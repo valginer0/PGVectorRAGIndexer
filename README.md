@@ -80,7 +80,7 @@ The script will embed your query, search the PostgreSQL database for the 5 most 
 **PGVectorRAGIndexer** is dual-licensed under two options:
 
 - 🟩 **Community License (default)** – Free for personal, educational, and research use.  
-  You may fork and contribute, but redistribution as standalone projects or commercial use requires permission.  
+  You may fork for personal use, but redistribution or commercial use requires permission.  
   See [LICENSE_COMMUNITY.txt](LICENSE_COMMUNITY.txt).
 
 - 🟨 **Commercial License** – Required for companies or individuals integrating  

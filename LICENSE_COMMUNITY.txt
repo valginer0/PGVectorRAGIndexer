@@ -5,19 +5,18 @@ Permission is hereby granted, free of charge, to any individual or organization 
 this software and its associated documentation (the "Software") for personal,
 educational, research, or evaluation purposes, subject to the following conditions:
 
-1. You may fork, modify, and contribute back to this project via pull requests on the
-   official repository. However, redistribution of modified versions as standalone
-   projects, sublicensing, or commercial use of the Software requires explicit written
-   permission from the copyright holder.
+1. You may fork and modify the Software for your own personal, educational, or research
+   use only. Redistribution of the Software or modified versions, sublicensing, or
+   commercial use requires explicit written permission from the copyright holder.
 
 2. The Software may be used to create and run your own personal, educational, research,
    or internal business evaluation projects, provided that such use does not involve
    charging a fee for access to the Software itself or offering paid services directly
    built upon it as a core component.
 
-3. You may share feedback, suggest improvements, or contribute voluntarily via the
-   official repository. By contributing, you agree that your contributions will be
-   licensed under the same terms. Voluntary contributions and sponsorships are welcome.
+3. You may share feedback, bug reports, and feature suggestions. However, this project
+   does not accept code contributions or pull requests. All development is maintained
+   exclusively by the copyright holder. Voluntary sponsorships are welcome.
 
 4. All copies of the Software must retain this notice and the following disclaimer.
 

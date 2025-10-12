@@ -14,10 +14,9 @@ PGVectorRAGIndexer uses a **dual licensing model** to balance open collaboration
 - ✅ **Use** for educational purposes
 - ✅ **Use** for academic research
 - ✅ **Use** for internal business evaluation
-- ✅ **Fork** the repository
-- ✅ **Modify** the code for your own use
-- ✅ **Contribute** back via pull requests
-- ✅ **Share** feedback and suggestions
+- ✅ **Fork** for personal/educational use only
+- ✅ **Modify** the code for your own personal use
+- ✅ **Share** feedback, bug reports, and suggestions
 
 ### ❌ What You CANNOT Do (Without Permission)
 
@@ -79,27 +78,28 @@ PGVectorRAGIndexer uses a **dual licensing model** to balance open collaboration
 
 **Response time**: Typically within 2-3 business days
 
-## 🤝 Contributing
+## 🤝 Feedback and Suggestions
 
 **File**: [CONTRIBUTING.md](CONTRIBUTING.md)
 
-### Contribution License
+### Development Policy
 
-By contributing to this project, you agree:
-- Your contributions will be licensed under the Community License
-- You retain copyright to your contributions
-- You grant the project maintainer rights to use your contributions
-- You confirm you have the right to make the contribution
+**Important**: This project is developed and maintained exclusively by Valery Giner.
 
-### How to Contribute
+**We do NOT accept**:
+- ❌ Pull requests
+- ❌ Code contributions
+- ❌ Direct code submissions
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes with tests
-4. Submit a pull request
-5. Participate in code review
+**We DO welcome**:
+- ✅ Bug reports
+- ✅ Feature suggestions
+- ✅ Feedback and ideas
+- ✅ Use case discussions
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+All development remains with the copyright holder to maintain full ownership and code quality.
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to submit feedback.
 
 ## ❓ Frequently Asked Questions
 
@@ -111,9 +111,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
 
 **A**: Yes! Fork away and modify as needed for personal, educational, or research purposes.
 
-### Q: Can I contribute improvements back?
+### Q: Can I contribute code improvements?
 
-**A**: Absolutely! We welcome contributions via pull requests.
+**A**: No. This project does not accept pull requests or code contributions. However, bug reports and feature suggestions are always welcome!
 
 ### Q: What if I'm a freelancer working for a client?
 

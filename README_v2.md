@@ -564,8 +564,8 @@ For issues and questions:
 
 **PGVectorRAGIndexer** is dual-licensed under two options:
 
-- **Community License (default)** – Free for personal, educational, and research use.  
-  You may fork and contribute, but redistribution as standalone projects or commercial use requires permission.  
+- 🟩 **Community License (default)** – Free for personal, educational, and research use.  
+  You may fork for personal use, but redistribution or commercial use requires permission.  
   See [LICENSE_COMMUNITY.txt](LICENSE_COMMUNITY.txt).
 
 - **Commercial License** – Required for companies or individuals integrating  

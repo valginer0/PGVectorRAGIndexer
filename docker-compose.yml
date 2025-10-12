@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  # Define the PostgreSQL service using pgvector image
+  db:
+    # Use a pre-built image with PostgreSQL 16 and pgvector installed
+    image: pgvector/pgvector:pg16
+    container_name: vector_rag_db
+    restart: always
+    environment:
+      # These variables set up the initial database user and credentials
+      POSTGRES_USER: rag_user
+      POSTGRES_PASSWORD: rag_password
+      POSTGRES_DB: rag_vector_db
+    ports:
+      # Map container port 5432 to host port 5432
+      - "5432:5432"
+    volumes:
+      # Data persistence volume: Stores DB files on the host filesystem (outside the container)
+      - postgres_data:/var/lib/postgresql/data
+      # Initialization script: Runs the init-db.sql script to create extension/table on first run
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+
+# Define the named volume for persistent storage
+volumes:
+  postgres_data:

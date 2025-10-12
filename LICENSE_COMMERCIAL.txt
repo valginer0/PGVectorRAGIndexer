@@ -1,0 +1,50 @@
+PGVectorRAGIndexer Commercial License v1.0
+Copyright (c) 2025 Valery Giner
+
+This license grants the licensee (“Licensee”) the right to use PGVectorRAGIndexer and its
+associated documentation (the “Software”) in commercial environments, products, or
+services, subject to the following terms:
+
+1. A valid commercial license agreement between the Licensee and the copyright holder
+   (Valery Giner) must be obtained prior to any commercial use, redistribution,
+   integration, or hosting of the Software.
+
+2. The Licensee may modify, extend, or integrate the Software within their systems or
+   products under the terms agreed upon in the commercial license agreement.
+
+3. This file serves as a placeholder reference to the commercial licensing terms and
+   does not itself grant any rights or warranties.
+
+DISCLAIMER:
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
+OR OTHER DEALINGS IN THE SOFTWARE.
+
+PRICING GUIDANCE:
+
+Commercial licenses are tailored to your specific use case and organization size.
+Indicative pricing tiers:
+
+- **Startup** (< 10 employees): Contact for startup-friendly pricing
+- **SMB** (10-100 employees): Contact for standard commercial license
+- **Enterprise** (100+ employees): Contact for enterprise license with SLA
+- **OEM/Redistribution**: Custom licensing available for integration partners
+
+Benefits of commercial license:
+✓ Production deployment rights
+✓ Commercial use and monetization
+✓ Priority support options
+✓ Custom feature development (negotiable)
+✓ Service level agreements (enterprise tier)
+
+For a detailed quote and to discuss your specific needs, please contact:
+valginer0@gmail.com
+
+Include in your inquiry:
+- Organization name and size
+- Intended use case
+- Expected deployment scale
+- Any specific requirements

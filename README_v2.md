@@ -527,17 +527,19 @@ class CustomLoader(DocumentLoader):
         pass
 ```
 
-## 🤝 Contributing
+## 💬 Feedback & Suggestions
 
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new features
-4. Ensure all tests pass
-5. Submit a pull request
+**This project does not accept pull requests or code contributions.**
 
-## 📄 License
+We welcome:
+- 🐛 **Bug reports** - Create an issue with details
+- 💡 **Feature suggestions** - Share your ideas via issues
+- 📝 **Feedback** - Let us know what could be better
+- 📧 **Direct contact** - valginer0@gmail.com for specific inquiries
 
-MIT License - See LICENSE file for details
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to provide feedback.
+
+All development is maintained exclusively by the copyright holder to ensure code quality and full ownership.
 
 ## 🙏 Acknowledgments
 

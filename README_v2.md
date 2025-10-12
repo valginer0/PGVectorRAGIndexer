@@ -559,3 +559,29 @@ For issues and questions:
 **Version**: 2.0.0  
 **Last Updated**: 2024  
 **Status**: Production Ready ✅
+
+## 📜 License
+
+**PGVectorRAGIndexer** is dual-licensed under two options:
+
+- **Community License (default)** – Free for personal, educational, and research use.  
+  You may fork and contribute, but redistribution as standalone projects or commercial use requires permission.  
+  See [LICENSE_COMMUNITY.txt](LICENSE_COMMUNITY.txt).
+
+- **Commercial License** – Required for companies or individuals integrating  
+  PGVectorRAGIndexer into commercial products or paid services.  
+  See [LICENSE_COMMERCIAL.txt](LICENSE_COMMERCIAL.txt) for details and contact  
+  Valery Giner at valginer0@gmail.com to discuss terms.
+
+This software is provided **"AS IS"**, without warranty of any kind.  
+Voluntary contributions or sponsorships are welcome 
+
+### Support
+
+If you find this tool useful, consider supporting its development:
+
+- **[Star this repo](https://github.com/valginer0/PGVectorRAGIndexer)** - Help others discover it!
+- **[Sponsor on GitHub](https://github.com/sponsors/valginer0)** - Support ongoing development
+- **Share it** - Tell others who might find it useful
+
+Your support helps maintain and improve this project. Thank you! 

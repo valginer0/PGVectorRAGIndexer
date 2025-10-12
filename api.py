@@ -1,0 +1,443 @@
+"""
+FastAPI REST API for PGVectorRAGIndexer.
+
+Provides HTTP endpoints for indexing, searching, and managing documents.
+"""
+
+import logging
+from typing import List, Optional, Dict, Any
+from datetime import datetime
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Query, status
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field
+
+from config import get_config
+from database import get_db_manager, close_db_manager, DocumentRepository
+from embeddings import get_embedding_service
+from document_processor import DocumentProcessor
+from indexer_v2 import DocumentIndexer
+from retriever_v2 import DocumentRetriever, SearchResult
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+
+# Pydantic models for API requests/responses
+class IndexRequest(BaseModel):
+    """Request model for indexing a document."""
+    source_uri: str = Field(..., description="Path or URL to document")
+    force_reindex: bool = Field(default=False, description="Force reindex if exists")
+    metadata: Optional[Dict[str, Any]] = Field(default=None, description="Custom metadata")
+
+
+class IndexResponse(BaseModel):
+    """Response model for indexing operation."""
+    status: str
+    document_id: Optional[str] = None
+    source_uri: Optional[str] = None
+    chunks_indexed: Optional[int] = None
+    message: Optional[str] = None
+    indexed_at: Optional[str] = None
+
+
+class SearchRequest(BaseModel):
+    """Request model for search."""
+    query: str = Field(..., description="Search query text")
+    top_k: Optional[int] = Field(default=None, description="Number of results")
+    min_score: Optional[float] = Field(default=None, description="Minimum relevance score")
+    filters: Optional[Dict[str, Any]] = Field(default=None, description="Search filters")
+    use_hybrid: bool = Field(default=False, description="Use hybrid search")
+    alpha: Optional[float] = Field(default=None, description="Hybrid search weight")
+
+
+class SearchResultModel(BaseModel):
+    """Model for search result."""
+    chunk_id: int
+    document_id: str
+    chunk_index: int
+    text_content: str
+    source_uri: str
+    distance: float
+    relevance_score: float
+
+
+class SearchResponse(BaseModel):
+    """Response model for search."""
+    query: str
+    results: List[SearchResultModel]
+    total_results: int
+    search_time_ms: float
+
+
+class DocumentInfo(BaseModel):
+    """Model for document information."""
+    document_id: str
+    source_uri: str
+    chunk_count: int
+    indexed_at: datetime
+    last_updated: Optional[datetime] = None
+
+
+class HealthResponse(BaseModel):
+    """Response model for health check."""
+    status: str
+    timestamp: str
+    database: Dict[str, Any]
+    embedding_model: Dict[str, Any]
+
+
+class StatsResponse(BaseModel):
+    """Response model for statistics."""
+    total_documents: int
+    total_chunks: int
+    avg_chunks_per_document: int
+    database_size: str
+    embedding_model: str
+    embedding_dimension: int
+
+
+# Lifespan context manager for startup/shutdown
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    # Startup
+    logger.info("Starting PGVectorRAGIndexer API...")
+    try:
+        # Initialize services
+        _ = get_db_manager()
+        _ = get_embedding_service()
+        logger.info("Services initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {e}")
+        raise
+    
+    yield
+    
+    # Shutdown
+    logger.info("Shutting down PGVectorRAGIndexer API...")
+    close_db_manager()
+    logger.info("Cleanup complete")
+
+
+# Create FastAPI app
+config = get_config()
+app = FastAPI(
+    title="PGVectorRAGIndexer API",
+    description="REST API for semantic document search using PostgreSQL and pgvector",
+    version="2.0.0",
+    lifespan=lifespan
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=config.api.cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Initialize services (will be created on first request)
+indexer: Optional[DocumentIndexer] = None
+retriever: Optional[DocumentRetriever] = None
+
+
+def get_indexer() -> DocumentIndexer:
+    """Get or create indexer instance."""
+    global indexer
+    if indexer is None:
+        indexer = DocumentIndexer()
+    return indexer
+
+
+def get_retriever() -> DocumentRetriever:
+    """Get or create retriever instance."""
+    global retriever
+    if retriever is None:
+        retriever = DocumentRetriever()
+    return retriever
+
+
+# API Endpoints
+
+@app.get("/", tags=["General"])
+async def root():
+    """Root endpoint with API information."""
+    return {
+        "name": "PGVectorRAGIndexer API",
+        "version": "2.0.0",
+        "description": "Semantic document search using PostgreSQL and pgvector",
+        "docs": "/docs",
+        "health": "/health"
+    }
+
+
+@app.get("/health", response_model=HealthResponse, tags=["General"])
+async def health_check():
+    """Check API and database health."""
+    try:
+        db_manager = get_db_manager()
+        db_health = db_manager.health_check()
+        
+        embedding_service = get_embedding_service()
+        model_info = embedding_service.get_model_info()
+        
+        return HealthResponse(
+            status="healthy",
+            timestamp=datetime.utcnow().isoformat(),
+            database=db_health,
+            embedding_model=model_info
+        )
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Service unhealthy: {str(e)}"
+        )
+
+
+@app.get("/stats", response_model=StatsResponse, tags=["General"])
+async def get_statistics():
+    """Get system statistics."""
+    try:
+        idx = get_indexer()
+        stats = idx.get_statistics()
+        
+        return StatsResponse(
+            total_documents=stats['database']['total_documents'],
+            total_chunks=stats['database']['total_chunks'],
+            avg_chunks_per_document=stats['database']['avg_chunks_per_document'],
+            database_size=stats['database']['database_size'],
+            embedding_model=stats['embedding_model']['model_name'],
+            embedding_dimension=stats['embedding_model']['dimension']
+        )
+    except Exception as e:
+        logger.error(f"Failed to get statistics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get statistics: {str(e)}"
+        )
+
+
+@app.post("/index", response_model=IndexResponse, tags=["Indexing"])
+async def index_document(request: IndexRequest):
+    """Index a document from URI."""
+    try:
+        idx = get_indexer()
+        result = idx.index_document(
+            source_uri=request.source_uri,
+            force_reindex=request.force_reindex,
+            custom_metadata=request.metadata
+        )
+        
+        if result['status'] == 'error':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result['message']
+            )
+        
+        return IndexResponse(**result)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Indexing failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Indexing failed: {str(e)}"
+        )
+
+
+@app.post("/search", response_model=SearchResponse, tags=["Search"])
+async def search_documents(request: SearchRequest):
+    """Search for relevant documents."""
+    import time
+    
+    try:
+        ret = get_retriever()
+        
+        start_time = time.time()
+        
+        if request.use_hybrid:
+            results = ret.search_hybrid(
+                query=request.query,
+                top_k=request.top_k,
+                alpha=request.alpha
+            )
+        else:
+            results = ret.search(
+                query=request.query,
+                top_k=request.top_k,
+                filters=request.filters,
+                min_score=request.min_score
+            )
+        
+        search_time = (time.time() - start_time) * 1000  # Convert to ms
+        
+        # Convert SearchResult objects to Pydantic models
+        result_models = [
+            SearchResultModel(
+                chunk_id=r.chunk_id,
+                document_id=r.document_id,
+                chunk_index=r.chunk_index,
+                text_content=r.text_content,
+                source_uri=r.source_uri,
+                distance=r.distance,
+                relevance_score=r.relevance_score
+            )
+            for r in results
+        ]
+        
+        return SearchResponse(
+            query=request.query,
+            results=result_models,
+            total_results=len(result_models),
+            search_time_ms=round(search_time, 2)
+        )
+    except Exception as e:
+        logger.error(f"Search failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Search failed: {str(e)}"
+        )
+
+
+@app.get("/documents", response_model=List[DocumentInfo], tags=["Documents"])
+async def list_documents(
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum documents to return"),
+    offset: int = Query(default=0, ge=0, description="Number of documents to skip")
+):
+    """List all indexed documents."""
+    try:
+        idx = get_indexer()
+        db_manager = get_db_manager()
+        repo = DocumentRepository(db_manager)
+        
+        documents = repo.list_documents(limit=limit, offset=offset)
+        
+        return [
+            DocumentInfo(
+                document_id=doc['document_id'],
+                source_uri=doc['source_uri'],
+                chunk_count=doc['chunk_count'],
+                indexed_at=doc['indexed_at'],
+                last_updated=doc.get('last_updated')
+            )
+            for doc in documents
+        ]
+    except Exception as e:
+        logger.error(f"Failed to list documents: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list documents: {str(e)}"
+        )
+
+
+@app.get("/documents/{document_id}", response_model=DocumentInfo, tags=["Documents"])
+async def get_document(document_id: str):
+    """Get document information by ID."""
+    try:
+        db_manager = get_db_manager()
+        repo = DocumentRepository(db_manager)
+        
+        doc = repo.get_document_by_id(document_id)
+        
+        if not doc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Document not found: {document_id}"
+            )
+        
+        return DocumentInfo(
+            document_id=doc['document_id'],
+            source_uri=doc['source_uri'],
+            chunk_count=doc['chunk_count'],
+            indexed_at=doc['indexed_at']
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get document: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get document: {str(e)}"
+        )
+
+
+@app.delete("/documents/{document_id}", tags=["Documents"])
+async def delete_document(document_id: str):
+    """Delete a document by ID."""
+    try:
+        idx = get_indexer()
+        
+        if not idx.delete_document(document_id):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Document not found: {document_id}"
+            )
+        
+        return {
+            "status": "success",
+            "message": f"Document deleted: {document_id}"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete document: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete document: {str(e)}"
+        )
+
+
+@app.get("/context", tags=["RAG"])
+async def get_context(
+    query: str = Query(..., description="Search query"),
+    top_k: int = Query(default=5, ge=1, le=20, description="Number of chunks"),
+    use_hybrid: bool = Query(default=False, description="Use hybrid search")
+):
+    """Get concatenated context for RAG applications."""
+    try:
+        ret = get_retriever()
+        context = ret.get_context(query, top_k=top_k, use_hybrid=use_hybrid)
+        
+        return {
+            "query": query,
+            "context": context,
+            "chunks_used": top_k
+        }
+    except Exception as e:
+        logger.error(f"Failed to get context: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get context: {str(e)}"
+        )
+
+
+# Error handlers
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    """Global exception handler."""
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "detail": "Internal server error",
+            "error": str(exc)
+        }
+    )
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "api:app",
+        host=config.api.host,
+        port=config.api.port,
+        reload=config.api.reload,
+        log_level=config.api.log_level
+    )

@@ -54,7 +54,7 @@ Share your thoughts via GitHub issues or email.
 
 ## ❓ Questions?
 
-- **Check documentation** - README_v2.md, DEPLOYMENT.md, TESTING_GUIDE.md
+- **Check documentation** - README.md, DEPLOYMENT.md, TESTING_GUIDE.md
 - **Search existing issues** - Your question may already be answered
 - **Create a new issue** - For questions not covered in docs
 - **Contact directly** - valginer0@gmail.com for specific inquiries

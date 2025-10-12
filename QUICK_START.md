@@ -154,7 +154,7 @@ pytest --cov
 
 ## 📚 Next Steps
 
-- Read [README_v2.md](README_v2.md) for detailed documentation
+- Read [README.md](README.md) for detailed documentation
 - Check [DEPLOYMENT.md](DEPLOYMENT.md) for production deployment
 - Review [IMPROVEMENTS_SUMMARY.md](IMPROVEMENTS_SUMMARY.md) for all features
 - Explore API docs at http://localhost:8000/docs

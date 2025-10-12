@@ -4,7 +4,7 @@ contact_links:
     url: mailto:valginer0@gmail.com
     about: For commercial licensing, custom development, or private inquiries
   - name: 📚 Documentation
-    url: https://github.com/valginer0/PGVectorRAGIndexer/blob/main/README_v2.md
+    url: https://github.com/valginer0/PGVectorRAGIndexer/blob/main/README.md
     about: Read the comprehensive documentation
   - name: 🚀 Quick Start Guide
     url: https://github.com/valginer0/PGVectorRAGIndexer/blob/main/QUICK_START.md

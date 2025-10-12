@@ -300,7 +300,7 @@ WITH (m = 16, ef_construction = 64);
 
 ### New Documentation Files
 
-1. **README_v2.md** - Comprehensive user guide
+1. **README.md** - Comprehensive user guide (v2)
    - Quick start guide
    - Usage examples
    - Configuration reference

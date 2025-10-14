@@ -65,7 +65,7 @@ cp .env.example .env
 
 # Edit .env and update PROJECT_DIR with your absolute path
 # Example: PROJECT_DIR=/home/username/projects/PGVectorRAGIndexer
-nano .env
+$EDITOR .env  # Use your preferred editor (vi, vim, nano, code, etc.)
 ```
 
 3. **Create virtual environment**:

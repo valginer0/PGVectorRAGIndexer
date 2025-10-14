@@ -73,15 +73,16 @@ def find_similar_chunks(conn, query_text: str, k: int = RETRIEVAL_LIMIT):
         # 2. Execute the vector search query
         # ORDER BY embedding <=> %s sorts by smallest cosine distance (closest match)
         search_query = """
-        SELECT text_content, source_uri, chunk_index, embedding <=> %s AS distance
+        SELECT text_content, source_uri, chunk_index, embedding <=> %s::vector AS distance
         FROM document_chunks
         ORDER BY distance
         LIMIT %s;
         """
         
         with conn.cursor() as cursor:
-            # Note: query_embedding is passed as a list, and psycopg2/pgvector handles conversion
-            cursor.execute(search_query, (query_embedding, k))
+            # Convert embedding list to pgvector format string
+            embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
+            cursor.execute(search_query, (embedding_str, k))
             results = cursor.fetchall()
             
         logging.info(f"Retrieved {len(results)} nearest neighbor chunks.")

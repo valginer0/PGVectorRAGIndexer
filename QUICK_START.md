@@ -6,7 +6,7 @@ Get up and running in 5 minutes!
 
 ```bash
 # 1. Navigate to project
-cd /home/valginer0/projects/PGVectorRAGIndexer
+cd ~/projects/PGVectorRAGIndexer
 
 # 2. Create virtual environment
 python3 -m venv venv

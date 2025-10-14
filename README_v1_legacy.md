@@ -33,7 +33,7 @@ Python: Python 3.9+ installed inside your Ubuntu WSL instance.
 2. Configure Environment
 Navigate to Project: Open your Ubuntu WSL terminal and navigate to the project directory:
 
-cd /home/valginer0/projects/PGVectorRAGIndexer
+cd ~/projects/PGVectorRAGIndexer
 
 Create Virtual Environment & Install Dependencies:
 

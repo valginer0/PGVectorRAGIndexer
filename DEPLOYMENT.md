@@ -15,7 +15,7 @@ This guide covers deployment strategies for different environments.
 
 ```bash
 # 1. Clone repository
-cd /home/valginer0/projects/PGVectorRAGIndexer
+cd ~/projects/PGVectorRAGIndexer
 
 # 2. Create virtual environment
 python3 -m venv venv

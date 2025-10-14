@@ -132,12 +132,12 @@ crontab -e
 
 **Add daily backup at 2 AM**:
 ```bash
-0 2 * * * cd /home/valginer0/projects/PGVectorRAGIndexer && ./backup_database.sh >> ./backups/backup.log 2>&1
+0 2 * * * cd ~/projects/PGVectorRAGIndexer && ./backup_database.sh >> ./backups/backup.log 2>&1
 ```
 
 **Add sync to Google Drive at 2:30 AM**:
 ```bash
-30 2 * * * cd /home/valginer0/projects/PGVectorRAGIndexer && ./sync_to_gdrive.sh >> ./backups/sync.log 2>&1
+30 2 * * * cd ~/projects/PGVectorRAGIndexer && ./sync_to_gdrive.sh >> ./backups/sync.log 2>&1
 ```
 
 **Common schedules**:
@@ -162,14 +162,14 @@ crontab -e
 3. **Trigger**: Daily at 2:00 AM
 4. **Action**: Start a program
    - Program: `wsl`
-   - Arguments: `bash -c "cd /home/valginer0/projects/PGVectorRAGIndexer && ./backup_database.sh && ./sync_to_gdrive.sh"`
+   - Arguments: `wsl bash -c "cd ~/projects/PGVectorRAGIndexer && ./backup_database.sh && ./sync_to_gdrive.sh"`
 
 ### Option 3: Manual Script
 
 Create `auto_backup.sh`:
 ```bash
 #!/bin/bash
-cd /home/valginer0/projects/PGVectorRAGIndexer
+cd ~/projects/PGVectorRAGIndexer
 ./backup_database.sh && ./sync_to_gdrive.sh
 ```
 

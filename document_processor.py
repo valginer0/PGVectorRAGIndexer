@@ -325,7 +325,7 @@ class DocumentProcessor:
         
         # Load document
         try:
-            documents = loader.load()
+            documents = loader.load(source_uri)
             if not documents:
                 raise LoaderError("No content loaded from document")
         except Exception as e:

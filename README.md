@@ -81,12 +81,13 @@ pip install -r requirements.txt
 
 5. **Start PostgreSQL with pgvector**:
 ```bash
-# Option 1: Using helper script (recommended)
+# Option 1: Using helper script (recommended - auto-initializes database)
 ./start_database.sh
 
-# Option 2: Direct docker compose (must be in project directory)
+# Option 2: Direct docker compose (requires manual setup)
 cd /path/to/PGVectorRAGIndexer
 docker compose up -d
+./setup_database.sh  # Run this to initialize schema
 ```
 
 6. **Verify setup**:

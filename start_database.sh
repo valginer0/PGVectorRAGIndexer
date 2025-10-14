@@ -46,7 +46,24 @@ docker compose up -d
 
 if [ $? -eq 0 ]; then
     echo ""
-    echo -e "${GREEN}✓ Database started successfully!${NC}"
+    echo -e "${GREEN}✓ Database container started!${NC}"
+    echo ""
+    
+    # Wait for database to be ready
+    echo "Waiting for database to be ready..."
+    sleep 3
+    
+    # Run database initialization
+    echo ""
+    echo -e "${GREEN}Initializing database schema...${NC}"
+    if [ -f "setup_database.sh" ]; then
+        bash setup_database.sh
+    else
+        # Fallback: run init-db.sql directly
+        docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db < init-db.sql
+        echo -e "${GREEN}✓ Database initialized!${NC}"
+    fi
+    
     echo ""
     echo "Container status:"
     docker ps --filter "name=vector_rag_db" --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

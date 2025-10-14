@@ -9,10 +9,11 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 # Set test environment variables before importing config
+# Use the existing development database for integration tests
 os.environ['ENVIRONMENT'] = 'development'
 os.environ['DB_HOST'] = 'localhost'
 os.environ['DB_PORT'] = '5432'
-os.environ['POSTGRES_DB'] = 'test_rag_db'
+os.environ['POSTGRES_DB'] = 'rag_vector_db'  # Use existing dev database
 os.environ['POSTGRES_USER'] = 'rag_user'
 os.environ['POSTGRES_PASSWORD'] = 'rag_password'
 

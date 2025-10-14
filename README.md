@@ -70,18 +70,41 @@ This automatically:
 - ✅ Initializes database schema
 - ✅ Verifies installation
 
-#### Alternative: Docker-Only Setup
+#### Alternative: Docker-Only Setup (No Repository Clone)
 
-**Run entire stack in Docker:**
+**Run from pre-built Docker image (recommended for production):**
 ```bash
-git clone https://github.com/valginer0/PGVectorRAGIndexer.git
-cd PGVectorRAGIndexer
-cp .env.example .env
-export PROJECT_DIR=$(pwd)
+# Download and run deployment script
+curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
+```
+
+Or manually:
+```bash
+# Create deployment directory
+mkdir -p ~/pgvector-rag && cd ~/pgvector-rag
+
+# Download docker-compose.yml
+curl -O https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-compose.full.yml
+
+# Create .env file
+cat > .env << EOF
+POSTGRES_USER=rag_user
+POSTGRES_PASSWORD=rag_password
+POSTGRES_DB=rag_vector_db
+API_PORT=8000
+EOF
+
+# Start services
 docker compose -f docker-compose.full.yml up -d
 ```
 
 This runs both database and API in containers. Access API at `http://localhost:8000`
+
+**Benefits:**
+- ✅ No repository clone needed
+- ✅ No Python environment setup
+- ✅ Everything in containers
+- ✅ Easy updates: `docker compose pull && docker compose up -d`
 
 #### Manual Setup (Advanced)
 
@@ -230,6 +253,45 @@ curl "http://localhost:8000/stats"
 **Health check**:
 ```bash
 curl "http://localhost:8000/health"
+```
+
+### Database Management
+
+#### Manual Database Inspection
+
+Use the interactive database inspection tool:
+```bash
+./inspect_db.sh
+```
+
+Options include:
+- List all documents
+- Count chunks per document
+- Show recent chunks
+- Search for text in chunks
+- Show database statistics
+- List extensions
+- Show table schema
+- Interactive psql session
+- Custom SQL query
+
+#### Direct Database Access
+
+```bash
+# View all documents
+docker exec vector_rag_db psql -U rag_user -d rag_vector_db -c \
+  "SELECT DISTINCT document_id, source_uri, COUNT(*) as chunks 
+   FROM document_chunks GROUP BY document_id, source_uri;"
+
+# Search for text
+docker exec vector_rag_db psql -U rag_user -d rag_vector_db -c \
+  "SELECT document_id, LEFT(text_content, 100) 
+   FROM document_chunks WHERE text_content ILIKE '%search_term%';"
+
+# Get statistics
+docker exec vector_rag_db psql -U rag_user -d rag_vector_db -c \
+  "SELECT COUNT(DISTINCT document_id) as docs, COUNT(*) as chunks 
+   FROM document_chunks;"
 ```
 
 ## ⚙️ Configuration

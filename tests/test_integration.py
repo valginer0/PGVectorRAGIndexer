@@ -22,9 +22,9 @@ def config():
 
 
 @pytest.fixture(scope="module")
-def db_manager(config):
+def db_manager():
     """Create database manager."""
-    manager = get_db_manager(config)
+    manager = get_db_manager()
     yield manager
     manager.close()
 
@@ -36,9 +36,9 @@ def repository(db_manager):
 
 
 @pytest.fixture(scope="module")
-def processor(config):
+def processor():
     """Create document processor."""
-    return DocumentProcessor(config)
+    return DocumentProcessor()
 
 
 @pytest.fixture(scope="module")
@@ -88,7 +88,7 @@ class TestIndexAndRetrieve:
         assert processed_doc.source_uri == test_document
         
         # Generate embeddings
-        embeddings = embedding_service.generate_embeddings(
+        embeddings = embedding_service.encode(
             [chunk.text_content for chunk in processed_doc.chunks]
         )
         
@@ -111,7 +111,7 @@ class TestIndexAndRetrieve:
         """Test searching for the indexed document."""
         # Generate query embedding
         query = "machine learning and neural networks"
-        query_embedding = embedding_service.generate_embeddings([query])[0]
+        query_embedding = embedding_service.encode([query])[0]
         
         # Search
         results = repository.search_similar(
@@ -133,7 +133,7 @@ class TestIndexAndRetrieve:
     def test_search_with_filters(self, repository, embedding_service):
         """Test searching with document filters."""
         query = "artificial intelligence"
-        query_embedding = embedding_service.generate_embeddings([query])[0]
+        query_embedding = embedding_service.encode([query])[0]
         
         # Search with document_id filter
         results = repository.search_similar(
@@ -148,7 +148,7 @@ class TestIndexAndRetrieve:
     def test_hybrid_search(self, repository, embedding_service):
         """Test hybrid search (vector + full-text)."""
         query = "deep learning neural"
-        query_embedding = embedding_service.generate_embeddings([query])[0]
+        query_embedding = embedding_service.encode([query])[0]
         
         # Hybrid search
         results = repository.hybrid_search(
@@ -205,8 +205,8 @@ class TestEmbeddingConsistency:
         """Test that same text produces same embedding."""
         text = "This is a test sentence."
         
-        emb1 = embedding_service.generate_embeddings([text])[0]
-        emb2 = embedding_service.generate_embeddings([text])[0]
+        emb1 = embedding_service.encode([text])[0]
+        emb2 = embedding_service.encode([text])[0]
         
         # Should be identical (or very close due to floating point)
         import numpy as np
@@ -215,7 +215,7 @@ class TestEmbeddingConsistency:
     def test_embedding_dimension(self, embedding_service):
         """Test embedding has correct dimension."""
         text = "Test text"
-        embedding = embedding_service.generate_embeddings([text])[0]
+        embedding = embedding_service.encode([text])[0]
         
         assert len(embedding) == 384  # all-MiniLM-L6-v2 dimension
     
@@ -227,7 +227,7 @@ class TestEmbeddingConsistency:
             "Third sentence"
         ]
         
-        embeddings = embedding_service.generate_embeddings(texts)
+        embeddings = embedding_service.encode(texts)
         
         assert len(embeddings) == 3
         assert all(len(emb) == 384 for emb in embeddings)

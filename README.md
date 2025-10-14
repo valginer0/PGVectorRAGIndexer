@@ -46,9 +46,9 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 
 ### Prerequisites
 
-- Docker Desktop with WSL 2 backend
-- Python 3.9+ in WSL Ubuntu
-- PostgreSQL (via Docker)
+- **Docker**: Docker Desktop or Rancher Desktop with WSL 2 backend
+- **Python**: Python 3.9+ in WSL Ubuntu
+- **PostgreSQL**: Runs via Docker container (included)
 
 ### Installation
 

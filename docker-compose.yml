@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Define the PostgreSQL service using pgvector image
   db:
@@ -19,7 +17,7 @@ services:
       # Data persistence volume: Stores DB files on the host filesystem (outside the container)
       - postgres_data:/var/lib/postgresql/data
       # Initialization script: Runs the init-db.sql script to create extension/table on first run
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - /home/valginer0/projects/PGVectorRAGIndexer/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
 
 # Define the named volume for persistent storage
 volumes:

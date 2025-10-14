@@ -1,3 +1,10 @@
+# PGVectorRAGIndexer Docker Compose Configuration
+# 
+# IMPORTANT: Update PROJECT_DIR in .env file with your absolute path
+# This is required for Rancher Desktop compatibility on WSL
+# 
+# Example: PROJECT_DIR=/home/username/projects/PGVectorRAGIndexer
+
 services:
   # Define the PostgreSQL service using pgvector image
   db:
@@ -17,7 +24,7 @@ services:
       # Data persistence volume: Stores DB files on the host filesystem (outside the container)
       - postgres_data:/var/lib/postgresql/data
       # Initialization script: Runs the init-db.sql script to create extension/table on first run
-      - /home/valginer0/projects/PGVectorRAGIndexer/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ${PROJECT_DIR}/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
 
 # Define the named volume for persistent storage
 volumes:

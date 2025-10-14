@@ -54,28 +54,45 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 
 1. **Clone and navigate to project**:
 ```bash
-cd /home/valginer0/projects/PGVectorRAGIndexer
+git clone https://github.com/valginer0/PGVectorRAGIndexer.git
+cd PGVectorRAGIndexer
 ```
 
-2. **Create virtual environment**:
+2. **Configure environment**:
+```bash
+# Copy example env file
+cp .env.example .env
+
+# Edit .env and update PROJECT_DIR with your absolute path
+# Example: PROJECT_DIR=/home/username/projects/PGVectorRAGIndexer
+nano .env
+```
+
+3. **Create virtual environment**:
 ```bash
 python3 -m venv venv
 source venv/bin/activate
 ```
 
-3. **Install dependencies**:
+4. **Install dependencies**:
 ```bash
 pip install -r requirements.txt
 ```
 
-4. **Start PostgreSQL with pgvector**:
+5. **Start PostgreSQL with pgvector**:
 ```bash
+# Option 1: Using helper script (recommended)
+./start_database.sh
+
+# Option 2: Direct docker compose (must be in project directory)
+cd /path/to/PGVectorRAGIndexer
 docker compose up -d
 ```
 
-5. **Verify setup**:
+6. **Verify setup**:
 ```bash
 docker ps  # Check container is running
+docker logs vector_rag_db  # View initialization logs
 ```
 
 ## 📖 Usage

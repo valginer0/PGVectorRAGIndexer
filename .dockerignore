@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+
+# Git
+.git/
+.gitignore
+.github/
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Tests
+tests/
+pytest.ini
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+documents/
+*.db
+*.sqlite
+
+# Backups
+backups/
+*.backup
+*.sql.gz
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local

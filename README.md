@@ -52,6 +52,42 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 
 ### Installation
 
+#### Quick Start (Automated - Recommended)
+
+**Single command setup:**
+```bash
+git clone https://github.com/valginer0/PGVectorRAGIndexer.git
+cd PGVectorRAGIndexer
+./setup.sh
+```
+
+This automatically:
+- ✅ Checks prerequisites (Docker, Python)
+- ✅ Creates and configures `.env` file
+- ✅ Sets up Python virtual environment
+- ✅ Installs all dependencies
+- ✅ Starts PostgreSQL with pgvector
+- ✅ Initializes database schema
+- ✅ Verifies installation
+
+#### Alternative: Docker-Only Setup
+
+**Run entire stack in Docker:**
+```bash
+git clone https://github.com/valginer0/PGVectorRAGIndexer.git
+cd PGVectorRAGIndexer
+cp .env.example .env
+export PROJECT_DIR=$(pwd)
+docker compose -f docker-compose.full.yml up -d
+```
+
+This runs both database and API in containers. Access API at `http://localhost:8000`
+
+#### Manual Setup (Advanced)
+
+<details>
+<summary>Click to expand manual installation steps</summary>
+
 1. **Clone and navigate to project**:
 ```bash
 git clone https://github.com/valginer0/PGVectorRAGIndexer.git
@@ -60,12 +96,8 @@ cd PGVectorRAGIndexer
 
 2. **Configure environment**:
 ```bash
-# Copy example env file
 cp .env.example .env
-
-# Edit .env and update PROJECT_DIR with your absolute path
-# Example: PROJECT_DIR=/home/username/projects/PGVectorRAGIndexer
-$EDITOR .env  # Use your preferred editor (vi, vim, nano, code, etc.)
+$EDITOR .env  # Update PROJECT_DIR with your absolute path
 ```
 
 3. **Create virtual environment**:
@@ -79,22 +111,18 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-5. **Start PostgreSQL with pgvector**:
+5. **Start database**:
 ```bash
-# Option 1: Using helper script (recommended - auto-initializes database)
-./start_database.sh
-
-# Option 2: Direct docker compose (requires manual setup)
-cd /path/to/PGVectorRAGIndexer
-docker compose up -d
-./setup_database.sh  # Run this to initialize schema
+./start_database.sh  # Auto-initializes pgvector
 ```
 
 6. **Verify setup**:
 ```bash
-docker ps  # Check container is running
-docker logs vector_rag_db  # View initialization logs
+docker ps
+docker logs vector_rag_db
 ```
+
+</details>
 
 ## 📖 Usage
 

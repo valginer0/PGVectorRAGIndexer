@@ -1,0 +1,61 @@
+# Full-stack Docker Compose Configuration
+# Includes both database and application containers
+# Usage: docker compose -f docker-compose.full.yml up -d
+
+services:
+  # PostgreSQL with pgvector
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: vector_rag_db
+    restart: always
+    environment:
+      POSTGRES_USER: rag_user
+      POSTGRES_PASSWORD: rag_password
+      POSTGRES_DB: rag_vector_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ${PROJECT_DIR}/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_vector_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag_network
+
+  # RAG Application API
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: vector_rag_app
+    restart: always
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: rag_user
+      POSTGRES_PASSWORD: rag_password
+      POSTGRES_DB: rag_vector_db
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount for document processing
+      - ${PROJECT_DIR}/documents:/app/documents:ro
+      # Mount for model cache
+      - model_cache:/root/.cache/huggingface
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - rag_network
+    command: uvicorn api:app --host 0.0.0.0 --port 8000
+
+volumes:
+  postgres_data:
+  model_cache:
+
+networks:
+  rag_network:
+    driver: bridge

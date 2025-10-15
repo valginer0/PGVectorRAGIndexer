@@ -148,6 +148,15 @@ echo ""
 echo -e "${GREEN}Starting services...${NC}"
 docker compose up -d
 
+# Wait for database to be ready
+echo -e "${GREEN}Waiting for database to initialize...${NC}"
+sleep 5
+
+# Initialize database schema
+echo -e "${GREEN}Initializing database schema...${NC}"
+cat init-db.sql | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db > /dev/null 2>&1 || true
+echo -e "${GREEN}✓ Database ready${NC}"
+
 echo ""
 echo -e "${GREEN}╔════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║              ✓ Deployment Complete!                       ║${NC}"

@@ -16,7 +16,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ${PROJECT_DIR}/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_vector_db"]
       interval: 10s
@@ -27,9 +27,7 @@ services:
 
   # RAG Application API
   app:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    image: ghcr.io/valginer0/pgvectorragindexer:latest
     container_name: vector_rag_app
     restart: always
     environment:
@@ -42,7 +40,7 @@ services:
       - "8000:8000"
     volumes:
       # Mount for document processing
-      - ${PROJECT_DIR}/documents:/app/documents:ro
+      - ./documents:/app/documents:ro
       # Mount for model cache
       - model_cache:/root/.cache/huggingface
     depends_on:

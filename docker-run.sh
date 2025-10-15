@@ -117,6 +117,10 @@ networks:
     driver: bridge
 EOF
 
+# Download init-db.sql
+echo -e "${GREEN}Downloading database initialization script...${NC}"
+curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/init-db.sql -o init-db.sql
+
 # Create documents directory
 mkdir -p documents
 

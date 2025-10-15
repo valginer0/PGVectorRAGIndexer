@@ -361,7 +361,10 @@ class DocumentRepository:
         
         # Build query with optional filters
         where_clauses = []
-        params = [query_embedding]
+        params = []
+        
+        # Convert embedding to pgvector format string
+        embedding_str = '[' + ','.join(map(str, query_embedding)) + ']'
         
         if filters:
             for key, value in filters.items():
@@ -378,13 +381,14 @@ class DocumentRepository:
             text_content,
             source_uri,
             indexed_at,
-            embedding {operator} %s AS distance
+            embedding {operator} %s::vector AS distance
         FROM document_chunks
         {where_sql}
         ORDER BY distance
         LIMIT %s
         """
         
+        params.insert(0, embedding_str)
         params.append(top_k)
         
         with self.db.get_cursor(dict_cursor=True) as cursor:

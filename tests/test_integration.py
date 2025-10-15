@@ -47,7 +47,7 @@ def embedding_service():
     return EmbeddingService()
 
 
-@pytest.fixture
+@pytest.fixture(scope="class")
 def test_document():
     """Create a temporary test document."""
     content = """
@@ -74,6 +74,43 @@ def test_document():
         os.unlink(temp_path)
 
 
+@pytest.fixture(scope="class")
+def indexed_document(processor, repository, embedding_service, test_document):
+    """Index a document and return its ID for use in tests."""
+    # Process document
+    processed_doc = processor.process(test_document)
+    
+    # Check if already exists (from test_index_document)
+    if not repository.document_exists(processed_doc.document_id):
+        # Generate embeddings
+        embeddings = embedding_service.encode(
+            [chunk.page_content for chunk in processed_doc.chunks]
+        )
+        
+        # Prepare chunks for database insertion
+        chunk_tuples = [
+            (
+                processed_doc.document_id,
+                i,
+                chunk.page_content,
+                processed_doc.source_uri,
+                embedding
+            )
+            for i, (chunk, embedding) in enumerate(zip(processed_doc.chunks, embeddings))
+        ]
+        
+        # Store in database
+        repository.insert_chunks(chunk_tuples)
+    
+    yield processed_doc.document_id
+    
+    # Cleanup: delete the document after all tests
+    try:
+        repository.delete_document(processed_doc.document_id)
+    except:
+        pass  # Ignore if already deleted by test
+
+
 class TestIndexAndRetrieve:
     """Test full indexing and retrieval workflow."""
     
@@ -89,17 +126,27 @@ class TestIndexAndRetrieve:
         
         # Generate embeddings
         embeddings = embedding_service.encode(
-            [chunk.text_content for chunk in processed_doc.chunks]
+            [chunk.page_content for chunk in processed_doc.chunks]
         )
         
         assert len(embeddings) == len(processed_doc.chunks)
         assert all(len(emb) == 384 for emb in embeddings)  # all-MiniLM-L6-v2 dimension
         
-        # Store in database
-        for chunk, embedding in zip(processed_doc.chunks, embeddings):
-            chunk.embedding = embedding
+        # Prepare chunks for database insertion
+        # Format: (document_id, chunk_index, text, source_uri, embedding)
+        chunk_tuples = [
+            (
+                processed_doc.document_id,
+                i,
+                chunk.page_content,
+                processed_doc.source_uri,
+                embedding
+            )
+            for i, (chunk, embedding) in enumerate(zip(processed_doc.chunks, embeddings))
+        ]
         
-        repository.insert_chunks(processed_doc.chunks)
+        # Store in database
+        repository.insert_chunks(chunk_tuples)
         
         # Verify document exists
         assert repository.document_exists(processed_doc.document_id)
@@ -107,7 +154,7 @@ class TestIndexAndRetrieve:
         # Store document_id for cleanup
         self.test_doc_id = processed_doc.document_id
     
-    def test_search_indexed_document(self, repository, embedding_service):
+    def test_search_indexed_document(self, repository, embedding_service, indexed_document):
         """Test searching for the indexed document."""
         # Generate query embedding
         query = "machine learning and neural networks"
@@ -130,7 +177,7 @@ class TestIndexAndRetrieve:
         )
         assert found_ml_content, "Should find content about machine learning"
     
-    def test_search_with_filters(self, repository, embedding_service):
+    def test_search_with_filters(self, repository, embedding_service, indexed_document):
         """Test searching with document filters."""
         query = "artificial intelligence"
         query_embedding = embedding_service.encode([query])[0]
@@ -139,45 +186,54 @@ class TestIndexAndRetrieve:
         results = repository.search_similar(
             query_embedding=query_embedding,
             top_k=5,
-            filters={'document_id': self.test_doc_id}
+            filters={'document_id': indexed_document}
         )
         
         assert len(results) > 0
-        assert all(r['document_id'] == self.test_doc_id for r in results)
+        assert all(r['document_id'] == indexed_document for r in results)
     
-    def test_hybrid_search(self, repository, embedding_service):
-        """Test hybrid search (vector + full-text)."""
+    def test_search_different_metrics(self, repository, embedding_service):
+        """Test search with different distance metrics."""
         query = "deep learning neural"
         query_embedding = embedding_service.encode([query])[0]
         
-        # Hybrid search
-        results = repository.hybrid_search(
-            query_text=query,
+        # Test cosine distance
+        results_cosine = repository.search_similar(
             query_embedding=query_embedding,
-            top_k=5,
-            alpha=0.5
+            top_k=3,
+            distance_metric='cosine'
         )
         
-        assert len(results) > 0
-        assert 'score' in results[0]
-    
-    def test_get_document_chunks(self, repository):
-        """Test retrieving all chunks for a document."""
-        chunks = repository.get_document_chunks(self.test_doc_id)
+        # Test L2 distance
+        results_l2 = repository.search_similar(
+            query_embedding=query_embedding,
+            top_k=3,
+            distance_metric='l2'
+        )
         
-        assert len(chunks) > 0
-        assert all(c['document_id'] == self.test_doc_id for c in chunks)
+        assert len(results_cosine) > 0
+        assert len(results_l2) > 0
+        assert 'distance' in results_cosine[0]
     
-    def test_delete_document(self, repository):
+    def test_get_document_by_id(self, repository, indexed_document):
+        """Test retrieving document metadata by ID."""
+        doc = repository.get_document_by_id(indexed_document)
+        
+        assert doc is not None
+        assert doc['document_id'] == indexed_document
+        assert 'chunk_count' in doc
+        assert doc['chunk_count'] > 0
+    
+    def test_delete_document(self, repository, indexed_document):
         """Test deleting the indexed document."""
         # Delete
-        deleted = repository.delete_document(self.test_doc_id)
+        deleted = repository.delete_document(indexed_document)
         assert deleted > 0
         
         # Verify deletion
-        assert not repository.document_exists(self.test_doc_id)
-        chunks = repository.get_document_chunks(self.test_doc_id)
-        assert len(chunks) == 0
+        assert not repository.document_exists(indexed_document)
+        doc = repository.get_document_by_id(indexed_document)
+        assert doc is None
 
 
 class TestDatabaseQueries:

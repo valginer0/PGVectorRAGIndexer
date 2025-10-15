@@ -35,17 +35,25 @@ echo ""
 # Check for existing containers
 if docker ps -a | grep -q "vector_rag_"; then
     echo -e "${YELLOW}⚠ Existing containers found${NC}"
-    read -p "Stop and remove existing containers? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        echo -e "${GREEN}Stopping and removing existing containers...${NC}"
-        docker compose down 2>/dev/null || true
-        docker rm -f vector_rag_db vector_rag_app 2>/dev/null || true
-        echo -e "${GREEN}✓ Cleanup complete${NC}"
+    
+    # Check if running interactively
+    if [ -t 0 ]; then
+        # Interactive mode - ask user
+        read -p "Stop and remove existing containers? (y/N): " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            echo -e "${RED}✗ Cannot proceed with existing containers. Exiting.${NC}"
+            exit 1
+        fi
     else
-        echo -e "${RED}✗ Cannot proceed with existing containers. Exiting.${NC}"
-        exit 1
+        # Non-interactive mode (piped) - auto cleanup
+        echo -e "${GREEN}Running in non-interactive mode - automatically cleaning up...${NC}"
     fi
+    
+    echo -e "${GREEN}Stopping and removing existing containers...${NC}"
+    docker compose down 2>/dev/null || true
+    docker rm -f vector_rag_db vector_rag_app 2>/dev/null || true
+    echo -e "${GREEN}✓ Cleanup complete${NC}"
 fi
 echo ""
 

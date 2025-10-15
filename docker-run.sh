@@ -32,6 +32,23 @@ cd "$DEPLOY_DIR"
 echo -e "${GREEN}Deployment directory: $DEPLOY_DIR${NC}"
 echo ""
 
+# Check for existing containers
+if docker ps -a | grep -q "vector_rag_"; then
+    echo -e "${YELLOW}⚠ Existing containers found${NC}"
+    read -p "Stop and remove existing containers? (y/N): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${GREEN}Stopping and removing existing containers...${NC}"
+        docker compose down 2>/dev/null || true
+        docker rm -f vector_rag_db vector_rag_app 2>/dev/null || true
+        echo -e "${GREEN}✓ Cleanup complete${NC}"
+    else
+        echo -e "${RED}✗ Cannot proceed with existing containers. Exiting.${NC}"
+        exit 1
+    fi
+fi
+echo ""
+
 # Create .env file if it doesn't exist
 if [ ! -f ".env" ]; then
     echo -e "${GREEN}Creating .env file...${NC}"

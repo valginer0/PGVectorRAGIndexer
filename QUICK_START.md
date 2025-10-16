@@ -1,93 +1,102 @@
 # Quick Start Guide - PGVectorRAGIndexer v2.0
 
-Get up and running in 5 minutes!
+Get up and running in 5 minutes with Docker-only deployment!
 
-## ⚡ Installation (2 minutes)
+## ⚡ Installation (1 minute)
+
+**One command to deploy everything:**
 
 ```bash
-# 1. Navigate to project
-cd ~/projects/PGVectorRAGIndexer
-
-# 2. Create virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Start database
-docker compose up -d
-
-# 5. Verify
-python indexer_v2.py stats
+curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
 ```
+
+That's it! The script will:
+- ✅ Pull pre-built Docker image
+- ✅ Set up PostgreSQL with pgvector
+- ✅ Initialize database schema
+- ✅ Start API server
+- ✅ Configure everything automatically
+
+**Services available at:**
+- 🌐 API: http://localhost:8000
+- 📚 Docs: http://localhost:8000/docs
+- 🗄️ Database: localhost:5432
+
+## ✅ Verify Installation (30 seconds)
+
+```bash
+# Check system health
+curl http://localhost:8000/health
+
+# Should show: "status": "healthy"
+```
+
+Open http://localhost:8000/docs in your browser to see the interactive API documentation!
 
 ## 📝 Basic Usage (3 minutes)
 
-### Index Your First Document
+### 1. Index Your First Document
 
+**Create a sample document:**
 ```bash
-# Index a PDF
-python indexer_v2.py index /path/to/document.pdf
+cat > ~/pgvector-rag/documents/sample.txt << 'EOF'
+Machine Learning Basics
 
-# Index from Windows path (auto-converted)
-python indexer_v2.py index "C:\Users\YourName\Documents\report.pdf"
-
-# Index a web page
-python indexer_v2.py index https://en.wikipedia.org/wiki/Machine_learning
+Machine learning is a method of data analysis that automates 
+analytical model building. It uses algorithms that iteratively 
+learn from data, allowing computers to find hidden insights.
+EOF
 ```
 
-### Search Your Documents
-
+**Index it via API:**
 ```bash
-# Basic search
-python retriever_v2.py "What is machine learning?"
-
-# Get more results
-python retriever_v2.py "Python programming" --top-k 10
-
-# Hybrid search (better results)
-python retriever_v2.py "database optimization" --hybrid
-```
-
-### Manage Documents
-
-```bash
-# List all indexed documents
-python indexer_v2.py list
-
-# Show statistics
-python indexer_v2.py stats
-
-# Delete a document
-python indexer_v2.py delete <document_id>
-```
-
-## 🌐 API Usage (Optional)
-
-### Start API Server
-
-```bash
-python api.py
-```
-
-Visit http://localhost:8000/docs for interactive API documentation!
-
-### Example API Calls
-
-```bash
-# Index a document
-curl -X POST "http://localhost:8000/index" \
+curl -X POST "http://localhost:8000/index/file" \
   -H "Content-Type: application/json" \
-  -d '{"source_uri": "/path/to/doc.pdf"}'
+  -d '{"file_path": "/app/documents/sample.txt"}'
+```
 
-# Search
+**Or index from URL:**
+```bash
+curl -X POST "http://localhost:8000/index/url" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://en.wikipedia.org/wiki/Machine_learning"}'
+```
+
+### 2. Search Your Documents
+
+```bash
 curl -X POST "http://localhost:8000/search" \
   -H "Content-Type: application/json" \
-  -d '{"query": "machine learning", "top_k": 5}'
+  -d '{
+    "query": "What is machine learning?",
+    "top_k": 5
+  }'
+```
 
-# Health check
-curl "http://localhost:8000/health"
+**Response:**
+```json
+{
+  "results": [
+    {
+      "text_content": "Machine learning is a method of data analysis...",
+      "distance": 0.234,
+      "source_uri": "/app/documents/sample.txt"
+    }
+  ]
+}
+```
+
+### 3. Manage Documents
+
+```bash
+# List all documents
+curl http://localhost:8000/documents
+
+# Get statistics
+curl http://localhost:8000/stats
+
+# Delete a document
+curl -X DELETE "http://localhost:8000/documents/<document_id>"
 ```
 
 ## 🎯 Common Tasks
@@ -95,62 +104,83 @@ curl "http://localhost:8000/health"
 ### Index Multiple Documents
 
 ```bash
-# Create a script
-for file in /path/to/documents/*.pdf; do
-    python indexer_v2.py index "$file"
+# Create multiple documents
+for i in {1..5}; do
+  echo "Document $i about topic $i" > ~/pgvector-rag/documents/doc$i.txt
+done
+
+# Index them all
+for i in {1..5}; do
+  curl -X POST "http://localhost:8000/index/file" \
+    -H "Content-Type: application/json" \
+    -d "{\"file_path\": \"/app/documents/doc$i.txt\"}"
 done
 ```
 
 ### Search with Filters
 
 ```bash
-# Search within specific document
-python retriever_v2.py "query" --filter-doc <document_id>
-
-# Set minimum relevance score
-python retriever_v2.py "query" --min-score 0.8
+# Search only in specific document
+curl -X POST "http://localhost:8000/search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "machine learning",
+    "top_k": 3,
+    "filters": {"document_id": "abc123..."}
+  }'
 ```
 
-### Get Context for RAG
+### Use Interactive API Docs
 
-```bash
-# Get formatted context for LLM
-python retriever_v2.py "explain neural networks" --context
-```
+Open http://localhost:8000/docs and try the API interactively!
 
 ## 🔧 Configuration
 
-Edit `.env` file to customize:
+Edit `~/pgvector-rag/.env` to customize:
 
 ```bash
 # Database
-DB_HOST=localhost
-DB_PORT=5432
+POSTGRES_USER=rag_user
+POSTGRES_PASSWORD=rag_password
+POSTGRES_DB=rag_vector_db
 
 # Embedding Model
 EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
 EMBEDDING_DIMENSION=384
 
-# Search
-RETRIEVAL_TOP_K=5
-RETRIEVAL_SIMILARITY_THRESHOLD=0.7
-
 # API
 API_PORT=8000
 ```
 
-## 🧪 Testing
+**Restart after changes:**
+```bash
+cd ~/pgvector-rag
+docker compose restart
+```
+
+## 🔍 Database Inspector
 
 ```bash
-# Run all tests
-pytest
+cd ~/pgvector-rag
 
-# Run specific tests
-pytest tests/test_config.py
+# Download inspector
+curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/inspect_db.sh -o inspect_db.sh
+chmod +x inspect_db.sh
 
-# With coverage
-pytest --cov
+# Run it
+./inspect_db.sh
 ```
+
+**Available options:**
+1. List all documents
+2. Count chunks per document
+3. Show recent chunks
+4. Search for text
+5. Show statistics
+6. List extensions
+7. Show table schema
+8. Interactive psql session
+9. Custom SQL query
 
 ## 📚 Next Steps
 
@@ -161,46 +191,72 @@ pytest --cov
 
 ## 🆘 Troubleshooting
 
-### Database Connection Error
+### Check Logs
 ```bash
-# Check if container is running
-docker ps
+cd ~/pgvector-rag
 
-# Restart container
+# All logs
+docker compose logs -f
+
+# Just API logs
+docker compose logs -f app
+
+# Just database logs
+docker compose logs -f db
+```
+
+### Common Issues
+
+**1. "Connection refused":**
+```bash
+# Check containers
+docker ps | grep vector_rag
+
+# Restart
+cd ~/pgvector-rag
 docker compose restart
 ```
 
-### Import Errors
+**2. "Port already in use":**
 ```bash
-# Activate virtual environment
-source venv/bin/activate
+# Change port in .env
+echo "API_PORT=8001" >> ~/pgvector-rag/.env
 
-# Reinstall dependencies
-pip install -r requirements.txt
+# Restart
+cd ~/pgvector-rag
+docker compose down
+docker compose up -d
 ```
 
-### Slow Performance
+**3. Update to latest version:**
 ```bash
-# Clear embedding cache
-python -c "from embeddings import get_embedding_service; get_embedding_service().clear_cache()"
-
-# Check database indexes
-python indexer_v2.py stats
+cd ~/pgvector-rag
+docker compose pull
+docker compose up -d
 ```
 
 ## 💡 Tips
 
-1. **Use hybrid search** for better results: `--hybrid`
-2. **Adjust top_k** based on your needs: `--top-k 10`
-3. **Set score threshold** to filter results: `--min-score 0.8`
-4. **Use verbose mode** to see full text: `--verbose`
-5. **Check stats regularly** to monitor system: `indexer_v2.py stats`
+1. **Use Interactive Docs**: http://localhost:8000/docs - Try all endpoints visually
+2. **Check Health**: `curl http://localhost:8000/health` - Verify system status
+3. **Monitor Logs**: `docker compose logs -f` - See what's happening
+4. **Inspect Database**: Use `./inspect_db.sh` - View indexed content
+5. **Backup Data**: Database persists in Docker volumes - Safe across restarts
+
+## 📖 More Resources
+
+- 📘 [USAGE_GUIDE.md](USAGE_GUIDE.md) - Complete usage examples
+- 🚀 [README.md](README.md) - Full documentation
+- 🏗️ [DEPLOYMENT.md](DEPLOYMENT.md) - Production deployment
+- 🐛 [GitHub Issues](https://github.com/valginer0/PGVectorRAGIndexer/issues) - Get help
 
 ## 🎉 You're Ready!
 
 Start indexing and searching your documents with semantic search powered by PostgreSQL and pgvector!
 
-For questions or issues, check the documentation or review the logs.
+**Your deployment directory:** `~/pgvector-rag/`
+**API endpoint:** http://localhost:8000
+**Interactive docs:** http://localhost:8000/docs
 
 ---
 

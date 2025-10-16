@@ -46,61 +46,91 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 
 ### Prerequisites
 
-- **Docker**: Docker Desktop or Rancher Desktop with WSL 2 backend
-- **Python**: Python 3.9+ in WSL Ubuntu
-- **PostgreSQL**: Runs via Docker container (included)
+- **Docker** (required): Docker Desktop or Rancher Desktop
+- That's it! Everything else runs in containers.
 
-### Installation
+### Installation (Recommended: Docker-Only)
 
-#### Quick Start (Automated - Recommended)
+**One command to deploy everything:**
 
-**Single command setup:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
+```
+
+This automatically:
+- ✅ Downloads pre-built Docker image from GitHub Container Registry
+- ✅ Sets up PostgreSQL with pgvector extension
+- ✅ Initializes database schema
+- ✅ Starts API server
+- ✅ No repository clone needed
+- ✅ No Python installation needed
+
+**Services will be available at:**
+- 🌐 API: `http://localhost:8000`
+- 📚 Interactive Docs: `http://localhost:8000/docs`
+- 🗄️ Database: `localhost:5432`
+
+### Basic Usage
+
+**1. Check system health:**
+```bash
+curl http://localhost:8000/health
+```
+
+**2. Index a document:**
+```bash
+# Place your document in the documents directory
+echo "Your document content here" > ~/pgvector-rag/documents/sample.txt
+
+# Index it via API
+curl -X POST "http://localhost:8000/index/file" \
+  -H "Content-Type: application/json" \
+  -d '{"file_path": "/app/documents/sample.txt"}'
+```
+
+**3. Search for similar content:**
+```bash
+curl -X POST "http://localhost:8000/search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "your search query",
+    "top_k": 5
+  }'
+```
+
+**4. View logs and manage:**
+```bash
+cd ~/pgvector-rag
+
+# View logs
+docker compose logs -f
+
+# Stop services
+docker compose down
+
+# Restart services
+docker compose restart
+
+# Update to latest version
+docker compose pull && docker compose up -d
+```
+
+See [USAGE_GUIDE.md](USAGE_GUIDE.md) for more examples and [QUICK_START.md](QUICK_START.md) for detailed setup.
+
+---
+
+### Alternative: Developer Setup (For Contributing)
+
+**If you want to modify the code:**
 ```bash
 git clone https://github.com/valginer0/PGVectorRAGIndexer.git
 cd PGVectorRAGIndexer
 ./setup.sh
 ```
 
-This automatically:
-- ✅ Checks prerequisites (Docker, Python)
-- ✅ Creates and configures `.env` file
-- ✅ Sets up Python virtual environment
-- ✅ Installs all dependencies
-- ✅ Starts PostgreSQL with pgvector
-- ✅ Initializes database schema
-- ✅ Verifies installation
+This sets up a local development environment with Python virtual environment.
 
-#### Alternative: Docker-Only Setup (No Repository Clone)
-
-**Run from pre-built Docker image (recommended for production):**
-```bash
-# Download and run deployment script
-curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
-```
-
-Or manually:
-```bash
-# Create deployment directory
-mkdir -p ~/pgvector-rag && cd ~/pgvector-rag
-
-# Download docker-compose.yml
-curl -O https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-compose.full.yml
-
-# Create .env file
-cat > .env << EOF
-POSTGRES_USER=rag_user
-POSTGRES_PASSWORD=rag_password
-POSTGRES_DB=rag_vector_db
-API_PORT=8000
-EOF
-
-# Start services
-docker compose -f docker-compose.full.yml up -d
-```
-
-This runs both database and API in containers. Access API at `http://localhost:8000`
-
-**Benefits:**
+**Benefits of Docker-only:**
 - ✅ No repository clone needed
 - ✅ No Python environment setup
 - ✅ Everything in containers

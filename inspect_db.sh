@@ -37,7 +37,8 @@ case $choice in
     1)
         echo -e "${BLUE}Listing all documents:${NC}"
         docker exec vector_rag_db psql -U rag_user -d rag_vector_db -c \
-            "SELECT DISTINCT document_id, source_uri, COUNT(*) as chunks 
+            "SELECT document_id, source_uri, COUNT(*) as chunks, 
+                    MAX(indexed_at) as last_indexed 
              FROM document_chunks 
              GROUP BY document_id, source_uri 
              ORDER BY MAX(indexed_at) DESC;"

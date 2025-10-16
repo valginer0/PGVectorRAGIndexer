@@ -5,6 +5,49 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Windows native support** - PowerShell deployment script (`docker-run.ps1`)
+- **WINDOWS_SETUP.md** - Comprehensive Windows setup guide
+- **DEPLOYMENT_OPTIONS.md** - Comparison of all deployment methods
+- **Docker Desktop and Rancher Desktop** support documented
+
+### Changed
+- Updated QUICK_START.md with Windows installation option
+- Updated README.md with Windows deployment instructions
+- Updated DEPLOYMENT.md with note pointing to simpler Docker-only guides
+
+### Removed
+- Deleted obsolete v1 documentation (README_v1_legacy.md)
+- Deleted one-time migration docs (IMPROVEMENTS_SUMMARY.md)
+- Deleted redundant licensing summary (LICENSING_SUMMARY.md)
+- Deleted internal ownership notes (OWNERSHIP_NOTES.md)
+
+## [2.0.2] - 2025-10-16
+
+### Added
+- **Upload-and-index endpoint** (`/upload-and-index`) for indexing files from ANY location
+- Upload files directly from Windows (C:, D:, network drives) without copying
+- Upload files from any Linux/macOS directory
+- 7 comprehensive unit tests for upload endpoint
+- Documentation updates with upload examples in README, QUICK_START, USAGE_GUIDE
+
+### Fixed
+- **Flaky integration tests** - Fixed `encode()` calls to use single string instead of `[string][0]`
+- Better test isolation with `indexed_document` fixture
+- Improved error messages in tests
+
+### Changed
+- All tests now pass consistently (37 tests: 11 integration + 19 embedding + 7 upload)
+
+## [2.0.1] - 2025-10-15
+
+### Fixed
+- **Critical embedding dimension bug** - Single text embeddings now return 1D list instead of 2D
+- Fixed "invalid input syntax for type vector" PostgreSQL error
+- Added regression test `test_single_text_returns_1d_list`
+
 ## [2.0.0] - 2025-10-14
 
 ### Added

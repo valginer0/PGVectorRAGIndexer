@@ -1,6 +1,13 @@
 # Deployment Guide - PGVectorRAGIndexer v2.0
 
-This guide covers deployment strategies for different environments.
+> **📌 Note:** For quick Docker-only deployment (recommended for most users), see:
+> - **Windows**: [WINDOWS_SETUP.md](WINDOWS_SETUP.md)
+> - **Linux/macOS/WSL**: [QUICK_START.md](QUICK_START.md)
+> - **Comparison**: [DEPLOYMENT_OPTIONS.md](DEPLOYMENT_OPTIONS.md)
+>
+> This guide covers **advanced production deployment** scenarios.
+
+This guide covers deployment strategies for production environments.
 
 ## 📦 Deployment Options
 

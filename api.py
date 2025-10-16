@@ -251,6 +251,83 @@ async def index_document(request: IndexRequest):
         )
 
 
+@app.post("/upload-and-index", response_model=IndexResponse, tags=["Indexing"])
+async def upload_and_index(
+    file: UploadFile = File(...),
+    force_reindex: bool = False
+):
+    """
+    Upload a file and index it immediately.
+    
+    This endpoint allows you to index files from any location on your system
+    without needing to copy them to the documents directory first.
+    
+    Args:
+        file: The file to upload and index
+        force_reindex: Force reindex if file already exists
+        
+    Returns:
+        IndexResponse with indexing results
+        
+    Example:
+        curl -X POST "http://localhost:8000/upload-and-index" \\
+          -F "file=@C:\\Users\\YourName\\Documents\\file.pdf"
+    """
+    import tempfile
+    import os
+    
+    temp_path = None
+    try:
+        # Create temporary file with original extension
+        suffix = os.path.splitext(file.filename)[1] if file.filename else '.tmp'
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            temp_path = temp_file.name
+            # Write uploaded content to temp file
+            content = await file.read()
+            temp_file.write(content)
+        
+        logger.info(f"Uploaded file: {file.filename} ({len(content)} bytes) -> {temp_path}")
+        
+        # Index the temporary file
+        idx = get_indexer()
+        result = idx.index_document(
+            source_uri=temp_path,
+            force_reindex=force_reindex,
+            custom_metadata={
+                'original_filename': file.filename,
+                'upload_method': 'http_upload'
+            }
+        )
+        
+        if result['status'] == 'error':
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result['message']
+            )
+        
+        # Update source_uri in response to show original filename
+        result['source_uri'] = file.filename
+        
+        return IndexResponse(**result)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Upload and index failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Upload and index failed: {str(e)}"
+        )
+    finally:
+        # Clean up temporary file
+        if temp_path and os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+                logger.debug(f"Cleaned up temp file: {temp_path}")
+            except Exception as e:
+                logger.warning(f"Failed to clean up temp file {temp_path}: {e}")
+
+
 @app.post("/search", response_model=SearchResponse, tags=["Search"])
 async def search_documents(request: SearchRequest):
     """Search for relevant documents."""

@@ -62,6 +62,17 @@ curl -X POST "http://localhost:8000/index" \
   -d '{"source_uri": "https://en.wikipedia.org/wiki/Machine_learning"}'
 ```
 
+**Or upload from ANY location (Windows/Linux):**
+```bash
+# From any Windows directory
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@C:\Users\YourName\Documents\myfile.pdf"
+
+# From any WSL/Linux directory
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@/home/user/documents/file.txt"
+```
+
 ### 2. Search Your Documents
 
 ```bash

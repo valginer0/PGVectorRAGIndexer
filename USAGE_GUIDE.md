@@ -95,7 +95,48 @@ curl -X POST "http://localhost:8000/index" \
   }'
 ```
 
-### 3. Index Text Directly
+### 3. Upload and Index from Any Location ⭐ NEW
+
+**Index files from ANY directory on your system** - no need to copy to documents folder!
+
+**From Windows:**
+```bash
+# Any folder on C: drive
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@C:\Users\YourName\Documents\report.pdf"
+
+# D: drive
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@D:\Projects\analysis.xlsx"
+
+# Network drive
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@\\server\share\document.docx"
+```
+
+**From WSL/Linux:**
+```bash
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@/home/user/documents/file.txt"
+```
+
+**With force reindex:**
+```bash
+curl -X POST "http://localhost:8000/upload-and-index?force_reindex=true" \
+  -F "file=@C:\path\to\file.pdf"
+```
+
+**Response:**
+```json
+{
+  "status": "success",
+  "document_id": "xyz789...",
+  "chunks_indexed": 5,
+  "source_uri": "report.pdf"
+}
+```
+
+### 4. Index Text Directly
 
 ```bash
 curl -X POST "http://localhost:8000/index" \
@@ -109,7 +150,7 @@ curl -X POST "http://localhost:8000/index" \
   }'
 ```
 
-### 4. Batch Index Multiple Files
+### 5. Batch Index Multiple Files
 
 ```bash
 # Create multiple documents

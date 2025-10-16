@@ -93,7 +93,14 @@ curl -X POST "http://localhost:8000/index" \
   -d '{"source_uri": "/app/documents/sample.txt"}'
 ```
 
-**3. Search for similar content:**
+**3. Or upload from ANY location:**
+```bash
+# Index files from any Windows directory - no copying needed!
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@C:\Users\YourName\Documents\report.pdf"
+```
+
+**4. Search for similar content:**
 ```bash
 curl -X POST "http://localhost:8000/search" \
   -H "Content-Type: application/json" \
@@ -103,7 +110,7 @@ curl -X POST "http://localhost:8000/search" \
   }'
 ```
 
-**4. View logs and manage:**
+**5. View logs and manage:**
 ```bash
 cd ~/pgvector-rag
 

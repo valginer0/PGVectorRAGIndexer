@@ -155,10 +155,9 @@ class TestIndexAndRetrieve:
         self.test_doc_id = processed_doc.document_id
     
     def test_search_indexed_document(self, repository, embedding_service, indexed_document):
-        """Test searching for the indexed document."""
-        # Generate query embedding
+        """Test searching for indexed document."""
         query = "machine learning and neural networks"
-        query_embedding = embedding_service.encode([query])[0]
+        query_embedding = embedding_service.encode(query)  # Single text returns 1D array
         
         # Search
         results = repository.search_similar(
@@ -167,20 +166,20 @@ class TestIndexAndRetrieve:
             distance_metric='cosine'
         )
         
-        assert len(results) > 0
-        assert results[0]['distance'] < 1.0  # Should have reasonable similarity
+        assert len(results) > 0, "Should return search results"
+        assert results[0]['distance'] < 1.0, "Should have reasonable similarity"
         
         # Verify result contains expected content
         found_ml_content = any(
             'machine learning' in result['text_content'].lower()
             for result in results
         )
-        assert found_ml_content, "Should find content about machine learning"
+        assert found_ml_content, f"Should find content about machine learning. Got: {[r['text_content'][:50] for r in results]}"
     
     def test_search_with_filters(self, repository, embedding_service, indexed_document):
         """Test searching with document filters."""
         query = "artificial intelligence"
-        query_embedding = embedding_service.encode([query])[0]
+        query_embedding = embedding_service.encode(query)  # Single text returns 1D array
         
         # Search with document_id filter
         results = repository.search_similar(
@@ -195,7 +194,7 @@ class TestIndexAndRetrieve:
     def test_search_different_metrics(self, repository, embedding_service):
         """Test search with different distance metrics."""
         query = "deep learning neural"
-        query_embedding = embedding_service.encode([query])[0]
+        query_embedding = embedding_service.encode(query)  # Single text returns 1D array
         
         # Test cosine distance
         results_cosine = repository.search_similar(
@@ -261,8 +260,8 @@ class TestEmbeddingConsistency:
         """Test that same text produces same embedding."""
         text = "This is a test sentence."
         
-        emb1 = embedding_service.encode([text])[0]
-        emb2 = embedding_service.encode([text])[0]
+        emb1 = embedding_service.encode(text)  # Single text returns 1D array
+        emb2 = embedding_service.encode(text)
         
         # Should be identical (or very close due to floating point)
         import numpy as np
@@ -271,7 +270,7 @@ class TestEmbeddingConsistency:
     def test_embedding_dimension(self, embedding_service):
         """Test embedding has correct dimension."""
         text = "Test text"
-        embedding = embedding_service.encode([text])[0]
+        embedding = embedding_service.encode(text)  # Single text returns 1D array
         
         assert len(embedding) == 384  # all-MiniLM-L6-v2 dimension
     

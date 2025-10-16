@@ -177,7 +177,7 @@ Start-Sleep -Seconds 5
 
 # Initialize database schema
 Write-Host "Initializing database schema..." -ForegroundColor Green
-Get-Content $initDbFile | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db 2>$null | Out-Null
+Get-Content $initDbFile | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db > $null 2>&1
 Write-Host "[OK] Database ready" -ForegroundColor Green
 
 Write-Host ""

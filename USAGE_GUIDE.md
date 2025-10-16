@@ -68,10 +68,10 @@ EOF
 
 **Index via API:**
 ```bash
-curl -X POST "http://localhost:8000/index/file" \
+curl -X POST "http://localhost:8000/index" \
   -H "Content-Type: application/json" \
   -d '{
-    "file_path": "/app/documents/ai_overview.txt"
+    "source_uri": "/app/documents/ai_overview.txt"
   }'
 ```
 
@@ -88,20 +88,20 @@ curl -X POST "http://localhost:8000/index/file" \
 ### 2. Index from URL
 
 ```bash
-curl -X POST "http://localhost:8000/index/url" \
+curl -X POST "http://localhost:8000/index" \
   -H "Content-Type: application/json" \
   -d '{
-    "url": "https://en.wikipedia.org/wiki/Machine_learning"
+    "source_uri": "https://en.wikipedia.org/wiki/Machine_learning"
   }'
 ```
 
 ### 3. Index Text Directly
 
 ```bash
-curl -X POST "http://localhost:8000/index/text" \
+curl -X POST "http://localhost:8000/index" \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "Quantum computing uses quantum-mechanical phenomena like superposition and entanglement to perform computation.",
+    "source_uri": "text://Quantum computing uses quantum-mechanical phenomena like superposition and entanglement to perform computation.",
     "metadata": {
       "source": "manual_entry",
       "topic": "quantum_computing"
@@ -119,9 +119,9 @@ done
 
 # Index them
 for i in {1..5}; do
-  curl -X POST "http://localhost:8000/index/file" \
+  curl -X POST "http://localhost:8000/index" \
     -H "Content-Type: application/json" \
-    -d "{\"file_path\": \"/app/documents/doc$i.txt\"}"
+    -d "{\"source_uri\": \"/app/documents/doc$i.txt\"}"
   echo ""
 done
 ```
@@ -387,17 +387,17 @@ class RAGClient:
     def index_file(self, file_path: str) -> Dict:
         """Index a file."""
         return requests.post(
-            f"{self.base_url}/index/file",
-            json={"file_path": file_path}
+            f"{self.base_url}/index",
+            json={"source_uri": file_path}
         ).json()
     
     def index_text(self, text: str, metadata: Optional[Dict] = None) -> Dict:
         """Index text directly."""
-        payload = {"text": text}
+        payload = {"source_uri": f"text://{text}"}
         if metadata:
             payload["metadata"] = metadata
         return requests.post(
-            f"{self.base_url}/index/text",
+            f"{self.base_url}/index",
             json=payload
         ).json()
     
@@ -427,10 +427,7 @@ class RAGClient:
 client = RAGClient()
 
 # Index some content
-doc = client.index_text(
-    "Docker is a platform for developing, shipping, and running applications in containers.",
-    metadata={"topic": "devops"}
-)
+doc = client.index_file("/app/documents/docker_intro.txt")
 print(f"Indexed document: {doc['document_id']}")
 
 # Search

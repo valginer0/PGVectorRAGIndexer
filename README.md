@@ -83,9 +83,9 @@ curl http://localhost:8000/health
 echo "Your document content here" > ~/pgvector-rag/documents/sample.txt
 
 # Index it via API
-curl -X POST "http://localhost:8000/index/file" \
+curl -X POST "http://localhost:8000/index" \
   -H "Content-Type: application/json" \
-  -d '{"file_path": "/app/documents/sample.txt"}'
+  -d '{"source_uri": "/app/documents/sample.txt"}'
 ```
 
 **3. Search for similar content:**

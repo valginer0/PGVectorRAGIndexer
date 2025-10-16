@@ -50,16 +50,16 @@ EOF
 
 **Index it via API:**
 ```bash
-curl -X POST "http://localhost:8000/index/file" \
+curl -X POST "http://localhost:8000/index" \
   -H "Content-Type: application/json" \
-  -d '{"file_path": "/app/documents/sample.txt"}'
+  -d '{"source_uri": "/app/documents/sample.txt"}'
 ```
 
 **Or index from URL:**
 ```bash
-curl -X POST "http://localhost:8000/index/url" \
+curl -X POST "http://localhost:8000/index" \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://en.wikipedia.org/wiki/Machine_learning"}'
+  -d '{"source_uri": "https://en.wikipedia.org/wiki/Machine_learning"}'
 ```
 
 ### 2. Search Your Documents
@@ -111,9 +111,9 @@ done
 
 # Index them all
 for i in {1..5}; do
-  curl -X POST "http://localhost:8000/index/file" \
+  curl -X POST "http://localhost:8000/index" \
     -H "Content-Type: application/json" \
-    -d "{\"file_path\": \"/app/documents/doc$i.txt\"}"
+    -d "{\"source_uri\": \"/app/documents/doc$i.txt\"}"
 done
 ```
 

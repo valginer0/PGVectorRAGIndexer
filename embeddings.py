@@ -137,7 +137,7 @@ class EmbeddingService:
             
             # Convert to list format
             if is_single:
-                embedding = embeddings.tolist()
+                embedding = embeddings[0].tolist()  # Get first element to flatten from 2D to 1D
                 self._add_to_cache(texts[0], embedding)
                 return embedding
             else:

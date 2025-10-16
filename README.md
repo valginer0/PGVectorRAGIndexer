@@ -79,8 +79,13 @@ curl http://localhost:8000/health
 
 **2. Index a document:**
 ```bash
-# Place your document in the documents directory
-echo "Your document content here" > ~/pgvector-rag/documents/sample.txt
+# Create a text document in the documents directory
+cat > ~/pgvector-rag/documents/sample.txt << 'EOF'
+Artificial Intelligence and Machine Learning
+
+Machine learning is a subset of AI that enables computers to learn from data.
+Deep learning uses neural networks to process complex patterns.
+EOF
 
 # Index it via API
 curl -X POST "http://localhost:8000/index" \

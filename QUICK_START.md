@@ -130,6 +130,16 @@ curl -X POST "http://localhost:8000/search" \
   }'
 ```
 
+### Supported File Types
+
+The system supports these file formats:
+- `.txt` - Plain text
+- `.pdf` - PDF documents
+- `.docx` - Word documents
+- `.xlsx`, `.csv` - Spreadsheets
+- `.html` - HTML files
+- `.pptx` - PowerPoint presentations
+
 ### Use Interactive API Docs
 
 Open http://localhost:8000/docs and try the API interactively!

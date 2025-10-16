@@ -31,6 +31,31 @@ class TestEmbeddingService:
         assert len(embedding) == embedding_service.config.dimension
         assert all(isinstance(x, float) for x in embedding)
     
+    def test_single_text_returns_1d_list(self, embedding_service):
+        """Test that single text returns 1D list, not 2D nested list.
+        
+        Bug: embeddings.tolist() on single text was returning [[...]] instead of [...]
+        This caused PostgreSQL vector type errors in search queries.
+        """
+        text = "Machine learning is a subset of artificial intelligence."
+        embedding = embedding_service.encode(text)
+        
+        # Should be a list
+        assert isinstance(embedding, list), f"Expected list, got {type(embedding)}"
+        
+        # Should have correct dimension
+        assert len(embedding) == embedding_service.config.dimension, \
+            f"Expected dimension {embedding_service.config.dimension}, got {len(embedding)}"
+        
+        # First element should be a float, NOT a list (this is the key test)
+        assert isinstance(embedding[0], (int, float)), \
+            f"Expected first element to be float, got {type(embedding[0])}. " \
+            f"This indicates a 2D list [[...]] instead of 1D list [...]"
+        
+        # All elements should be numbers
+        assert all(isinstance(x, (int, float)) for x in embedding), \
+            "All elements should be numbers, not nested lists"
+    
     def test_encode_multiple_texts(self, embedding_service):
         """Test encoding multiple texts."""
         texts = [
@@ -199,6 +224,11 @@ class TestEmbeddingServiceGlobalInstance:
 
 class TestEmbeddingDimensions:
     """Tests for different embedding dimensions."""
+    
+    @pytest.fixture
+    def embedding_service(self):
+        """Create embedding service instance."""
+        return EmbeddingService()
     
     def test_correct_dimension(self, embedding_service):
         """Test that embeddings have correct dimension."""

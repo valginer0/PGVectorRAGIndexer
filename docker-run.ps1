@@ -6,19 +6,19 @@
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Blue
-Write-Host "║     PGVectorRAGIndexer - Docker-Only Deployment           ║" -ForegroundColor Blue
-Write-Host "║                  (Windows Native)                          ║" -ForegroundColor Blue
-Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Blue
+Write-Host "============================================================" -ForegroundColor Blue
+Write-Host "     PGVectorRAGIndexer - Docker-Only Deployment           " -ForegroundColor Blue
+Write-Host "                  (Windows Native)                          " -ForegroundColor Blue
+Write-Host "============================================================" -ForegroundColor Blue
 Write-Host ""
 
 # Check Docker
 try {
     docker --version | Out-Null
 } catch {
-    Write-Host "✗ Docker not found. Please install a container runtime first." -ForegroundColor Red
+    Write-Host "[ERROR] Docker not found. Please install a container runtime first." -ForegroundColor Red
     Write-Host "  Docker Desktop: https://www.docker.com/products/docker-desktop" -ForegroundColor Yellow
-    Write-Host "  Rancher Desktop: https://rancherdesktop.io/ (free, open-source)" -ForegroundColor Yellow
+    Write-Host "  Rancher Desktop: https://rancherdesktop.io/ - free, open-source" -ForegroundColor Yellow
     exit 1
 }
 
@@ -26,7 +26,7 @@ try {
 try {
     docker ps | Out-Null
 } catch {
-    Write-Host "✗ Docker is not running. Please start your container runtime:" -ForegroundColor Red
+    Write-Host "[ERROR] Docker is not running. Please start your container runtime:" -ForegroundColor Red
     Write-Host "  - Docker Desktop: Start from Start menu" -ForegroundColor Yellow
     Write-Host "  - Rancher Desktop: Start from Start menu, ensure 'dockerd (moby)' is selected" -ForegroundColor Yellow
     exit 1
@@ -45,17 +45,17 @@ Write-Host ""
 # Check for existing containers
 $existingContainers = docker ps -a --filter "name=vector_rag_" --format "{{.Names}}"
 if ($existingContainers) {
-    Write-Host "⚠ Existing containers found" -ForegroundColor Yellow
+    Write-Host "[WARN] Existing containers found" -ForegroundColor Yellow
     $response = Read-Host "Stop and remove existing containers? (y/N)"
     if ($response -ne 'y' -and $response -ne 'Y') {
-        Write-Host "✗ Cannot proceed with existing containers. Exiting." -ForegroundColor Red
+        Write-Host "[ERROR] Cannot proceed with existing containers. Exiting." -ForegroundColor Red
         exit 1
     }
     
     Write-Host "Stopping and removing existing containers..." -ForegroundColor Green
     docker compose down 2>$null
     docker rm -f vector_rag_db vector_rag_app 2>$null
-    Write-Host "✓ Cleanup complete" -ForegroundColor Green
+    Write-Host "[OK] Cleanup complete" -ForegroundColor Green
 }
 Write-Host ""
 
@@ -79,15 +79,15 @@ EMBEDDING_DIMENSION=384
 API_HOST=0.0.0.0
 API_PORT=8000
 "@ | Out-File -FilePath $envFile -Encoding UTF8
-    Write-Host "✓ Created .env file" -ForegroundColor Green
+    Write-Host "[OK] Created .env file" -ForegroundColor Green
 } else {
-    Write-Host "⚠ .env file already exists" -ForegroundColor Yellow
+    Write-Host "[WARN] .env file already exists" -ForegroundColor Yellow
 }
 
 # Create docker-compose.yml
 Write-Host "Creating docker-compose.yml..." -ForegroundColor Green
 $composeFile = Join-Path $DeployDir "docker-compose.yml"
-@"
+$composeContent = @'
 version: '3.8'
 
 services:
@@ -96,15 +96,15 @@ services:
     container_name: vector_rag_db
     restart: always
     environment:
-      POSTGRES_USER: `${POSTGRES_USER}
-      POSTGRES_PASSWORD: `${POSTGRES_PASSWORD}
-      POSTGRES_DB: `${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U `${POSTGRES_USER} -d `${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -118,13 +118,13 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      POSTGRES_USER: `${POSTGRES_USER}
-      POSTGRES_PASSWORD: `${POSTGRES_PASSWORD}
-      POSTGRES_DB: `${POSTGRES_DB}
-      API_HOST: `${API_HOST}
-      API_PORT: `${API_PORT}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      API_HOST: ${API_HOST}
+      API_PORT: ${API_PORT}
     ports:
-      - "`${API_PORT}:8000"
+      - "${API_PORT}:8000"
     volumes:
       - ./documents:/app/documents
       - model_cache:/root/.cache/huggingface
@@ -141,7 +141,8 @@ volumes:
 networks:
   rag_network:
     driver: bridge
-"@ | Out-File -FilePath $composeFile -Encoding UTF8
+'@
+$composeContent | Out-File -FilePath $composeFile -Encoding UTF8
 
 # Download init-db.sql
 Write-Host "Downloading database initialization script..." -ForegroundColor Green
@@ -155,7 +156,7 @@ if (-not (Test-Path $documentsDir)) {
     New-Item -ItemType Directory -Path $documentsDir | Out-Null
 }
 
-Write-Host "✓ Configuration complete" -ForegroundColor Green
+Write-Host "[OK] Configuration complete" -ForegroundColor Green
 Write-Host ""
 
 # Start services
@@ -169,12 +170,12 @@ Start-Sleep -Seconds 5
 # Initialize database schema
 Write-Host "Initializing database schema..." -ForegroundColor Green
 Get-Content $initDbFile | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db 2>$null | Out-Null
-Write-Host "✓ Database ready" -ForegroundColor Green
+Write-Host "[OK] Database ready" -ForegroundColor Green
 
 Write-Host ""
-Write-Host "╔════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-Write-Host "║              ✓ Deployment Complete!                       ║" -ForegroundColor Green
-Write-Host "╚════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor Green
+Write-Host "              [OK] Deployment Complete!                     " -ForegroundColor Green
+Write-Host "============================================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "Services:" -ForegroundColor Blue
 Write-Host "  API:      http://localhost:8000" -ForegroundColor Yellow
@@ -193,7 +194,7 @@ Write-Host "  Update image: docker compose pull; docker compose up -d" -Foregrou
 Write-Host ""
 Write-Host "Upload files from ANY Windows location:" -ForegroundColor Blue
 Write-Host "  curl -X POST http://localhost:8000/upload-and-index ``" -ForegroundColor Yellow
-Write-Host "    -F 'file=@C:\Users\YourName\Documents\file.pdf'" -ForegroundColor Yellow
+Write-Host "    -F ""file=@C:\Users\YourName\Documents\file.pdf""" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Or place documents in: $documentsDir" -ForegroundColor Blue
 Write-Host ""

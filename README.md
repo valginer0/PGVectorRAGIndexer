@@ -51,11 +51,22 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 
 ### Installation (Recommended: Docker-Only)
 
-**One command to deploy everything:**
+#### For Linux/macOS/WSL:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
 ```
+
+#### For Windows (Native - No WSL Required):
+
+Open **PowerShell** and run:
+
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.ps1" -OutFile "$env:TEMP\docker-run.ps1"
+PowerShell -ExecutionPolicy Bypass -File "$env:TEMP\docker-run.ps1"
+```
+
+📖 **See [WINDOWS_SETUP.md](WINDOWS_SETUP.md) for detailed Windows instructions**
 
 This automatically:
 - ✅ Downloads pre-built Docker image from GitHub Container Registry

@@ -53,8 +53,16 @@ if ($existingContainers) {
     }
     
     Write-Host "Stopping and removing existing containers..." -ForegroundColor Green
-    docker compose down 2>$null
-    docker rm -f vector_rag_db vector_rag_app 2>$null
+    
+    # Try docker compose down if compose file exists
+    $composeFile = Join-Path $DeployDir "docker-compose.yml"
+    if (Test-Path $composeFile) {
+        Set-Location $DeployDir
+        docker compose down 2>$null | Out-Null
+    }
+    
+    # Force remove containers by name
+    docker rm -f vector_rag_db vector_rag_app 2>$null | Out-Null
     Write-Host "[OK] Cleanup complete" -ForegroundColor Green
 }
 Write-Host ""

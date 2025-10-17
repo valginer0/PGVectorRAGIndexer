@@ -39,35 +39,48 @@ if [ -f "VERSION" ]; then
     CURRENT_VERSION=$(cat VERSION)
     echo -e "${BLUE}Current version: ${YELLOW}v$CURRENT_VERSION${NC}"
 else
-    CURRENT_VERSION="1.0.0"
-    echo -e "${YELLOW}No VERSION file found. Starting from v1.0.0${NC}"
+    CURRENT_VERSION="0.0.0"
+    echo -e "${YELLOW}No VERSION file found. Starting from v0.0.0${NC}"
 fi
 
-# Ask for new version
-echo ""
-echo -e "${GREEN}Enter new version (e.g., 2.0.0, 2.1.0, 2.0.1):${NC}"
-read -p "> " NEW_VERSION
+# Parse current version
+IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
 
-# Validate version format
-if ! [[ $NEW_VERSION =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-    echo -e "${RED}✗ Invalid version format. Use semantic versioning (e.g., 2.0.0)${NC}"
+# Determine new version based on argument
+BUMP_TYPE="${1:-patch}"  # Default to patch if no argument
+
+if [[ $BUMP_TYPE =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    # Explicit version provided
+    NEW_VERSION="$BUMP_TYPE"
+    echo -e "${GREEN}Using explicit version: ${YELLOW}v$NEW_VERSION${NC}"
+elif [ "$BUMP_TYPE" = "major" ]; then
+    NEW_VERSION="$((MAJOR + 1)).0.0"
+    echo -e "${GREEN}Bumping major version: ${YELLOW}v$CURRENT_VERSION → v$NEW_VERSION${NC}"
+elif [ "$BUMP_TYPE" = "minor" ]; then
+    NEW_VERSION="$MAJOR.$((MINOR + 1)).0"
+    echo -e "${GREEN}Bumping minor version: ${YELLOW}v$CURRENT_VERSION → v$NEW_VERSION${NC}"
+elif [ "$BUMP_TYPE" = "patch" ]; then
+    NEW_VERSION="$MAJOR.$MINOR.$((PATCH + 1))"
+    echo -e "${GREEN}Bumping patch version: ${YELLOW}v$CURRENT_VERSION → v$NEW_VERSION${NC}"
+else
+    echo -e "${RED}✗ Invalid argument. Use: major, minor, patch, or explicit version (e.g., 2.0.3)${NC}"
+    echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  ./release.sh          # Auto-bump patch"
+    echo -e "  ./release.sh patch    # Bump patch: 2.0.2 → 2.0.3"
+    echo -e "  ./release.sh minor    # Bump minor: 2.0.2 → 2.1.0"
+    echo -e "  ./release.sh major    # Bump major: 2.0.2 → 3.0.0"
+    echo -e "  ./release.sh 2.5.7    # Explicit version"
     exit 1
 fi
 
-# Confirm
 echo ""
 echo -e "${YELLOW}This will:${NC}"
 echo -e "  1. Update VERSION file to ${GREEN}$NEW_VERSION${NC}"
-echo -e "  2. Create git tag ${GREEN}v$NEW_VERSION${NC}"
-echo -e "  3. Push tag to GitHub"
-echo -e "  4. Trigger Docker build and publish to GitHub Container Registry"
+echo -e "  2. Run tests"
+echo -e "  3. Create git tag ${GREEN}v$NEW_VERSION${NC}"
+echo -e "  4. Push tag to GitHub"
+echo -e "  5. Trigger Docker build and publish to GitHub Container Registry"
 echo ""
-read -p "Continue? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "${YELLOW}Release cancelled.${NC}"
-    exit 0
-fi
 
 # Update VERSION file
 echo "$NEW_VERSION" > VERSION

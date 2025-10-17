@@ -22,6 +22,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY *.py ./
 COPY init-db.sql ./
 
+# Copy static files for Web UI
+COPY static/ ./static/
+
 # Create directories
 RUN mkdir -p /app/documents
 

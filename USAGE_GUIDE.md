@@ -21,10 +21,31 @@ Complete guide for using PGVectorRAGIndexer with Docker-only deployment.
 curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
 ```
 
+### Access the System
+
+**Option 1: Web UI (Recommended for most users)**
+
+Open in your browser: **http://localhost:8000**
+
+The modern web interface provides:
+- 🔍 **Search Tab**: Semantic and hybrid search with configurable options
+- 📤 **Upload Tab**: Drag & drop file upload with progress tracking
+- 📚 **Documents Tab**: Browse and manage indexed documents
+- 📊 **Statistics Tab**: System health and metrics dashboard
+
+**Option 2: REST API (For developers and integrations)**
+
+- **API Documentation**: http://localhost:8000/docs (Swagger UI)
+- **API Endpoints**: http://localhost:8000/api
+
 ### Verify Installation
 
+**Using Web UI:**
+- Open http://localhost:8000
+- Check the status indicator in the header (should show "System Healthy")
+
+**Using API:**
 ```bash
-# Check health
 curl http://localhost:8000/health
 
 # Should return:
@@ -35,17 +56,21 @@ curl http://localhost:8000/health
 # }
 ```
 
-### Access Interactive Documentation
-
-Open in your browser: http://localhost:8000/docs
-
-This provides a Swagger UI where you can test all API endpoints interactively.
-
 ---
 
 ## Indexing Documents
 
-### 1. Index a Local File
+### Method 1: Using Web UI (Easiest)
+
+1. Open http://localhost:8000
+2. Click the **📤 Upload** tab
+3. Drag & drop your files or click to browse
+4. Watch the progress bars as files are indexed
+5. ✅ Done! Files are now searchable
+
+**Supported formats:** TXT, PDF, DOCX, MD
+
+### Method 2: Using API
 
 **Prepare your document:**
 ```bash
@@ -171,7 +196,21 @@ done
 
 ## Searching
 
-### 1. Basic Semantic Search
+### Method 1: Using Web UI (Easiest)
+
+1. Open http://localhost:8000
+2. Click the **🔍 Search** tab (default)
+3. Enter your query in the search box
+4. Adjust options if needed:
+   - **Results**: Number of results to return (1-50)
+   - **Similarity Threshold**: Minimum relevance score (0-1)
+   - **Search Method**: Semantic or Hybrid
+5. Click **Search**
+6. View results with similarity scores and source documents
+
+### Method 2: Using API
+
+**Basic Semantic Search:**
 
 ```bash
 curl -X POST "http://localhost:8000/search" \

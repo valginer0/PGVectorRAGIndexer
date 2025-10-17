@@ -1,31 +1,65 @@
 # PGVectorRAGIndexer Docker Compose Configuration
 # 
-# IMPORTANT: Update PROJECT_DIR in .env file with your absolute path
-# This is required for Rancher Desktop compatibility on WSL
-# 
-# Example: PROJECT_DIR=/home/username/projects/PGVectorRAGIndexer
+# For production deployment, use the automated scripts:
+#   Linux/macOS/WSL: curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
+#   Windows: See WINDOWS_SETUP.md
+#
+# For development, create a .env file with:
+#   POSTGRES_USER=rag_user
+#   POSTGRES_PASSWORD=rag_password
+#   POSTGRES_DB=rag_vector_db
+#   API_HOST=0.0.0.0
+#   API_PORT=8000
 
 services:
-  # Define the PostgreSQL service using pgvector image
+  # PostgreSQL database with pgvector extension
   db:
-    # Use a pre-built image with PostgreSQL 16 and pgvector installed
     image: pgvector/pgvector:pg16
     container_name: vector_rag_db
     restart: always
     environment:
-      # These variables set up the initial database user and credentials
-      POSTGRES_USER: rag_user
-      POSTGRES_PASSWORD: rag_password
-      POSTGRES_DB: rag_vector_db
+      POSTGRES_USER: ${POSTGRES_USER:-rag_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_password}
+      POSTGRES_DB: ${POSTGRES_DB:-rag_vector_db}
     ports:
-      # Map container port 5432 to host port 5432
       - "5432:5432"
     volumes:
-      # Data persistence volume: Stores DB files on the host filesystem (outside the container)
       - postgres_data:/var/lib/postgresql/data
-      # Initialization script: Runs the init-db.sql script to create extension/table on first run
-      - ${PROJECT_DIR}/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag_user} -d ${POSTGRES_DB:-rag_vector_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag_network
 
-# Define the named volume for persistent storage
+  # PGVectorRAGIndexer application
+  app:
+    image: ghcr.io/valginer0/pgvectorragindexer:latest
+    container_name: vector_rag_app
+    restart: always
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-rag_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_password}
+      POSTGRES_DB: ${POSTGRES_DB:-rag_vector_db}
+      API_HOST: ${API_HOST:-0.0.0.0}
+      API_PORT: ${API_PORT:-8000}
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./documents:/app/documents
+      - model_cache:/root/.cache/huggingface
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - rag_network
+
 volumes:
   postgres_data:
+  model_cache:
+
+networks:
+  rag_network:

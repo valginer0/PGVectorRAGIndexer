@@ -96,8 +96,6 @@ API_PORT=8000
 Write-Host "Creating docker-compose.yml..." -ForegroundColor Green
 $composeFile = Join-Path $DeployDir "docker-compose.yml"
 $composeContent = @'
-version: '3.8'
-
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -170,12 +168,16 @@ Write-Host ""
 # Pull latest images
 Write-Host "Pulling latest Docker images..." -ForegroundColor Green
 Set-Location $DeployDir
-docker compose pull
+$ErrorActionPreference = 'SilentlyContinue'
+docker compose pull 2>&1 | Out-Null
+$ErrorActionPreference = 'Stop'
 
 # Start services
 Write-Host "Starting services..." -ForegroundColor Green
 Set-Location $DeployDir
-docker compose up -d
+$ErrorActionPreference = 'SilentlyContinue'
+docker compose up -d 2>&1 | Out-Null
+$ErrorActionPreference = 'Stop'
 
 # Wait for database to be ready
 Write-Host "Waiting for database to initialize..." -ForegroundColor Green
@@ -183,7 +185,9 @@ Start-Sleep -Seconds 5
 
 # Initialize database schema
 Write-Host "Initializing database schema..." -ForegroundColor Green
-Get-Content $initDbFile | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db *> $null
+$ErrorActionPreference = 'SilentlyContinue'
+Get-Content $initDbFile | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db 2>&1 | Out-Null
+$ErrorActionPreference = 'Stop'
 Write-Host "[OK] Database ready" -ForegroundColor Green
 
 Write-Host ""

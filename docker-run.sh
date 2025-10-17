@@ -87,8 +87,6 @@ fi
 # Create docker-compose.yml
 echo -e "${GREEN}Creating docker-compose.yml...${NC}"
 cat > docker-compose.yml << 'EOF'
-version: '3.8'
-
 services:
   db:
     image: pgvector/pgvector:pg16

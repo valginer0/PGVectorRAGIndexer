@@ -86,14 +86,35 @@ echo ""
 echo "$NEW_VERSION" > VERSION
 echo -e "${GREEN}✓ Updated VERSION file${NC}"
 
+# Ensure database is running for tests
+echo -e "${GREEN}Checking database...${NC}"
+DB_RUNNING=false
+if docker ps | grep -q vector_rag_db; then
+    echo -e "${GREEN}✓ Database already running${NC}"
+    DB_RUNNING=true
+else
+    echo -e "${YELLOW}Database not running. Starting test database...${NC}"
+    # Check if we have docker-compose.yml in a test location or use existing deployment
+    if [ -d "$HOME/pgvector-rag" ] && [ -f "$HOME/pgvector-rag/docker-compose.yml" ]; then
+        cd "$HOME/pgvector-rag"
+        docker compose up -d db
+        sleep 5  # Wait for database to be ready
+        cd - > /dev/null
+        echo -e "${GREEN}✓ Started test database${NC}"
+    else
+        echo -e "${YELLOW}⚠ No database available. Tests requiring database will be skipped.${NC}"
+    fi
+fi
+
 # Run tests
 echo -e "${GREEN}Running tests...${NC}"
 if command -v python3 &> /dev/null; then
     if [ -d "venv" ]; then
         source venv/bin/activate
-        # Run all tests except integration (which require database)
-        python -m pytest tests/ --ignore=tests/test_integration.py -v
-        if [ $? -ne 0 ]; then
+        # Run ALL tests
+        python -m pytest tests/ -v
+        TEST_RESULT=$?
+        if [ $TEST_RESULT -ne 0 ]; then
             echo -e "${RED}✗ Tests failed. Please fix before releasing.${NC}"
             exit 1
         fi

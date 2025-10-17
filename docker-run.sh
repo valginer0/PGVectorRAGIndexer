@@ -152,6 +152,10 @@ mkdir -p documents
 echo -e "${GREEN}✓ Configuration complete${NC}"
 echo ""
 
+# Pull latest images
+echo -e "${GREEN}Pulling latest Docker images...${NC}"
+docker compose pull
+
 # Start services
 echo -e "${GREEN}Starting services...${NC}"
 docker compose up -d

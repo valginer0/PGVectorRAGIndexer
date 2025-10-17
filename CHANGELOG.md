@@ -5,18 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.0.3] - 2025-10-16
 
 ### Added
 - **Windows native support** - PowerShell deployment script (`docker-run.ps1`)
 - **WINDOWS_SETUP.md** - Comprehensive Windows setup guide
 - **DEPLOYMENT_OPTIONS.md** - Comparison of all deployment methods
 - **Docker Desktop and Rancher Desktop** support documented
+- **DOCUMENTATION_STRUCTURE.md** - Documentation roadmap
 
 ### Changed
 - Updated QUICK_START.md with Windows installation option
 - Updated README.md with Windows deployment instructions
 - Updated DEPLOYMENT.md with note pointing to simpler Docker-only guides
+- Improved PowerShell script with better error handling and output suppression
+
+### Fixed
+- PowerShell script syntax errors (Unicode characters, here-string format)
+- Container cleanup logic in PowerShell script
+- PostgreSQL notice output suppression
 
 ### Removed
 - Deleted obsolete v1 documentation (README_v1_legacy.md)

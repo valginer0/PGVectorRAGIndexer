@@ -167,6 +167,10 @@ if (-not (Test-Path $documentsDir)) {
 Write-Host "[OK] Configuration complete" -ForegroundColor Green
 Write-Host ""
 
+# Pull latest images
+Write-Host "Pulling latest Docker images..." -ForegroundColor Green
+docker compose pull
+
 # Start services
 Write-Host "Starting services..." -ForegroundColor Green
 docker compose up -d

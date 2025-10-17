@@ -11,7 +11,8 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from config import get_config
@@ -141,6 +142,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Mount static files for web UI
+import os
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if os.path.exists(static_dir):
+    app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 # Initialize services (will be created on first request)
 indexer: Optional[DocumentIndexer] = None
 retriever: Optional[DocumentRetriever] = None
@@ -164,9 +171,20 @@ def get_retriever() -> DocumentRetriever:
 
 # API Endpoints
 
-@app.get("/", tags=["General"])
+@app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def root():
-    """Root endpoint with API information."""
+    """Serve the web UI."""
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    index_path = os.path.join(static_dir, "index.html")
+    if os.path.exists(index_path):
+        with open(index_path, 'r') as f:
+            return f.read()
+    return "<h1>PGVectorRAGIndexer API</h1><p>Visit <a href='/docs'>/docs</a> for API documentation</p>"
+
+
+@app.get("/api", tags=["General"])
+async def api_info():
+    """API information endpoint."""
     return {
         "name": "PGVectorRAGIndexer API",
         "version": "2.0.0",

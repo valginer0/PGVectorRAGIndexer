@@ -91,7 +91,8 @@ echo -e "${GREEN}Running tests...${NC}"
 if command -v python3 &> /dev/null; then
     if [ -d "venv" ]; then
         source venv/bin/activate
-        python -m pytest tests/test_integration.py -v
+        # Run all tests except integration (which require database)
+        python -m pytest tests/ --ignore=tests/test_integration.py -v
         if [ $? -ne 0 ]; then
             echo -e "${RED}✗ Tests failed. Please fix before releasing.${NC}"
             exit 1

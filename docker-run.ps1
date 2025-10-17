@@ -58,11 +58,11 @@ if ($existingContainers) {
     $composeFile = Join-Path $DeployDir "docker-compose.yml"
     if (Test-Path $composeFile) {
         Set-Location $DeployDir
-        docker compose down 2>$null | Out-Null
+        docker compose down *> $null
     }
     
     # Force remove containers by name
-    docker rm -f vector_rag_db vector_rag_app 2>$null | Out-Null
+    docker rm -f vector_rag_db vector_rag_app *> $null
     Write-Host "[OK] Cleanup complete" -ForegroundColor Green
 }
 Write-Host ""
@@ -169,10 +169,12 @@ Write-Host ""
 
 # Pull latest images
 Write-Host "Pulling latest Docker images..." -ForegroundColor Green
+Set-Location $DeployDir
 docker compose pull
 
 # Start services
 Write-Host "Starting services..." -ForegroundColor Green
+Set-Location $DeployDir
 docker compose up -d
 
 # Wait for database to be ready
@@ -181,7 +183,7 @@ Start-Sleep -Seconds 5
 
 # Initialize database schema
 Write-Host "Initializing database schema..." -ForegroundColor Green
-Get-Content $initDbFile | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db > $null 2>&1
+Get-Content $initDbFile | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db *> $null
 Write-Host "[OK] Database ready" -ForegroundColor Green
 
 Write-Host ""

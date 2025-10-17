@@ -31,11 +31,22 @@ That's it! The script will:
 - ✅ Configure everything automatically
 
 **Services available at:**
-- 🌐 API: http://localhost:8000
-- 📚 Docs: http://localhost:8000/docs
-- 🗄️ Database: localhost:5432
+- 🌐 **Web UI**: http://localhost:8000 (Start here!)
+- 📚 **API Docs**: http://localhost:8000/docs
+- 🔧 **API**: http://localhost:8000/api
+- 🗄️ **Database**: localhost:5432
 
 ## ✅ Verify Installation (30 seconds)
+
+**Option 1: Use the Web UI (Easiest)**
+
+Open http://localhost:8000 in your browser - you'll see a modern interface where you can:
+- 🔍 Search documents
+- 📤 Upload files (drag & drop)
+- 📚 Browse indexed documents
+- 📊 View system statistics
+
+**Option 2: Use the API**
 
 ```bash
 # Check system health
@@ -44,7 +55,7 @@ curl http://localhost:8000/health
 # Should show: "status": "healthy"
 ```
 
-Open http://localhost:8000/docs in your browser to see the interactive API documentation!
+For API integration, visit http://localhost:8000/docs for interactive documentation!
 
 ## 📝 Basic Usage (3 minutes)
 

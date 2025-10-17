@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Modern Web UI** - User-friendly web interface for document management
+  - Search interface with semantic and hybrid options
+  - Drag & drop file upload with progress tracking
+  - Document browser with delete functionality
+  - Statistics dashboard with system metrics
+  - Responsive design with gradient theme
+- 11 comprehensive tests for web UI functionality
+
+### Changed
+- Root endpoint (`/`) now serves web UI instead of JSON
+- API info moved to `/api` endpoint
+- Updated documentation (README, QUICK_START) to highlight web UI
+
 ## [2.0.3] - 2025-10-16
 
 ### Added
@@ -13,17 +29,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DEPLOYMENT_OPTIONS.md** - Comparison of all deployment methods
 - **Docker Desktop and Rancher Desktop** support documented
 - **DOCUMENTATION_STRUCTURE.md** - Documentation roadmap
+- **Automated release script** with smart version bumping (patch/minor/major)
+- Database startup in release script for comprehensive testing
 
 ### Changed
 - Updated QUICK_START.md with Windows installation option
 - Updated README.md with Windows deployment instructions
 - Updated DEPLOYMENT.md with note pointing to simpler Docker-only guides
 - Improved PowerShell script with better error handling and output suppression
+- Release script now runs ALL tests (not selective)
+- Release script auto-bumps version without manual input
 
 ### Fixed
+- **Critical**: Upload endpoint now stores original filename instead of temp path
 - PowerShell script syntax errors (Unicode characters, here-string format)
 - Container cleanup logic in PowerShell script
 - PostgreSQL notice output suppression
+- Docker Compose obsolete `version` field warning
+- Container removal errors during cleanup
+- Test failures: Pydantic config validation, exception type expectations
 
 ### Removed
 - Deleted obsolete v1 documentation (README_v1_legacy.md)

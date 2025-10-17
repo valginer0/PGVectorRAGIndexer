@@ -6,6 +6,7 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 
 ### Major Improvements
 
+- **✅ Modern Web UI**: User-friendly web interface for search, upload, and document management
 - **✅ Modular Architecture**: Clean separation of concerns with dedicated modules for config, database, embeddings, and processing
 - **✅ Configuration Management**: Pydantic-based configuration with validation and environment variable support
 - **✅ Connection Pooling**: Efficient database connection management with automatic retry and health checks
@@ -33,6 +34,14 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 - **Embedding Cache**: Speed up repeated queries with in-memory cache
 - **Batch Operations**: Process multiple documents efficiently
 - **Health Monitoring**: Built-in health checks and statistics
+
+### User Interface
+
+- **Modern Web UI**: Beautiful, responsive web interface for non-technical users
+- **Search Interface**: Intuitive search with semantic and hybrid options
+- **Drag & Drop Upload**: Easy file upload with progress tracking
+- **Document Browser**: View and manage all indexed documents
+- **Statistics Dashboard**: Real-time system health and metrics
 
 ### API Features
 
@@ -77,9 +86,10 @@ This automatically:
 - ✅ No Python installation needed
 
 **Services will be available at:**
-- 🌐 API: `http://localhost:8000`
-- 📚 Interactive Docs: `http://localhost:8000/docs`
-- 🗄️ Database: `localhost:5432`
+- 🌐 **Web UI**: `http://localhost:8000` (User-friendly interface)
+- 📚 **API Docs**: `http://localhost:8000/docs` (Interactive API documentation)
+- 🔧 **API**: `http://localhost:8000/api` (REST API endpoints)
+- 🗄️ **Database**: `localhost:5432` (PostgreSQL with pgvector)
 
 ### Basic Usage
 

@@ -21,7 +21,7 @@ from langchain_community.document_loaders import (
     UnstructuredFileLoader
 )
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain.schema.document import Document
+from langchain_core.documents import Document
 
 from config import get_config
 

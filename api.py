@@ -17,7 +17,7 @@ from pydantic import BaseModel, Field
 from config import get_config
 from database import get_db_manager, close_db_manager, DocumentRepository
 from embeddings import get_embedding_service
-from document_processor import DocumentProcessor
+from document_processor import DocumentProcessor, UnsupportedFormatError, DocumentProcessingError
 from indexer_v2 import DocumentIndexer
 from retriever_v2 import DocumentRetriever, SearchResult
 
@@ -288,30 +288,74 @@ async def upload_and_index(
         
         logger.info(f"Uploaded file: {file.filename} ({len(content)} bytes) -> {temp_path}")
         
-        # Index the temporary file
+        # Process the file using temp path, but override source_uri to original filename
         idx = get_indexer()
-        result = idx.index_document(
+        
+        # Process document from temp file
+        processed_doc = idx.processor.process(
             source_uri=temp_path,
-            force_reindex=force_reindex,
             custom_metadata={
-                'original_filename': file.filename,
-                'upload_method': 'http_upload'
+                'upload_method': 'http_upload',
+                'original_filename': file.filename
             }
         )
         
-        if result['status'] == 'error':
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result['message']
+        # Override source_uri to use original filename instead of temp path
+        processed_doc.source_uri = file.filename
+        processed_doc.metadata['source_uri'] = file.filename
+        
+        # Check if document already exists
+        if not force_reindex and idx.repository.document_exists(processed_doc.document_id):
+            return IndexResponse(
+                status='skipped',
+                document_id=processed_doc.document_id,
+                source_uri=file.filename,
+                chunks_indexed=0,
+                message='Document already indexed (use force_reindex=true to reindex)'
             )
         
-        # Update source_uri in response to show original filename
-        result['source_uri'] = file.filename
+        # Delete existing if force reindex
+        if force_reindex and idx.repository.document_exists(processed_doc.document_id):
+            logger.info(f"Removing existing document: {processed_doc.document_id}")
+            idx.repository.delete_document(processed_doc.document_id)
         
-        return IndexResponse(**result)
+        # Generate embeddings
+        logger.info(f"Generating embeddings for {len(processed_doc.chunks)} chunks...")
+        chunk_texts = processed_doc.get_chunk_texts()
+        embeddings = idx.embedding_service.encode_batch(chunk_texts, show_progress=False)
+        
+        # Prepare chunks for insertion
+        chunks_data = []
+        for i, (chunk, embedding) in enumerate(zip(processed_doc.chunks, embeddings)):
+            chunks_data.append((
+                processed_doc.document_id,
+                i,
+                chunk.page_content,
+                processed_doc.source_uri,  # This is now the original filename
+                embedding
+            ))
+        
+        # Insert into database
+        logger.info(f"Storing {len(chunks_data)} chunks in database...")
+        idx.repository.insert_chunks(chunks_data)
+        
+        logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
+        
+        return IndexResponse(
+            status='success',
+            document_id=processed_doc.document_id,
+            source_uri=file.filename,
+            chunks_indexed=len(chunks_data)
+        )
         
     except HTTPException:
         raise
+    except (UnsupportedFormatError, DocumentProcessingError) as e:
+        logger.error(f"Upload and index failed: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error(f"Upload and index failed: {e}")
         raise HTTPException(

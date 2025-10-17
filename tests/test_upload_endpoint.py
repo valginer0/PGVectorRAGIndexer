@@ -93,7 +93,7 @@ class TestUploadAndIndex:
         assert response.status_code == 422  # Validation error
     
     def test_upload_preserves_filename(self, client):
-        """Test that original filename is preserved in metadata."""
+        """Test that original filename is preserved in metadata and database."""
         file_content = b"Test content with filename preservation."
         file_data = io.BytesIO(file_content)
         original_filename = "my_important_document.txt"
@@ -106,6 +106,18 @@ class TestUploadAndIndex:
         assert response.status_code == 200
         data = response.json()
         assert data["source_uri"] == original_filename
+        
+        # Verify it's stored correctly in database
+        document_id = data["document_id"]
+        docs_response = client.get("/documents")
+        assert docs_response.status_code == 200
+        docs = docs_response.json()
+        
+        # Find our document
+        uploaded_doc = next((d for d in docs if d["document_id"] == document_id), None)
+        assert uploaded_doc is not None
+        assert uploaded_doc["source_uri"] == original_filename
+        assert "/tmp/" not in uploaded_doc["source_uri"], "source_uri should not contain temp path"
     
     def test_upload_large_file(self, client):
         """Test uploading a larger file."""

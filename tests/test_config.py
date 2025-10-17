@@ -33,9 +33,9 @@ class TestDatabaseConfig:
         config = DatabaseConfig(
             host='testhost',
             port=5433,
-            user='testuser',
-            password='testpass',
-            name='testdb'
+            POSTGRES_USER='testuser',
+            POSTGRES_PASSWORD='testpass',
+            POSTGRES_DB='testdb'
         )
         expected = 'postgresql://testuser:testpass@testhost:5433/testdb'
         assert config.connection_string == expected

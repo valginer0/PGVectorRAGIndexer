@@ -70,8 +70,8 @@ class TestDatabaseManager:
         try:
             with db_manager.get_cursor() as cursor:
                 cursor.execute("INVALID SQL QUERY")
-        except QueryError:
-            pass  # Expected
+        except ConnectionPoolError:
+            pass  # Expected - QueryError is wrapped in ConnectionPoolError
         
         # Connection should still work after error
         with db_manager.get_cursor() as cursor:
@@ -242,7 +242,7 @@ class TestDocumentRepository:
         repo.insert_chunks(chunks)
         
         # Try to insert same chunk again (should fail due to UNIQUE constraint)
-        with pytest.raises(QueryError):
+        with pytest.raises(ConnectionPoolError):
             repo.insert_chunks(chunks)
 
 

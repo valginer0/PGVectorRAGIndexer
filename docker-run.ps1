@@ -63,8 +63,11 @@ if ($existingContainers) {
         $ErrorActionPreference = 'Stop'
     }
     
-    # Force remove containers by name
+    # Force remove any remaining containers by name (ignore errors if already removed)
+    $ErrorActionPreference = 'SilentlyContinue'
     docker rm -f vector_rag_db vector_rag_app 2>&1 | Out-Null
+    $ErrorActionPreference = 'Stop'
+    
     Write-Host "[OK] Cleanup complete" -ForegroundColor Green
 }
 Write-Host ""

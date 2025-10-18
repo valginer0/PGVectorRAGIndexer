@@ -61,12 +61,30 @@
         <div class="tab-content" id="upload">
             <div class="upload-section">
                 <h2>Upload Documents</h2>
+                
+                <!-- Method 1: Drag & Drop -->
                 <div class="upload-area" id="uploadArea">
                     <div class="upload-icon">📁</div>
                     <p>Drag & drop files here or click to browse</p>
                     <p class="upload-hint">Supported: TXT, PDF, DOCX, MD</p>
                     <input type="file" id="fileInput" multiple accept=".txt,.pdf,.docx,.md" hidden />
                 </div>
+                
+                <!-- Method 2: Custom Source URI -->
+                <div style="margin-top: 30px; padding: 20px; background: #f9fafb; border-radius: 8px;">
+                    <h3 style="margin-bottom: 15px;">💡 Preserve File Path Information:</h3>
+                    <p style="color: #6b7280; margin-bottom: 15px;">
+                        After selecting files above, you can optionally specify a custom display name to preserve the original file path or folder structure.
+                    </p>
+                    <div style="display: flex; gap: 12px;">
+                        <input type="text" id="customSourceUri" placeholder="e.g., C:\Projects\Docs\report.pdf or Reports/2024/Q1/sales.pdf" 
+                               style="flex: 1; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; font-size: 0.9em;" />
+                    </div>
+                    <p style="color: #6b7280; font-size: 0.85em; margin-top: 8px;">
+                        📝 This name will be displayed in search results and document lists instead of just the filename.
+                    </p>
+                </div>
+                
                 <div class="upload-options">
                     <label>
                         <input type="checkbox" id="forceReindex" />

@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Query, status
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -272,7 +272,8 @@ async def index_document(request: IndexRequest):
 @app.post("/upload-and-index", response_model=IndexResponse, tags=["Indexing"])
 async def upload_and_index(
     file: UploadFile = File(...),
-    force_reindex: bool = False
+    force_reindex: bool = Form(default=False),
+    custom_source_uri: Optional[str] = Form(default=None)
 ):
     """
     Upload a file and index it immediately.
@@ -318,16 +319,19 @@ async def upload_and_index(
             }
         )
         
-        # Override source_uri to use original filename instead of temp path
-        processed_doc.source_uri = file.filename
-        processed_doc.metadata['source_uri'] = file.filename
+        # Override source_uri to use custom name if provided, otherwise use original filename
+        display_name = custom_source_uri if custom_source_uri else file.filename
+        processed_doc.source_uri = display_name
+        processed_doc.metadata['source_uri'] = display_name
+        if custom_source_uri:
+            processed_doc.metadata['original_filename'] = file.filename
         
         # Check if document already exists
         if not force_reindex and idx.repository.document_exists(processed_doc.document_id):
             return IndexResponse(
                 status='skipped',
                 document_id=processed_doc.document_id,
-                source_uri=file.filename,
+                source_uri=processed_doc.source_uri,
                 chunks_indexed=0,
                 message='Document already indexed (use force_reindex=true to reindex)'
             )
@@ -362,7 +366,7 @@ async def upload_and_index(
         return IndexResponse(
             status='success',
             document_id=processed_doc.document_id,
-            source_uri=file.filename,
+            source_uri=processed_doc.source_uri,
             chunks_indexed=len(chunks_data)
         )
         
@@ -529,6 +533,31 @@ async def delete_document(document_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete document: {str(e)}"
+        )
+
+
+@app.get("/statistics", tags=["General"])
+async def get_statistics():
+    """Get system statistics."""
+    try:
+        db_manager = get_db_manager()
+        repo = DocumentRepository(db_manager)
+        stats = repo.get_statistics()
+        
+        embedding_service = get_embedding_service()
+        model_info = embedding_service.get_model_info()
+        
+        return {
+            "total_documents": stats.get('total_documents', 0),
+            "total_chunks": stats.get('total_chunks', 0),
+            "database_size_bytes": stats.get('database_size_bytes', 0),
+            "embedding_model": model_info.get('model_name', 'unknown')
+        }
+    except Exception as e:
+        logger.error(f"Failed to get statistics: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get statistics: {str(e)}"
         )
 
 

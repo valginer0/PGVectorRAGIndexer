@@ -100,8 +100,8 @@ class DocumentRetriever:
             List of SearchResult objects
         """
         # Use config defaults if not specified
-        top_k = top_k or self.config.retrieval.top_k
-        min_score = min_score or self.config.retrieval.similarity_threshold
+        top_k = top_k if top_k is not None else self.config.retrieval.top_k
+        min_score = min_score if min_score is not None else self.config.retrieval.similarity_threshold
         distance_metric = self.config.retrieval.distance_metric
         
         logger.info(f"Searching for: '{query}' (top_k={top_k}, metric={distance_metric})")

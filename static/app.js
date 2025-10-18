@@ -166,20 +166,29 @@ function initUpload() {
 async function handleFiles(files) {
     const progressContainer = document.getElementById('uploadProgress');
     const forceReindex = document.getElementById('forceReindex').checked;
+    const customSourceUri = document.getElementById('customSourceUri').value.trim();
     
     progressContainer.innerHTML = '';
     
     for (const file of files) {
-        await uploadFile(file, forceReindex, progressContainer);
+        // If custom source URI is provided and we're uploading a single file, use it
+        const sourceUri = (files.length === 1 && customSourceUri) ? customSourceUri : null;
+        await uploadFile(file, forceReindex, progressContainer, sourceUri);
+    }
+    
+    // Clear custom source URI after upload
+    if (customSourceUri) {
+        document.getElementById('customSourceUri').value = '';
     }
 }
 
-async function uploadFile(file, forceReindex, container) {
+async function uploadFile(file, forceReindex, container, customSourceUri = null) {
+    const displayName = customSourceUri || file.name;
     const progressId = `progress-${Date.now()}-${Math.random()}`;
     const progressHtml = `
         <div class="progress-item" id="${progressId}">
             <div class="progress-header">
-                <span>📄 ${escapeHtml(file.name)}</span>
+                <span>📄 ${escapeHtml(displayName)}</span>
                 <span class="progress-percent">0%</span>
             </div>
             <div class="progress-bar">
@@ -199,7 +208,11 @@ async function uploadFile(file, forceReindex, container) {
         const formData = new FormData();
         formData.append('file', file);
         
-        const url = `${API_BASE}/upload-and-index?force_reindex=${forceReindex}`;
+        let url = `${API_BASE}/upload-and-index?force_reindex=${forceReindex}`;
+        if (customSourceUri) {
+            url += `&custom_source_uri=${encodeURIComponent(customSourceUri)}`;
+        }
+        
         const response = await fetch(url, {
             method: 'POST',
             body: formData

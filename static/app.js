@@ -97,7 +97,7 @@ async function performSearch() {
             body: JSON.stringify({
                 query,
                 top_k: topK,
-                similarity_threshold: threshold
+                min_score: threshold
             })
         });
         
@@ -125,9 +125,9 @@ function displaySearchResults(results) {
         <div class="result-card">
             <div class="result-header">
                 <div class="result-source">📄 ${escapeHtml(result.source_uri)}</div>
-                <div class="result-score">${(result.similarity_score * 100).toFixed(1)}%</div>
+                <div class="result-score">${(result.relevance_score * 100).toFixed(1)}%</div>
             </div>
-            <div class="result-content">${escapeHtml(result.content)}</div>
+            <div class="result-content">${escapeHtml(result.text_content)}</div>
             <div class="result-meta">
                 <span>📍 Chunk ${result.chunk_index}</span>
                 <span>🆔 ${result.document_id}</span>

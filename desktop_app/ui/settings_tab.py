@@ -157,7 +157,12 @@ class SettingsTab(QWidget):
             self.db_size_label.setText(size_str)
         else:
             error_msg = data
-            QMessageBox.critical(self, "Load Failed", f"Failed to load statistics: {error_msg}")
+            # Show a more helpful error message
+            QMessageBox.warning(
+                self, 
+                "Statistics Not Available", 
+                f"Failed to load statistics.\n\nError: {error_msg}\n\nThe API may still be starting up. Please:\n1. Wait a moment\n2. Check that the API status is green\n3. Try 'Refresh Statistics' again"
+            )
     
     def restart_containers(self):
         """Restart Docker containers."""

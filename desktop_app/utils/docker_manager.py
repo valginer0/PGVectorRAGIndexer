@@ -143,25 +143,28 @@ class DockerManager:
             if result.returncode == 0:
                 # Wait for containers to be healthy (with retries)
                 logger.info("Waiting for containers to become healthy...")
-                max_retries = 12  # 12 * 5 = 60 seconds max
+                max_retries = 18  # 18 * 5 = 90 seconds max (API needs time to start)
                 for i in range(max_retries):
                     time.sleep(5)
                     db_running, app_running = self.get_container_status()
                     
                     if db_running and app_running:
-                        logger.info("Containers started successfully")
-                        return True, "Containers started successfully!\n\nThe API should be ready in a few moments."
+                        logger.info("Containers are running, waiting for API...")
+                        # Give API a bit more time to be ready
+                        if i >= 3:  # After 15+ seconds, containers should be stable
+                            logger.info("Containers started successfully")
+                            return True, "Containers started successfully!\n\nThe API should be ready shortly.\n\nIf the API status doesn't turn green, please wait another moment and click 'Refresh Status'."
                     
                     logger.info(f"Waiting... ({(i+1)*5}s)")
                 
                 # Final check
                 db_running, app_running = self.get_container_status()
                 if db_running and app_running:
-                    return True, "Containers started successfully!\n\nThe API should be ready in a few moments."
+                    return True, "Containers are running!\n\nThe API may still be initializing.\nPlease wait a moment and click 'Refresh Status' in the main window."
                 elif db_running:
-                    return True, "Database started. Application is still starting up.\n\nPlease wait a moment and check the API status."
+                    return True, "Database started. Application is still starting up.\n\nPlease wait a moment and click 'Refresh Status'."
                 else:
-                    return False, "Containers started but not healthy after 60 seconds.\n\nCheck logs for details."
+                    return False, "Containers started but not healthy after 90 seconds.\n\nTry running: docker ps\nAnd check logs with: docker logs vector_rag_app"
             else:
                 error_msg = result.stderr or "Unknown error"
                 logger.error(f"Failed to start containers: {error_msg}")

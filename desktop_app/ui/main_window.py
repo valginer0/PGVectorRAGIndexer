@@ -188,12 +188,13 @@ class MainWindow(QMainWindow):
         
         # Create progress dialog
         self.progress_dialog = QProgressDialog(
-            "Starting Docker containers...\n\nThis may take up to 60 seconds.\nPlease wait while the database and application initialize.",
+            "Starting Docker containers...\n\nThis may take up to 90 seconds.\nPlease wait while the database and application initialize.\n\nThe window will remain responsive.",
             None,  # No cancel button
             0, 0,  # Indeterminate progress
             self
         )
         self.progress_dialog.setWindowTitle("Starting Containers")
+        self.progress_dialog.setMinimumDuration(0)
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.show()
         

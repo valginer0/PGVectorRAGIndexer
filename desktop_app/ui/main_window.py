@@ -9,9 +9,9 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QStatusBar, QPushButton, QLabel,
-    QMessageBox, QFileDialog
+    QMessageBox, QFileDialog, QProgressDialog
 )
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtGui import QIcon
 
 from .upload_tab import UploadTab
@@ -22,6 +22,21 @@ from ..utils.docker_manager import DockerManager
 from ..utils.api_client import APIClient
 
 logger = logging.getLogger(__name__)
+
+
+class DockerStartWorker(QThread):
+    """Worker thread for starting Docker containers."""
+    
+    finished = Signal(bool, str)  # success, message
+    
+    def __init__(self, docker_manager):
+        super().__init__()
+        self.docker_manager = docker_manager
+    
+    def run(self):
+        """Start containers."""
+        success, message = self.docker_manager.start_containers()
+        self.finished.emit(success, message)
 
 
 class MainWindow(QMainWindow):
@@ -171,7 +186,30 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage("Starting Docker containers...")
         self.docker_control_btn.setEnabled(False)
         
-        success, message = self.docker_manager.start_containers()
+        # Create progress dialog
+        self.progress_dialog = QProgressDialog(
+            "Starting Docker containers...\n\nThis may take up to 60 seconds.\nPlease wait while the database and application initialize.",
+            None,  # No cancel button
+            0, 0,  # Indeterminate progress
+            self
+        )
+        self.progress_dialog.setWindowTitle("Starting Containers")
+        self.progress_dialog.setWindowModality(Qt.WindowModal)
+        self.progress_dialog.show()
+        
+        # Start worker thread
+        self.docker_start_worker = DockerStartWorker(self.docker_manager)
+        self.docker_start_worker.finished.connect(self.docker_start_finished)
+        self.docker_start_worker.start()
+    
+    def docker_start_finished(self, success: bool, message: str):
+        """Handle Docker start completion."""
+        # Close progress dialog
+        if hasattr(self, 'progress_dialog'):
+            self.progress_dialog.close()
+        
+        # Re-enable button
+        self.docker_control_btn.setEnabled(True)
         
         if success:
             QMessageBox.information(self, "Success", message)
@@ -180,7 +218,6 @@ class MainWindow(QMainWindow):
         else:
             QMessageBox.critical(self, "Error", message)
         
-        self.docker_control_btn.setEnabled(True)
         self.check_docker_status()
     
     def stop_docker(self):

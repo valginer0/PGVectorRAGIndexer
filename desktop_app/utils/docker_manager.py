@@ -141,15 +141,27 @@ class DockerManager:
                 )
             
             if result.returncode == 0:
-                # Wait for containers to be healthy
-                time.sleep(5)
-                db_running, app_running = self.get_container_status()
+                # Wait for containers to be healthy (with retries)
+                logger.info("Waiting for containers to become healthy...")
+                max_retries = 12  # 12 * 5 = 60 seconds max
+                for i in range(max_retries):
+                    time.sleep(5)
+                    db_running, app_running = self.get_container_status()
+                    
+                    if db_running and app_running:
+                        logger.info("Containers started successfully")
+                        return True, "Containers started successfully!\n\nThe API should be ready in a few moments."
+                    
+                    logger.info(f"Waiting... ({(i+1)*5}s)")
                 
+                # Final check
+                db_running, app_running = self.get_container_status()
                 if db_running and app_running:
-                    logger.info("Containers started successfully")
-                    return True, "Containers started successfully"
+                    return True, "Containers started successfully!\n\nThe API should be ready in a few moments."
+                elif db_running:
+                    return True, "Database started. Application is still starting up.\n\nPlease wait a moment and check the API status."
                 else:
-                    return False, "Containers started but not healthy"
+                    return False, "Containers started but not healthy after 60 seconds.\n\nCheck logs for details."
             else:
                 error_msg = result.stderr or "Unknown error"
                 logger.error(f"Failed to start containers: {error_msg}")

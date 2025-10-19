@@ -51,6 +51,24 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 - **Error Handling**: Comprehensive error responses with detailed messages
 - **Async Support**: Asynchronous operations for better performance
 
+## Desktop Application
+
+**One-line install for Windows:**
+
+```powershell
+irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.ps1 | iex
+```
+
+Features:
+- 📁 **Native file picker** - Access Windows files directly
+- 🔒 **Full path preservation** - Store complete file paths (e.g., `C:\Projects\file.txt`)
+- 🔍 **Search & manage** - Full document management UI
+- 🐳 **Docker control** - Start/stop containers from the app
+
+See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for details.
+
+---
+
 ## 🚀 Quick Start
 
 ### Prerequisites

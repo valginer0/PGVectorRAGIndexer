@@ -90,8 +90,9 @@ class SettingsTab(QWidget):
             
             layout.addWidget(stats_group)
             
-            # Auto-load stats
-            self.load_statistics()
+            # Don't auto-load stats on startup - wait for user to click refresh
+            # This prevents premature API calls before containers are ready
+            # self.load_statistics()
         
         # Docker controls
         docker_group = QGroupBox("Docker Container Management")

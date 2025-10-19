@@ -101,15 +101,26 @@ class DockerManager:
             )
             
             if result.returncode != 0:
+                logger.warning(f"Docker ps failed: {result.stderr}")
                 return False, False
             
             containers = result.stdout.strip().split('\n')
+            logger.debug(f"Found containers: {containers}")
+            
             db_running = 'vector_rag_db' in containers
             app_running = 'vector_rag_app' in containers
             
+            logger.debug(f"Container status - DB: {db_running}, App: {app_running}")
             return db_running, app_running
             
-        except (subprocess.TimeoutExpired, FileNotFoundError):
+        except subprocess.TimeoutExpired:
+            logger.error("Timeout checking container status")
+            return False, False
+        except FileNotFoundError:
+            logger.error("Docker command not found")
+            return False, False
+        except Exception as e:
+            logger.error(f"Error checking container status: {e}")
             return False, False
     
     def start_containers(self) -> Tuple[bool, str]:
@@ -120,6 +131,12 @@ class DockerManager:
             Tuple of (success, message)
         """
         try:
+            # Check if containers are already running
+            db_running, app_running = self.get_container_status()
+            if db_running and app_running:
+                logger.info("Containers are already running")
+                return True, "Containers are already running and healthy!"
+            
             logger.info("Starting Docker containers...")
             
             if self.is_windows:

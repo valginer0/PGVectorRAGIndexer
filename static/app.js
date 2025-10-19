@@ -141,23 +141,10 @@ function initUpload() {
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
     
+    // Click to browse (NO drag & drop)
     uploadArea.addEventListener('click', () => fileInput.click());
     
-    uploadArea.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        uploadArea.classList.add('dragover');
-    });
-    
-    uploadArea.addEventListener('dragleave', () => {
-        uploadArea.classList.remove('dragover');
-    });
-    
-    uploadArea.addEventListener('drop', (e) => {
-        e.preventDefault();
-        uploadArea.classList.remove('dragover');
-        handleFiles(e.dataTransfer.files);
-    });
-    
+    // Handle file selection
     fileInput.addEventListener('change', (e) => {
         handleFiles(e.target.files);
     });
@@ -171,8 +158,14 @@ async function handleFiles(files) {
     progressContainer.innerHTML = '';
     
     for (const file of files) {
-        // If custom source URI is provided and we're uploading a single file, use it
-        const sourceUri = (files.length === 1 && customSourceUri) ? customSourceUri : null;
+        // Try to get full path from file object (browser-dependent)
+        let sourceUri = file.path || file.mozFullPath || file.webkitRelativePath || file.name;
+        
+        // If custom source URI is provided for single file, override
+        if (files.length === 1 && customSourceUri) {
+            sourceUri = customSourceUri;
+        }
+        
         await uploadFile(file, forceReindex, progressContainer, sourceUri);
     }
     
@@ -207,13 +200,12 @@ async function uploadFile(file, forceReindex, container, customSourceUri = null)
     try {
         const formData = new FormData();
         formData.append('file', file);
-        
-        let url = `${API_BASE}/upload-and-index?force_reindex=${forceReindex}`;
+        formData.append('force_reindex', forceReindex);
         if (customSourceUri) {
-            url += `&custom_source_uri=${encodeURIComponent(customSourceUri)}`;
+            formData.append('custom_source_uri', customSourceUri);
         }
         
-        const response = await fetch(url, {
+        const response = await fetch(`${API_BASE}/upload-and-index`, {
             method: 'POST',
             body: formData
         });

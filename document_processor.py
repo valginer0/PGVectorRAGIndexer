@@ -79,11 +79,11 @@ class DocumentLoader:
 
 
 class TextDocumentLoader(DocumentLoader):
-    """Loader for plain text files."""
+    """Loader for plain text files and Markdown."""
     
     def can_load(self, source_uri: str) -> bool:
-        """Check if source is a text file."""
-        return source_uri.lower().endswith('.txt')
+        """Check if source is a text or Markdown file."""
+        return source_uri.lower().endswith(('.txt', '.md', '.markdown'))
     
     def load(self, source_uri: str) -> List[Document]:
         """Load text file."""

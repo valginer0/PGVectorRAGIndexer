@@ -423,17 +423,17 @@ class DocumentRepository:
             """)
             avg_chunks = cursor.fetchone()[0] or 0
             
-            # Database size
+            # Database size in bytes
             cursor.execute("""
-                SELECT pg_size_pretty(pg_database_size(current_database()))
+                SELECT pg_database_size(current_database())
             """)
-            db_size = cursor.fetchone()[0]
+            db_size_bytes = cursor.fetchone()[0]
             
             return {
                 "total_chunks": total_chunks,
                 "total_documents": total_documents,
                 "avg_chunks_per_document": avg_chunks,
-                "database_size": db_size
+                "database_size_bytes": db_size_bytes
             }
 
 

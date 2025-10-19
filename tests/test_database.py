@@ -231,7 +231,7 @@ class TestDocumentRepository:
         assert stats['total_chunks'] == 3
         assert stats['total_documents'] == 2
         assert stats['avg_chunks_per_document'] > 0
-        assert 'database_size' in stats
+        assert 'database_size_bytes' in stats
     
     def test_duplicate_prevention(self, db_manager, sample_embeddings):
         """Test that duplicate chunks are prevented."""

@@ -42,7 +42,11 @@ echo "Step 6: Running REST API tests..."
 ./test_rest_api.sh
 echo ""
 
-echo "Step 7: Restoring original docker-compose.yml..."
+echo "Step 7: Testing custom path upload..."
+./test_upload_with_path.sh
+echo ""
+
+echo "Step 8: Restoring original docker-compose.yml..."
 mv docker-compose.yml.backup docker-compose.yml
 echo "✓ Restored"
 echo ""

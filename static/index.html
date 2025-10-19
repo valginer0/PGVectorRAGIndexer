@@ -62,15 +62,15 @@
             <div class="upload-section">
                 <h2>Upload Documents</h2>
                 
-                <!-- Method 1: Drag & Drop -->
-                <div class="upload-area" id="uploadArea">
+                <!-- File Browser (NO drag & drop) -->
+                <div class="upload-area" id="uploadArea" style="cursor: pointer;">
                     <div class="upload-icon">📁</div>
-                    <p>Drag & drop files here or click to browse</p>
-                    <p class="upload-hint">Supported: TXT, PDF, DOCX, MD</p>
-                    <input type="file" id="fileInput" multiple accept=".txt,.pdf,.docx,.md" hidden />
+                    <p>Click to browse and select files</p>
+                    <p class="upload-hint">Supported: TXT, MD, PDF, DOCX, PPTX, HTML</p>
+                    <input type="file" id="fileInput" multiple accept=".txt,.md,.markdown,.pdf,.docx,.pptx,.html" hidden />
                 </div>
                 
-                <!-- Method 2: Custom Source URI -->
+                <!-- Custom Source URI (Optional - for single file uploads) -->
                 <div style="margin-top: 30px; padding: 20px; background: #f9fafb; border-radius: 8px;">
                     <h3 style="margin-bottom: 15px;">💡 Preserve File Path Information:</h3>
                     <p style="color: #6b7280; margin-bottom: 15px;">

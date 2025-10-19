@@ -55,10 +55,9 @@ if (-not (Test-Path "venv-windows")) {
     python -m venv venv-windows
 }
 
-# Activate and install dependencies
+# Install dependencies (don't need to activate for pip install)
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
-& ".\venv-windows\Scripts\Activate.ps1"
-pip install -q -r requirements-desktop.txt
+& ".\venv-windows\Scripts\pip.exe" install -q -r requirements-desktop.txt
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
@@ -80,5 +79,5 @@ $runNow = Read-Host "Would you like to run the app now? (Y/N)"
 if ($runNow -eq "Y" -or $runNow -eq "y") {
     Write-Host ""
     Write-Host "Starting desktop app..." -ForegroundColor Green
-    python -m desktop_app.main
+    & ".\venv-windows\Scripts\python.exe" -m desktop_app.main
 }

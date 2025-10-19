@@ -29,23 +29,19 @@ if (-not (Test-Path "venv-windows")) {
     python -m venv venv-windows
 }
 
-# Activate virtual environment
-Write-Host "Activating virtual environment..." -ForegroundColor Yellow
-& ".\venv-windows\Scripts\Activate.ps1"
-
 # Check if PySide6 is installed
-$pyside6Installed = python -c "import PySide6" 2>&1
+$pyside6Installed = & ".\venv-windows\Scripts\python.exe" -c "import PySide6" 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing desktop app dependencies..." -ForegroundColor Yellow
-    pip install -r requirements-desktop.txt
+    & ".\venv-windows\Scripts\pip.exe" install -r requirements-desktop.txt
 }
 
 Write-Host ""
 Write-Host "Starting desktop application..." -ForegroundColor Green
 Write-Host ""
 
-# Run the app
-python -m desktop_app.main
+# Run the app (use venv python directly, no activation needed)
+& ".\venv-windows\Scripts\python.exe" -m desktop_app.main
 
 # Keep window open if there was an error
 if ($LASTEXITCODE -ne 0) {

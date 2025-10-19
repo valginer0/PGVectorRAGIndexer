@@ -28,14 +28,29 @@ class DockerManager:
         # Detect if running on Windows
         self.is_windows = platform.system() == "Windows"
         
-        # If on Windows with WSL path, convert to WSL format for docker commands
-        if self.is_windows and str(project_path).startswith("\\\\wsl"):
-            # Convert \\wsl.localhost\Ubuntu\home\user\... to /home/user/...
+        # Convert Windows path to WSL format for docker commands
+        if self.is_windows:
             path_str = str(project_path)
-            if "\\wsl.localhost\\Ubuntu\\" in path_str:
-                self.wsl_project_path = path_str.replace("\\wsl.localhost\\Ubuntu\\", "/").replace("\\", "/")
+            
+            if path_str.startswith("\\\\wsl"):
+                # Already a WSL path: \\wsl.localhost\Ubuntu\home\user\...
+                # Convert to /home/user/...
+                if "\\wsl.localhost\\Ubuntu\\" in path_str:
+                    # Remove the \\wsl.localhost\Ubuntu\ prefix completely
+                    wsl_part = path_str.replace("\\wsl.localhost\\Ubuntu\\", "")
+                    # Convert backslashes and ensure single leading slash
+                    self.wsl_project_path = "/" + wsl_part.replace("\\", "/").lstrip("/")
+                else:
+                    self.wsl_project_path = path_str.replace("\\", "/")
             else:
-                self.wsl_project_path = str(project_path)
+                # Windows path: C:\Users\... → /mnt/c/Users/...
+                # Convert drive letter and backslashes
+                if len(path_str) >= 2 and path_str[1] == ':':
+                    drive = path_str[0].lower()
+                    rest = path_str[2:].replace("\\", "/")
+                    self.wsl_project_path = f"/mnt/{drive}{rest}"
+                else:
+                    self.wsl_project_path = path_str.replace("\\", "/")
         else:
             self.wsl_project_path = str(project_path)
         

@@ -5,53 +5,128 @@
 To create a new release, simply run:
 
 ```bash
-./release.sh
+./release.sh patch  # or: minor, major, or explicit version like 2.0.3
 ```
 
 This will:
 1. ✅ Check you're on main branch with no uncommitted changes
 2. ✅ Pull latest changes
-3. ✅ Ask for new version number
+3. ✅ Bump version number (patch/minor/major)
 4. ✅ Run all tests
-5. ✅ Update VERSION file
-6. ✅ Create git tag
-7. ✅ Push to GitHub
-8. ✅ Trigger automated Docker build
+5. ✅ **Build Docker image locally** (~15 minutes)
+6. ✅ **Push image to GHCR** (with version tag and `:latest`)
+7. ✅ Update VERSION file
+8. ✅ Create git tag
+9. ✅ Push to GitHub (with `[skip ci]` to avoid duplicate build)
+
+**Note:** This builds the Docker image locally and pushes it directly to GHCR, skipping GitHub Actions (~20 minutes faster).
+
+## Prerequisites
+
+Before releasing, ensure you're logged into GitHub Container Registry:
+
+```bash
+# Login to GHCR (one-time setup)
+docker login ghcr.io -u valginer0
+# Enter your GitHub Personal Access Token when prompted
+```
 
 ## Manual Release Process
 
 If you prefer to do it manually:
 
-### 1. Update Version
+### 1. Run Tests
 
 ```bash
-echo "2.0.0" > VERSION
+source venv/bin/activate
+pytest tests/ -v
+```
+
+### 2. Build Docker Image
+
+```bash
+docker compose -f docker-compose.dev.yml build app
+```
+
+### 3. Tag Docker Image
+
+```bash
+# Replace 2.0.3 with your version
+docker tag pgvectorragindexer:dev ghcr.io/valginer0/pgvectorragindexer:2.0.3
+docker tag pgvectorragindexer:dev ghcr.io/valginer0/pgvectorragindexer:latest
+```
+
+**Why two tags?**
+- `:2.0.3` - Specific version (immutable, users can pin to this)
+- `:latest` - Always points to newest version (auto-updates)
+
+### 4. Push to GHCR
+
+```bash
+docker push ghcr.io/valginer0/pgvectorragindexer:2.0.3
+docker push ghcr.io/valginer0/pgvectorragindexer:latest
+```
+
+### 5. Update Version and Tag
+
+```bash
+echo "2.0.3" > VERSION
 git add VERSION
-git commit -m "chore: Bump version to v2.0.0"
+git commit -m "chore: Bump version to v2.0.3 [skip ci]"
+git tag -a v2.0.3 -m "Release v2.0.3"
 ```
 
-### 2. Create Tag
-
-```bash
-git tag -a v2.0.0 -m "Release v2.0.0"
-```
-
-### 3. Push
+### 6. Push to GitHub
 
 ```bash
 git push origin main
-git push origin v2.0.0
+git push origin v2.0.3
 ```
 
-### 4. Monitor Build
+**Note:** The `[skip ci]` in the commit message prevents GitHub Actions from rebuilding the Docker image (since we already built and pushed it).
 
-GitHub Actions will automatically:
-- Build Docker image
-- Run tests
-- Publish to `ghcr.io/valginer0/pgvectorragindexer:2.0.0`
-- Publish to `ghcr.io/valginer0/pgvectorragindexer:latest`
+## Development Workflow
 
-Monitor at: https://github.com/valginer0/PGVectorRAGIndexer/actions
+### Local Development (WSL)
+
+For rapid iteration during development:
+
+```bash
+# Build and run with development config
+docker compose -f docker-compose.dev.yml up -d
+
+# Run tests
+source venv/bin/activate
+pytest tests/ -v
+
+# Make changes, rebuild
+docker compose -f docker-compose.dev.yml build app
+docker compose -f docker-compose.dev.yml up -d
+
+# When ready, release
+./release.sh patch
+```
+
+**Key differences:**
+- `docker-compose.dev.yml` - Builds locally with `:dev` tag
+- `docker-compose.yml` - Pulls from GHCR with `:latest` tag (production)
+
+### Testing on Windows
+
+After releasing, test the desktop app on Windows:
+
+```powershell
+# Update to latest version
+.\update.ps1
+
+# Run desktop app
+.\run_desktop_app.ps1
+```
+
+The `update.ps1` script will:
+- Pull latest code from GitHub
+- Pull latest Docker image from GHCR
+- Update desktop app dependencies
 
 ## First Release (v2.0.0)
 

@@ -35,7 +35,9 @@ services:
 
   # PGVectorRAGIndexer application
   app:
-    image: ghcr.io/valginer0/pgvectorragindexer:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: vector_rag_app
     restart: always
     environment:

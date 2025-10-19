@@ -223,13 +223,15 @@ class UploadTab(QWidget):
         self.progress_bar.setVisible(False)
         
         if success:
-            QMessageBox.information(self, "Success", message)
+            # Don't show popup - just log the success
+            self.log(f"✓ {message}")
             # Clear selection
             self.selected_file = None
             self.file_path_label.setText("No file selected")
             self.file_path_label.setStyleSheet("color: #666; padding: 10px; background: #f5f5f5; border-radius: 5px;")
             self.upload_btn.setEnabled(False)
         else:
+            # Only show popup for errors
             QMessageBox.critical(self, "Upload Failed", message)
     
     def log(self, message: str):

@@ -163,8 +163,8 @@ class DocumentsTab(QWidget):
             chunks_item.setTextAlignment(Qt.AlignCenter)
             self.documents_table.setItem(i, 1, chunks_item)
             
-            # Created date
-            created = doc.get('created_at', '')
+            # Created date (API returns 'indexed_at')
+            created = doc.get('indexed_at', '')
             if created:
                 try:
                     dt = datetime.fromisoformat(created.replace('Z', '+00:00'))
@@ -175,8 +175,8 @@ class DocumentsTab(QWidget):
             created_item.setTextAlignment(Qt.AlignCenter)
             self.documents_table.setItem(i, 2, created_item)
             
-            # Updated date
-            updated = doc.get('updated_at', '')
+            # Updated date (API returns 'last_updated')
+            updated = doc.get('last_updated', '')
             if updated:
                 try:
                     dt = datetime.fromisoformat(updated.replace('Z', '+00:00'))

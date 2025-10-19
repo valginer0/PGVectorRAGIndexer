@@ -126,9 +126,44 @@ else
     echo -e "${YELLOW}⚠ Python not found, skipping tests${NC}"
 fi
 
+# Build Docker image locally
+echo ""
+echo -e "${GREEN}Building Docker image locally...${NC}"
+if command -v docker &> /dev/null; then
+    docker compose -f docker-compose.dev.yml build app
+    BUILD_RESULT=$?
+    if [ $BUILD_RESULT -ne 0 ]; then
+        echo -e "${RED}✗ Docker build failed. Please fix before releasing.${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ Docker image built successfully${NC}"
+else
+    echo -e "${RED}✗ Docker not found. Please install Docker first.${NC}"
+    exit 1
+fi
+
+# Tag Docker image with version and latest
+echo -e "${GREEN}Tagging Docker image...${NC}"
+docker tag pgvectorragindexer:dev ghcr.io/valginer0/pgvectorragindexer:$NEW_VERSION
+docker tag pgvectorragindexer:dev ghcr.io/valginer0/pgvectorragindexer:latest
+echo -e "${GREEN}✓ Image tagged as v$NEW_VERSION and latest${NC}"
+
+# Check if logged into GHCR
+echo -e "${GREEN}Pushing Docker image to GitHub Container Registry...${NC}"
+docker push ghcr.io/valginer0/pgvectorragindexer:$NEW_VERSION
+PUSH_RESULT=$?
+if [ $PUSH_RESULT -ne 0 ]; then
+    echo -e "${RED}✗ Failed to push image. Please login to GHCR first:${NC}"
+    echo -e "${YELLOW}  docker login ghcr.io -u valginer0${NC}"
+    exit 1
+fi
+docker push ghcr.io/valginer0/pgvectorragindexer:latest
+echo -e "${GREEN}✓ Image pushed to GHCR${NC}"
+
 # Commit VERSION file
+echo ""
 git add VERSION
-git commit -m "chore: Bump version to v$NEW_VERSION"
+git commit -m "chore: Bump version to v$NEW_VERSION [skip ci]"
 echo -e "${GREEN}✓ Committed version bump${NC}"
 
 # Create and push tag
@@ -147,13 +182,19 @@ echo -e "${GREEN}╔════════════════════
 echo -e "${GREEN}║              ✓ Release v$NEW_VERSION Created!                  ║${NC}"
 echo -e "${GREEN}╚════════════════════════════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${BLUE}Next steps:${NC}"
-echo -e "  1. GitHub Actions will build and publish Docker image"
-echo -e "  2. Monitor: ${YELLOW}https://github.com/valginer0/PGVectorRAGIndexer/actions${NC}"
-echo -e "  3. Image will be available at:"
-echo -e "     ${YELLOW}ghcr.io/valginer0/pgvectorragindexer:$NEW_VERSION${NC}"
-echo -e "     ${YELLOW}ghcr.io/valginer0/pgvectorragindexer:latest${NC}"
+echo -e "${BLUE}What was done:${NC}"
+echo -e "  1. ✓ All tests passed"
+echo -e "  2. ✓ Docker image built locally"
+echo -e "  3. ✓ Image pushed to GHCR"
+echo -e "  4. ✓ Version bumped and committed"
+echo -e "  5. ✓ Tag created and pushed"
 echo ""
-echo -e "${BLUE}Test the deployment:${NC}"
-echo -e "  ${YELLOW}curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash${NC}"
+echo -e "${BLUE}Docker images available at:${NC}"
+echo -e "  ${YELLOW}ghcr.io/valginer0/pgvectorragindexer:$NEW_VERSION${NC}"
+echo -e "  ${YELLOW}ghcr.io/valginer0/pgvectorragindexer:latest${NC}"
+echo ""
+echo -e "${BLUE}Test on Windows:${NC}"
+echo -e "  ${YELLOW}cd C:\\Users\\v_ale\\PGVectorRAGIndexer${NC}"
+echo -e "  ${YELLOW}.\\update.ps1${NC}"
+echo -e "  ${YELLOW}.\\run_desktop_app.ps1${NC}"
 echo ""

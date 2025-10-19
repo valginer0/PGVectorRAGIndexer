@@ -47,11 +47,12 @@ class TestUploadAndIndex:
         )
         assert response1.status_code == 200
         
-        # Second upload with force_reindex
+        # Second upload with force_reindex as form data
         file_data2 = io.BytesIO(file_content)
         response2 = client.post(
-            "/upload-and-index?force_reindex=true",
-            files={"file": ("force_test.txt", file_data2, "text/plain")}
+            "/upload-and-index",
+            files={"file": ("force_test.txt", file_data2, "text/plain")},
+            data={"force_reindex": "true"}
         )
         assert response2.status_code == 200
         data = response2.json()

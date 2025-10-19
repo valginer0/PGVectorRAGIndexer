@@ -1,15 +1,12 @@
-# PGVectorRAGIndexer Docker Compose Configuration
+# PGVectorRAGIndexer Development Docker Compose Configuration
 # 
-# For production deployment, use the automated scripts:
-#   Linux/macOS/WSL: curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
-#   Windows: See WINDOWS_SETUP.md
+# This file is for local development and testing.
+# It builds the Docker image locally instead of pulling from GHCR.
 #
-# For development, create a .env file with:
-#   POSTGRES_USER=rag_user
-#   POSTGRES_PASSWORD=rag_password
-#   POSTGRES_DB=rag_vector_db
-#   API_HOST=0.0.0.0
-#   API_PORT=8000
+# Usage:
+#   docker compose -f docker-compose.dev.yml up -d
+#   docker compose -f docker-compose.dev.yml down
+#   docker compose -f docker-compose.dev.yml build app
 
 services:
   # PostgreSQL database with pgvector extension
@@ -33,9 +30,12 @@ services:
     networks:
       - rag_network
 
-  # PGVectorRAGIndexer application
+  # PGVectorRAGIndexer application (built locally)
   app:
-    image: ghcr.io/valginer0/pgvectorragindexer:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: pgvectorragindexer:dev  # Tag with :dev to distinguish from production
     container_name: vector_rag_app
     restart: always
     environment:

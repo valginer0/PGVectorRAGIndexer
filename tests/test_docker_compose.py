@@ -37,8 +37,10 @@ class TestDockerCompose:
         assert 'pgvector' in db_service['image'].lower()
     
     def test_app_uses_correct_image(self, docker_compose_config):
-        """Test that app service uses correct image."""
+        """Test that production docker-compose uses GHCR image."""
         app_service = docker_compose_config['services']['app']
+        # Production docker-compose.yml must pull from GHCR
+        assert 'image' in app_service, "Production docker-compose.yml must use 'image:', not 'build:'"
         assert 'ghcr.io/valginer0/pgvectorragindexer' in app_service['image']
     
     def test_app_depends_on_db(self, docker_compose_config):

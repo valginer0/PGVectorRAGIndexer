@@ -307,7 +307,10 @@ async def upload_and_index(
         
         logger.info(f"Uploaded file: {file.filename} ({len(content)} bytes) -> {temp_path}")
         
-        # Process the file using temp path, but override source_uri to original filename
+        # Determine the source URI to use (custom path or filename)
+        display_name = custom_source_uri if custom_source_uri else file.filename
+        
+        # Process the file using temp path, but with custom source_uri for document_id
         idx = get_indexer()
         
         # Process document from temp file
@@ -315,16 +318,19 @@ async def upload_and_index(
             source_uri=temp_path,
             custom_metadata={
                 'upload_method': 'http_upload',
-                'original_filename': file.filename
+                'original_filename': file.filename,
+                'temp_path': temp_path
             }
         )
         
-        # Override source_uri to use custom name if provided, otherwise use original filename
-        display_name = custom_source_uri if custom_source_uri else file.filename
+        # Regenerate document_id based on the display name (not temp path)
+        import hashlib
+        processed_doc.document_id = hashlib.sha256(display_name.encode()).hexdigest()[:16]
         processed_doc.source_uri = display_name
         processed_doc.metadata['source_uri'] = display_name
+        processed_doc.metadata['document_id'] = processed_doc.document_id
         if custom_source_uri:
-            processed_doc.metadata['original_filename'] = file.filename
+            processed_doc.metadata['custom_source_uri'] = custom_source_uri
         
         # Check if document already exists
         if not force_reindex and idx.repository.document_exists(processed_doc.document_id):

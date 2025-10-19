@@ -99,24 +99,44 @@ docker compose -f docker-compose.dev.yml up -d
 source venv/bin/activate
 pytest tests/ -v
 
-# Make changes, rebuild
-docker compose -f docker-compose.dev.yml build app
-docker compose -f docker-compose.dev.yml up -d
-
-# When ready, release
-./release.sh patch
+# Make changes, rebuild, and push for Windows testing
+./push-dev.sh
 ```
+
+The `push-dev.sh` script will:
+1. Build Docker image with `:dev` tag
+2. Push to GHCR as `ghcr.io/valginer0/pgvectorragindexer:dev`
+3. Ready for Windows testing
 
 **Key differences:**
 - `docker-compose.dev.yml` - Builds locally with `:dev` tag
 - `docker-compose.yml` - Pulls from GHCR with `:latest` tag (production)
+- `:dev` tag - For testing before release
+- `:latest` tag - For production use
 
-### Testing on Windows
+### Testing on Windows (Development Build)
 
-After releasing, test the desktop app on Windows:
+After pushing dev build, test on Windows:
 
 ```powershell
-# Update to latest version
+# Pull and run latest dev build
+.\update-dev.ps1
+
+# Run desktop app
+.\run_desktop_app.ps1
+```
+
+The `update-dev.ps1` script will:
+- Pull latest `:dev` image from GHCR
+- Restart containers with dev image
+- Check API health
+
+### Testing on Windows (Production Build)
+
+After releasing, test the production build:
+
+```powershell
+# Update to latest production version
 .\update.ps1
 
 # Run desktop app
@@ -125,7 +145,7 @@ After releasing, test the desktop app on Windows:
 
 The `update.ps1` script will:
 - Pull latest code from GitHub
-- Pull latest Docker image from GHCR
+- Pull latest `:latest` image from GHCR
 - Update desktop app dependencies
 
 ## First Release (v2.0.0)

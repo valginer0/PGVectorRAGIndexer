@@ -13,11 +13,21 @@ If you don't have Python installed on Windows:
 
 ### 2. Run the Desktop App
 
-Double-click `run_desktop_app.bat` or run from PowerShell:
+**From PowerShell (Recommended - works with UNC paths):**
 
 ```powershell
+cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
+.\run_desktop_app.ps1
+```
+
+**OR if you have the project on a Windows drive:**
+
+```powershell
+cd C:\path\to\PGVectorRAGIndexer
 .\run_desktop_app.bat
 ```
+
+**Note:** The `.ps1` PowerShell script works with UNC paths (`\\wsl.localhost\...`), while the `.bat` file requires a regular Windows path.
 
 This will:
 - Create a Windows virtual environment (`venv-windows`)

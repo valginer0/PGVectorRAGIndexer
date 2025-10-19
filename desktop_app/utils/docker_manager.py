@@ -56,7 +56,7 @@ class DockerManager:
         
     def _run_docker_command(self, cmd: list, **kwargs) -> subprocess.CompletedProcess:
         """
-        Run a docker command, using WSL if on Windows.
+        Run a docker command, using WSL only for docker compose with path conversion.
         
         Args:
             cmd: Command list
@@ -65,12 +65,9 @@ class DockerManager:
         Returns:
             CompletedProcess result
         """
-        if self.is_windows:
-            # Run docker through WSL
-            wsl_cmd = ["wsl", "-d", "Ubuntu", "-e"] + cmd
-            return subprocess.run(wsl_cmd, **kwargs)
-        else:
-            return subprocess.run(cmd, **kwargs)
+        # Try to run docker directly first (works with Docker Desktop and Rancher Desktop on Windows)
+        # Only use WSL for docker compose commands that need path conversion
+        return subprocess.run(cmd, **kwargs)
     
     def is_docker_available(self) -> bool:
         """Check if Docker is installed and running."""
@@ -139,23 +136,14 @@ class DockerManager:
             
             logger.info("Starting Docker containers...")
             
-            if self.is_windows:
-                # Run docker compose through WSL with cd to project directory
-                result = subprocess.run(
-                    ["wsl", "-d", "Ubuntu", "-e", "bash", "-c", 
-                     f"cd {self.wsl_project_path} && docker compose up -d"],
-                    capture_output=True,
-                    text=True,
-                    timeout=120
-                )
-            else:
-                result = subprocess.run(
-                    ["docker", "compose", "up", "-d"],
-                    cwd=str(self.project_path),
-                    capture_output=True,
-                    text=True,
-                    timeout=120
-                )
+            # Use docker compose directly (works on Windows with Docker Desktop/Rancher Desktop)
+            result = subprocess.run(
+                ["docker", "compose", "up", "-d"],
+                cwd=str(self.project_path),
+                capture_output=True,
+                text=True,
+                timeout=120
+            )
             
             if result.returncode == 0:
                 # Wait for containers to be healthy (with retries)
@@ -205,22 +193,14 @@ class DockerManager:
         try:
             logger.info("Stopping Docker containers...")
             
-            if self.is_windows:
-                result = subprocess.run(
-                    ["wsl", "-d", "Ubuntu", "-e", "bash", "-c",
-                     f"cd {self.wsl_project_path} && docker compose down"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
-            else:
-                result = subprocess.run(
-                    ["docker", "compose", "down"],
-                    cwd=str(self.project_path),
-                    capture_output=True,
-                    text=True,
-                    timeout=60
-                )
+            # Use docker compose directly
+            result = subprocess.run(
+                ["docker", "compose", "down"],
+                cwd=str(self.project_path),
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
             
             if result.returncode == 0:
                 logger.info("Containers stopped successfully")

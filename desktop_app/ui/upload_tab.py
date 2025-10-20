@@ -221,18 +221,62 @@ class UploadTab(QWidget):
                 )
                 return
             
-            # Show confirmation dialog
+            # Show confirmation dialog with smart preview
             count = len(found_files)
-            preview = "\n".join(str(f) for f in found_files[:10])
-            if count > 10:
-                preview += f"\n... and {count - 10} more files"
+            
+            # Build confirmation message based on file count
+            if count <= 15:
+                # Small number - show all files
+                preview = "\n".join(str(f.relative_to(folder)) for f in found_files)
+                message = (
+                    f"Found {count} file(s) in:\n{folder_path}\n\n"
+                    f"Files to index:\n{preview}\n\n"
+                    f"Do you want to index all {count} file(s)?"
+                )
+            else:
+                # Large number - show statistics and sample
+                # Count by extension
+                ext_counts = {}
+                for f in found_files:
+                    ext = f.suffix.lower()
+                    ext_counts[ext] = ext_counts.get(ext, 0) + 1
+                
+                # Count by subdirectory depth
+                subdir_counts = {}
+                for f in found_files:
+                    rel_path = f.relative_to(folder)
+                    if len(rel_path.parts) > 1:
+                        subdir = rel_path.parts[0]
+                        subdir_counts[subdir] = subdir_counts.get(subdir, 0) + 1
+                    else:
+                        subdir_counts["(root)"] = subdir_counts.get("(root)", 0) + 1
+                
+                # Build statistics
+                stats = "File types:\n"
+                for ext, cnt in sorted(ext_counts.items()):
+                    stats += f"  {ext}: {cnt} file(s)\n"
+                
+                if len(subdir_counts) > 1:
+                    stats += "\nTop subdirectories:\n"
+                    for subdir, cnt in sorted(subdir_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
+                        stats += f"  {subdir}: {cnt} file(s)\n"
+                
+                # Show sample files
+                sample = "\n".join(str(f.relative_to(folder)) for f in found_files[:10])
+                
+                message = (
+                    f"Found {count} file(s) in:\n{folder_path}\n\n"
+                    f"{stats}\n"
+                    f"Sample files (first 10):\n{sample}\n"
+                    f"... and {count - 10} more files\n\n"
+                    f"⚠️ Do you want to index all {count} file(s)?\n"
+                    f"This may take several minutes."
+                )
             
             reply = QMessageBox.question(
                 self,
                 "Confirm Folder Indexing",
-                f"Found {count} file(s) in:\n{folder_path}\n\n"
-                f"Files to index:\n{preview}\n\n"
-                f"Do you want to index all {count} file(s)?",
+                message,
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No
             )

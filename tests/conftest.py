@@ -9,11 +9,11 @@ import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
 # Set test environment variables before importing config
-# Use the existing development database for integration tests
-os.environ['ENVIRONMENT'] = 'development'
+# Use a SEPARATE test database to avoid polluting development data
+os.environ['ENVIRONMENT'] = 'development'  # Use development mode but with test database
 os.environ['DB_HOST'] = 'localhost'
 os.environ['DB_PORT'] = '5432'
-os.environ['POSTGRES_DB'] = 'rag_vector_db'  # Use existing dev database
+os.environ['POSTGRES_DB'] = 'rag_vector_db_test'  # Separate test database
 os.environ['POSTGRES_USER'] = 'rag_user'
 os.environ['POSTGRES_PASSWORD'] = 'rag_password'
 
@@ -63,6 +63,40 @@ def setup_test_database(db_connection_params):
         
         cursor.close()
         conn.close()
+        
+        # Connect to test database and create pgvector extension and schema
+        conn_params['dbname'] = test_db_name
+        conn = psycopg2.connect(**conn_params)
+        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        cursor = conn.cursor()
+        cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
+        
+        # Create document_chunks table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS document_chunks (
+                chunk_id SERIAL PRIMARY KEY,
+                document_id VARCHAR(255) NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                text_content TEXT NOT NULL,
+                embedding vector(384),
+                source_uri TEXT,
+                metadata JSONB,
+                indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(document_id, chunk_index)
+            )
+        """)
+        
+        # Create index on embedding for similarity search
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_embedding 
+            ON document_chunks USING ivfflat (embedding vector_cosine_ops)
+            WITH (lists = 100)
+        """)
+        
+        cursor.close()
+        conn.commit()
+        conn.close()
+        print(f"Initialized pgvector extension and schema in {test_db_name}")
         
         yield test_db_name
         

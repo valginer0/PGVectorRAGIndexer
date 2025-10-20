@@ -16,7 +16,7 @@ class TestWebUIIntegration:
         """Create test client."""
         return TestClient(app)
     
-    def test_upload_and_search_workflow(self, client):
+    def test_upload_and_search_workflow(self, client, db_manager):
         """Test complete workflow: upload document, then search for content."""
         # Step 1: Upload a document
         file_content = b"The principal architect designed the system with scalability in mind."

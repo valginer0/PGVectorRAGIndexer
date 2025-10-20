@@ -38,13 +38,39 @@ Write-Host ""
 
 # Clone or update repository
 if (Test-Path $InstallDir) {
-    Write-Host "Updating existing installation at: $InstallDir" -ForegroundColor Yellow
-    Set-Location $InstallDir
-    git pull origin $Branch
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "✗ ERROR: Failed to update repository" -ForegroundColor Red
-        Read-Host "Press Enter to exit"
-        exit 1
+    # Check if it's a valid git repository
+    if (Test-Path "$InstallDir\.git") {
+        Write-Host "Updating existing installation at: $InstallDir" -ForegroundColor Yellow
+        Set-Location $InstallDir
+        
+        # Reset any local changes and pull
+        git reset --hard HEAD 2>&1 | Out-Null
+        git pull origin $Branch
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "✗ ERROR: Failed to update repository" -ForegroundColor Red
+            Write-Host "  Removing corrupted installation and retrying..." -ForegroundColor Yellow
+            Set-Location ..
+            Remove-Item -Recurse -Force $InstallDir
+            git clone "https://github.com/$GitHubRepo.git" $InstallDir
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "✗ ERROR: Failed to clone repository" -ForegroundColor Red
+                Read-Host "Press Enter to exit"
+                exit 1
+            }
+            Set-Location $InstallDir
+        }
+    } else {
+        # Directory exists but is not a git repo - remove and clone fresh
+        Write-Host "Removing incomplete installation at: $InstallDir" -ForegroundColor Yellow
+        Remove-Item -Recurse -Force $InstallDir
+        Write-Host "Installing to: $InstallDir" -ForegroundColor Yellow
+        git clone "https://github.com/$GitHubRepo.git" $InstallDir
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "✗ ERROR: Failed to clone repository" -ForegroundColor Red
+            Read-Host "Press Enter to exit"
+            exit 1
+        }
+        Set-Location $InstallDir
     }
 } else {
     Write-Host "Installing to: $InstallDir" -ForegroundColor Yellow

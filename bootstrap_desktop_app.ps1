@@ -41,13 +41,21 @@ if (Test-Path $InstallDir) {
     Write-Host "Updating existing installation at: $InstallDir" -ForegroundColor Yellow
     Set-Location $InstallDir
     git pull origin $Branch
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "✗ ERROR: Failed to update repository" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
 } else {
     Write-Host "Installing to: $InstallDir" -ForegroundColor Yellow
     git clone "https://github.com/$GitHubRepo.git" $InstallDir
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "✗ ERROR: Failed to clone repository" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
+    Set-Location $InstallDir
 }
-
-# Change to install directory (after clone completes)
-Set-Location $InstallDir
 
 Write-Host ""
 

@@ -44,8 +44,10 @@ if (Test-Path $InstallDir) {
 } else {
     Write-Host "Installing to: $InstallDir" -ForegroundColor Yellow
     git clone "https://github.com/$GitHubRepo.git" $InstallDir
-    Set-Location $InstallDir
 }
+
+# Change to install directory (after clone completes)
+Set-Location $InstallDir
 
 Write-Host ""
 

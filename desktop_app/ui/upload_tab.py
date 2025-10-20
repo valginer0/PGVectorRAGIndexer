@@ -66,8 +66,9 @@ class UploadTab(QWidget):
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
         self.api_client = api_client
-        self.selected_file: Optional[Path] = None
+        self.selected_files: list[Path] = []  # Changed to list for multi-file support
         self.upload_worker: Optional[UploadWorker] = None
+        self.current_upload_index = 0
         
         self.setup_ui()
     
@@ -86,10 +87,10 @@ class UploadTab(QWidget):
         info_layout = QVBoxLayout(info_box)
         info_text = QLabel(
             "This desktop app automatically preserves the full file path!\n\n"
-            "• Click 'Select File' to choose a document\n"
+            "• Click 'Select Files' to choose one or more documents\n"
+            "• Click 'Select Folder' to index all files in a directory (recursive)\n"
             "• The full path (e.g., C:\\Projects\\file.txt) is automatically captured\n"
-            "• Upload to index the document with its full path preserved\n"
-            "• Later you can edit the source file and re-index it\n\n"
+            "• Upload to index the documents with their full paths preserved\n\n"
             "Supported formats: TXT, MD, PDF, DOCX, PPTX, HTML"
         )
         info_text.setWordWrap(True)
@@ -101,13 +102,20 @@ class UploadTab(QWidget):
         file_layout = QVBoxLayout(file_group)
         
         select_btn_layout = QHBoxLayout()
-        self.select_file_btn = QPushButton("📁 Select File")
-        self.select_file_btn.clicked.connect(self.select_file)
-        self.select_file_btn.setMinimumHeight(40)
-        select_btn_layout.addWidget(self.select_file_btn)
+        
+        self.select_files_btn = QPushButton("📁 Select Files")
+        self.select_files_btn.clicked.connect(self.select_files)
+        self.select_files_btn.setMinimumHeight(40)
+        select_btn_layout.addWidget(self.select_files_btn)
+        
+        self.select_folder_btn = QPushButton("📂 Select Folder")
+        self.select_folder_btn.clicked.connect(self.select_folder)
+        self.select_folder_btn.setMinimumHeight(40)
+        select_btn_layout.addWidget(self.select_folder_btn)
+        
         file_layout.addLayout(select_btn_layout)
         
-        self.file_path_label = QLabel("No file selected")
+        self.file_path_label = QLabel("No files selected")
         self.file_path_label.setStyleSheet("color: #666; padding: 10px; background: #f5f5f5; border-radius: 5px;")
         self.file_path_label.setWordWrap(True)
         file_layout.addWidget(self.file_path_label)
@@ -164,27 +172,82 @@ class UploadTab(QWidget):
         
         layout.addStretch()
     
-    def select_file(self):
-        """Open file dialog to select a file."""
-        file_path, _ = QFileDialog.getOpenFileName(
+    def select_files(self):
+        """Open file dialog to select multiple files."""
+        file_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Select Document to Upload",
+            "Select Documents to Upload",
             "",
             "Documents (*.txt *.md *.markdown *.pdf *.docx *.pptx *.html);;All Files (*)"
         )
         
-        if file_path:
-            self.selected_file = Path(file_path)
-            # Display the FULL path - this is what gets preserved!
-            self.file_path_label.setText(f"✓ Selected: {file_path}")
+        if file_paths:
+            self.selected_files = [Path(fp) for fp in file_paths]
+            count = len(self.selected_files)
+            # Display the FULL paths
+            if count == 1:
+                self.file_path_label.setText(f"✓ Selected: {file_paths[0]}")
+            else:
+                preview = "\n".join(file_paths[:5])
+                if count > 5:
+                    preview += f"\n... and {count - 5} more files"
+                self.file_path_label.setText(f"✓ Selected {count} files:\n{preview}")
             self.file_path_label.setStyleSheet("color: #059669; padding: 10px; background: #d1fae5; border-radius: 5px; font-weight: bold;")
             self.upload_btn.setEnabled(True)
-            self.log(f"File selected: {file_path}")
+            self.log(f"{count} file(s) selected")
+    
+    def select_folder(self):
+        """Open folder dialog to select a directory and index all supported files."""
+        folder_path = QFileDialog.getExistingDirectory(
+            self,
+            "Select Folder to Index (Recursive)",
+            ""
+        )
+        
+        if folder_path:
+            # Find all supported files recursively
+            supported_extensions = {'.txt', '.md', '.markdown', '.pdf', '.docx', '.pptx', '.html'}
+            folder = Path(folder_path)
+            found_files = []
+            
+            for ext in supported_extensions:
+                found_files.extend(folder.rglob(f'*{ext}'))
+            
+            if not found_files:
+                QMessageBox.warning(
+                    self,
+                    "No Files Found",
+                    f"No supported files found in:\n{folder_path}\n\nSupported: TXT, MD, PDF, DOCX, PPTX, HTML"
+                )
+                return
+            
+            # Show confirmation dialog
+            count = len(found_files)
+            preview = "\n".join(str(f) for f in found_files[:10])
+            if count > 10:
+                preview += f"\n... and {count - 10} more files"
+            
+            reply = QMessageBox.question(
+                self,
+                "Confirm Folder Indexing",
+                f"Found {count} file(s) in:\n{folder_path}\n\n"
+                f"Files to index:\n{preview}\n\n"
+                f"Do you want to index all {count} file(s)?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.Yes:
+                self.selected_files = found_files
+                self.file_path_label.setText(f"✓ Selected {count} files from folder:\n{folder_path}")
+                self.file_path_label.setStyleSheet("color: #059669; padding: 10px; background: #d1fae5; border-radius: 5px; font-weight: bold;")
+                self.upload_btn.setEnabled(True)
+                self.log(f"Folder selected: {count} files found in {folder_path}")
     
     def upload_file(self):
-        """Upload the selected file."""
-        if not self.selected_file:
-            QMessageBox.warning(self, "No File", "Please select a file first.")
+        """Upload the selected files."""
+        if not self.selected_files:
+            QMessageBox.warning(self, "No Files", "Please select file(s) first.")
             return
         
         if not self.api_client.is_api_available():
@@ -195,19 +258,34 @@ class UploadTab(QWidget):
             )
             return
         
-        # Get the full path as string
-        full_path = str(self.selected_file.absolute())
-        
-        # Disable UI during upload
-        self.select_file_btn.setEnabled(False)
+        # Disable buttons during upload
+        self.select_files_btn.setEnabled(False)
+        self.select_folder_btn.setEnabled(False)
         self.upload_btn.setEnabled(False)
         self.progress_bar.setVisible(True)
-        self.progress_bar.setRange(0, 0)  # Indeterminate progress
+        self.progress_bar.setRange(0, len(self.selected_files))
+        self.progress_bar.setValue(0)
         
-        # Create and start worker thread
+        # Start uploading files one by one
+        self.current_upload_index = 0
+        self.upload_next_file()
+    
+    def upload_next_file(self):
+        """Upload the next file in the queue."""
+        if self.current_upload_index >= len(self.selected_files):
+            # All files uploaded
+            self.upload_all_finished()
+            return
+        
+        file_path = self.selected_files[self.current_upload_index]
+        full_path = str(file_path.resolve())
+        
+        self.log(f"[{self.current_upload_index + 1}/{len(self.selected_files)}] Uploading: {file_path.name}")
+        
+        # Start upload in background thread
         self.upload_worker = UploadWorker(
             self.api_client,
-            self.selected_file,
+            file_path,
             full_path,
             self.force_reindex_cb.isChecked()
         )
@@ -216,23 +294,35 @@ class UploadTab(QWidget):
         self.upload_worker.start()
     
     def upload_finished(self, success: bool, message: str):
-        """Handle upload completion."""
-        # Re-enable UI
-        self.select_file_btn.setEnabled(True)
-        self.upload_btn.setEnabled(True)
-        self.progress_bar.setVisible(False)
+        """Handle single file upload completion."""
+        self.progress_bar.setValue(self.current_upload_index + 1)
         
         if success:
-            # Don't show popup - just log the success
-            self.log(f"✓ {message}")
-            # Clear selection
-            self.selected_file = None
-            self.file_path_label.setText("No file selected")
-            self.file_path_label.setStyleSheet("color: #666; padding: 10px; background: #f5f5f5; border-radius: 5px;")
-            self.upload_btn.setEnabled(False)
+            self.log(f"✓ File {self.current_upload_index + 1} uploaded successfully")
         else:
-            # Only show popup for errors
-            QMessageBox.critical(self, "Upload Failed", message)
+            self.log(f"✗ File {self.current_upload_index + 1} failed: {message}")
+        
+        # Move to next file
+        self.current_upload_index += 1
+        self.upload_next_file()
+    
+    def upload_all_finished(self):
+        """Handle completion of all uploads."""
+        self.progress_bar.setVisible(False)
+        self.select_files_btn.setEnabled(True)
+        self.select_folder_btn.setEnabled(True)
+        self.upload_btn.setEnabled(True)
+        
+        total = len(self.selected_files)
+        self.log(f"\n{'='*50}")
+        self.log(f"✓ All uploads completed! ({total} file(s))")
+        self.log(f"{'='*50}")
+        
+        # Clear selection
+        self.selected_files = []
+        self.file_path_label.setText("No files selected")
+        self.file_path_label.setStyleSheet("color: #666; padding: 10px; background: #f5f5f5; border-radius: 5px;")
+        self.upload_btn.setEnabled(False)
     
     def log(self, message: str):
         """Add a message to the log."""

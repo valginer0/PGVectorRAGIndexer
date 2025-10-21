@@ -24,17 +24,11 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Warn user
-echo -e "${YELLOW}WARNING: This will build an 8.3GB image with PyTorch/CUDA.${NC}"
-echo -e "${YELLOW}This takes ~15 minutes and uploads ~8.3GB to GHCR.${NC}"
+# Info message
+echo -e "${YELLOW}Building 8.3GB base image with PyTorch/CUDA...${NC}"
+echo -e "${YELLOW}This takes ~15 minutes to build + ~10 minutes to push.${NC}"
 echo -e "${YELLOW}Only run this when requirements.txt changes!${NC}"
 echo ""
-read -p "Continue? (y/N): " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "${YELLOW}Cancelled.${NC}"
-    exit 0
-fi
 
 # Build base image
 echo -e "${GREEN}Building base image...${NC}"

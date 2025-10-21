@@ -93,7 +93,7 @@ class UploadTab(QWidget):
             "• Click 'Select Folder' to index all files in a directory (recursive)\n"
             "• The full path (e.g., C:\\Projects\\file.txt) is automatically captured\n"
             "• Upload to index the documents with their full paths preserved\n\n"
-            "Supported formats: TXT, MD, PDF, DOCX, PPTX, HTML"
+            "Supported formats: TXT, MD, PDF, DOC, DOCX, PPTX, HTML"
         )
         info_text.setWordWrap(True)
         info_layout.addWidget(info_text)
@@ -208,7 +208,7 @@ class UploadTab(QWidget):
             self,
             "Select Documents to Upload",
             "",
-            "Documents (*.txt *.md *.markdown *.pdf *.docx *.pptx *.html);;All Files (*)"
+            "Documents (*.txt *.md *.markdown *.pdf *.doc *.docx *.pptx *.html);;All Files (*)"
         )
         
         if file_paths:
@@ -236,7 +236,7 @@ class UploadTab(QWidget):
         
         if folder_path:
             # Find all supported files recursively
-            supported_extensions = {'.txt', '.md', '.markdown', '.pdf', '.docx', '.pptx', '.html'}
+            supported_extensions = {'.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.pptx', '.html'}
             folder = Path(folder_path)
             found_files = []
             
@@ -247,7 +247,7 @@ class UploadTab(QWidget):
                 QMessageBox.warning(
                     self,
                     "No Files Found",
-                    f"No supported files found in:\n{folder_path}\n\nSupported: TXT, MD, PDF, DOCX, PPTX, HTML"
+                    f"No supported files found in:\n{folder_path}\n\nSupported: TXT, MD, PDF, DOC, DOCX, PPTX, HTML"
                 )
                 return
             

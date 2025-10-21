@@ -157,7 +157,7 @@ class WebDocumentLoader(DocumentLoader):
 class OfficeDocumentLoader(DocumentLoader):
     """Loader for Microsoft Office documents."""
     
-    SUPPORTED_EXTENSIONS = ['.docx', '.pptx', '.html']
+    SUPPORTED_EXTENSIONS = ['.doc', '.docx', '.pptx', '.html']
     
     def can_load(self, source_uri: str) -> bool:
         """Check if source is an Office document."""

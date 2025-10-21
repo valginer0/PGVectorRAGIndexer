@@ -17,6 +17,7 @@ from PySide6.QtGui import QIcon
 from .upload_tab import UploadTab
 from .search_tab import SearchTab
 from .documents_tab import DocumentsTab
+from .manage_tab import ManageTab
 from .settings_tab import SettingsTab
 from ..utils.docker_manager import DockerManager
 from ..utils.api_client import APIClient
@@ -81,11 +82,13 @@ class MainWindow(QMainWindow):
         self.upload_tab = UploadTab(self.api_client, self)
         self.search_tab = SearchTab(self.api_client, self)
         self.documents_tab = DocumentsTab(self.api_client, self)
+        self.manage_tab = ManageTab(self.api_client)
         self.settings_tab = SettingsTab(self.docker_manager, self)
         
         self.tabs.addTab(self.upload_tab, "📤 Upload")
         self.tabs.addTab(self.search_tab, "🔍 Search")
         self.tabs.addTab(self.documents_tab, "📚 Documents")
+        self.tabs.addTab(self.manage_tab, "🗑️ Manage")
         self.tabs.addTab(self.settings_tab, "⚙️ Settings")
         
         # Status bar at bottom

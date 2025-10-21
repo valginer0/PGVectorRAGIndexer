@@ -198,3 +198,87 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+    
+    def bulk_delete_preview(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Preview what documents would be deleted with given filters.
+        
+        Args:
+            filters: Filter criteria
+            
+        Returns:
+            Preview data with document count and samples
+            
+        Raises:
+            requests.RequestException: If the request fails
+        """
+        response = requests.post(
+            f"{self.base_url}/documents/bulk-delete",
+            json={"filters": filters, "preview": True},
+            timeout=self.timeout
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def bulk_delete(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Actually delete documents matching filters.
+        
+        Args:
+            filters: Filter criteria
+            
+        Returns:
+            Delete result with chunks_deleted count
+            
+        Raises:
+            requests.RequestException: If the request fails
+        """
+        response = requests.post(
+            f"{self.base_url}/documents/bulk-delete",
+            json={"filters": filters, "preview": False},
+            timeout=self.timeout
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def export_documents(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Export documents matching filters as backup.
+        
+        Args:
+            filters: Filter criteria
+            
+        Returns:
+            Export data with backup_data
+            
+        Raises:
+            requests.RequestException: If the request fails
+        """
+        response = requests.post(
+            f"{self.base_url}/documents/export",
+            json={"filters": filters},
+            timeout=self.timeout
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def restore_documents(self, backup_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Restore documents from backup.
+        
+        Args:
+            backup_data: Backup data from export_documents
+            
+        Returns:
+            Restore result with chunks_restored count
+            
+        Raises:
+            requests.RequestException: If the request fails
+        """
+        response = requests.post(
+            f"{self.base_url}/documents/restore",
+            json={"backup_data": backup_data},
+            timeout=self.timeout
+        )
+        response.raise_for_status()
+        return response.json()

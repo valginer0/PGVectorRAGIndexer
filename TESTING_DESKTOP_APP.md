@@ -6,18 +6,42 @@
 
 ### Prerequisites
 1. **Docker Desktop or Rancher Desktop** running on Windows
-2. **Python 3.10+** installed on Windows
-3. **Desktop app installed** (see INSTALL_DESKTOP_APP.md)
+2. **Python 3.10+** installed on Windows ([Download](https://www.python.org/downloads/))
+   - ⚠️ During install, check "Add Python to PATH"
+3. **Git** (optional, for bootstrap install) ([Download](https://git-scm.com/downloads))
 
-### 1. Run from Windows PowerShell
+### Step 1: Install the Desktop App
 
-**Option A: If installed via bootstrap (recommended):**
+**One-line install (Recommended):**
+
+Open **PowerShell** and run:
+
+```powershell
+irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.ps1 | iex
+```
+
+This will:
+- Check for Python and Git
+- Clone to `%USERPROFILE%\PGVectorRAGIndexer`
+- Create virtual environment
+- Install dependencies
+- Offer to run the app
+
+**If you get "execution policy" error:**
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+Then run the install command again.
+
+### Step 2: Run the Desktop App
+
+**After installation:**
 ```powershell
 cd $env:USERPROFILE\PGVectorRAGIndexer
 .\run_desktop_app.ps1
 ```
 
-**Option B: If using WSL development directory:**
+**For developers using WSL directory:**
 ```powershell
 cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
 .\run_desktop_app.ps1
@@ -29,7 +53,7 @@ cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
 - Five tabs: Upload, Search, Documents, Manage, Settings
 - **File picker will show Windows drives (C:\, D:\, etc.)**
 
-### 2. Test Upload with Windows Path
+### Step 3: Test Upload with Windows Path
 
 **Steps:**
 1. Click **Upload** tab
@@ -48,7 +72,7 @@ cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
 - Click **🔄 Refresh**
 - Your file should appear with the FULL Windows path in the "Source URI" column
 
-### 3. Test Search
+### Step 4: Test Search
 
 **Steps:**
 1. Click **Search** tab
@@ -60,7 +84,7 @@ cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
 - Shows score, source (with full path), chunk number, and content preview
 - Double-click a result to see full content
 
-### 4. Test Documents Management
+### Step 5: Test Documents Management
 
 **Steps:**
 1. Click **Documents** tab
@@ -73,7 +97,7 @@ cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
 - After confirming, document is deleted
 - List refreshes automatically
 
-### 5. Test Manage Tab (Bulk Operations) - NEW in v2.1
+### Step 6: Test Manage Tab (Bulk Operations) - NEW in v2.1
 
 **Steps:**
 1. Click **Manage** tab
@@ -91,7 +115,7 @@ cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
 - Undo restores the documents from backup
 - All operations show success/error messages
 
-### 6. Test Settings
+### Step 7: Test Settings
 
 **Steps:**
 1. Click **Settings** tab

@@ -1,24 +1,13 @@
 # PGVectorRAGIndexer Application Container
-FROM python:3.12-slim
+# Uses pre-built base image with all heavy dependencies (PyTorch, CUDA, etc.)
+# This makes rebuilds much faster (~50MB instead of 8.3GB)
 
-# Set working directory
+# Use base image with all dependencies pre-installed
+# To rebuild base: docker build -f Dockerfile.base -t ghcr.io/valginer0/pgvectorragindexer:base .
+FROM ghcr.io/valginer0/pgvectorragindexer:base
+
+# Working directory is already set in base image
 WORKDIR /app
-
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    g++ \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements first for better caching
-COPY requirements.txt .
-
-# Install Python dependencies with cache mount for faster rebuilds
-# BuildKit will cache downloaded packages and reuse them if versions match
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install --upgrade pip && \
-    pip install -r requirements.txt
 
 # Copy application code
 COPY *.py ./

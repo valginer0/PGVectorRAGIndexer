@@ -1,0 +1,27 @@
+# Base Image for PGVectorRAGIndexer
+# Contains all heavy dependencies (PyTorch, CUDA, transformers, etc.)
+# Only rebuild when requirements.txt changes
+
+FROM python:3.12-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY requirements.txt .
+
+# Install Python dependencies with cache mount for faster rebuilds
+# BuildKit will cache downloaded packages and reuse them if versions match
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --upgrade pip && \
+    pip install -r requirements.txt
+
+# This image is ~8.3GB and contains all the heavy ML libraries
+# It should be rebuilt only when requirements.txt changes

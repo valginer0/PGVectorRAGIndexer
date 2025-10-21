@@ -300,3 +300,136 @@ class TestBulkDelete:
         
         # Should match draft documents with file_type=text
         assert preview["document_count"] >= 2
+
+
+class TestBackupRestore:
+    """Test backup/export and restore/undo functionality."""
+    
+    @pytest.fixture
+    def client(self):
+        """Create test client."""
+        return TestClient(app)
+    
+    def test_export_documents(self, client, db_manager):
+        """Test exporting documents as backup."""
+        # Upload test documents
+        client.post(
+            "/upload-and-index",
+            files={"file": ("doc1.txt", b"Content 1", "text/plain")},
+            data={"document_type": "temp"}
+        )
+        client.post(
+            "/upload-and-index",
+            files={"file": ("doc2.txt", b"Content 2", "text/plain")},
+            data={"document_type": "temp"}
+        )
+        
+        # Export temp documents
+        response = client.post(
+            "/documents/export",
+            json={"filters": {"type": "temp"}}
+        )
+        
+        assert response.status_code == 200
+        export = response.json()
+        
+        assert export["status"] == "success"
+        assert export["document_count"] == 2
+        assert export["chunk_count"] >= 2
+        assert "backup_data" in export
+        assert len(export["backup_data"]) >= 2
+        
+        # Verify backup data structure
+        first_chunk = export["backup_data"][0]
+        assert "document_id" in first_chunk
+        assert "text_content" in first_chunk
+        assert "embedding" in first_chunk
+        assert "metadata" in first_chunk
+    
+    def test_restore_documents(self, client, db_manager):
+        """Test restoring documents from backup (undo)."""
+        # Upload and export documents
+        client.post(
+            "/upload-and-index",
+            files={"file": ("restore_test.txt", b"Restore me", "text/plain")},
+            data={"document_type": "restore_test"}
+        )
+        
+        # Export before delete
+        export_response = client.post(
+            "/documents/export",
+            json={"filters": {"type": "restore_test"}}
+        )
+        backup_data = export_response.json()["backup_data"]
+        
+        # Delete the documents
+        client.post(
+            "/documents/bulk-delete",
+            json={"filters": {"type": "restore_test"}, "preview": False}
+        )
+        
+        # Verify deleted
+        with db_manager.get_cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM document_chunks WHERE metadata->>'type' = 'restore_test'")
+            count = cursor.fetchone()[0]
+            assert count == 0, "Documents should be deleted"
+        
+        # Restore from backup
+        restore_response = client.post(
+            "/documents/restore",
+            json={"backup_data": backup_data}
+        )
+        
+        assert restore_response.status_code == 200
+        restore = restore_response.json()
+        
+        assert restore["status"] == "success"
+        assert restore["chunks_restored"] > 0
+        
+        # Verify restored
+        with db_manager.get_cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM document_chunks WHERE metadata->>'type' = 'restore_test'")
+            count = cursor.fetchone()[0]
+            assert count > 0, "Documents should be restored"
+    
+    def test_export_restore_workflow(self, client, db_manager):
+        """Test complete export -> delete -> restore workflow."""
+        # 1. Upload documents
+        for i in range(3):
+            client.post(
+                "/upload-and-index",
+                files={"file": (f"workflow{i}.txt", f"Content {i}".encode(), "text/plain")},
+                data={"document_type": "workflow_test"}
+            )
+        
+        # 2. Export (backup)
+        export_response = client.post(
+            "/documents/export",
+            json={"filters": {"type": "workflow_test"}}
+        )
+        backup = export_response.json()
+        assert backup["document_count"] == 3
+        
+        # 3. Delete
+        delete_response = client.post(
+            "/documents/bulk-delete",
+            json={"filters": {"type": "workflow_test"}, "preview": False}
+        )
+        assert delete_response.json()["status"] == "success"
+        
+        # 4. Verify deleted
+        with db_manager.get_cursor() as cursor:
+            cursor.execute("SELECT COUNT(*) FROM document_chunks WHERE metadata->>'type' = 'workflow_test'")
+            assert cursor.fetchone()[0] == 0
+        
+        # 5. Restore (undo)
+        restore_response = client.post(
+            "/documents/restore",
+            json={"backup_data": backup["backup_data"]}
+        )
+        assert restore_response.json()["status"] == "success"
+        
+        # 6. Verify restored
+        with db_manager.get_cursor() as cursor:
+            cursor.execute("SELECT COUNT(DISTINCT document_id) FROM document_chunks WHERE metadata->>'type' = 'workflow_test'")
+            assert cursor.fetchone()[0] == 3

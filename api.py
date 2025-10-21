@@ -122,6 +122,16 @@ class BulkDeleteResponse(BaseModel):
     filters_applied: Dict[str, Any]
 
 
+class ExportRequest(BaseModel):
+    """Request model for exporting documents."""
+    filters: Dict[str, Any] = Field(..., description="Filter criteria for export")
+
+
+class RestoreRequest(BaseModel):
+    """Request model for restoring documents."""
+    backup_data: List[Dict[str, Any]] = Field(..., description="Backup data from export")
+
+
 # Lifespan context manager for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -705,6 +715,62 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to bulk delete: {str(e)}"
+        )
+
+
+@app.post("/documents/export", tags=["Documents"])
+async def export_documents(request: ExportRequest):
+    """
+    Export documents matching filter criteria as JSON backup.
+    
+    Use this before bulk delete to create a backup that can be restored later.
+    Returns all document chunks with embeddings and metadata.
+    """
+    try:
+        db_manager = get_db_manager()
+        repo = DocumentRepository(db_manager)
+        
+        export_data = repo.export_documents(request.filters)
+        
+        return {
+            "status": "success",
+            "chunk_count": len(export_data),
+            "document_count": len(set(chunk['document_id'] for chunk in export_data)),
+            "filters_applied": request.filters,
+            "backup_data": export_data
+        }
+    except Exception as e:
+        logger.error(f"Failed to export documents: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export documents: {str(e)}"
+        )
+
+
+@app.post("/documents/restore", tags=["Documents"])
+async def restore_documents(request: RestoreRequest):
+    """
+    Restore documents from a backup (undo delete).
+    
+    Use the backup_data from /documents/export to restore deleted documents.
+    Existing documents with same IDs will not be overwritten.
+    """
+    try:
+        db_manager = get_db_manager()
+        repo = DocumentRepository(db_manager)
+        
+        chunks_restored = repo.restore_documents(request.backup_data)
+        
+        return {
+            "status": "success",
+            "chunks_restored": chunks_restored,
+            "document_count": len(set(chunk['document_id'] for chunk in request.backup_data))
+        }
+    except Exception as e:
+        logger.error(f"Failed to restore documents: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to restore documents: {str(e)}"
         )
 
 

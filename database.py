@@ -6,6 +6,7 @@ for the PGVectorRAGIndexer system.
 """
 
 import logging
+import json
 from contextlib import contextmanager, asynccontextmanager
 from typing import Optional, List, Dict, Any, Tuple
 from datetime import datetime
@@ -613,6 +614,108 @@ class DocumentRepository:
             deleted_count = cursor.rowcount
             logger.info(f"Bulk deleted {deleted_count} chunks matching filters: {filters}")
             return deleted_count
+    
+    def export_documents(self, filters: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Export documents matching filters as JSON (for backup before delete).
+        
+        Args:
+            filters: Filter criteria (same format as search_similar)
+            
+        Returns:
+            List of document chunks with all data
+        """
+        where_clauses = []
+        params = []
+        
+        for key, value in filters.items():
+            if key.startswith('metadata.'):
+                metadata_key = key[9:]
+                where_clauses.append(f"metadata->>%s = %s")
+                params.append(metadata_key)
+                params.append(value)
+            elif key in ['type', 'namespace', 'category']:
+                where_clauses.append(f"metadata->>'{key}' = %s")
+                params.append(value)
+            else:
+                where_clauses.append(f"{key} = %s")
+                params.append(value)
+        
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        
+        # Export all chunk data
+        query = f"""
+        SELECT 
+            chunk_id,
+            document_id,
+            chunk_index,
+            text_content,
+            source_uri,
+            embedding::text as embedding,
+            metadata,
+            indexed_at
+        FROM document_chunks
+        {where_sql}
+        ORDER BY document_id, chunk_index
+        """
+        
+        with self.db.get_cursor(dict_cursor=True) as cursor:
+            cursor.execute(query, params)
+            results = cursor.fetchall()
+            
+            # Convert to serializable format
+            export_data = []
+            for row in results:
+                export_data.append({
+                    'chunk_id': row['chunk_id'],
+                    'document_id': row['document_id'],
+                    'chunk_index': row['chunk_index'],
+                    'text_content': row['text_content'],
+                    'source_uri': row['source_uri'],
+                    'embedding': row['embedding'],
+                    'metadata': row['metadata'],
+                    'indexed_at': row['indexed_at'].isoformat() if row['indexed_at'] else None
+                })
+            
+            logger.info(f"Exported {len(export_data)} chunks matching filters: {filters}")
+            return export_data
+    
+    def restore_documents(self, backup_data: List[Dict[str, Any]]) -> int:
+        """
+        Restore documents from backup data.
+        
+        Args:
+            backup_data: List of document chunks from export_documents
+            
+        Returns:
+            Number of chunks restored
+        """
+        if not backup_data:
+            return 0
+        
+        # Prepare data for insertion
+        chunks_to_insert = []
+        for chunk in backup_data:
+            chunks_to_insert.append((
+                chunk['document_id'],
+                chunk['chunk_index'],
+                chunk['text_content'],
+                chunk['source_uri'],
+                chunk['embedding'],  # Already in text format from export
+                json.dumps(chunk['metadata']) if isinstance(chunk['metadata'], dict) else chunk['metadata']
+            ))
+        
+        # Insert chunks
+        query = """
+        INSERT INTO document_chunks 
+        (document_id, chunk_index, text_content, source_uri, embedding, metadata)
+        VALUES %s
+        ON CONFLICT (document_id, chunk_index) DO NOTHING
+        """
+        
+        self.db.execute_many(query, chunks_to_insert, page_size=100)
+        logger.info(f"Restored {len(chunks_to_insert)} chunks from backup")
+        return len(chunks_to_insert)
 
 
 # Global database manager instance

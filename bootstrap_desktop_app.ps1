@@ -96,6 +96,14 @@ Write-Host "Installing dependencies..." -ForegroundColor Yellow
 & ".\venv-windows\Scripts\pip.exe" install -q -r requirements-desktop.txt
 
 Write-Host ""
+
+# Update Docker containers if update-dev.ps1 exists
+if (Test-Path ".\update-dev.ps1") {
+    Write-Host "Updating Docker containers..." -ForegroundColor Yellow
+    & ".\update-dev.ps1"
+    Write-Host ""
+}
+
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host "Installation Complete!" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green

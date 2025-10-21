@@ -94,7 +94,8 @@ def indexed_document(processor, repository, embedding_service, test_document):
                 i,
                 chunk.page_content,
                 processed_doc.source_uri,
-                embedding
+                embedding,
+                processed_doc.metadata
             )
             for i, (chunk, embedding) in enumerate(zip(processed_doc.chunks, embeddings))
         ]
@@ -133,14 +134,15 @@ class TestIndexAndRetrieve:
         assert all(len(emb) == 384 for emb in embeddings)  # all-MiniLM-L6-v2 dimension
         
         # Prepare chunks for database insertion
-        # Format: (document_id, chunk_index, text, source_uri, embedding)
+        # Format: (document_id, chunk_index, text, source_uri, embedding, metadata)
         chunk_tuples = [
             (
                 processed_doc.document_id,
                 i,
                 chunk.page_content,
                 processed_doc.source_uri,
-                embedding
+                embedding,
+                processed_doc.metadata
             )
             for i, (chunk, embedding) in enumerate(zip(processed_doc.chunks, embeddings))
         ]

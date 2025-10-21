@@ -39,7 +39,8 @@ class APIClient:
         self,
         file_path: Path,
         custom_source_uri: Optional[str] = None,
-        force_reindex: bool = False
+        force_reindex: bool = False,
+        document_type: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Upload and index a document.
@@ -48,6 +49,7 @@ class APIClient:
             file_path: Path to the file to upload
             custom_source_uri: Custom source URI (full path) to preserve
             force_reindex: Whether to force reindexing if document exists
+            document_type: Optional document type/category (e.g., 'resume', 'policy', 'report')
             
         Returns:
             Response data from the API
@@ -55,7 +57,7 @@ class APIClient:
         Raises:
             requests.RequestException: If the request fails
         """
-        logger.info(f"Uploading document: {file_path}")
+        logger.info(f"Uploading document: {file_path} (type: {document_type})")
         
         with open(file_path, 'rb') as f:
             files = {'file': (file_path.name, f)}
@@ -63,6 +65,9 @@ class APIClient:
             
             if custom_source_uri:
                 data['custom_source_uri'] = custom_source_uri
+            
+            if document_type:
+                data['document_type'] = document_type
             
             response = requests.post(
                 f"{self.base_url}/upload-and-index",
@@ -78,7 +83,8 @@ class APIClient:
         query: str,
         top_k: int = 10,
         min_score: float = 0.5,
-        metric: str = "cosine"
+        metric: str = "cosine",
+        document_type: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """
         Search for documents.
@@ -88,6 +94,7 @@ class APIClient:
             top_k: Number of results to return
             min_score: Minimum similarity score
             metric: Similarity metric to use
+            document_type: Optional filter by document type
             
         Returns:
             List of search results
@@ -95,16 +102,22 @@ class APIClient:
         Raises:
             requests.RequestException: If the request fails
         """
-        logger.info(f"Searching for: {query}")
+        logger.info(f"Searching for: {query} (type filter: {document_type})")
+        
+        payload = {
+            "query": query,
+            "top_k": top_k,
+            "min_score": min_score,
+            "metric": metric
+        }
+        
+        # Add type filter if specified
+        if document_type:
+            payload["filters"] = {"type": document_type}
         
         response = requests.post(
             f"{self.base_url}/search",
-            json={
-                "query": query,
-                "top_k": top_k,
-                "min_score": min_score,
-                "metric": metric
-            },
+            json=payload,
             timeout=self.timeout
         )
         response.raise_for_status()

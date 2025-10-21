@@ -81,6 +81,7 @@ class DocumentInfo(BaseModel):
     chunk_count: int
     indexed_at: datetime
     last_updated: Optional[datetime] = None
+    document_type: Optional[str] = None
 
 
 class HealthResponse(BaseModel):
@@ -273,7 +274,8 @@ async def index_document(request: IndexRequest):
 async def upload_and_index(
     file: UploadFile = File(...),
     force_reindex: bool = Form(default=False),
-    custom_source_uri: Optional[str] = Form(default=None)
+    custom_source_uri: Optional[str] = Form(default=None),
+    document_type: Optional[str] = Form(default=None)
 ):
     """
     Upload a file and index it immediately.
@@ -314,13 +316,19 @@ async def upload_and_index(
         idx = get_indexer()
         
         # Process document from temp file
+        metadata = {
+            'upload_method': 'http_upload',
+            'original_filename': file.filename,
+            'temp_path': temp_path
+        }
+        
+        # Add document type if provided
+        if document_type:
+            metadata['type'] = document_type
+        
         processed_doc = idx.processor.process(
             source_uri=temp_path,
-            custom_metadata={
-                'upload_method': 'http_upload',
-                'original_filename': file.filename,
-                'temp_path': temp_path
-            }
+            custom_metadata=metadata
         )
         
         # Regenerate document_id based on the display name (not temp path)
@@ -360,7 +368,8 @@ async def upload_and_index(
                 i,
                 chunk.page_content,
                 processed_doc.source_uri,  # This is now the original filename
-                embedding
+                embedding,
+                processed_doc.metadata  # Include metadata
             ))
         
         # Insert into database
@@ -473,7 +482,8 @@ async def list_documents(
                 source_uri=doc['source_uri'],
                 chunk_count=doc['chunk_count'],
                 indexed_at=doc['indexed_at'],
-                last_updated=doc.get('last_updated')
+                last_updated=doc.get('last_updated'),
+                document_type=doc.get('document_type')
             )
             for doc in documents
         ]

@@ -9,7 +9,7 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QCheckBox, QTextEdit,
-    QProgressBar, QMessageBox, QGroupBox
+    QProgressBar, QMessageBox, QGroupBox, QLineEdit, QComboBox
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -24,12 +24,13 @@ class UploadWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
     
-    def __init__(self, api_client, file_path: Path, full_path: str, force_reindex: bool):
+    def __init__(self, api_client, file_path: Path, full_path: str, force_reindex: bool, document_type: Optional[str] = None):
         super().__init__()
         self.api_client = api_client
         self.file_path = file_path
         self.full_path = full_path
         self.force_reindex = force_reindex
+        self.document_type = document_type
     
     def run(self):
         """Upload the file."""
@@ -39,7 +40,8 @@ class UploadWorker(QThread):
             result = self.api_client.upload_document(
                 self.file_path,
                 custom_source_uri=self.full_path,
-                force_reindex=self.force_reindex
+                force_reindex=self.force_reindex,
+                document_type=self.document_type
             )
             
             doc_id = result.get('document_id', 'unknown')
@@ -125,6 +127,34 @@ class UploadTab(QWidget):
         # Options
         options_group = QGroupBox("Options")
         options_layout = QVBoxLayout(options_group)
+        
+        # Document Type
+        type_layout = QHBoxLayout()
+        type_label = QLabel("Document Type:")
+        type_label.setMinimumWidth(120)
+        type_layout.addWidget(type_label)
+        
+        self.document_type_combo = QComboBox()
+        self.document_type_combo.setEditable(True)
+        self.document_type_combo.addItems([
+            "",  # Empty for no type
+            "resume",
+            "policy",
+            "report",
+            "email",
+            "memo",
+            "contract",
+            "invoice",
+            "manual",
+            "guide",
+            "specification",
+            "research",
+            "presentation"
+        ])
+        self.document_type_combo.setToolTip("Optional: Categorize your document for easier filtering")
+        self.document_type_combo.setPlaceholderText("(optional)")
+        type_layout.addWidget(self.document_type_combo)
+        options_layout.addLayout(type_layout)
         
         self.force_reindex_cb = QCheckBox("Force reindex if document already exists")
         self.force_reindex_cb.setToolTip("Check this to reindex the document even if it already exists in the database")
@@ -324,6 +354,9 @@ class UploadTab(QWidget):
         file_path = self.selected_files[self.current_upload_index]
         full_path = str(file_path.resolve())
         
+        # Get document type (empty string if not set)
+        document_type = self.document_type_combo.currentText().strip() or None
+        
         self.log(f"[{self.current_upload_index + 1}/{len(self.selected_files)}] Uploading: {file_path.name}")
         
         # Start upload in background thread
@@ -331,7 +364,8 @@ class UploadTab(QWidget):
             self.api_client,
             file_path,
             full_path,
-            self.force_reindex_cb.isChecked()
+            self.force_reindex_cb.isChecked(),
+            document_type
         )
         self.upload_worker.progress.connect(self.log)
         self.upload_worker.finished.connect(self.upload_finished)

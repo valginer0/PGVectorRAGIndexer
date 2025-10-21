@@ -88,8 +88,8 @@ class TestDocumentRepository:
         repo = DocumentRepository(db_manager)
         
         chunks = [
-            ('doc1', 0, 'First chunk', '/path/to/doc1.txt', sample_embeddings[0]),
-            ('doc1', 1, 'Second chunk', '/path/to/doc1.txt', sample_embeddings[1]),
+            ('doc1', 0, 'First chunk', '/path/to/doc1.txt', sample_embeddings[0], {}),
+            ('doc1', 1, 'Second chunk', '/path/to/doc1.txt', sample_embeddings[1], {}),
         ]
         
         count = repo.insert_chunks(chunks)
@@ -109,7 +109,7 @@ class TestDocumentRepository:
         assert not repo.document_exists('doc1')
         
         # Insert document
-        chunks = [('doc1', 0, 'Test chunk', '/path/to/doc1.txt', sample_embeddings[0])]
+        chunks = [('doc1', 0, 'Test chunk', '/path/to/doc1.txt', sample_embeddings[0], {})]
         repo.insert_chunks(chunks)
         
         # Document should exist now
@@ -121,8 +121,8 @@ class TestDocumentRepository:
         
         # Insert document
         chunks = [
-            ('doc1', 0, 'First chunk', '/path/to/doc1.txt', sample_embeddings[0]),
-            ('doc1', 1, 'Second chunk', '/path/to/doc1.txt', sample_embeddings[1]),
+            ('doc1', 0, 'First chunk', '/path/to/doc1.txt', sample_embeddings[0], {}),
+            ('doc1', 1, 'Second chunk', '/path/to/doc1.txt', sample_embeddings[1], {}),
         ]
         repo.insert_chunks(chunks)
         
@@ -140,8 +140,8 @@ class TestDocumentRepository:
         
         # Insert document
         chunks = [
-            ('doc1', 0, 'First chunk', '/path/to/doc1.txt', sample_embeddings[0]),
-            ('doc1', 1, 'Second chunk', '/path/to/doc1.txt', sample_embeddings[1]),
+            ('doc1', 0, 'First chunk', '/path/to/doc1.txt', sample_embeddings[0], {}),
+            ('doc1', 1, 'Second chunk', '/path/to/doc1.txt', sample_embeddings[1], {}),
         ]
         repo.insert_chunks(chunks)
         
@@ -157,8 +157,8 @@ class TestDocumentRepository:
         repo = DocumentRepository(db_manager)
         
         # Insert multiple documents
-        chunks1 = [('doc1', 0, 'Chunk 1', '/path/to/doc1.txt', sample_embeddings[0])]
-        chunks2 = [('doc2', 0, 'Chunk 2', '/path/to/doc2.txt', sample_embeddings[1])]
+        chunks1 = [('doc1', 0, 'Chunk 1', '/path/to/doc1.txt', sample_embeddings[0], {})]
+        chunks2 = [('doc2', 0, 'Chunk 2', '/path/to/doc2.txt', sample_embeddings[1], {})]
         
         repo.insert_chunks(chunks1)
         repo.insert_chunks(chunks2)
@@ -178,9 +178,9 @@ class TestDocumentRepository:
         
         # Insert documents
         chunks = [
-            ('doc1', 0, 'Python programming', '/path/to/doc1.txt', sample_embeddings[0]),
-            ('doc2', 0, 'Java programming', '/path/to/doc2.txt', sample_embeddings[1]),
-            ('doc3', 0, 'Machine learning', '/path/to/doc3.txt', sample_embeddings[2]),
+            ('doc1', 0, 'Python programming', '/path/to/doc1.txt', sample_embeddings[0], {}),
+            ('doc2', 0, 'Java programming', '/path/to/doc2.txt', sample_embeddings[1], {}),
+            ('doc3', 0, 'Machine learning', '/path/to/doc3.txt', sample_embeddings[2], {}),
         ]
         repo.insert_chunks(chunks)
         
@@ -199,8 +199,8 @@ class TestDocumentRepository:
         
         # Insert documents
         chunks = [
-            ('doc1', 0, 'Text 1', '/path/to/doc1.txt', sample_embeddings[0]),
-            ('doc2', 0, 'Text 2', '/path/to/doc2.txt', sample_embeddings[1]),
+            ('doc1', 0, 'Text 1', '/path/to/doc1.txt', sample_embeddings[0], {}),
+            ('doc2', 0, 'Text 2', '/path/to/doc2.txt', sample_embeddings[1], {}),
         ]
         repo.insert_chunks(chunks)
         
@@ -220,9 +220,9 @@ class TestDocumentRepository:
         
         # Insert documents
         chunks = [
-            ('doc1', 0, 'Chunk 1', '/path/to/doc1.txt', sample_embeddings[0]),
-            ('doc1', 1, 'Chunk 2', '/path/to/doc1.txt', sample_embeddings[1]),
-            ('doc2', 0, 'Chunk 3', '/path/to/doc2.txt', sample_embeddings[2]),
+            ('doc1', 0, 'Chunk 1', '/path/to/doc1.txt', sample_embeddings[0], {}),
+            ('doc1', 1, 'Chunk 2', '/path/to/doc1.txt', sample_embeddings[1], {}),
+            ('doc2', 0, 'Chunk 3', '/path/to/doc2.txt', sample_embeddings[2], {}),
         ]
         repo.insert_chunks(chunks)
         
@@ -238,7 +238,7 @@ class TestDocumentRepository:
         repo = DocumentRepository(db_manager)
         
         # Insert chunk
-        chunks = [('doc1', 0, 'Test chunk', '/path/to/doc1.txt', sample_embeddings[0])]
+        chunks = [('doc1', 0, 'Test chunk', '/path/to/doc1.txt', sample_embeddings[0], {})]
         repo.insert_chunks(chunks)
         
         # Try to insert same chunk again (should fail due to UNIQUE constraint)

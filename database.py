@@ -218,26 +218,37 @@ class DocumentRepository:
     
     def insert_chunks(
         self,
-        chunks: List[Tuple[str, int, str, str, List[float]]],
+        chunks: List[Tuple[str, int, str, str, List[float], Optional[Dict[str, Any]]]],
         batch_size: int = 100
     ) -> int:
         """
         Insert document chunks into database.
         
         Args:
-            chunks: List of (document_id, chunk_index, text, source_uri, embedding)
+            chunks: List of (document_id, chunk_index, text, source_uri, embedding, metadata)
             batch_size: Batch size for insertion
             
         Returns:
             Number of chunks inserted
         """
+        import json
+        
+        # Convert metadata dicts to JSON strings for PostgreSQL JSONB
+        chunks_with_json = []
+        for chunk in chunks:
+            doc_id, idx, text, uri, emb, metadata = chunk
+            metadata_json = json.dumps(metadata) if metadata else '{}'
+            chunks_with_json.append((doc_id, idx, text, uri, emb, metadata_json))
+        
         query = """
         INSERT INTO document_chunks 
-        (document_id, chunk_index, text_content, source_uri, embedding)
+        (document_id, chunk_index, text_content, source_uri, embedding, metadata)
         VALUES %s
         """
         
-        self.db.execute_many(query, chunks, page_size=batch_size)
+        # Note: metadata is passed as JSON string and will be cast to JSONB by PostgreSQL
+        
+        self.db.execute_many(query, chunks_with_json, page_size=batch_size)
         logger.info(f"Inserted {len(chunks)} chunks into database")
         return len(chunks)
     
@@ -320,7 +331,8 @@ class DocumentRepository:
             source_uri,
             COUNT(*) as chunk_count,
             MIN(indexed_at) as indexed_at,
-            MAX(indexed_at) as last_updated
+            MAX(indexed_at) as last_updated,
+            (array_agg(metadata->>'type'))[1] as document_type
         FROM document_chunks
         GROUP BY document_id, source_uri
         ORDER BY indexed_at DESC
@@ -368,8 +380,14 @@ class DocumentRepository:
         
         if filters:
             for key, value in filters.items():
-                where_clauses.append(f"{key} = %s")
-                params.append(value)
+                # Support metadata JSONB queries (e.g., 'type' -> metadata->>'type')
+                if key in ['type', 'namespace', 'category']:
+                    where_clauses.append(f"metadata->>'{key}' = %s")
+                    params.append(value)
+                else:
+                    # Direct column match
+                    where_clauses.append(f"{key} = %s")
+                    params.append(value)
         
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
         

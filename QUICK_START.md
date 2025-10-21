@@ -1,6 +1,14 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.0
+# Quick Start Guide - PGVectorRAGIndexer v2.1
 
 Get up and running in 5 minutes with Docker-only deployment!
+
+## 🆕 What's New in v2.1
+
+- **Document Types**: Organize documents with custom types (policy, resume, report, etc.)
+- **Bulk Delete**: Preview, export backup, delete, and undo multiple documents
+- **Metadata Discovery**: Dynamically discover available metadata fields
+- **Legacy Word Support**: Added .doc (Office 97-2003) file support
+- **Desktop App Manage Tab**: Full GUI for bulk operations with backup/restore
 
 ## ⚡ Installation (1 minute)
 

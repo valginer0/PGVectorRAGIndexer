@@ -17,7 +17,7 @@ cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
 **What should happen:**
 - A window opens showing "PGVectorRAGIndexer - Document Management"
 - Status bar shows Docker and API status
-- Four tabs: Upload, Search, Documents, Settings
+- Five tabs: Upload, Search, Documents, Manage, Settings
 
 ### 2. Test Upload with Windows Path
 
@@ -63,7 +63,25 @@ cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
 - After confirming, document is deleted
 - List refreshes automatically
 
-### 5. Test Settings
+### 5. Test Manage Tab (Bulk Operations) - NEW in v2.1
+
+**Steps:**
+1. Click **Manage** tab
+2. Upload a few test documents with type "draft" (use Upload tab first)
+3. In Manage tab, select "draft" from Document Type dropdown
+4. Click **👁️ Preview Delete**
+5. Click **💾 Export Backup** and save to a file
+6. Click **🗑️ Delete Documents** and confirm
+7. Click **↩️ Undo Last Delete** to restore
+
+**Expected Result:**
+- Preview shows count and list of documents that will be deleted
+- Export saves a JSON backup file
+- Delete removes the documents (with confirmation)
+- Undo restores the documents from backup
+- All operations show success/error messages
+
+### 6. Test Settings
 
 **Steps:**
 1. Click **Settings** tab
@@ -204,6 +222,13 @@ python -m desktop_app.main
 - Lists all documents with full paths
 - Can delete documents
 - Auto-refreshes after operations
+
+✅ **Manage Tab (NEW v2.1):**
+- Can filter by document type or custom metadata
+- Preview shows affected documents before delete
+- Export backup creates JSON file
+- Delete removes documents with confirmation
+- Undo restores from backup
 
 ✅ **Settings Tab:**
 - Shows database statistics

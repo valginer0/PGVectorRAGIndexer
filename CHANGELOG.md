@@ -7,19 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2025-10-20
+
 ### Added
-- **Modern Web UI** - User-friendly web interface for document management
-  - Search interface with semantic and hybrid options
-  - Drag & drop file upload with progress tracking
-  - Document browser with delete functionality
-  - Statistics dashboard with system metrics
-  - Responsive design with gradient theme
-- 11 comprehensive tests for web UI functionality
+- **Document Type/Metadata System** - Organize documents with custom types
+  - Upload documents with `document_type` parameter (policy, resume, report, etc.)
+  - Store metadata in PostgreSQL JSONB column
+  - Filter search results by document type
+  - Display document type in documents list
+- **Generic Metadata Filtering** - Filter by ANY metadata field
+  - Use `metadata.*` syntax for custom fields (e.g., `metadata.author`)
+  - Backward compatible with shortcuts (type, namespace, category)
+  - Future-proof - works with any metadata you add later
+- **Metadata Discovery API** - Discover available metadata dynamically
+  - `GET /metadata/keys` - List all metadata keys (with pattern support)
+  - `GET /metadata/values?key=X` - Get all values for a specific key
+  - Useful for building dynamic UI filters
+- **Bulk Delete with Preview** - Safely delete multiple documents
+  - `POST /documents/bulk-delete` with `preview: true` for dry-run
+  - `POST /documents/bulk-delete` with `preview: false` to actually delete
+  - Safety check: Cannot delete all documents without filters
+  - Supports multiple filter criteria
+- **Export/Backup System** - Create restorable backups
+  - `POST /documents/export` - Export documents as JSON backup
+  - Includes all chunks, embeddings, and metadata
+  - Use before bulk delete for safety
+- **Undo/Restore Functionality** - Restore deleted documents
+  - `POST /documents/restore` - Restore from backup
+  - Safe: Uses ON CONFLICT DO NOTHING (won't overwrite existing)
+  - One-click undo in desktop app
+- **Desktop App Manage Tab** - Full GUI for bulk operations
+  - Filter by document type or custom metadata (JSON)
+  - Preview what will be deleted before taking action
+  - Export backup button (saves JSON file)
+  - Delete button with confirmation dialog
+  - Undo button (restore from last backup or file)
+  - Results table showing affected documents
+- **Legacy Word Support** - Added .doc (Office 97-2003) file support
+  - Works with existing `unstructured` library
+  - No additional dependencies required
+  - Updated desktop app file picker and folder indexing
+- **26 new comprehensive tests** covering all new features
+  - 9 tests for metadata filtering and discovery
+  - 9 tests for bulk delete operations
+  - 3 tests for backup/restore functionality
+  - 5 tests for legacy Word support
 
 ### Changed
-- Root endpoint (`/`) now serves web UI instead of JSON
-- API info moved to `/api` endpoint
-- Updated documentation (README, QUICK_START) to highlight web UI
+- Enhanced `search_similar()` to support `metadata.*` syntax
+- Updated `DocumentInfo` model to include `document_type` field
+- Updated desktop app Upload tab with Document Type dropdown
+- Updated supported file formats list to include .doc
+- All 143 tests passing (98.6% pass rate)
+
+### Fixed
+- Metadata now correctly stored and retrieved from JSONB column
+- List documents endpoint now returns document_type field
+- Search filtering now works with generic metadata fields
 
 ## [2.0.3] - 2025-10-16
 

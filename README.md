@@ -2,15 +2,26 @@
 
 A production-ready, modular semantic document search system using PostgreSQL with pgvector extension. Built for RAG (Retrieval-Augmented Generation) applications with enterprise-grade features.
 
-## 🎯 What's New in v2.0
+## 🎯 What's New in v2.1
 
-### Major Improvements
+### 🆕 Latest Features (v2.1)
+
+- **✅ Document Type/Metadata System**: Organize documents with custom types (policy, resume, report, etc.)
+- **✅ Generic Metadata Filtering**: Filter by ANY metadata field using `metadata.*` syntax
+- **✅ Metadata Discovery API**: Discover available metadata keys and values dynamically
+- **✅ Bulk Delete with Preview**: Safely delete multiple documents with preview before action
+- **✅ Export/Backup System**: Export documents as JSON backup before deletion
+- **✅ Undo/Restore Functionality**: Restore deleted documents from backup
+- **✅ Desktop App Manage Tab**: Full GUI for bulk operations with backup/restore
+- **✅ Legacy Word Support**: Added .doc (Office 97-2003) file support
+
+### Major Improvements (v2.0)
 
 - **✅ Modern Web UI**: User-friendly web interface for search, upload, and document management
 - **✅ Modular Architecture**: Clean separation of concerns with dedicated modules for config, database, embeddings, and processing
 - **✅ Configuration Management**: Pydantic-based configuration with validation and environment variable support
 - **✅ Connection Pooling**: Efficient database connection management with automatic retry and health checks
-- **✅ Comprehensive Testing**: Full test suite with unit, integration, and end-to-end tests
+- **✅ Comprehensive Testing**: Full test suite with unit, integration, and end-to-end tests (143 tests!)
 - **✅ Document Deduplication**: Automatic detection and prevention of duplicate documents
 - **✅ Metadata Support**: Rich metadata storage and filtering capabilities
 - **✅ Hybrid Search**: Combine vector similarity with full-text search for better results
@@ -25,14 +36,16 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 
 ### Core Capabilities
 
-- **Multi-Format Support**: PDF, DOCX, XLSX, TXT, HTML, PPTX, CSV, and web URLs
+- **Multi-Format Support**: PDF, DOC, DOCX, XLSX, TXT, HTML, PPTX, CSV, and web URLs
 - **Semantic Search**: Vector similarity search using sentence transformers
 - **Hybrid Search**: Combine vector and full-text search with configurable weights
 - **Document Management**: Full CRUD operations for indexed documents
-- **Metadata Filtering**: Filter search results by document properties
+- **Generic Metadata System**: Store and filter by ANY custom metadata field
+- **Metadata Discovery**: Dynamically discover available metadata keys and values
+- **Bulk Operations**: Preview, export, delete, and restore multiple documents
+- **Backup/Restore**: Export documents as JSON and restore with undo functionality
 - **Connection Pooling**: Efficient database connection management
 - **Embedding Cache**: Speed up repeated queries with in-memory cache
-- **Batch Operations**: Process multiple documents efficiently
 - **Health Monitoring**: Built-in health checks and statistics
 
 ### User Interface
@@ -62,7 +75,10 @@ irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstra
 Features:
 - 📁 **Native file picker** - Access Windows files directly
 - 🔒 **Full path preservation** - Store complete file paths (e.g., `C:\Projects\file.txt`)
+- 🏷️ **Document types** - Organize with custom types (policy, resume, report, etc.)
 - 🔍 **Search & manage** - Full document management UI
+- 🗑️ **Bulk delete** - Preview, export backup, delete, and undo
+- 💾 **Backup/Restore** - Export documents as JSON and restore with one click
 - 🐳 **Docker control** - Start/stop containers from the app
 
 See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for details.
@@ -334,6 +350,72 @@ curl "http://localhost:8000/stats"
 **Health check**:
 ```bash
 curl "http://localhost:8000/health"
+```
+
+#### New Metadata & Bulk Operations API (v2.1)
+
+**Upload with document type**:
+```bash
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@document.pdf" \
+  -F "document_type=policy"
+```
+
+**Discover metadata keys**:
+```bash
+curl "http://localhost:8000/metadata/keys"
+# Returns: ["type", "author", "file_type", "upload_method", ...]
+```
+
+**Get values for a metadata key**:
+```bash
+curl "http://localhost:8000/metadata/values?key=type"
+# Returns: ["policy", "resume", "report", ...]
+```
+
+**Search with metadata filter**:
+```bash
+curl -X POST "http://localhost:8000/search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "security requirements",
+    "top_k": 5,
+    "filters": {"type": "policy"}
+  }'
+```
+
+**Preview bulk delete**:
+```bash
+curl -X POST "http://localhost:8000/documents/bulk-delete" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filters": {"type": "draft"},
+    "preview": true
+  }'
+```
+
+**Export backup before delete**:
+```bash
+curl -X POST "http://localhost:8000/documents/export" \
+  -H "Content-Type: application/json" \
+  -d '{"filters": {"type": "draft"}}' > backup.json
+```
+
+**Bulk delete documents**:
+```bash
+curl -X POST "http://localhost:8000/documents/bulk-delete" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "filters": {"type": "draft"},
+    "preview": false
+  }'
+```
+
+**Restore from backup (undo)**:
+```bash
+curl -X POST "http://localhost:8000/documents/restore" \
+  -H "Content-Type: application/json" \
+  -d @backup.json
 ```
 
 ### Database Management

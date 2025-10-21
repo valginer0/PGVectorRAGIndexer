@@ -84,7 +84,8 @@ class APIClient:
         top_k: int = 10,
         min_score: float = 0.5,
         metric: str = "cosine",
-        document_type: Optional[str] = None
+        document_type: Optional[str] = None,
+        filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
         Search for documents.
@@ -94,7 +95,8 @@ class APIClient:
             top_k: Number of results to return
             min_score: Minimum similarity score
             metric: Similarity metric to use
-            document_type: Optional filter by document type
+            document_type: Optional filter by document type (deprecated, use filters)
+            filters: Optional filter dictionary
             
         Returns:
             List of search results
@@ -102,7 +104,7 @@ class APIClient:
         Raises:
             requests.RequestException: If the request fails
         """
-        logger.info(f"Searching for: {query} (type filter: {document_type})")
+        logger.info(f"Searching for: {query} (filters: {filters or document_type})")
         
         payload = {
             "query": query,
@@ -111,8 +113,11 @@ class APIClient:
             "metric": metric
         }
         
-        # Add type filter if specified
-        if document_type:
+        # Add filters if specified
+        if filters:
+            payload["filters"] = filters
+        elif document_type:
+            # Backward compatibility
             payload["filters"] = {"type": document_type}
         
         response = requests.post(
@@ -278,6 +283,52 @@ class APIClient:
         response = requests.post(
             f"{self.base_url}/documents/restore",
             json={"backup_data": backup_data},
+            timeout=self.timeout
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def get_metadata_keys(self, pattern: Optional[str] = None) -> List[str]:
+        """
+        Get all unique metadata keys.
+        
+        Args:
+            pattern: Optional SQL LIKE pattern to filter keys
+            
+        Returns:
+            List of metadata keys
+            
+        Raises:
+            requests.RequestException: If the request fails
+        """
+        params = {}
+        if pattern:
+            params['pattern'] = pattern
+        
+        response = requests.get(
+            f"{self.base_url}/metadata/keys",
+            params=params,
+            timeout=self.timeout
+        )
+        response.raise_for_status()
+        return response.json()
+    
+    def get_metadata_values(self, key: str) -> List[str]:
+        """
+        Get all unique values for a metadata key.
+        
+        Args:
+            key: Metadata key to get values for
+            
+        Returns:
+            List of unique values
+            
+        Raises:
+            requests.RequestException: If the request fails
+        """
+        response = requests.get(
+            f"{self.base_url}/metadata/values",
+            params={"key": key},
             timeout=self.timeout
         )
         response.raise_for_status()

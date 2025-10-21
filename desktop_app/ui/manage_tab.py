@@ -5,11 +5,14 @@ Manage Documents tab for bulk operations (delete, export, restore).
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QComboBox, QTextEdit, QMessageBox, QFileDialog,
-    QTableWidget, QTableWidgetItem, QHeaderView
+    QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit
 )
 from PySide6.QtCore import Qt
 import json
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class ManageTab(QWidget):
@@ -47,39 +50,73 @@ class ManageTab(QWidget):
         layout.addWidget(info_box)
         
         # Filter selection
-        filter_group = QGroupBox("🔍 Filter Criteria")
+        filter_group = QGroupBox("🔍 Filter Criteria (All filters combined with AND)")
         filter_layout = QVBoxLayout(filter_group)
         
-        # Document type filter
+        # Document type filter with refresh button
         type_layout = QHBoxLayout()
-        type_layout.addWidget(QLabel("Document Type:"))
+        type_label = QLabel("Document Type:")
+        type_label.setMinimumWidth(120)
+        type_layout.addWidget(type_label)
+        
         self.type_combo = QComboBox()
         self.type_combo.setEditable(True)
-        self.type_combo.addItems([
-            "",  # Empty = all types
-            "policy",
-            "resume",
-            "report",
-            "memo",
-            "draft",
-            "final",
-            "temp",
-            "archive"
-        ])
+        self.type_combo.addItem("")  # Empty = all types
         self.type_combo.setPlaceholderText("Select or enter type...")
-        type_layout.addWidget(self.type_combo)
+        self.type_combo.setToolTip("Filter by document type. Leave empty for all types.")
+        type_layout.addWidget(self.type_combo, 1)
+        
+        refresh_types_btn = QPushButton("🔄 Refresh Types")
+        refresh_types_btn.clicked.connect(self.load_document_types)
+        refresh_types_btn.setToolTip("Load document types from database")
+        type_layout.addWidget(refresh_types_btn)
         filter_layout.addLayout(type_layout)
         
-        # Metadata filter (advanced)
-        metadata_layout = QHBoxLayout()
-        metadata_layout.addWidget(QLabel("Custom Filter (JSON):"))
-        self.metadata_input = QTextEdit()
-        self.metadata_input.setPlaceholderText('{"metadata.author": "John", "metadata.status": "obsolete"}')
-        self.metadata_input.setMaximumHeight(60)
-        metadata_layout.addWidget(self.metadata_input)
-        filter_layout.addLayout(metadata_layout)
+        # Path/Name filter with wildcards
+        path_layout = QHBoxLayout()
+        path_label = QLabel("Path/Name Filter:")
+        path_label.setMinimumWidth(120)
+        path_layout.addWidget(path_label)
+        
+        self.path_filter = QLineEdit()
+        self.path_filter.setPlaceholderText("e.g., *resume*, C:\\Projects\\*, */2024/*")
+        self.path_filter.setToolTip("Use wildcards: * for any characters, ? for single character")
+        path_layout.addWidget(self.path_filter)
+        filter_layout.addLayout(path_layout)
+        
+        # Additional metadata filters (key-value pairs)
+        metadata_label = QLabel("Additional Metadata Filters:")
+        metadata_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
+        filter_layout.addWidget(metadata_label)
+        
+        # Metadata key 1
+        meta1_layout = QHBoxLayout()
+        meta1_layout.addWidget(QLabel("Key:"))
+        self.meta_key1 = QLineEdit()
+        self.meta_key1.setPlaceholderText("e.g., author, department, status")
+        meta1_layout.addWidget(self.meta_key1)
+        meta1_layout.addWidget(QLabel("Value:"))
+        self.meta_value1 = QLineEdit()
+        self.meta_value1.setPlaceholderText("e.g., John, HR, obsolete")
+        meta1_layout.addWidget(self.meta_value1)
+        filter_layout.addLayout(meta1_layout)
+        
+        # Metadata key 2
+        meta2_layout = QHBoxLayout()
+        meta2_layout.addWidget(QLabel("Key:"))
+        self.meta_key2 = QLineEdit()
+        self.meta_key2.setPlaceholderText("e.g., year, category")
+        meta2_layout.addWidget(self.meta_key2)
+        meta2_layout.addWidget(QLabel("Value:"))
+        self.meta_value2 = QLineEdit()
+        self.meta_value2.setPlaceholderText("e.g., 2023, draft")
+        meta2_layout.addWidget(self.meta_value2)
+        filter_layout.addLayout(meta2_layout)
         
         layout.addWidget(filter_group)
+        
+        # Load document types on init
+        self.load_document_types()
         
         # Action buttons
         button_group = QGroupBox("⚡ Actions")
@@ -140,6 +177,32 @@ class ManageTab(QWidget):
         
         layout.addStretch()
     
+    def load_document_types(self):
+        """Load document types from database via metadata discovery API."""
+        try:
+            # Get all values for the 'type' metadata key
+            types = self.api_client.get_metadata_values("type")
+            
+            # Clear and repopulate combo box
+            current_text = self.type_combo.currentText()
+            self.type_combo.clear()
+            self.type_combo.addItem("")  # Empty option
+            
+            for doc_type in sorted(types):
+                if doc_type:  # Skip empty strings
+                    self.type_combo.addItem(doc_type)
+            
+            # Restore previous selection if it still exists
+            if current_text:
+                index = self.type_combo.findText(current_text)
+                if index >= 0:
+                    self.type_combo.setCurrentIndex(index)
+            
+            logger.info(f"Loaded {len(types)} document types from database")
+        except Exception as e:
+            logger.error(f"Failed to load document types: {e}")
+            # Keep default types if API fails
+    
     def get_filters(self):
         """Build filter dictionary from UI inputs."""
         filters = {}
@@ -149,19 +212,24 @@ class ManageTab(QWidget):
         if doc_type:
             filters["type"] = doc_type
         
-        # Custom metadata filters
-        metadata_json = self.metadata_input.toPlainText().strip()
-        if metadata_json:
-            try:
-                custom_filters = json.loads(metadata_json)
-                filters.update(custom_filters)
-            except json.JSONDecodeError:
-                QMessageBox.warning(
-                    self,
-                    "Invalid JSON",
-                    "Custom filter is not valid JSON. Please fix it or leave empty."
-                )
-                return None
+        # Path/name filter with wildcards
+        path_filter = self.path_filter.text().strip()
+        if path_filter:
+            # Convert wildcards to SQL LIKE pattern
+            # * -> %, ? -> _
+            sql_pattern = path_filter.replace('*', '%').replace('?', '_')
+            filters["source_uri_like"] = sql_pattern
+        
+        # Additional metadata filters
+        if self.meta_key1.text().strip() and self.meta_value1.text().strip():
+            key = self.meta_key1.text().strip()
+            value = self.meta_value1.text().strip()
+            filters[f"metadata.{key}"] = value
+        
+        if self.meta_key2.text().strip() and self.meta_value2.text().strip():
+            key = self.meta_key2.text().strip()
+            value = self.meta_value2.text().strip()
+            filters[f"metadata.{key}"] = value
         
         if not filters:
             QMessageBox.warning(

@@ -23,13 +23,14 @@ class SearchWorker(QThread):
     
     finished = Signal(bool, object)  # success, results or error message
     
-    def __init__(self, api_client, query: str, top_k: int, min_score: float, metric: str):
+    def __init__(self, api_client, query: str, top_k: int, min_score: float, metric: str, filters: Dict[str, Any] = None):
         super().__init__()
         self.api_client = api_client
         self.query = query
         self.top_k = top_k
         self.min_score = min_score
         self.metric = metric
+        self.filters = filters or {}
     
     def run(self):
         """Execute the search."""
@@ -38,7 +39,8 @@ class SearchWorker(QThread):
                 self.query,
                 top_k=self.top_k,
                 min_score=self.min_score,
-                metric=self.metric
+                metric=self.metric,
+                filters=self.filters
             )
             self.finished.emit(True, results)
         except requests.RequestException as e:
@@ -123,6 +125,44 @@ class SearchTab(QWidget):
         options_layout.addStretch()
         layout.addWidget(options_group)
         
+        # Metadata filters
+        filters_group = QGroupBox("🔍 Metadata Filters (Optional)")
+        filters_layout = QVBoxLayout(filters_group)
+        
+        # Document type filter
+        type_layout = QHBoxLayout()
+        type_layout.addWidget(QLabel("Document Type:"))
+        self.type_filter = QComboBox()
+        self.type_filter.setEditable(True)
+        self.type_filter.addItem("")  # Empty = no filter
+        self.type_filter.setPlaceholderText("(optional)")
+        self.type_filter.setToolTip("Filter by document type")
+        type_layout.addWidget(self.type_filter, 1)
+        
+        refresh_types_btn = QPushButton("🔄")
+        refresh_types_btn.clicked.connect(self.load_document_types)
+        refresh_types_btn.setToolTip("Refresh types from database")
+        refresh_types_btn.setMaximumWidth(40)
+        type_layout.addWidget(refresh_types_btn)
+        filters_layout.addLayout(type_layout)
+        
+        # Additional metadata key-value filter
+        meta_layout = QHBoxLayout()
+        meta_layout.addWidget(QLabel("Metadata:"))
+        self.meta_key = QLineEdit()
+        self.meta_key.setPlaceholderText("Key (e.g., author)")
+        meta_layout.addWidget(self.meta_key)
+        meta_layout.addWidget(QLabel("="))
+        self.meta_value = QLineEdit()
+        self.meta_value.setPlaceholderText("Value (e.g., John)")
+        meta_layout.addWidget(self.meta_value)
+        filters_layout.addLayout(meta_layout)
+        
+        layout.addWidget(filters_group)
+        
+        # Load document types on init
+        self.load_document_types()
+        
         # Results table
         results_group = QGroupBox("Search Results")
         results_layout = QVBoxLayout(results_group)
@@ -165,13 +205,25 @@ class SearchTab(QWidget):
         self.status_label.setText(f"Searching for: {query}...")
         self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
         
+        # Build filters
+        filters = {}
+        doc_type = self.type_filter.currentText().strip()
+        if doc_type:
+            filters["type"] = doc_type
+        
+        if self.meta_key.text().strip() and self.meta_value.text().strip():
+            key = self.meta_key.text().strip()
+            value = self.meta_value.text().strip()
+            filters[f"metadata.{key}"] = value
+        
         # Start search worker
         self.search_worker = SearchWorker(
             self.api_client,
             query,
             self.top_k_spin.value(),
             self.min_score_spin.value(),
-            self.metric_combo.currentText()
+            self.metric_combo.currentText(),
+            filters
         )
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
@@ -239,3 +291,29 @@ class SearchTab(QWidget):
             msg.setText(f"Source: {source}\nChunk: {chunk}\nScore: {score:.4f}")
             msg.setDetailedText(content)
             msg.exec()
+    
+    def load_document_types(self):
+        """Load document types from database via metadata discovery API."""
+        try:
+            # Get all values for the 'type' metadata key
+            types = self.api_client.get_metadata_values("type")
+            
+            # Clear and repopulate combo box
+            current_text = self.type_filter.currentText()
+            self.type_filter.clear()
+            self.type_filter.addItem("")  # Empty option
+            
+            for doc_type in sorted(types):
+                if doc_type:  # Skip empty strings
+                    self.type_filter.addItem(doc_type)
+            
+            # Restore previous selection if it still exists
+            if current_text:
+                index = self.type_filter.findText(current_text)
+                if index >= 0:
+                    self.type_filter.setCurrentIndex(index)
+            
+            logger.info(f"Loaded {len(types)} document types for search filters")
+        except Exception as e:
+            logger.error(f"Failed to load document types: {e}")
+            # Keep default empty if API fails

@@ -547,6 +547,10 @@ class DocumentRepository:
             elif key in ['type', 'namespace', 'category']:
                 where_clauses.append(f"metadata->>'{key}' = %s")
                 params.append(value)
+            elif key == 'source_uri_like':
+                # LIKE pattern matching for source_uri
+                where_clauses.append(f"source_uri LIKE %s")
+                params.append(value)
             else:
                 where_clauses.append(f"{key} = %s")
                 params.append(value)
@@ -597,6 +601,10 @@ class DocumentRepository:
             elif key in ['type', 'namespace', 'category']:
                 where_clauses.append(f"metadata->>'{key}' = %s")
                 params.append(value)
+            elif key == 'source_uri_like':
+                # LIKE pattern matching for source_uri
+                where_clauses.append(f"source_uri LIKE %s")
+                params.append(value)
             else:
                 where_clauses.append(f"{key} = %s")
                 params.append(value)
@@ -636,6 +644,10 @@ class DocumentRepository:
                 params.append(value)
             elif key in ['type', 'namespace', 'category']:
                 where_clauses.append(f"metadata->>'{key}' = %s")
+                params.append(value)
+            elif key == 'source_uri_like':
+                # LIKE pattern matching for source_uri
+                where_clauses.append(f"source_uri LIKE %s")
                 params.append(value)
             else:
                 where_clauses.append(f"{key} = %s")

@@ -66,7 +66,8 @@ while ($attempt -lt $maxAttempts -and -not $apiReady) {
         if ($response.StatusCode -eq 200) {
             $apiReady = $true
         }
-    } catch {
+    }
+    catch {
         # API not ready yet
     }
     

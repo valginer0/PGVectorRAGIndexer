@@ -1,23 +1,33 @@
 # Testing the Desktop Application
 
-## Quick Start Testing
+**Primary Use Case:** The desktop app is designed for **Windows** to access Windows files with full path preservation.
+
+## Quick Start Testing (Windows - Recommended)
+
+### Prerequisites
+1. **Docker Desktop or Rancher Desktop** running on Windows
+2. **Python 3.10+** installed on Windows
+3. **Desktop app installed** (see INSTALL_DESKTOP_APP.md)
 
 ### 1. Run from Windows PowerShell
 
+**Option A: If installed via bootstrap (recommended):**
 ```powershell
-# Navigate to project (using WSL path)
-cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
-
-# Launch the app (use .ps1 for UNC paths)
+cd $env:USERPROFILE\PGVectorRAGIndexer
 .\run_desktop_app.ps1
 ```
 
-**Note:** Use `run_desktop_app.ps1` (PowerShell script) when accessing via UNC path (`\\wsl.localhost\...`). The `.bat` file doesn't work with UNC paths.
+**Option B: If using WSL development directory:**
+```powershell
+cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
+.\run_desktop_app.ps1
+```
 
 **What should happen:**
 - A window opens showing "PGVectorRAGIndexer - Document Management"
 - Status bar shows Docker and API status
 - Five tabs: Upload, Search, Documents, Manage, Settings
+- **File picker will show Windows drives (C:\, D:\, etc.)**
 
 ### 2. Test Upload with Windows Path
 
@@ -112,26 +122,11 @@ pytest tests/test_desktop_app.py -v
 
 **Note:** These are smoke tests only. Full GUI testing requires a display server and GUI testing framework (like pytest-qt), which is beyond current scope.
 
-## Platform-Specific Testing
+## Alternative: WSL Testing (Not Recommended)
 
-### Windows Testing (Primary)
+**⚠️ Limitation:** When run from WSL, the desktop app can only access WSL files, NOT Windows files.
 
-**Why:** Desktop app is designed for Windows to access Windows file paths.
-
-**Test:**
-```powershell
-cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
-.\run_desktop_app.bat
-```
-
-**Verify:**
-- File picker shows Windows drives (C:\, D:\, etc.)
-- Can navigate to Windows folders
-- Full paths are captured and stored
-
-### WSL Testing (Secondary)
-
-**Why:** Verify it works but shows WSL files only.
+**Why test this?** Only to verify the app works in a Linux environment, but you lose the main benefit (Windows file access).
 
 **Test:**
 ```bash
@@ -140,8 +135,11 @@ cd /home/valginer0/projects/PGVectorRAGIndexer
 ```
 
 **Expected:**
-- App runs but file picker shows WSL filesystem only
-- Paths like `/home/user/...` instead of `C:\...`
+- App runs but file picker shows WSL filesystem only (`/home/user/...`)
+- Cannot access Windows drives (C:\, D:\, etc.)
+- Paths stored as Linux paths, not Windows paths
+
+**Conclusion:** Always run from Windows for production use!
 
 ## Docker Integration Testing
 
@@ -242,9 +240,10 @@ python -m desktop_app.main
 
 ## Known Limitations
 
-1. **WSL File Access:** When run from WSL, only shows WSL files (by design)
-2. **GUI Testing:** No automated GUI tests (would require pytest-qt and display server)
-3. **Windows Only:** Full path preservation only works when run from Windows
+1. **Windows-First Design:** The desktop app is designed for Windows. Running from WSL limits functionality.
+2. **WSL File Access:** When run from WSL, only shows WSL files, cannot access Windows drives.
+3. **GUI Testing:** No automated GUI tests (would require pytest-qt and display server).
+4. **Path Preservation:** Full Windows path preservation (C:\...) only works when run from Windows.
 
 ## Next Steps
 

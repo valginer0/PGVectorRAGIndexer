@@ -23,9 +23,9 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
-# Build Docker image
-echo -e "${GREEN}Building Docker image...${NC}"
-docker compose -f docker-compose.dev.yml build app
+# Build Docker image with BuildKit for caching
+echo -e "${GREEN}Building Docker image with BuildKit cache...${NC}"
+DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build app
 BUILD_RESULT=$?
 if [ $BUILD_RESULT -ne 0 ]; then
     echo -e "${RED}✗ Docker build failed.${NC}"

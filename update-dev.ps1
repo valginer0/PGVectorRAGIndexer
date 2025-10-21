@@ -22,7 +22,7 @@ try {
     exit 1
 }
 
-Write-Host "✓ Docker is running" -ForegroundColor Green
+Write-Host "[OK] Docker is running" -ForegroundColor Green
 Write-Host ""
 
 # Pull latest :dev image
@@ -34,13 +34,13 @@ if ($LASTEXITCODE -ne 0) {
     Read-Host "Press Enter to exit"
     exit 1
 }
-Write-Host "✓ Image pulled successfully" -ForegroundColor Green
+Write-Host "[OK] Image pulled successfully" -ForegroundColor Green
 Write-Host ""
 
 # Stop and remove existing containers
 Write-Host "Stopping existing containers..." -ForegroundColor Yellow
 docker compose down 2>&1 | Out-Null
-Write-Host "✓ Containers stopped" -ForegroundColor Green
+Write-Host "[OK] Containers stopped" -ForegroundColor Green
 Write-Host ""
 
 # Start containers with new image
@@ -51,7 +51,7 @@ if ($LASTEXITCODE -ne 0) {
     Read-Host "Press Enter to exit"
     exit 1
 }
-Write-Host "✓ Containers started" -ForegroundColor Green
+Write-Host "[OK] Containers started" -ForegroundColor Green
 Write-Host ""
 
 # Wait for health check
@@ -81,16 +81,16 @@ while ($attempt -lt $maxAttempts -and -not $apiReady) {
 Write-Host ""
 
 if ($apiReady) {
-    Write-Host "✓ API is ready!" -ForegroundColor Green
+    Write-Host "[OK] API is ready!" -ForegroundColor Green
 } else {
-    Write-Host "⚠ WARNING: API health check timed out" -ForegroundColor Yellow
+    Write-Host "[WARNING] API health check timed out" -ForegroundColor Yellow
     Write-Host "  The containers are running but may still be initializing" -ForegroundColor Yellow
     Write-Host "  Check logs with: docker compose logs -f" -ForegroundColor Yellow
 }
 
 Write-Host ""
 Write-Host "==========================================" -ForegroundColor Green
-Write-Host "       ✓ Update Complete!" -ForegroundColor Green
+Write-Host "       Update Complete!" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "API available at: http://localhost:8000" -ForegroundColor Cyan

@@ -35,6 +35,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      cache_from:
+        - pgvectorragindexer:dev
     image: pgvectorragindexer:dev  # Tag with :dev to distinguish from production
     container_name: vector_rag_app
     restart: always

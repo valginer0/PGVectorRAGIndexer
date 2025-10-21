@@ -380,12 +380,21 @@ class DocumentRepository:
         
         if filters:
             for key, value in filters.items():
-                # Support metadata JSONB queries (e.g., 'type' -> metadata->>'type')
-                if key in ['type', 'namespace', 'category']:
+                # Support generic metadata JSONB queries
+                # Use 'metadata.keyname' syntax for metadata fields
+                # OR use bare key names for backward compatibility with common fields
+                if key.startswith('metadata.'):
+                    # Extract the actual metadata key (e.g., 'metadata.type' -> 'type')
+                    metadata_key = key[9:]  # Remove 'metadata.' prefix
+                    where_clauses.append(f"metadata->>%s = %s")
+                    params.append(metadata_key)
+                    params.append(value)
+                elif key in ['type', 'namespace', 'category']:
+                    # Backward compatibility: bare key names for common metadata fields
                     where_clauses.append(f"metadata->>'{key}' = %s")
                     params.append(value)
                 else:
-                    # Direct column match
+                    # Direct column match (e.g., document_id, source_uri)
                     where_clauses.append(f"{key} = %s")
                     params.append(value)
         
@@ -453,6 +462,157 @@ class DocumentRepository:
                 "avg_chunks_per_document": avg_chunks,
                 "database_size_bytes": db_size_bytes
             }
+    
+    def get_metadata_keys(self, pattern: Optional[str] = None) -> List[str]:
+        """
+        Get all unique metadata keys across all documents.
+        
+        Args:
+            pattern: Optional SQL LIKE pattern to filter keys (e.g., 't%' for keys starting with 't')
+            
+        Returns:
+            List of unique metadata keys
+        """
+        # Use subquery to work around set-returning function limitation
+        if pattern:
+            query = """
+            SELECT DISTINCT key
+            FROM (
+                SELECT jsonb_object_keys(metadata) as key
+                FROM document_chunks
+                WHERE metadata IS NOT NULL AND metadata != '{}'::jsonb
+            ) subq
+            WHERE key LIKE %s
+            ORDER BY key
+            """
+            params = [pattern]
+        else:
+            query = """
+            SELECT DISTINCT jsonb_object_keys(metadata) as key
+            FROM document_chunks
+            WHERE metadata IS NOT NULL AND metadata != '{}'::jsonb
+            ORDER BY key
+            """
+            params = []
+        
+        with self.db.get_cursor(dict_cursor=True) as cursor:
+            cursor.execute(query, params if params else None)
+            results = cursor.fetchall()
+            return [row['key'] for row in results]
+    
+    def get_metadata_values(self, key: str, limit: int = 100) -> List[str]:
+        """
+        Get all unique values for a specific metadata key.
+        
+        Args:
+            key: The metadata key to get values for
+            limit: Maximum number of values to return
+            
+        Returns:
+            List of unique values for the key
+        """
+        query = """
+        SELECT DISTINCT metadata->>%s as value
+        FROM document_chunks
+        WHERE metadata->>%s IS NOT NULL
+        ORDER BY value
+        LIMIT %s
+        """
+        
+        with self.db.get_cursor(dict_cursor=True) as cursor:
+            cursor.execute(query, (key, key, limit))
+            results = cursor.fetchall()
+            return [row['value'] for row in results if row['value']]
+    
+    def preview_delete(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Preview what would be deleted with given filters (dry-run).
+        
+        Args:
+            filters: Filter criteria (same format as search_similar)
+            
+        Returns:
+            Dictionary with preview information
+        """
+        where_clauses = []
+        params = []
+        
+        for key, value in filters.items():
+            if key.startswith('metadata.'):
+                metadata_key = key[9:]
+                where_clauses.append(f"metadata->>%s = %s")
+                params.append(metadata_key)
+                params.append(value)
+            elif key in ['type', 'namespace', 'category']:
+                where_clauses.append(f"metadata->>'{key}' = %s")
+                params.append(value)
+            else:
+                where_clauses.append(f"{key} = %s")
+                params.append(value)
+        
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
+        
+        # Get count and sample documents
+        count_query = f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {where_sql}"
+        sample_query = f"""
+        SELECT DISTINCT document_id, source_uri
+        FROM document_chunks
+        {where_sql}
+        LIMIT 10
+        """
+        
+        with self.db.get_cursor(dict_cursor=True) as cursor:
+            cursor.execute(count_query, params)
+            count = cursor.fetchone()['count']
+            
+            cursor.execute(sample_query, params)
+            samples = cursor.fetchall()
+            
+            return {
+                "document_count": count,
+                "sample_documents": [dict(row) for row in samples],
+                "filters_applied": filters
+            }
+    
+    def bulk_delete(self, filters: Dict[str, Any]) -> int:
+        """
+        Delete documents matching the given filters.
+        
+        Args:
+            filters: Filter criteria (same format as search_similar)
+            
+        Returns:
+            Number of chunks deleted
+        """
+        where_clauses = []
+        params = []
+        
+        for key, value in filters.items():
+            if key.startswith('metadata.'):
+                metadata_key = key[9:]
+                where_clauses.append(f"metadata->>%s = %s")
+                params.append(metadata_key)
+                params.append(value)
+            elif key in ['type', 'namespace', 'category']:
+                where_clauses.append(f"metadata->>'{key}' = %s")
+                params.append(value)
+            else:
+                where_clauses.append(f"{key} = %s")
+                params.append(value)
+        
+        if not where_clauses:
+            raise ValueError("Filters are required for bulk delete (safety check)")
+        
+        where_sql = f"WHERE {' AND '.join(where_clauses)}"
+        
+        # Delete chunks matching the filters
+        delete_query = f"DELETE FROM document_chunks {where_sql}"
+        
+        with self.db.get_cursor() as cursor:
+            cursor.execute(delete_query, params)
+            deleted_count = cursor.rowcount
+            logger.info(f"Bulk deleted {deleted_count} chunks matching filters: {filters}")
+            return deleted_count
 
 
 # Global database manager instance

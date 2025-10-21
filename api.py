@@ -102,6 +102,26 @@ class StatsResponse(BaseModel):
     embedding_dimension: int
 
 
+class BulkDeleteRequest(BaseModel):
+    """Request model for bulk delete operations."""
+    filters: Dict[str, Any] = Field(..., description="Filter criteria for deletion")
+    preview: bool = Field(default=True, description="If true, only preview without deleting")
+
+
+class BulkDeletePreview(BaseModel):
+    """Response model for bulk delete preview."""
+    document_count: int
+    sample_documents: List[Dict[str, Any]]
+    filters_applied: Dict[str, Any]
+
+
+class BulkDeleteResponse(BaseModel):
+    """Response model for bulk delete operation."""
+    status: str
+    chunks_deleted: int
+    filters_applied: Dict[str, Any]
+
+
 # Lifespan context manager for startup/shutdown
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -598,6 +618,93 @@ async def get_context(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get context: {str(e)}"
+        )
+
+
+@app.get("/metadata/keys", response_model=List[str], tags=["Metadata"])
+async def get_metadata_keys(
+    pattern: Optional[str] = Query(default=None, description="SQL LIKE pattern to filter keys (e.g., 't%')")
+):
+    """
+    Get all unique metadata keys across all documents.
+    
+    Useful for discovering what metadata fields are available for filtering.
+    """
+    try:
+        db_manager = get_db_manager()
+        repo = DocumentRepository(db_manager)
+        keys = repo.get_metadata_keys(pattern=pattern)
+        return keys
+    except Exception as e:
+        logger.error(f"Failed to get metadata keys: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get metadata keys: {str(e)}"
+        )
+
+
+@app.get("/metadata/values", response_model=List[str], tags=["Metadata"])
+async def get_metadata_values(
+    key: str = Query(..., description="Metadata key to get values for"),
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum values to return")
+):
+    """
+    Get all unique values for a specific metadata key.
+    
+    Useful for building filter dropdowns in UI.
+    """
+    try:
+        db_manager = get_db_manager()
+        repo = DocumentRepository(db_manager)
+        values = repo.get_metadata_values(key=key, limit=limit)
+        return values
+    except Exception as e:
+        logger.error(f"Failed to get metadata values for key '{key}': {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get metadata values: {str(e)}"
+        )
+
+
+@app.post("/documents/bulk-delete", tags=["Documents"])
+async def bulk_delete_documents(request: BulkDeleteRequest):
+    """
+    Bulk delete documents matching filter criteria.
+    
+    Set preview=true to see what would be deleted without actually deleting.
+    Set preview=false to perform the actual deletion.
+    
+    Filters support:
+    - metadata.* syntax for any metadata field (e.g., {"metadata.type": "draft"})
+    - Direct column names (e.g., {"document_id": "abc123"})
+    - Backward compatible shortcuts (e.g., {"type": "draft"})
+    """
+    try:
+        db_manager = get_db_manager()
+        repo = DocumentRepository(db_manager)
+        
+        if request.preview:
+            # Preview mode - show what would be deleted
+            preview = repo.preview_delete(request.filters)
+            return BulkDeletePreview(**preview)
+        else:
+            # Actually delete
+            chunks_deleted = repo.bulk_delete(request.filters)
+            return BulkDeleteResponse(
+                status="success",
+                chunks_deleted=chunks_deleted,
+                filters_applied=request.filters
+            )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Failed to bulk delete documents: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to bulk delete: {str(e)}"
         )
 
 

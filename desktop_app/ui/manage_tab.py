@@ -167,8 +167,8 @@ class ManageTab(QWidget):
         results_layout.addWidget(self.results_label)
         
         self.results_table = QTableWidget()
-        self.results_table.setColumnCount(2)
-        self.results_table.setHorizontalHeaderLabels(["Document ID", "Source URI"])
+        self.results_table.setColumnCount(3)
+        self.results_table.setHorizontalHeaderLabels(["Document ID", "Document Type", "Source URI"])
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.results_table.setVisible(False)
         results_layout.addWidget(self.results_table)
@@ -271,7 +271,11 @@ class ManageTab(QWidget):
             self.results_table.setRowCount(len(samples))
             for i, doc in enumerate(samples):
                 self.results_table.setItem(i, 0, QTableWidgetItem(doc.get("document_id", "")))
-                self.results_table.setItem(i, 1, QTableWidgetItem(doc.get("source_uri", "")))
+                # Extract document_type from metadata
+                metadata = doc.get("metadata", {})
+                doc_type = metadata.get("type", "Unknown") if isinstance(metadata, dict) else "Unknown"
+                self.results_table.setItem(i, 1, QTableWidgetItem(doc_type))
+                self.results_table.setItem(i, 2, QTableWidgetItem(doc.get("source_uri", "")))
             
             self.results_table.setVisible(True)
             self.export_btn.setEnabled(True)

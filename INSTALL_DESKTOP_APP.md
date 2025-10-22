@@ -63,6 +63,14 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ---
 
+## See Also (Recommended Reading)
+
+- **Desktop App Data Fields** (where the Document Type comes from): See `README.md` → [Desktop App Data Fields](README.md#desktop-app-data-fields)
+- **Windows vs WSL Compose** (build in WSL, pull/run on Windows): See `README.md` → [Windows vs WSL Compose](README.md#windows-vs-wsl-compose)
+- **Troubleshooting UI Not Updating** (refresh steps and checks): See `README.md` → [Troubleshooting UI Not Updating](README.md#troubleshooting-ui-not-updating)
+
+---
+
 ## Requirements
 
 - **Python 3.10+** - [Download](https://www.python.org/downloads/)

@@ -88,6 +88,7 @@ See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for details.
 ### Desktop App Data Fields
 
 - **Document Type** shown in the Desktop app comes from `metadata.type` returned by the API, not from a separate database column. The backend aggregates per-document info and includes a `metadata` object in `/documents` responses so the UI can render the type.
+  See installation and Windows specifics in `INSTALL_DESKTOP_APP.md`.
 
 ### Windows vs WSL Compose
 

@@ -82,6 +82,7 @@ class DocumentInfo(BaseModel):
     indexed_at: datetime
     last_updated: Optional[datetime] = None
     document_type: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class HealthResponse(BaseModel):
@@ -513,7 +514,8 @@ async def list_documents(
                 chunk_count=doc['chunk_count'],
                 indexed_at=doc['indexed_at'],
                 last_updated=doc.get('last_updated'),
-                document_type=doc.get('document_type')
+                document_type=doc.get('document_type'),
+                metadata={"type": doc.get('document_type')} if doc.get('document_type') is not None else {}
             )
             for doc in documents
         ]

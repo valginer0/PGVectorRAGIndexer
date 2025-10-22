@@ -85,6 +85,22 @@ See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for details.
 
 ---
 
+### Desktop App Data Fields
+
+- **Document Type** shown in the Desktop app comes from `metadata.type` returned by the API, not from a separate database column. The backend aggregates per-document info and includes a `metadata` object in `/documents` responses so the UI can render the type.
+
+### Windows vs WSL Compose
+
+- Development flow builds and pushes a `:dev` image from WSL using `docker-compose.dev.yml`.
+- Windows pulls and runs that same `:dev` image via `update-dev.ps1`. Because the `image` is GHCR-qualified, Windows does not rebuild locally.
+- Release uses `:latest` (or a version tag) pulled by Windows scripts.
+
+### Troubleshooting UI Not Updating
+
+- After pulling new code, restart the Desktop app to load updated UI components.
+- Verify backend endpoints by checking `GET /openapi.json` and `GET /docs`.
+- If the Documents tab type column is empty, ensure `/documents` returns a `metadata` object with a `type` field.
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -457,52 +473,143 @@ docker exec vector_rag_db psql -U rag_user -d rag_vector_db -c \
    FROM document_chunks;"
 ```
 
-## ⚙️ Configuration
+## 🔍 Advanced Features
 
-Configuration is managed through environment variables and the `.env` file. All settings have sensible defaults.
+### Hybrid Search
 
-### Environment Variables
+Combine vector similarity with full-text search for better results:
 
-```bash
-# Database
-DB_HOST=localhost
-DB_PORT=5432
-POSTGRES_DB=rag_vector_db
-POSTGRES_USER=rag_user
-POSTGRES_PASSWORD=rag_password
-
-# Embedding Model
-EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
-EMBEDDING_DIMENSION=384
-EMBEDDING_BATCH_SIZE=32
-
-# Chunking
-CHUNK_SIZE=500
-CHUNK_OVERLAP=50
-
-# Retrieval
-RETRIEVAL_TOP_K=5
-RETRIEVAL_SIMILARITY_THRESHOLD=0.7
-RETRIEVAL_DISTANCE_METRIC=cosine
-RETRIEVAL_ENABLE_HYBRID_SEARCH=false
+```python
+# CLI
+python retriever_v2.py "query" --hybrid --alpha 0.7
 
 # API
-API_HOST=0.0.0.0
-API_PORT=8000
-API_WORKERS=4
-API_LOG_LEVEL=info
-
-# Application
-ENVIRONMENT=development
-DEBUG=false
-MAX_FILE_SIZE_MB=50
-CACHE_EMBEDDINGS=true
-ENABLE_DEDUPLICATION=true
+{
+  "query": "machine learning",
+  "use_hybrid": true,
+  "alpha": 0.7  # 0.7 vector + 0.3 full-text
+}
 ```
 
-### Configuration Validation
+### Metadata Filtering
 
-The system uses Pydantic for configuration validation. Invalid configurations will raise clear error messages at startup.
+Add and filter by custom metadata:
+
+```python
+# Index with metadata
+{
+  "source_uri": "/path/to/doc.pdf",
+  "metadata": {
+    "author": "John Doe",
+    "category": "research",
+    "year": 2024
+  }
+}
+
+# Search with filters
+{
+  "query": "neural networks",
+  "filters": {
+    "document_id": "abc123"
+  }
+}
+```
+
+### Batch Processing
+
+Process multiple documents efficiently:
+
+```python
+from indexer_v2 import DocumentIndexer
+
+indexer = DocumentIndexer()
+results = indexer.index_batch([
+    "/path/to/doc1.pdf",
+    "/path/to/doc2.pdf",
+    "https://example.com/article"
+])
+```
+
+## 📊 Performance Optimization
+
+### Database Tuning
+
+For production, consider these PostgreSQL settings:
+
+```sql
+-- Increase work memory for vector operations
+SET work_mem = '256MB';
+
+-- Tune HNSW index parameters
+CREATE INDEX ON document_chunks USING hnsw (embedding vector_cosine_ops)
+WITH (m = 32, ef_construction = 128);  -- Higher values = better recall, slower build
+```
+
+### Embedding Cache
+
+The system caches embeddings in memory. Monitor cache size:
+
+```python
+from embeddings import get_embedding_service
+
+service = get_embedding_service()
+print(f"Cache size: {service.get_cache_size()}")
+service.clear_cache()  # Clear if needed
+```
+
+### Connection Pooling
+
+Adjust pool size based on workload:
+
+```bash
+DB_POOL_SIZE=20
+DB_MAX_OVERFLOW=40
+```
+
+## 🔒 Security Considerations
+
+1. **Database Credentials**: Store in `.env` file (gitignored)
+2. **API Authentication**: Add authentication middleware for production
+3. **Input Validation**: All inputs validated via Pydantic
+4. **SQL Injection**: Protected via parameterized queries
+5. **File Upload**: Validate file types and sizes
+
+## 🐛 Troubleshooting
+
+### Database Connection Issues
+
+```bash
+# Check container status
+docker ps
+
+# Check logs
+docker logs vector_rag_db
+
+# Restart container
+docker compose restart
+```
+
+### Import Errors
+
+```bash
+# Ensure virtual environment is activated
+source venv/bin/activate
+
+# Reinstall dependencies
+pip install -r requirements.txt --upgrade
+```
+
+### Memory Issues
+
+```bash
+# Clear embedding cache
+python -c "from embeddings import get_embedding_service; get_embedding_service().clear_cache()"
+
+# Reduce batch size
+export EMBEDDING_BATCH_SIZE=16
+```
+
+## 📈 Monitoring
 
 ## 🧪 Testing
 
@@ -524,6 +631,12 @@ pytest -m integration
 # With coverage
 pytest --cov=. --cov-report=html
 ```
+
+### Testing Rules
+
+- **Write tests first**: For each bug or feature, add or update tests before changing code.
+- **Separate test database**: Tests run against `rag_vector_db_test` to avoid polluting development data. This is configured in `tests/conftest.py`.
+- **No manual installs**: Do not run `pip install <pkg>`. Always add dependencies to `requirements.txt` and install via `pip install -r requirements.txt` for reproducibility.
 
 ### Test Structure
 

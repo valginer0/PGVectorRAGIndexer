@@ -118,10 +118,6 @@ Write-Host "  cd $InstallDir" -ForegroundColor White
 Write-Host "  .\run_desktop_app.ps1" -ForegroundColor White
 Write-Host ""
 
-# Ask if user wants to run now
-$runNow = Read-Host "Would you like to run the app now? (Y/N)"
-if ($runNow -eq "Y" -or $runNow -eq "y") {
-    Write-Host ""
-    Write-Host "Starting desktop app..." -ForegroundColor Green
-    & ".\venv-windows\Scripts\python.exe" -m desktop_app.main
-}
+# Auto-start the desktop app
+Write-Host "Starting desktop app..." -ForegroundColor Green
+& ".\venv-windows\Scripts\python.exe" -m desktop_app.main

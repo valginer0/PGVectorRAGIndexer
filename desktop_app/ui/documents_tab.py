@@ -93,9 +93,9 @@ class DocumentsTab(QWidget):
         table_layout = QVBoxLayout(table_group)
         
         self.documents_table = QTableWidget()
-        self.documents_table.setColumnCount(5)
+        self.documents_table.setColumnCount(6)
         self.documents_table.setHorizontalHeaderLabels([
-            "Source URI", "Chunks", "Created", "Updated", "Actions"
+            "Source URI", "Document Type", "Chunks", "Created", "Updated", "Actions"
         ])
         self.documents_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.documents_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -158,10 +158,17 @@ class DocumentsTab(QWidget):
             source_item.setToolTip(doc.get('source_uri', ''))
             self.documents_table.setItem(i, 0, source_item)
             
+            # Document Type (extract from metadata)
+            metadata = doc.get('metadata', {})
+            doc_type = metadata.get('type', 'Unknown') if isinstance(metadata, dict) else 'Unknown'
+            type_item = QTableWidgetItem(doc_type)
+            type_item.setTextAlignment(Qt.AlignCenter)
+            self.documents_table.setItem(i, 1, type_item)
+            
             # Chunk count
             chunks_item = QTableWidgetItem(str(doc.get('chunk_count', 0)))
             chunks_item.setTextAlignment(Qt.AlignCenter)
-            self.documents_table.setItem(i, 1, chunks_item)
+            self.documents_table.setItem(i, 2, chunks_item)
             
             # Created date (API returns 'indexed_at')
             created = doc.get('indexed_at', '')
@@ -173,7 +180,7 @@ class DocumentsTab(QWidget):
                     pass
             created_item = QTableWidgetItem(created)
             created_item.setTextAlignment(Qt.AlignCenter)
-            self.documents_table.setItem(i, 2, created_item)
+            self.documents_table.setItem(i, 3, created_item)
             
             # Updated date (API returns 'last_updated')
             updated = doc.get('last_updated', '')
@@ -185,7 +192,7 @@ class DocumentsTab(QWidget):
                     pass
             updated_item = QTableWidgetItem(updated)
             updated_item.setTextAlignment(Qt.AlignCenter)
-            self.documents_table.setItem(i, 3, updated_item)
+            self.documents_table.setItem(i, 4, updated_item)
             
             # Actions - Delete button
             delete_btn = QPushButton("🗑️ Delete")
@@ -201,7 +208,7 @@ class DocumentsTab(QWidget):
                 }
             """)
             delete_btn.clicked.connect(lambda checked, doc_id=doc.get('document_id'): self.delete_document(doc_id))
-            self.documents_table.setCellWidget(i, 4, delete_btn)
+            self.documents_table.setCellWidget(i, 5, delete_btn)
         
         self.documents_table.resizeRowsToContents()
     

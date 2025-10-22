@@ -39,13 +39,13 @@ Write-Host ""
 
 # Stop and remove existing containers
 Write-Host "Stopping existing containers..." -ForegroundColor Yellow
-docker compose down 2>&1 | Out-Null
+docker compose -f docker-compose.dev.yml down 2>&1 | Out-Null
 Write-Host "[OK] Containers stopped" -ForegroundColor Green
 Write-Host ""
 
 # Start containers with new image
 Write-Host "Starting containers with updated image..." -ForegroundColor Yellow
-docker compose up -d
+docker compose -f docker-compose.dev.yml up -d
 if ($LASTEXITCODE -ne 0) {
     Write-Host "✗ ERROR: Failed to start containers" -ForegroundColor Red
     Read-Host "Press Enter to exit"

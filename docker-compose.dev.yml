@@ -30,16 +30,16 @@ services:
     networks:
       - rag_network
 
-  # PGVectorRAGIndexer application (built locally)
+  # PGVectorRAGIndexer application (built locally in WSL, pulled from GHCR on Windows)
   app:
     build:
       context: .
       dockerfile: Dockerfile
       cache_from:
-        - pgvectorragindexer:dev
+        - ghcr.io/valginer0/pgvectorragindexer:dev
       args:
         BUILDKIT_INLINE_CACHE: 1
-    image: pgvectorragindexer:dev  # Tag with :dev to distinguish from production
+    image: ghcr.io/valginer0/pgvectorragindexer:dev
     container_name: vector_rag_app
     restart: always
     environment:

@@ -13,7 +13,7 @@ This will:
 2. ✅ Clone the repository to `%USERPROFILE%\PGVectorRAGIndexer`
 3. ✅ Create virtual environment
 4. ✅ Install dependencies
-5. ✅ Offer to run the app
+5. ✅ Auto-start the desktop app after setup (no interactive prompt)
 
 **If you get "execution policy" error:**
 ```powershell

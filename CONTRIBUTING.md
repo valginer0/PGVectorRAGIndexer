@@ -59,6 +59,13 @@ Share your thoughts via GitHub issues or email.
 - **Create a new issue** - For questions not covered in docs
 - **Contact directly** - valginer0@gmail.com for specific inquiries
 
+## 🧪 Testing and Development Rules
+
+- **Write tests first** for bugs and features. Demonstrate failures before fixes.
+- **Use a separate test database** (`rag_vector_db_test`) to ensure isolation. This is enforced in `tests/conftest.py`.
+- **Do not manually install packages** with `pip install <pkg>`. Always add to `requirements.txt` and install with `pip install -r requirements.txt`.
+- **Run the full test suite** before committing changes.
+
 ## 💖 Support the Project
 
 If you find this project valuable:

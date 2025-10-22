@@ -34,6 +34,12 @@ class TestWebUIIntegration:
         assert upload_data["source_uri"] == filename
         document_id = upload_data["document_id"]
         
+        # Diagnostic: ensure DB shows chunks before searching
+        stats_pre_search = client.get("/statistics")
+        assert stats_pre_search.status_code == 200
+        stats_payload = stats_pre_search.json()
+        assert stats_payload.get("total_chunks", 0) > 0, "Stats should reflect inserted chunk before search"
+
         # Step 2: Search for content that exists in the document
         search_response = client.post(
             "/search",

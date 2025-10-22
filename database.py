@@ -548,9 +548,20 @@ class DocumentRepository:
                 where_clauses.append(f"metadata->>'{key}' = %s")
                 params.append(value)
             elif key == 'source_uri_like':
-                # LIKE pattern matching for source_uri
-                where_clauses.append(f"source_uri LIKE %s")
-                params.append(value)
+                # Case-insensitive matching tolerant to Windows backslashes and JSON escape TAB issues
+                # Normalize both DB fields and the pattern by converting backslashes and tab to '/'
+                normalized = value.replace('\\', '/').replace('\t', '/').replace('\n', '/').replace('\r', '/')
+                normalized2 = value.replace('\\', '/').replace('\u0009', '/').replace('\u000a', '/').replace('\u000d', '/')
+                norm_expr = "REPLACE(REPLACE(REPLACE(%s, '\\', '/'), E'\t', '/'), E'\n', '/')"
+                # Build SQL using normalized expressions on fields
+                where_clauses.append(
+                    "(" 
+                    + f"REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
+                    + f"REPLACE(REPLACE(REPLACE(metadata->>'source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
+                    + f"REPLACE(REPLACE(REPLACE(metadata->>'custom_source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s"
+                    + ")"
+                )
+                params.extend([normalized, normalized, normalized])
             else:
                 where_clauses.append(f"{key} = %s")
                 params.append(value)
@@ -560,9 +571,12 @@ class DocumentRepository:
         # Get count and sample documents
         count_query = f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {where_sql}"
         sample_query = f"""
-        SELECT DISTINCT document_id, source_uri
+        SELECT document_id,
+               source_uri,
+               (array_agg(metadata))[1] AS metadata
         FROM document_chunks
         {where_sql}
+        GROUP BY document_id, source_uri
         LIMIT 10
         """
         

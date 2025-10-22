@@ -158,9 +158,13 @@ class DocumentsTab(QWidget):
             source_item.setToolTip(doc.get('source_uri', ''))
             self.documents_table.setItem(i, 0, source_item)
             
-            # Document Type (extract from metadata)
+            # Document Type: prefer metadata.type, fallback to document_type
             metadata = doc.get('metadata', {})
-            doc_type = metadata.get('type', 'Unknown') if isinstance(metadata, dict) else 'Unknown'
+            doc_type = 'Unknown'
+            if isinstance(metadata, dict) and metadata.get('type'):
+                doc_type = metadata.get('type')
+            elif doc.get('document_type'):
+                doc_type = doc.get('document_type')
             type_item = QTableWidgetItem(doc_type)
             type_item.setTextAlignment(Qt.AlignCenter)
             self.documents_table.setItem(i, 1, type_item)

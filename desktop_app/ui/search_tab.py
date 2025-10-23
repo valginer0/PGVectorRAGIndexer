@@ -12,8 +12,13 @@ from PySide6.QtWidgets import (
     QTableWidgetItem, QHeaderView, QMessageBox
 )
 from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QColor
 
 import requests
+from pathlib import Path
+import os
+import sys
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -173,7 +178,9 @@ class SearchTab(QWidget):
         self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.results_table.cellClicked.connect(self.handle_results_cell_clicked)
         self.results_table.doubleClicked.connect(self.show_full_content)
+        self.results_table.viewport().setCursor(Qt.PointingHandCursor)
         results_layout.addWidget(self.results_table)
         
         layout.addWidget(results_group)
@@ -256,7 +263,7 @@ class SearchTab(QWidget):
             self.results_table.setItem(i, 0, score_item)
             
             # Source URI
-            source_item = QTableWidgetItem(result.get('source_uri', 'Unknown'))
+            source_item = self._create_source_item(result.get('source_uri', 'Unknown'))
             self.results_table.setItem(i, 1, source_item)
             
             # Chunk number
@@ -274,23 +281,83 @@ class SearchTab(QWidget):
             self.results_table.item(i, 0).setData(Qt.UserRole, result)
         
         self.results_table.resizeRowsToContents()
-    
+
     def show_full_content(self, index):
         """Show full content of selected result."""
         row = index.row()
         result = self.results_table.item(row, 0).data(Qt.UserRole)
-        
+
         if result:
             content = result.get('text_content', 'No content')
             source = result.get('source_uri', 'Unknown')
             score = result.get('score', 0)
             chunk = result.get('chunk_number', 0)
-            
+
             msg = QMessageBox(self)
             msg.setWindowTitle("Full Content")
             msg.setText(f"Source: {source}\nChunk: {chunk}\nScore: {score:.4f}")
             msg.setDetailedText(content)
             msg.exec()
+
+    def _create_source_item(self, source_uri: str) -> QTableWidgetItem:
+        """Create table item for clickable source URI."""
+        item = QTableWidgetItem(source_uri or "Unknown")
+        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        item.setData(Qt.UserRole, source_uri)
+
+        if source_uri:
+            font = item.font()
+            font.setUnderline(True)
+            item.setFont(font)
+            item.setForeground(QColor("#1a73e8"))
+            item.setToolTip("Open this file with the default application")
+
+        return item
+
+    def handle_results_cell_clicked(self, row: int, column: int) -> None:
+        """Handle clicks on the results table."""
+        if column != 1:
+            return
+
+        item = self.results_table.item(row, column)
+        if item is None:
+            return
+
+        source_uri = item.data(Qt.UserRole) or item.text()
+        self.open_source_path(source_uri)
+
+    def open_source_path(self, path: str) -> None:
+        """Open the given path with the OS default application."""
+        if not path or path == "Unknown":
+            QMessageBox.warning(
+                self,
+                "No Path",
+                "No source path is available to open."
+            )
+            return
+
+        normalized = Path(path)
+        if not normalized.exists():
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                f"The file does not exist:\n{path}"
+            )
+            return
+
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(str(normalized))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(normalized)])
+            else:
+                subprocess.Popen(["xdg-open", str(normalized)])
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Open Failed",
+                f"Unable to open the file:\n{path}\n\nError: {exc}"
+            )
     
     def load_document_types(self):
         """Load document types from database via metadata discovery API."""

@@ -5,6 +5,30 @@
 
 set -e
 
+USE_CACHE=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --use-cache)
+            USE_CACHE=true
+            shift
+            ;;
+        -h|--help)
+            cat <<EOF
+Usage: ./push-dev.sh [--use-cache]
+
+Builds and pushes the :dev Docker image.
+  --use-cache   Build with Docker layer cache (default is --no-cache)
+EOF
+            exit 0
+            ;;
+        *)
+            echo -e "${RED}Unknown option: $arg${NC}"
+            exit 1
+            ;;
+    esac
+done
+
 # Colors
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -24,8 +48,13 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # Build Docker image with BuildKit for caching
-echo -e "${GREEN}Building Docker image with BuildKit cache...${NC}"
-DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build app
+if [ "$USE_CACHE" = true ]; then
+    echo -e "${GREEN}Building Docker image with BuildKit (cache enabled)...${NC}"
+    DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build app
+else
+    echo -e "${GREEN}Building Docker image with BuildKit (cache disabled)...${NC}"
+    DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build --no-cache app
+fi
 BUILD_RESULT=$?
 if [ $BUILD_RESULT -ne 0 ]; then
     echo -e "${RED}✗ Docker build failed.${NC}"

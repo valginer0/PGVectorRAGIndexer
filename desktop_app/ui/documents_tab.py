@@ -12,8 +12,13 @@ from PySide6.QtWidgets import (
     QHeaderView, QMessageBox, QGroupBox
 )
 from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtGui import QColor
 
 import requests
+from pathlib import Path
+import os
+import sys
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +105,8 @@ class DocumentsTab(QWidget):
         self.documents_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         self.documents_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.documents_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.documents_table.cellClicked.connect(self.handle_documents_cell_clicked)
+        self.documents_table.viewport().setCursor(Qt.PointingHandCursor)
         table_layout.addWidget(self.documents_table)
         
         layout.addWidget(table_group)
@@ -154,8 +161,7 @@ class DocumentsTab(QWidget):
         
         for i, doc in enumerate(documents):
             # Source URI
-            source_item = QTableWidgetItem(doc.get('source_uri', 'Unknown'))
-            source_item.setToolTip(doc.get('source_uri', ''))
+            source_item = self._create_source_item(doc.get('source_uri', ''))
             self.documents_table.setItem(i, 0, source_item)
             
             # Document Type: prefer metadata.type, fallback to document_type
@@ -215,7 +221,7 @@ class DocumentsTab(QWidget):
             self.documents_table.setCellWidget(i, 5, delete_btn)
         
         self.documents_table.resizeRowsToContents()
-    
+
     def delete_document(self, document_id: str):
         """Delete a document."""
         # Find document name for confirmation
@@ -252,3 +258,65 @@ class DocumentsTab(QWidget):
             QMessageBox.critical(self, "Delete Failed", f"Failed to delete document: {message}")
             self.status_label.setText("Delete failed")
             self.status_label.setStyleSheet("color: #dc2626; font-style: italic;")
+
+    def _create_source_item(self, source_uri: str) -> QTableWidgetItem:
+        """Create a hyperlink-style item for source URIs."""
+        display_text = source_uri or "Unknown"
+        item = QTableWidgetItem(display_text)
+        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        item.setData(Qt.UserRole, source_uri)
+        item.setToolTip(source_uri)
+
+        if source_uri:
+            font = item.font()
+            font.setUnderline(True)
+            item.setFont(font)
+            item.setForeground(QColor("#1a73e8"))
+            item.setToolTip("Open this file with the default application")
+
+        return item
+
+    def handle_documents_cell_clicked(self, row: int, column: int) -> None:
+        """Open source path when source column is clicked."""
+        if column != 0:
+            return
+
+        item = self.documents_table.item(row, column)
+        if item is None:
+            return
+
+        source_uri = item.data(Qt.UserRole) or item.text()
+        self.open_source_path(source_uri)
+
+    def open_source_path(self, path: str) -> None:
+        """Open the given path with the OS default application."""
+        if not path or path == "Unknown":
+            QMessageBox.warning(
+                self,
+                "No Path",
+                "No source path is available to open."
+            )
+            return
+
+        normalized = Path(path)
+        if not normalized.exists():
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                f"The file does not exist:\n{path}"
+            )
+            return
+
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(str(normalized))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(normalized)])
+            else:
+                subprocess.Popen(["xdg-open", str(normalized)])
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Open Failed",
+                f"Unable to open the file:\n{path}\n\nError: {exc}"
+            )

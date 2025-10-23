@@ -8,9 +8,13 @@ from PySide6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 import json
 from pathlib import Path
 import logging
+import os
+import sys
+import subprocess
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +174,8 @@ class ManageTab(QWidget):
         self.results_table.setColumnCount(3)
         self.results_table.setHorizontalHeaderLabels(["Document ID", "Document Type", "Source URI"])
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.results_table.cellClicked.connect(self.handle_results_cell_clicked)
+        self.results_table.viewport().setCursor(Qt.PointingHandCursor)
         self.results_table.setVisible(False)
         results_layout.addWidget(self.results_table)
         
@@ -279,12 +285,17 @@ class ManageTab(QWidget):
             # Populate table
             self.results_table.setRowCount(len(samples))
             for i, doc in enumerate(samples):
-                self.results_table.setItem(i, 0, QTableWidgetItem(doc.get("document_id", "")))
+                doc_id_item = QTableWidgetItem(doc.get("document_id", ""))
+                doc_id_item.setFlags(doc_id_item.flags() & ~Qt.ItemIsEditable)
+                self.results_table.setItem(i, 0, doc_id_item)
                 # Extract document_type from metadata
                 metadata = doc.get("metadata", {})
                 doc_type = metadata.get("type", "Unknown") if isinstance(metadata, dict) else "Unknown"
-                self.results_table.setItem(i, 1, QTableWidgetItem(doc_type))
-                self.results_table.setItem(i, 2, QTableWidgetItem(doc.get("source_uri", "")))
+                type_item = QTableWidgetItem(doc_type)
+                type_item.setFlags(type_item.flags() & ~Qt.ItemIsEditable)
+                self.results_table.setItem(i, 1, type_item)
+                source_item = self._create_source_item(doc.get("source_uri", ""))
+                self.results_table.setItem(i, 2, source_item)
             
             self.results_table.setVisible(True)
             self.export_btn.setEnabled(True)
@@ -389,6 +400,67 @@ class ManageTab(QWidget):
                 f"Failed to delete documents:\n{str(e)}"
             )
     
+    def _create_source_item(self, source_uri: str) -> QTableWidgetItem:
+        """Create table item for clickable source URI."""
+        display_text = source_uri or ""
+        item = QTableWidgetItem(display_text)
+        item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+        item.setData(Qt.UserRole, source_uri)
+
+        if source_uri:
+            font = item.font()
+            font.setUnderline(True)
+            item.setFont(font)
+            item.setForeground(QColor("#1a73e8"))
+            item.setToolTip("Open this file with the default application")
+
+        return item
+
+    def handle_results_cell_clicked(self, row: int, column: int) -> None:
+        """Handle clicks on the results table."""
+        if column != 2:
+            return
+
+        item = self.results_table.item(row, column)
+        if item is None:
+            return
+
+        source_uri = item.data(Qt.UserRole) or item.text()
+        self.open_source_path(source_uri)
+
+    def open_source_path(self, path: str) -> None:
+        """Open the given path with the OS default application."""
+        if not path:
+            QMessageBox.warning(
+                self,
+                "No Path",
+                "No source path is available to open."
+            )
+            return
+
+        normalized = Path(path)
+        if not normalized.exists():
+            QMessageBox.warning(
+                self,
+                "File Not Found",
+                f"The file does not exist:\n{path}"
+            )
+            return
+
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(str(normalized))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(normalized)])
+            else:
+                subprocess.Popen(["xdg-open", str(normalized)])
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Open Failed",
+                f"Unable to open the file:\n{path}\n\nError: {exc}"
+            )
+
     def undo_delete(self):
         """Restore documents from last backup (undo)."""
         if not self.last_backup:

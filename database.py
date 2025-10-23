@@ -216,6 +216,12 @@ class DocumentRepository:
     def __init__(self, db_manager: DatabaseManager):
         """Initialize repository with database manager."""
         self.db = db_manager
+
+    def _normalize_source_uri_like(self, pattern: str) -> str:
+        normalized = pattern.replace('\\', '/').replace('\t', '/').replace('\n', '/').replace('\r', '/')
+        while '//' in normalized:
+            normalized = normalized.replace('//', '/')
+        return normalized
     
     def insert_chunks(
         self,
@@ -553,8 +559,7 @@ class DocumentRepository:
                 pattern = value
                 if '%' not in pattern and '_' not in pattern:
                     pattern = f"%{pattern}%"
-                # Normalize pattern backslashes/control chars to '/'
-                normalized = pattern.replace('\\', '/').replace('\t', '/').replace('\n', '/').replace('\r', '/')
+                normalized = self._normalize_source_uri_like(pattern)
                 # Build SQL using normalized expressions on fields
                 where_clauses.append(
                     "(" 
@@ -622,7 +627,7 @@ class DocumentRepository:
                 pattern = value
                 if '%' not in pattern and '_' not in pattern:
                     pattern = f"%{pattern}%"
-                normalized = pattern.replace('\\', '/').replace('\t', '/').replace('\n', '/').replace('\r', '/')
+                normalized = self._normalize_source_uri_like(pattern)
                 where_clauses.append(
                     "(" 
                     + f"REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
@@ -673,8 +678,18 @@ class DocumentRepository:
                 params.append(value)
             elif key == 'source_uri_like':
                 # LIKE pattern matching for source_uri
-                where_clauses.append(f"source_uri LIKE %s")
-                params.append(value)
+                pattern = value
+                if '%' not in pattern and '_' not in pattern:
+                    pattern = f"%{pattern}%"
+                normalized = self._normalize_source_uri_like(pattern)
+                where_clauses.append(
+                    "("
+                    + "REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
+                    + "REPLACE(REPLACE(REPLACE(metadata->>'source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
+                    + "REPLACE(REPLACE(REPLACE(metadata->>'custom_source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s"
+                    + ")"
+                )
+                params.extend([normalized, normalized, normalized])
             else:
                 where_clauses.append(f"{key} = %s")
                 params.append(value)

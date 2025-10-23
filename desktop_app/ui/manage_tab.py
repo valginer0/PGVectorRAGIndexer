@@ -215,10 +215,18 @@ class ManageTab(QWidget):
         # Path/name filter with wildcards
         path_filter = self.path_filter.text().strip()
         if path_filter:
-            # Double backslashes so JSON won't interpret \t, \n, \r as control chars
-            escaped = path_filter.replace('\\', '\\\\')
+            # Normalize backslashes/control chars to forward slashes before wildcard conversion
+            normalized = (
+                path_filter
+                .replace('\\', '/')
+                .replace('\t', '/')
+                .replace('\n', '/')
+                .replace('\r', '/')
+            )
+            while '//' in normalized:
+                normalized = normalized.replace('//', '/')
             # Convert wildcards: * -> %, ? -> _
-            sql_pattern = escaped.replace('*', '%').replace('?', '_')
+            sql_pattern = normalized.replace('*', '%').replace('?', '_')
             filters["source_uri_like"] = sql_pattern
         
         # Additional metadata filters

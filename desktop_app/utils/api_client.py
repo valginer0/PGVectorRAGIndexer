@@ -217,9 +217,11 @@ class APIClient:
         Raises:
             requests.RequestException: If the request fails
         """
+        payload = {"filters": filters, "preview": True}
+        logger.info(f"bulk_delete_preview payload: {payload!r}")
         response = requests.post(
             f"{self.base_url}/documents/bulk-delete",
-            json={"filters": filters, "preview": True},
+            json=payload,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -238,9 +240,11 @@ class APIClient:
         Raises:
             requests.RequestException: If the request fails
         """
+        payload = {"filters": filters, "preview": False}
+        logger.info(f"bulk_delete payload: {payload!r}")
         response = requests.post(
             f"{self.base_url}/documents/bulk-delete",
-            json={"filters": filters, "preview": False},
+            json=payload,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -259,9 +263,11 @@ class APIClient:
         Raises:
             requests.RequestException: If the request fails
         """
+        payload = {"filters": filters}
+        logger.info(f"export_documents payload: {payload!r}")
         response = requests.post(
             f"{self.base_url}/documents/export",
-            json={"filters": filters},
+            json=payload,
             timeout=self.timeout
         )
         response.raise_for_status()

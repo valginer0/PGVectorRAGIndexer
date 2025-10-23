@@ -6,11 +6,43 @@ import pytest
 import io
 from fastapi.testclient import TestClient
 from api import app
+import api as api_module
+import embeddings
+import retriever_v2
 
 
 class TestWebUIIntegration:
     """Integration tests for Web UI with real data."""
     
+    @pytest.fixture(autouse=True)
+    def reset_embeddings(self, monkeypatch, mock_embedding_service):
+        """Ensure embedding service uses deterministic vectors between tests."""
+        mock_service = mock_embedding_service
+
+        def encode(text, **kwargs):
+            if isinstance(text, str):
+                return [0.05] * mock_service.config.dimension
+            return [[0.05] * mock_service.config.dimension for _ in text]
+
+        def encode_batch(texts, **kwargs):
+            return [[0.05] * mock_service.config.dimension for _ in texts]
+
+        mock_service.encode = encode
+        mock_service.encode_batch = encode_batch
+
+        monkeypatch.setattr(embeddings, '_embedding_service', mock_service, raising=False)
+        monkeypatch.setattr(embeddings, 'get_embedding_service', lambda: mock_service, raising=False)
+        monkeypatch.setattr(retriever_v2, 'get_embedding_service', lambda: mock_service, raising=False)
+
+        previous_retriever = getattr(api_module, 'retriever', None)
+        previous_indexer = getattr(api_module, 'indexer', None)
+        api_module.retriever = None
+        api_module.indexer = None
+        yield
+        api_module.retriever = previous_retriever
+        api_module.indexer = previous_indexer
+        embeddings._embedding_service = None
+
     @pytest.fixture
     def client(self):
         """Create test client."""

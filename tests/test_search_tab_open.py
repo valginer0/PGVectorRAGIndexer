@@ -17,9 +17,6 @@ class _DummyApiClient:
     def search(self, *args, **kwargs):
         return []
 
-    def get_metadata_values(self, key):
-        return []
-
     def is_api_available(self):
         return True
 

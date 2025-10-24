@@ -6,9 +6,7 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 
 ### 🆕 Latest Features (v2.1)
 
-- **✅ Document Type/Metadata System**: Organize documents with custom types (policy, resume, report, etc.)
-- **✅ Generic Metadata Filtering**: Filter by ANY metadata field using `metadata.*` syntax
-- **✅ Metadata Discovery API**: Discover available metadata keys and values dynamically
+- **✅ Document Type System**: Organize documents with custom types (policy, resume, report, etc.)
 - **✅ Bulk Delete with Preview**: Safely delete multiple documents with preview before action
 - **✅ Export/Backup System**: Export documents as JSON backup before deletion
 - **✅ Undo/Restore Functionality**: Restore deleted documents from backup
@@ -40,8 +38,6 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 - **Semantic Search**: Vector similarity search using sentence transformers
 - **Hybrid Search**: Combine vector and full-text search with configurable weights
 - **Document Management**: Full CRUD operations for indexed documents
-- **Generic Metadata System**: Store and filter by ANY custom metadata field
-- **Metadata Discovery**: Dynamically discover available metadata keys and values
 - **Bulk Operations**: Preview, export, delete, and restore multiple documents
 - **Backup/Restore**: Export documents as JSON and restore with undo functionality
 - **Connection Pooling**: Efficient database connection management
@@ -89,6 +85,7 @@ See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for details.
 
 - **Document Type** shown in the Desktop app comes from `metadata.type` returned by the API, not from a separate database column. The backend aggregates per-document info and includes a `metadata` object in `/documents` responses so the UI can render the type.
   See installation and Windows specifics in `INSTALL_DESKTOP_APP.md`.
+- **Metadata filters** are currently hidden in the search UI to avoid confusion. Advanced filtering remains available through the REST API and will return to the desktop app once metadata discovery is exposed to users.
 
 ### Windows vs WSL Compose
 

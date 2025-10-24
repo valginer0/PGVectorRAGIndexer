@@ -219,4 +219,3 @@ class RecentActivityTab(QWidget):
 
     def _set_status(self, message: str) -> None:
         self.status_label.setText(message)
-*** End Patch

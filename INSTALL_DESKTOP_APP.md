@@ -107,6 +107,12 @@ cd %USERPROFILE%\PGVectorRAGIndexer
 
 Or create a desktop shortcut to `run_desktop_app.ps1`!
 
+### Working with SourceOpenManager features
+
+- **Recent edits list** – The main window now shows the last files you opened. It updates automatically when you open a source from `Search`, `Documents`, or `Manage` tabs and highlights entries that have been reindexed.
+- **Context menu actions** – Right-click any `Source URI` entry to access `Open`, `Open with…`, `Show in Folder`, `Copy Path`, or `Reindex Now`. These options are available everywhere the same Source URI appears, so behavior stays consistent across tabs.
+- **Reindex prompts** – When you open a file, the app can immediately ask whether you want to reindex it. Use `Reindex Now` later if you skip the prompt.
+
 ---
 
 ## Troubleshooting

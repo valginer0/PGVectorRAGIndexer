@@ -4,7 +4,7 @@ Manage Documents tab for bulk operations (delete, export, restore).
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QGroupBox, QComboBox, QTextEdit, QMessageBox, QFileDialog,
+    QGroupBox, QComboBox, QMessageBox, QFileDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QMenu
 )
 from PySide6.QtCore import Qt, QPoint
@@ -47,7 +47,7 @@ class ManageTab(QWidget):
         info_layout = QVBoxLayout(info_box)
         info_text = QLabel(
             "Safely delete multiple documents at once:\n\n"
-            "1. Select filter criteria (document type, metadata, etc.)\n"
+            "1. Select filter criteria (document type, path wildcards)\n"
             "2. Preview what will be deleted\n"
             "3. Export backup (recommended!)\n"
             "4. Delete documents\n"
@@ -92,35 +92,6 @@ class ManageTab(QWidget):
         self.path_filter.setToolTip("Use wildcards: * for any characters, ? for single character")
         path_layout.addWidget(self.path_filter)
         filter_layout.addLayout(path_layout)
-        
-        # Additional metadata filters (key-value pairs)
-        metadata_label = QLabel("Additional Metadata Filters:")
-        metadata_label.setStyleSheet("font-weight: bold; margin-top: 10px;")
-        filter_layout.addWidget(metadata_label)
-        
-        # Metadata key 1
-        meta1_layout = QHBoxLayout()
-        meta1_layout.addWidget(QLabel("Key:"))
-        self.meta_key1 = QLineEdit()
-        self.meta_key1.setPlaceholderText("e.g., author, department, status")
-        meta1_layout.addWidget(self.meta_key1)
-        meta1_layout.addWidget(QLabel("Value:"))
-        self.meta_value1 = QLineEdit()
-        self.meta_value1.setPlaceholderText("e.g., John, HR, obsolete")
-        meta1_layout.addWidget(self.meta_value1)
-        filter_layout.addLayout(meta1_layout)
-        
-        # Metadata key 2
-        meta2_layout = QHBoxLayout()
-        meta2_layout.addWidget(QLabel("Key:"))
-        self.meta_key2 = QLineEdit()
-        self.meta_key2.setPlaceholderText("e.g., year, category")
-        meta2_layout.addWidget(self.meta_key2)
-        meta2_layout.addWidget(QLabel("Value:"))
-        self.meta_value2 = QLineEdit()
-        self.meta_value2.setPlaceholderText("e.g., 2023, draft")
-        meta2_layout.addWidget(self.meta_value2)
-        filter_layout.addLayout(meta2_layout)
         
         layout.addWidget(filter_group)
         
@@ -243,16 +214,6 @@ class ManageTab(QWidget):
             filters["source_uri_like"] = sql_pattern
         
         # Additional metadata filters
-        if self.meta_key1.text().strip() and self.meta_value1.text().strip():
-            key = self.meta_key1.text().strip()
-            value = self.meta_value1.text().strip()
-            filters[f"metadata.{key}"] = value
-        
-        if self.meta_key2.text().strip() and self.meta_value2.text().strip():
-            key = self.meta_key2.text().strip()
-            value = self.meta_value2.text().strip()
-            filters[f"metadata.{key}"] = value
-        
         if not filters:
             QMessageBox.warning(
                 self,

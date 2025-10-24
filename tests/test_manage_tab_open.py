@@ -197,3 +197,30 @@ def test_context_menu_actions(monkeypatch, managed_with_tracker, qt_app):
         assert manager.calls[0] == ("queue", "/tmp/doc.txt", False)
     finally:
         monkeypatch.setattr(manage_tab_module, "QMenu", original_menu)
+
+
+def test_get_filters_requires_selection(monkeypatch, manage_tab):
+    captured = []
+
+    def fake_warning(parent, title, text):
+        captured.append((title, text))
+        return QMessageBox.Ok
+
+    monkeypatch.setattr(manage_tab_module.QMessageBox, "warning", fake_warning)
+
+    manage_tab.type_combo.setCurrentText("")
+    manage_tab.path_filter.setText("")
+
+    result = manage_tab.get_filters()
+
+    assert result is None
+    assert captured
+
+
+def test_get_filters_converts_path_wildcards(manage_tab):
+    manage_tab.type_combo.setCurrentText("")
+    manage_tab.path_filter.setText(r"C:\\Projects\\*report?.txt")
+
+    filters = manage_tab.get_filters()
+
+    assert filters == {"source_uri_like": "C:/Projects/%report_.txt"}

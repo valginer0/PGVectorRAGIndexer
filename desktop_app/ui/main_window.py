@@ -9,8 +9,7 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QTabWidget, QStatusBar, QPushButton, QLabel,
-    QMessageBox, QFileDialog, QProgressDialog, QListWidget,
-    QListWidgetItem
+    QMessageBox, QFileDialog, QProgressDialog
 )
 from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtGui import QIcon
@@ -20,6 +19,7 @@ from .search_tab import SearchTab
 from .documents_tab import DocumentsTab
 from .manage_tab import ManageTab
 from .settings_tab import SettingsTab
+from .recent_activity_tab import RecentActivityTab
 from .source_open_manager import SourceOpenManager
 from ..utils.docker_manager import DockerManager
 from ..utils.api_client import APIClient
@@ -77,13 +77,6 @@ class MainWindow(QMainWindow):
         # Docker status bar at top
         self.create_docker_status_bar(layout)
         
-        # Recent edits section
-        self.recent_list = QListWidget()
-        self.recent_list.setMaximumHeight(120)
-        self.recent_list.setSelectionMode(QListWidget.NoSelection)
-        self.recent_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        layout.addWidget(self.recent_list)
-
         # Tab widget
         self.tabs = QTabWidget()
         layout.addWidget(self.tabs)
@@ -96,6 +89,9 @@ class MainWindow(QMainWindow):
         self.manage_tab = ManageTab(self.api_client, source_manager=self.source_manager)
         self.settings_tab = SettingsTab(self.docker_manager, self)
         
+        self.recent_tab = RecentActivityTab(self.source_manager, self)
+
+        self.tabs.addTab(self.recent_tab, "🕓 Recent")
         self.tabs.addTab(self.upload_tab, "📤 Upload")
         self.tabs.addTab(self.search_tab, "🔍 Search")
         self.tabs.addTab(self.documents_tab, "📚 Documents")
@@ -107,29 +103,6 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready")
 
-        # Wire SourceOpenManager signals
-        self.source_manager.entry_added.connect(self.on_recent_entry_added)
-        self.source_manager.entry_updated.connect(self.on_recent_entry_updated)
-        self.source_manager.entries_cleared.connect(self.recent_list.clear)
-
-    def on_recent_entry_added(self, entry):
-        text = f"{entry.opened_at.strftime('%H:%M:%S')}  {entry.path}"
-        item = QListWidgetItem(text)
-        item.setData(Qt.UserRole, entry)
-        self.recent_list.insertItem(0, item)
-
-    def on_recent_entry_updated(self, entry):
-        for row in range(self.recent_list.count()):
-            item = self.recent_list.item(row)
-            stored = item.data(Qt.UserRole)
-            if stored and stored.path == entry.path:
-                label = entry.opened_at.strftime('%H:%M:%S')
-                if entry.reindexed:
-                    label += "  ✅"
-                item.setText(f"{label}  {entry.path}")
-                item.setData(Qt.UserRole, entry)
-                break
-    
     def create_docker_status_bar(self, parent_layout):
         """Create the Docker status indicator bar."""
         status_widget = QWidget()

@@ -457,7 +457,14 @@ class ManageTab(QWidget):
         open_with_action = menu.addAction("Open with…")
         show_in_folder_action = menu.addAction("Show in Folder")
         copy_path_action = menu.addAction("Copy Path")
+
+        entry = self.source_manager.find_entry(source_uri)
+        queued = entry.queued if entry else False
+        queue_label = "Unqueue from Reindex" if queued else "Queue for Reindex"
+        queue_action = menu.addAction(queue_label)
+
         reindex_action = menu.addAction("Reindex Now")
+        remove_action = menu.addAction("Remove from Recent")
 
         action = menu.exec(self.results_table.viewport().mapToGlobal(pos))
         if action is None:
@@ -468,11 +475,15 @@ class ManageTab(QWidget):
         elif action == open_with_action:
             self.source_manager.open_path(source_uri, mode="open_with")
         elif action == show_in_folder_action:
-            self.source_manager.open_path(source_uri, mode="show_in_folder", prompt_reindex=False)
+            self.source_manager.open_path(source_uri, mode="show_in_folder", auto_queue=False)
         elif action == copy_path_action:
-            self.source_manager.open_path(source_uri, mode="copy_path", prompt_reindex=False)
+            self.source_manager.open_path(source_uri, mode="copy_path", auto_queue=False)
+        elif action == queue_action:
+            self.source_manager.queue_entry(source_uri, not queued)
         elif action == reindex_action:
             self.source_manager.trigger_reindex_path(source_uri)
+        elif action == remove_action:
+            self.source_manager.remove_entry(source_uri)
 
     def open_source_path(self, path: str) -> None:
         """Open the given path with the OS default application."""

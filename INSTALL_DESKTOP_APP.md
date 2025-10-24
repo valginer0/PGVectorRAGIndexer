@@ -109,9 +109,9 @@ Or create a desktop shortcut to `run_desktop_app.ps1`!
 
 ### Working with SourceOpenManager features
 
-- **Recent edits list** – The main window now shows the last files you opened. It updates automatically when you open a source from `Search`, `Documents`, or `Manage` tabs and highlights entries that have been reindexed.
-- **Context menu actions** – Right-click any `Source URI` entry to access `Open`, `Open with…`, `Show in Folder`, `Copy Path`, or `Reindex Now`. These options are available everywhere the same Source URI appears, so behavior stays consistent across tabs.
-- **Reindex prompts** – When you open a file, the app can immediately ask whether you want to reindex it. Use `Reindex Now` later if you skip the prompt.
+- **Recent Activity tab** – The tab bar now includes `🕓 Recent`, which lists the last files you opened from `Search`, `Documents`, or `Manage`. Each entry shows when it was opened, whether it’s queued, reindexed, or has a last error.
+- **Queue and batch reindex** – Use the buttons in the Recent tab (Queue/Unqueue, Reindex, Remove) or the context menus in other tabs to queue items. Press **Reindex Queued** to submit every queued document at once. No pop-ups appear unless a critical error occurs.
+- **Context menu actions** – Right-click any `Source URI` entry to access `Open`, `Open with…`, `Show in Folder`, `Copy Path`, `Queue for Reindex`, `Reindex Now`, or `Remove from Recent`. Options stay consistent across tabs thanks to the shared `SourceOpenManager`.
 
 ---
 

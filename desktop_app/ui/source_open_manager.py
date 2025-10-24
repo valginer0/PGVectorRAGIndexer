@@ -19,12 +19,14 @@ class RecentEntry:
     path: str
     opened_at: datetime
     reindexed: bool = False
+    queued: bool = False
     last_error: Optional[str] = None
 
 
 class SourceOpenManager(QObject):
     entry_added = Signal(object)
     entry_updated = Signal(object)
+    entry_removed = Signal(object)
     entries_cleared = Signal()
 
     def __init__(self, api_client, parent=None, max_entries: int = 20):
@@ -40,7 +42,11 @@ class SourceOpenManager(QObject):
         self._recent_entries.clear()
         self.entries_cleared.emit()
 
-    def open_path(self, path: str, mode: str = "default", prompt_reindex: bool = True) -> None:
+    def find_entry(self, path: str) -> Optional[RecentEntry]:
+        normalized = Path(path).expanduser()
+        return next((e for e in self._recent_entries if e.path == str(normalized)), None)
+
+    def open_path(self, path: str, mode: str = "default", auto_queue: bool = True) -> None:
         normalized = self._normalize_path(path, warn=mode not in {"copy_path"})
         if normalized is None:
             return
@@ -50,10 +56,10 @@ class SourceOpenManager(QObject):
                 self._launch_open_with_dialog(normalized)
             elif mode == "show_in_folder":
                 self._show_in_folder(normalized)
-                prompt_reindex = False
+                auto_queue = False
             elif mode == "copy_path":
                 self._copy_to_clipboard(normalized)
-                prompt_reindex = False
+                auto_queue = False
             else:
                 self._launch_default(normalized)
         except Exception as exc:
@@ -62,8 +68,8 @@ class SourceOpenManager(QObject):
 
         if mode in {"default", "open_with"}:
             entry = self._track_recent(str(normalized))
-            if prompt_reindex:
-                self._prompt_reindex(entry)
+            if auto_queue:
+                self._set_entry_queued(entry, True)
 
     def trigger_reindex_path(self, path: str) -> bool:
         normalized = self._normalize_path(path)
@@ -72,10 +78,54 @@ class SourceOpenManager(QObject):
         entry = self._track_recent(str(normalized))
         return self._reindex_entry(entry)
 
+    def queue_entry(self, path: str, queued: bool) -> Optional[RecentEntry]:
+        normalized = self._normalize_path(path, warn=False)
+        if normalized is None:
+            return None
+        entry = self._track_recent(str(normalized))
+        self._set_entry_queued(entry, queued)
+        return entry
+
+    def remove_entry(self, path: str) -> bool:
+        normalized = Path(path).expanduser()
+        entry = next((e for e in self._recent_entries if e.path == str(normalized)), None)
+        if entry is None:
+            return False
+        self._recent_entries.remove(entry)
+        self.entry_removed.emit(entry)
+        return True
+
+    def clear_queue(self) -> bool:
+        changed = False
+        for entry in self._recent_entries:
+            if entry.queued:
+                entry.queued = False
+                self.entry_updated.emit(entry)
+                changed = True
+        return changed
+
+    def process_queue(self) -> tuple[int, int]:
+        queued_entries = [entry for entry in self._recent_entries if entry.queued]
+        if not queued_entries:
+            return 0, 0
+
+        success = 0
+        failures = 0
+        for entry in list(queued_entries):
+            if self._reindex_entry(entry):
+                success += 1
+            else:
+                failures += 1
+
+        return success, failures
+
     def _track_recent(self, path: str) -> RecentEntry:
         existing = next((e for e in self._recent_entries if e.path == path), None)
         if existing:
             existing.opened_at = datetime.utcnow()
+            existing.reindexed = False if existing.queued else existing.reindexed
+            self._recent_entries.remove(existing)
+            self._recent_entries.insert(0, existing)
             self.entry_updated.emit(existing)
             return existing
 
@@ -86,17 +136,6 @@ class SourceOpenManager(QObject):
         self.entry_added.emit(entry)
         return entry
 
-    def _prompt_reindex(self, entry: RecentEntry) -> None:
-        reply = QMessageBox.question(
-            self._parent_widget(),
-            "Reindex Document?",
-            f"Reindex the edited document now?\n\n{entry.path}",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.Yes
-        )
-        if reply == QMessageBox.Yes:
-            self._reindex_entry(entry)
-
     def _reindex_entry(self, entry: RecentEntry) -> bool:
         try:
             response = self.api_client.upload_document(
@@ -105,23 +144,23 @@ class SourceOpenManager(QObject):
                 force_reindex=True
             )
             entry.reindexed = True
+            entry.queued = False
             entry.last_error = None
             self.entry_updated.emit(entry)
-            QMessageBox.information(
-                self._parent_widget(),
-                "Reindex Started",
-                f"Reindex request submitted for:\n{entry.path}"
-            )
             return True
         except Exception as exc:
             entry.last_error = str(exc)
+            entry.queued = True
             self.entry_updated.emit(entry)
-            QMessageBox.critical(
-                self._parent_widget(),
-                "Reindex Failed",
-                f"Unable to reindex the document:\n{entry.path}\n\nError: {exc}"
-            )
             return False
+
+    def _set_entry_queued(self, entry: RecentEntry, queued: bool) -> None:
+        if entry.queued == queued:
+            return
+        entry.queued = queued
+        if queued:
+            entry.reindexed = False
+        self.entry_updated.emit(entry)
 
     def _normalize_path(self, path: str, warn: bool = True) -> Optional[Path]:
         if not path:

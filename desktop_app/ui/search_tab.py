@@ -118,8 +118,8 @@ class SearchTab(QWidget):
         options_layout.addWidget(QLabel("Min Score:"))
         self.min_score_spin = QDoubleSpinBox()
         self.min_score_spin.setRange(0.0, 1.0)
-        self.min_score_spin.setSingleStep(0.1)
-        self.min_score_spin.setValue(0.5)
+        self.min_score_spin.setSingleStep(0.05)
+        self.min_score_spin.setValue(0.3)
         options_layout.addWidget(self.min_score_spin)
         
         # Metric

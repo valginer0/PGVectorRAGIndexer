@@ -3,15 +3,15 @@ Search tab for querying indexed documents.
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QLineEdit, QPushButton, QTextEdit, QSpinBox,
     QDoubleSpinBox, QComboBox, QGroupBox, QTableWidget,
-    QTableWidgetItem, QHeaderView, QMessageBox
+    QTableWidgetItem, QHeaderView, QMessageBox, QMenu
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QPoint
 from PySide6.QtGui import QColor
 
 import requests
@@ -57,10 +57,11 @@ class SearchWorker(QThread):
 class SearchTab(QWidget):
     """Tab for searching documents."""
     
-    def __init__(self, api_client, parent=None):
+    def __init__(self, api_client, parent=None, source_manager: Optional[object] = None):
         super().__init__(parent)
         self.api_client = api_client
         self.search_worker = None
+        self.source_manager = source_manager
         self.setup_ui()
     
     def setup_ui(self):
@@ -180,6 +181,8 @@ class SearchTab(QWidget):
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.results_table.cellClicked.connect(self.handle_results_cell_clicked)
         self.results_table.doubleClicked.connect(self.show_full_content)
+        self.results_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.results_table.customContextMenuRequested.connect(self.show_results_context_menu)
         self.results_table.viewport().setCursor(Qt.PointingHandCursor)
         results_layout.addWidget(self.results_table)
         
@@ -324,7 +327,46 @@ class SearchTab(QWidget):
             return
 
         source_uri = item.data(Qt.UserRole) or item.text()
-        self.open_source_path(source_uri)
+        if self.source_manager:
+            self.source_manager.open_path(source_uri)
+        else:
+            self.open_source_path(source_uri)
+
+    def show_results_context_menu(self, pos: QPoint) -> None:
+        if not self.source_manager:
+            return
+
+        index = self.results_table.indexAt(pos)
+        if not index.isValid() or index.column() != 1:
+            return
+
+        item = self.results_table.item(index.row(), index.column())
+        if item is None:
+            return
+
+        source_uri = item.data(Qt.UserRole) or item.text()
+
+        menu = QMenu(self)
+        open_action = menu.addAction("Open")
+        open_with_action = menu.addAction("Open with…")
+        show_in_folder_action = menu.addAction("Show in Folder")
+        copy_path_action = menu.addAction("Copy Path")
+        reindex_action = menu.addAction("Reindex Now")
+
+        action = menu.exec(self.results_table.viewport().mapToGlobal(pos))
+        if action is None:
+            return
+
+        if action == open_action:
+            self.source_manager.open_path(source_uri)
+        elif action == open_with_action:
+            self.source_manager.open_path(source_uri, mode="open_with")
+        elif action == show_in_folder_action:
+            self.source_manager.open_path(source_uri, mode="show_in_folder", prompt_reindex=False)
+        elif action == copy_path_action:
+            self.source_manager.open_path(source_uri, mode="copy_path", prompt_reindex=False)
+        elif action == reindex_action:
+            self.source_manager.trigger_reindex_path(source_uri)
 
     def open_source_path(self, path: str) -> None:
         """Open the given path with the OS default application."""

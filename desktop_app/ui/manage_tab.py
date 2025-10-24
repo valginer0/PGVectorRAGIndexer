@@ -5,9 +5,9 @@ Manage Documents tab for bulk operations (delete, export, restore).
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QComboBox, QTextEdit, QMessageBox, QFileDialog,
-    QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit
+    QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QMenu
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QPoint
 from PySide6.QtGui import QColor
 import json
 from pathlib import Path
@@ -16,16 +16,21 @@ import os
 import sys
 import subprocess
 
+from typing import Optional
+
+from .source_open_manager import SourceOpenManager
+
 logger = logging.getLogger(__name__)
 
 
 class ManageTab(QWidget):
     """Tab for managing documents (bulk delete, export, restore)."""
     
-    def __init__(self, api_client):
+    def __init__(self, api_client, source_manager: Optional[SourceOpenManager] = None):
         super().__init__()
         self.api_client = api_client
         self.last_backup = None  # Store last backup for undo
+        self.source_manager = source_manager
         self.init_ui()
     
     def init_ui(self):
@@ -175,6 +180,8 @@ class ManageTab(QWidget):
         self.results_table.setHorizontalHeaderLabels(["Document ID", "Document Type", "Source URI"])
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
         self.results_table.cellClicked.connect(self.handle_results_cell_clicked)
+        self.results_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.results_table.customContextMenuRequested.connect(self.show_results_context_menu)
         self.results_table.viewport().setCursor(Qt.PointingHandCursor)
         self.results_table.setVisible(False)
         results_layout.addWidget(self.results_table)
@@ -426,7 +433,46 @@ class ManageTab(QWidget):
             return
 
         source_uri = item.data(Qt.UserRole) or item.text()
-        self.open_source_path(source_uri)
+        if self.source_manager:
+            self.source_manager.open_path(source_uri)
+        else:
+            self.open_source_path(source_uri)
+
+    def show_results_context_menu(self, pos: QPoint) -> None:
+        if not self.source_manager:
+            return
+
+        index = self.results_table.indexAt(pos)
+        if not index.isValid() or index.column() != 2:
+            return
+
+        item = self.results_table.item(index.row(), index.column())
+        if item is None:
+            return
+
+        source_uri = item.data(Qt.UserRole) or item.text()
+        menu = QMenu(self)
+
+        open_action = menu.addAction("Open")
+        open_with_action = menu.addAction("Open with…")
+        show_in_folder_action = menu.addAction("Show in Folder")
+        copy_path_action = menu.addAction("Copy Path")
+        reindex_action = menu.addAction("Reindex Now")
+
+        action = menu.exec(self.results_table.viewport().mapToGlobal(pos))
+        if action is None:
+            return
+
+        if action == open_action:
+            self.source_manager.open_path(source_uri)
+        elif action == open_with_action:
+            self.source_manager.open_path(source_uri, mode="open_with")
+        elif action == show_in_folder_action:
+            self.source_manager.open_path(source_uri, mode="show_in_folder", prompt_reindex=False)
+        elif action == copy_path_action:
+            self.source_manager.open_path(source_uri, mode="copy_path", prompt_reindex=False)
+        elif action == reindex_action:
+            self.source_manager.trigger_reindex_path(source_uri)
 
     def open_source_path(self, path: str) -> None:
         """Open the given path with the OS default application."""

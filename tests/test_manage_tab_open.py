@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 from PySide6.QtWidgets import QApplication, QTableWidgetItem, QMessageBox
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QPoint
 
 import desktop_app.ui.manage_tab as manage_tab_module
 from desktop_app.ui.manage_tab import ManageTab
@@ -14,6 +14,18 @@ from desktop_app.ui.manage_tab import ManageTab
 class _DummyApiClient:
     def get_metadata_values(self, key):
         return []
+
+
+class _StubManager:
+    def __init__(self):
+        self.calls = []
+
+    def open_path(self, path: str, mode: str = "default", prompt_reindex: bool = True) -> None:
+        self.calls.append((mode, prompt_reindex, path))
+
+    def trigger_reindex_path(self, path: str) -> bool:
+        self.calls.append(("reindex", True, path))
+        return True
 
 
 @pytest.fixture(scope="module")
@@ -27,6 +39,13 @@ def qt_app():
 @pytest.fixture
 def manage_tab(qt_app):
     return ManageTab(_DummyApiClient())
+
+
+@pytest.fixture
+def managed_with_tracker(qt_app):
+    manager = _StubManager()
+    tab = ManageTab(_DummyApiClient(), source_manager=manager)
+    return tab, manager
 
 
 def test_open_source_path_no_path_shows_warning(monkeypatch, manage_tab):
@@ -90,14 +109,59 @@ def test_open_source_path_linux(monkeypatch, manage_tab, tmp_path):
     assert called["args"] == ["xdg-open", str(file_path)]
 
 
-def test_handle_results_cell_clicked_invokes_open(monkeypatch, manage_tab):
-    manage_tab.results_table.setRowCount(1)
+def test_handle_results_cell_clicked_invokes_manager(managed_with_tracker):
+    tab, manager = managed_with_tracker
+    tab.results_table.setRowCount(1)
     item = QTableWidgetItem("C:/docs/file.txt")
     item.setData(Qt.UserRole, "C:/docs/file.txt")
-    manage_tab.results_table.setItem(0, 2, item)
+    tab.results_table.setItem(0, 2, item)
 
-    called = []
-    monkeypatch.setattr(manage_tab, "open_source_path", lambda path: called.append(path))
+    tab.handle_results_cell_clicked(0, 2)
+    assert manager.calls[0] == ("default", True, "C:/docs/file.txt")
 
-    manage_tab.handle_results_cell_clicked(0, 2)
-    assert called == ["C:/docs/file.txt"]
+
+def test_context_menu_actions(monkeypatch, managed_with_tracker, qt_app):
+    tab, manager = managed_with_tracker
+    tab.results_table.setRowCount(1)
+    item = QTableWidgetItem("/tmp/doc.txt")
+    item.setData(Qt.UserRole, "/tmp/doc.txt")
+    tab.results_table.setItem(0, 2, item)
+
+    def fake_index_at(pos):
+        return tab.results_table.model().index(0, 2)
+
+    class _MenuStub:
+        def __init__(self, _parent):
+            self.actions = []
+
+        def addAction(self, label):
+            self.actions.append(label)
+            return label
+
+        def exec(self, _pos):
+            return self.actions[self.selection]
+
+    monkeypatch.setattr(tab.results_table, "indexAt", fake_index_at)
+    monkeypatch.setattr(tab.results_table.viewport(), "mapToGlobal", lambda p: p)
+
+    original_menu = manage_tab_module.QMenu
+
+    try:
+        for selection, expected in [
+            (0, ("default", True, "/tmp/doc.txt")),
+            (1, ("open_with", True, "/tmp/doc.txt")),
+            (2, ("show_in_folder", False, "/tmp/doc.txt")),
+            (3, ("copy_path", False, "/tmp/doc.txt")),
+            (4, ("reindex", True, "/tmp/doc.txt")),
+        ]:
+            def factory(parent):
+                menu = _MenuStub(parent)
+                menu.selection = selection
+                return menu
+
+            monkeypatch.setattr(manage_tab_module, "QMenu", factory)
+            manager.calls.clear()
+            tab.show_results_context_menu(QPoint(0, 0))
+            assert manager.calls[0] == expected
+    finally:
+        monkeypatch.setattr(manage_tab_module, "QMenu", original_menu)

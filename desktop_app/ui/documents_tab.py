@@ -3,15 +3,15 @@ Documents tab for viewing and managing indexed documents.
 """
 
 import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from datetime import datetime
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QGroupBox
+    QHeaderView, QMessageBox, QGroupBox, QMenu
 )
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QPoint
 from PySide6.QtGui import QColor
 
 import requests
@@ -70,6 +70,7 @@ class DocumentsTab(QWidget):
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
         self.api_client = api_client
+        self.source_manager: Optional[object] = None
         self.documents_worker = None
         self.delete_worker = None
         self.current_documents = []
@@ -106,6 +107,8 @@ class DocumentsTab(QWidget):
         self.documents_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.documents_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.documents_table.cellClicked.connect(self.handle_documents_cell_clicked)
+        self.documents_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.documents_table.customContextMenuRequested.connect(self.show_documents_context_menu)
         self.documents_table.viewport().setCursor(Qt.PointingHandCursor)
         table_layout.addWidget(self.documents_table)
         
@@ -286,7 +289,46 @@ class DocumentsTab(QWidget):
             return
 
         source_uri = item.data(Qt.UserRole) or item.text()
-        self.open_source_path(source_uri)
+        if self.source_manager:
+            self.source_manager.open_path(source_uri)
+        else:
+            self.open_source_path(source_uri)
+
+    def show_documents_context_menu(self, pos: QPoint) -> None:
+        if not self.source_manager:
+            return
+
+        index = self.documents_table.indexAt(pos)
+        if not index.isValid() or index.column() != 0:
+            return
+
+        item = self.documents_table.item(index.row(), index.column())
+        if item is None:
+            return
+
+        source_uri = item.data(Qt.UserRole) or item.text()
+        menu = QMenu(self)
+
+        open_action = menu.addAction("Open")
+        open_with_action = menu.addAction("Open with…")
+        show_in_folder_action = menu.addAction("Show in Folder")
+        copy_path_action = menu.addAction("Copy Path")
+        reindex_action = menu.addAction("Reindex Now")
+
+        action = menu.exec(self.documents_table.viewport().mapToGlobal(pos))
+        if action is None:
+            return
+
+        if action == open_action:
+            self.source_manager.open_path(source_uri)
+        elif action == open_with_action:
+            self.source_manager.open_path(source_uri, mode="open_with")
+        elif action == show_in_folder_action:
+            self.source_manager.open_path(source_uri, mode="show_in_folder", prompt_reindex=False)
+        elif action == copy_path_action:
+            self.source_manager.open_path(source_uri, mode="copy_path", prompt_reindex=False)
+        elif action == reindex_action:
+            self.source_manager.trigger_reindex_path(source_uri)
 
     def open_source_path(self, path: str) -> None:
         """Open the given path with the OS default application."""

@@ -19,6 +19,7 @@ import subprocess
 from typing import Optional
 
 from .source_open_manager import SourceOpenManager
+from .shared import populate_document_type_combo
 
 logger = logging.getLogger(__name__)
 
@@ -163,29 +164,12 @@ class ManageTab(QWidget):
     
     def load_document_types(self):
         """Load document types from database via metadata discovery API."""
-        try:
-            # Get all values for the 'type' metadata key
-            types = self.api_client.get_metadata_values("type")
-            
-            # Clear and repopulate combo box
-            current_text = self.type_combo.currentText()
-            self.type_combo.clear()
-            self.type_combo.addItem("")  # Empty option
-            
-            for doc_type in sorted(types):
-                if doc_type:  # Skip empty strings
-                    self.type_combo.addItem(doc_type)
-            
-            # Restore previous selection if it still exists
-            if current_text:
-                index = self.type_combo.findText(current_text)
-                if index >= 0:
-                    self.type_combo.setCurrentIndex(index)
-            
-            logger.info(f"Loaded {len(types)} document types from database")
-        except Exception as e:
-            logger.error(f"Failed to load document types: {e}")
-            # Keep default types if API fails
+        populate_document_type_combo(
+            self.type_combo,
+            self.api_client,
+            logger,
+            log_context="Manage tab"
+        )
     
     def get_filters(self):
         """Build filter dictionary from UI inputs."""

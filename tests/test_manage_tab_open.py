@@ -15,7 +15,21 @@ from desktop_app.ui.manage_tab import ManageTab
 
 class _DummyApiClient:
     def get_metadata_values(self, key):
+        if key == "type":
+            return ["policy", "report"]
         return []
+
+    def bulk_delete_preview(self, filters):
+        return {
+            "document_count": 1,
+            "sample_documents": [
+                {
+                    "document_id": "doc-123",
+                    "metadata": {"type": "policy"},
+                    "source_uri": "/tmp/doc.txt"
+                }
+            ]
+        }
 
 
 class _StubManager:
@@ -61,6 +75,22 @@ def managed_with_tracker(qt_app):
     manager = _StubManager()
     tab = ManageTab(_DummyApiClient(), source_manager=manager)
     return tab, manager
+
+
+def test_load_document_types_populates_combo(manage_tab):
+    index = manage_tab.type_combo.findText("policy")
+    assert index >= 0
+
+
+def test_preview_delete_populates_table(monkeypatch, manage_tab):
+    manage_tab.type_combo.setCurrentText("policy")
+
+    manage_tab.preview_delete()
+
+    assert manage_tab.results_table.rowCount() == 1
+    assert not manage_tab.results_table.isHidden()
+    assert manage_tab.delete_btn.isEnabled()
+    assert manage_tab.export_btn.isEnabled()
 
 
 def test_open_source_path_no_path_shows_warning(monkeypatch, manage_tab):

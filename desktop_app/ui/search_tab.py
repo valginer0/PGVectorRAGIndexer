@@ -6,10 +6,9 @@ import logging
 from typing import List, Dict, Any, Optional
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QLineEdit, QPushButton, QSpinBox, QDoubleSpinBox,
-    QComboBox, QGroupBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QMenu
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QLineEdit,
+    QSpinBox, QDoubleSpinBox, QComboBox,
+    QGroupBox, QTableWidget, QTableWidgetItem, QMessageBox, QMenu, QHeaderView
 )
 from PySide6.QtCore import Qt, QThread, Signal, QPoint
 from PySide6.QtGui import QColor
@@ -19,6 +18,9 @@ from pathlib import Path
 import os
 import sys
 import subprocess
+
+from .source_open_manager import SourceOpenManager
+from .shared import populate_document_type_combo
 
 logger = logging.getLogger(__name__)
 
@@ -244,16 +246,9 @@ class SearchTab(QWidget):
         self.results_table.setRowCount(len(results))
         
         for i, result in enumerate(results):
-            # Score
-            raw_score = result.get('score')
-            if raw_score is None:
-                raw_score = result.get('relevance_score', 0)
-            try:
-                score_value = float(raw_score)
-            except (TypeError, ValueError):
-                score_value = 0.0
+            augmented = self._augment_result(result)
 
-            score_item = QTableWidgetItem(f"{score_value:.4f}")
+            score_item = QTableWidgetItem(f"{augmented['display_score']:.4f}")
             score_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 0, score_item)
             
@@ -262,10 +257,7 @@ class SearchTab(QWidget):
             self.results_table.setItem(i, 1, source_item)
             
             # Chunk number
-            chunk_value = result.get('chunk_number')
-            if chunk_value is None:
-                chunk_value = result.get('chunk_index', 0)
-            chunk_item = QTableWidgetItem(str(chunk_value))
+            chunk_item = QTableWidgetItem(str(augmented['display_chunk']))
             chunk_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 2, chunk_item)
             
@@ -276,10 +268,7 @@ class SearchTab(QWidget):
             self.results_table.setItem(i, 3, content_item)
             
             # Store full result in row
-            augmented_result = dict(result)
-            augmented_result['display_score'] = score_value
-            augmented_result['display_chunk'] = chunk_value
-            self.results_table.item(i, 0).setData(Qt.UserRole, augmented_result)
+            self.results_table.item(i, 0).setData(Qt.UserRole, augmented)
         
         self.results_table.resizeRowsToContents()
 
@@ -291,16 +280,8 @@ class SearchTab(QWidget):
         if result:
             content = result.get('text_content', 'No content')
             source = result.get('source_uri', 'Unknown')
-            score = result.get('display_score')
-            if score is None:
-                score = result.get('score')
-            if score is None:
-                score = result.get('relevance_score', 0)
-            chunk = result.get('display_chunk')
-            if chunk is None:
-                chunk = result.get('chunk_number')
-            if chunk is None:
-                chunk = result.get('chunk_index', 0)
+            score = result.get('display_score', 0.0)
+            chunk = result.get('display_chunk', 0)
 
             msg = QMessageBox(self)
             msg.setWindowTitle("Full Content")
@@ -422,27 +403,29 @@ class SearchTab(QWidget):
         """Populate the document type filter from the API."""
         if not hasattr(self, "type_filter"):
             return
+
+        populate_document_type_combo(
+            self.type_filter,
+            self.api_client,
+            logger,
+            log_context="Search tab"
+        )
+
+    def _augment_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        augmented = dict(result)
+
+        raw_score = augmented.get('score')
+        if raw_score is None:
+            raw_score = augmented.get('relevance_score', 0)
         try:
-            types = self.api_client.get_metadata_values("type")
-        except Exception as exc:
-            logger.error(f"Failed to load document types: {exc}")
-            return
+            display_score = float(raw_score)
+        except (TypeError, ValueError):
+            display_score = 0.0
+        augmented['display_score'] = display_score
 
-        current_text = self.type_filter.currentText()
-        self.type_filter.blockSignals(True)
-        self.type_filter.clear()
-        self.type_filter.addItem("")
+        chunk_value = augmented.get('chunk_number')
+        if chunk_value is None:
+            chunk_value = augmented.get('chunk_index', 0)
+        augmented['display_chunk'] = chunk_value
 
-        for doc_type in sorted(types):
-            if doc_type:
-                self.type_filter.addItem(doc_type)
-
-        if current_text:
-            index = self.type_filter.findText(current_text)
-            if index >= 0:
-                self.type_filter.setCurrentIndex(index)
-            else:
-                self.type_filter.setCurrentText(current_text)
-
-        self.type_filter.blockSignals(False)
-        logger.info(f"Loaded {len(types)} document types into search filter")
+        return augmented

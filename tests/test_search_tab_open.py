@@ -20,6 +20,11 @@ class _DummyApiClient:
     def is_api_available(self):
         return True
 
+    def get_metadata_values(self, key):
+        if key == "type":
+            return ["report", "policy"]
+        return []
+
 
 class _StubManager:
     def __init__(self, queued: bool = False):
@@ -64,6 +69,31 @@ def search_tab_with_manager(qt_app):
     manager = _StubManager()
     tab = SearchTab(_DummyApiClient(), source_manager=manager)
     return tab, manager
+
+
+def test_document_type_filter_populates_on_init(search_tab):
+    assert search_tab.type_filter.count() >= 1
+    assert search_tab.type_filter.findText("report") >= 0
+
+
+def test_document_type_filter_includes_selection_in_search(monkeypatch, search_tab):
+    captured = {}
+
+    def fake_search(*args, **kwargs):
+        captured.update(kwargs)
+        return []
+
+    monkeypatch.setattr(search_tab.api_client, "search", fake_search)
+    monkeypatch.setattr(search_tab_module.QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(search_tab_module.QMessageBox, "critical", lambda *args, **kwargs: QMessageBox.Ok)
+    monkeypatch.setattr(search_tab_module.SearchWorker, "start", lambda self: self.run())
+
+    search_tab.api_client.is_api_available = lambda: True
+    search_tab.type_filter.setCurrentText("policy")
+    search_tab.query_input.setText("security policy")
+    search_tab.perform_search()
+
+    assert captured.get("document_type") == "policy"
 
 
 def test_open_source_path_no_path_shows_warning(monkeypatch, search_tab):

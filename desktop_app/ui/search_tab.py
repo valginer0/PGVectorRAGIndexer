@@ -28,14 +28,23 @@ class SearchWorker(QThread):
     
     finished = Signal(bool, object)  # success, results or error message
     
-    def __init__(self, api_client, query: str, top_k: int, min_score: float, metric: str):
+    def __init__(
+        self,
+        api_client,
+        query: str,
+        top_k: int,
+        min_score: float,
+        metric: str,
+        document_type: Optional[str] = None
+    ):
         super().__init__()
         self.api_client = api_client
         self.query = query
         self.top_k = top_k
         self.min_score = min_score
         self.metric = metric
-    
+        self.document_type = document_type or None
+
     def run(self):
         """Execute the search."""
         try:
@@ -43,7 +52,8 @@ class SearchWorker(QThread):
                 self.query,
                 top_k=self.top_k,
                 min_score=self.min_score,
-                metric=self.metric
+                metric=self.metric,
+                document_type=self.document_type
             )
             self.finished.emit(True, results)
         except requests.RequestException as e:
@@ -128,7 +138,29 @@ class SearchTab(QWidget):
         
         options_layout.addStretch()
         layout.addWidget(options_group)
-        
+
+        # Document type filter
+        type_group = QGroupBox("Document Type Filter (Optional)")
+        type_layout = QHBoxLayout(type_group)
+        type_layout.addWidget(QLabel("Document Type:"))
+        self.type_filter = QComboBox()
+        self.type_filter.setEditable(True)
+        self.type_filter.addItem("")  # Empty = no filter
+        self.type_filter.setPlaceholderText("(optional)")
+        self.type_filter.setToolTip("Filter results by metadata.type value")
+        type_layout.addWidget(self.type_filter, 1)
+
+        refresh_types_btn = QPushButton("🔄")
+        refresh_types_btn.clicked.connect(self.load_document_types)
+        refresh_types_btn.setToolTip("Refresh available document types")
+        refresh_types_btn.setMaximumWidth(40)
+        type_layout.addWidget(refresh_types_btn)
+
+        layout.addWidget(type_group)
+
+        # Load document types on init
+        self.load_document_types()
+
         # Results table
         results_group = QGroupBox("Search Results")
         results_layout = QVBoxLayout(results_group)
@@ -176,12 +208,16 @@ class SearchTab(QWidget):
         self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
         
         # Start search worker
+        selected_type = self.type_filter.currentText().strip() if hasattr(self, "type_filter") else ""
+        document_type = selected_type or None
+
         self.search_worker = SearchWorker(
             self.api_client,
             query,
             self.top_k_spin.value(),
             self.min_score_spin.value(),
-            self.metric_combo.currentText()
+            self.metric_combo.currentText(),
+            document_type=document_type
         )
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
@@ -360,3 +396,31 @@ class SearchTab(QWidget):
                 f"Unable to open the file:\n{path}\n\nError: {exc}"
             )
     
+    def load_document_types(self) -> None:
+        """Populate the document type filter from the API."""
+        if not hasattr(self, "type_filter"):
+            return
+        try:
+            types = self.api_client.get_metadata_values("type")
+        except Exception as exc:
+            logger.error(f"Failed to load document types: {exc}")
+            return
+
+        current_text = self.type_filter.currentText()
+        self.type_filter.blockSignals(True)
+        self.type_filter.clear()
+        self.type_filter.addItem("")
+
+        for doc_type in sorted(types):
+            if doc_type:
+                self.type_filter.addItem(doc_type)
+
+        if current_text:
+            index = self.type_filter.findText(current_text)
+            if index >= 0:
+                self.type_filter.setCurrentIndex(index)
+            else:
+                self.type_filter.setCurrentText(current_text)
+
+        self.type_filter.blockSignals(False)
+        logger.info(f"Loaded {len(types)} document types into search filter")

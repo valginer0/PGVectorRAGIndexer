@@ -420,9 +420,19 @@ async def upload_and_index(
         raise
     except (UnsupportedFormatError, DocumentProcessingError) as e:
         logger.error(f"Upload and index failed: {e}")
+        detail_message = str(e) if str(e) else ""
+        if (
+            file.filename
+            and file.filename.lower().endswith(".doc")
+            and "convert" not in detail_message.lower()
+        ):
+            detail_message = (
+                "Legacy .doc format is not supported automatically. "
+                "Please install LibreOffice/soffice for conversion or convert the document to .docx."
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
+            detail=detail_message
         )
     except Exception as e:
         logger.error(f"Upload and index failed: {e}")

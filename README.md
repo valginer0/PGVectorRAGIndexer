@@ -13,6 +13,8 @@ A production-ready, modular semantic document search system using PostgreSQL wit
 - **✅ Desktop App Manage Tab**: Full GUI for bulk operations with backup/restore
 - **✅ Legacy Word Support**: Added .doc (Office 97-2003) file support
 
+> ℹ️ **Legacy .doc conversion**: Automatic conversion relies on LibreOffice. Install it on the host and expose the `soffice` binary to the backend (e.g. `export LIBREOFFICE_PATH="/mnt/c/Program Files/LibreOffice/program/soffice.exe"` when running under WSL). Without it, legacy `.doc` uploads will return an error asking for manual conversion.
+
 ### Major Improvements (v2.0)
 
 - **✅ Modern Web UI**: User-friendly web interface for search, upload, and document management

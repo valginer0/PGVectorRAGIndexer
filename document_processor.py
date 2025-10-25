@@ -4,14 +4,16 @@ Document processing module for loading, chunking, and preparing documents.
 Supports multiple document formats with extensible loader architecture.
 """
 
-import os
 import hashlib
 import logging
-import mimetypes
-from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple
+import os
+import shutil
+import subprocess
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 import pandas as pd
 from langchain_community.document_loaders import (
@@ -160,29 +162,84 @@ class OfficeDocumentLoader(DocumentLoader):
     """Loader for Microsoft Office documents."""
 
     SUPPORTED_EXTENSIONS = ['.doc', '.docx', '.pptx', '.html']
+    CONVERTER_CANDIDATES = ("soffice", "libreoffice")
+    WINDOWS_DEFAULT_PATHS = (
+        "C:\\Program Files\\LibreOffice\\program\\soffice.exe",
+        "C:\\Program Files (x86)\\LibreOffice\\program\\soffice.exe",
+    )
 
     def can_load(self, source_uri: str) -> bool:
         """Check if source is an Office document."""
         return any(source_uri.lower().endswith(ext) for ext in self.SUPPORTED_EXTENSIONS)
-
+    
     def _load_doc_with_unstructured(self, source_uri: str) -> List[Document]:
         try:
             loader = UnstructuredFileLoader(source_uri)
-            return loader.load()
+            documents = loader.load()
+            if documents:
+                return documents
+            raise LoaderError(
+                "Legacy .doc format is not supported. Please convert the document to .docx before uploading."
+            )
         except Exception as exc:
             logger.error(f"Fallback unstructured load failed for {source_uri}: {exc}")
             raise LoaderError(
                 "Legacy .doc format is not supported. Please convert the document to .docx before uploading."
             ) from exc
 
-    def _load_word_document(self, source_uri: str) -> List[Document]:
-        """Load .doc/.docx documents using python-docx with helpful fallbacks."""
+    def _find_converter_command(self) -> Optional[str]:
+        override = os.getenv("LIBREOFFICE_PATH")
+        if override:
+            if Path(override).is_file() or shutil.which(override):
+                return override
+        for candidate in self.CONVERTER_CANDIDATES:
+            located = shutil.which(candidate)
+            if located:
+                return located
+
+        for win_path in self.WINDOWS_DEFAULT_PATHS:
+            converted = convert_windows_path(win_path)
+            if Path(converted).exists():
+                return converted
+        return None
+
+    def _convert_doc_to_docx(self, source_uri: str) -> Optional[Path]:
+        command = self._find_converter_command()
+        if not command:
+            logger.warning("No LibreOffice/soffice command found for automatic .doc conversion")
+            return None
+
+        with tempfile.TemporaryDirectory(prefix="doc_convert_") as tmpdir:
+            output_dir = Path(tmpdir)
+            cmd = [
+                command,
+                "--headless",
+                "--convert-to",
+                "docx",
+                "--outdir",
+                str(output_dir),
+                source_uri
+            ]
+            try:
+                subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            except Exception as exc:
+                logger.error(f"Automatic .doc conversion via {command} failed for {source_uri}: {exc}")
+                return None
+
+            expected = output_dir / (Path(source_uri).stem + ".docx")
+            if not expected.exists():
+                logger.error(f"Conversion reported success but {expected} was not created")
+                return None
+
+            with tempfile.NamedTemporaryFile(suffix=".docx", delete=False) as tmp_file:
+                shutil.copyfile(expected, tmp_file.name)
+                temp_path = tmp_file.name
+
+        return Path(temp_path)
+
+    def _extract_docx_documents(self, source_uri: str, *, original_source: Optional[str] = None) -> List[Document]:
         try:
             doc = DocxDocument(source_uri)
-        except PackageNotFoundError:
-            # Legacy .doc detected - fallback to unstructured loader
-            logger.warning("python-docx cannot open legacy .doc; attempting unstructured fallback")
-            return self._load_doc_with_unstructured(source_uri)
         except Exception as exc:
             logger.error(f"Failed to load Word document {source_uri}: {exc}")
             raise LoaderError(f"Word document loading failed: {exc}")
@@ -204,20 +261,30 @@ class OfficeDocumentLoader(DocumentLoader):
         if not full_text:
             raise LoaderError("No textual content could be extracted from the Word document.")
 
-        return [Document(page_content=full_text, metadata={'source': source_uri})]
+        metadata_source = original_source or source_uri
+        return [Document(page_content=full_text, metadata={'source': metadata_source})]
 
-    def load(self, source_uri: str) -> List[Document]:
-        """Load Office document."""
-        lower = source_uri.lower()
-
-        if lower.endswith(('.doc', '.docx')):
-            try:
-                return self._load_word_document(source_uri)
-            except LoaderError as exc:
-                # As an extra safeguard, try unstructured fallback if not already attempted
-                if lower.endswith('.doc'):
-                    return self._load_doc_with_unstructured(source_uri)
+    def _load_word_document(self, source_uri: str, *, original_source: Optional[str] = None) -> List[Document]:
+        try:
+            return self._extract_docx_documents(source_uri, original_source=original_source)
+        except LoaderError as exc:
+            # Re-raise immediately for non-legacy doc
+            if not source_uri.lower().endswith('.doc'):
                 raise exc
+
+            logger.warning("python-docx cannot open legacy .doc; attempting automatic conversion")
+            converted_path = self._convert_doc_to_docx(source_uri)
+            if converted_path:
+                try:
+                    return self._extract_docx_documents(str(converted_path), original_source=original_source or source_uri)
+                finally:
+                    try:
+                        os.remove(converted_path)
+                    except OSError:
+                        pass
+
+            # Fall back to unstructured if conversion failed
+            return self._load_doc_with_unstructured(source_uri)
 
         try:
             loader = UnstructuredFileLoader(source_uri)
@@ -382,9 +449,17 @@ class DocumentProcessor:
             documents = loader.load(source_uri)
             if not documents:
                 raise LoaderError("No content loaded from document")
+        except DocumentProcessingError:
+            raise
+        except LoaderError as e:
+            # Preserve loader-specific message (e.g., legacy .doc conversion hint)
+            raise e
         except Exception as e:
             logger.error(f"Failed to load document: {e}")
-            raise
+            cause = getattr(e, "__cause__", None) or getattr(e, "__context__", None)
+            if isinstance(cause, LoaderError):
+                raise cause
+            raise DocumentProcessingError(f"Document loading failed: {e}") from e
         
         # Split into chunks
         try:
@@ -459,6 +534,13 @@ def convert_windows_path(path: str) -> str:
     Returns:
         WSL-compatible path
     """
+    # Handle UNC paths pointing to WSL
+    if path.startswith("\\\\wsl.localhost\\"):
+        no_prefix = path.replace("\\wsl.localhost\\", "", 1)
+        unix_path = no_prefix.replace('\\', '/')
+        logger.info(f"Converted WSL UNC path: {path} -> /{unix_path.lstrip('/')}")
+        return "/" + unix_path.lstrip('/')
+
     # Check if it's a Windows path (e.g., C:\...)
     if len(path) > 1 and path[1] == ':' and path[0].isalpha():
         drive_letter = path[0].lower()
@@ -466,5 +548,5 @@ def convert_windows_path(path: str) -> str:
         wsl_path = f"/mnt/{drive_letter}/{path[3:].replace(chr(92), '/')}"
         logger.info(f"Converted Windows path: {path} -> {wsl_path}")
         return wsl_path
-    
+
     return path

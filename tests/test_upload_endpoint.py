@@ -57,7 +57,20 @@ class TestUploadAndIndex:
         assert response2.status_code == 200
         data = response2.json()
         assert data["status"] == "success"
-    
+
+    def test_upload_legacy_doc_returns_hint(self, client):
+        file_data = io.BytesIO(b"dummy")
+
+        response = client.post(
+            "/upload-and-index",
+            files={"file": ("legacy.doc", file_data, "application/msword")}
+        )
+
+        if response.status_code == 400:
+            assert "convert" in response.json()["detail"].lower()
+        else:
+            assert response.status_code == 200
+
     def test_upload_unsupported_file_type(self, client):
         """Test uploading unsupported file type."""
         file_content = b"# Markdown content"

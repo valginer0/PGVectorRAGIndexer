@@ -20,6 +20,8 @@ from langchain_community.document_loaders import (
     WebBaseLoader,
     UnstructuredFileLoader
 )
+from docx import Document as DocxDocument
+from docx.opc.exceptions import PackageNotFoundError
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
@@ -156,15 +158,67 @@ class WebDocumentLoader(DocumentLoader):
 
 class OfficeDocumentLoader(DocumentLoader):
     """Loader for Microsoft Office documents."""
-    
+
     SUPPORTED_EXTENSIONS = ['.doc', '.docx', '.pptx', '.html']
-    
+
     def can_load(self, source_uri: str) -> bool:
         """Check if source is an Office document."""
         return any(source_uri.lower().endswith(ext) for ext in self.SUPPORTED_EXTENSIONS)
-    
+
+    def _load_doc_with_unstructured(self, source_uri: str) -> List[Document]:
+        try:
+            loader = UnstructuredFileLoader(source_uri)
+            return loader.load()
+        except Exception as exc:
+            logger.error(f"Fallback unstructured load failed for {source_uri}: {exc}")
+            raise LoaderError(
+                "Legacy .doc format is not supported. Please convert the document to .docx before uploading."
+            ) from exc
+
+    def _load_word_document(self, source_uri: str) -> List[Document]:
+        """Load .doc/.docx documents using python-docx with helpful fallbacks."""
+        try:
+            doc = DocxDocument(source_uri)
+        except PackageNotFoundError:
+            # Legacy .doc detected - fallback to unstructured loader
+            logger.warning("python-docx cannot open legacy .doc; attempting unstructured fallback")
+            return self._load_doc_with_unstructured(source_uri)
+        except Exception as exc:
+            logger.error(f"Failed to load Word document {source_uri}: {exc}")
+            raise LoaderError(f"Word document loading failed: {exc}")
+
+        text_segments: List[str] = []
+
+        for paragraph in doc.paragraphs:
+            cleaned = paragraph.text.strip()
+            if cleaned:
+                text_segments.append(cleaned)
+
+        for table in doc.tables:
+            for row in table.rows:
+                row_text = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                if row_text:
+                    text_segments.append("\t".join(row_text))
+
+        full_text = "\n\n".join(text_segments).strip()
+        if not full_text:
+            raise LoaderError("No textual content could be extracted from the Word document.")
+
+        return [Document(page_content=full_text, metadata={'source': source_uri})]
+
     def load(self, source_uri: str) -> List[Document]:
         """Load Office document."""
+        lower = source_uri.lower()
+
+        if lower.endswith(('.doc', '.docx')):
+            try:
+                return self._load_word_document(source_uri)
+            except LoaderError as exc:
+                # As an extra safeguard, try unstructured fallback if not already attempted
+                if lower.endswith('.doc'):
+                    return self._load_doc_with_unstructured(source_uri)
+                raise exc
+
         try:
             loader = UnstructuredFileLoader(source_uri)
             return loader.load()

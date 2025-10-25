@@ -64,13 +64,12 @@ class TestLegacyWordSupport:
             data={"document_type": "test"}
         )
         
-        # The upload might fail if unstructured can't parse our fake .doc,
-        # but it should at least accept the file type
-        assert response.status_code in [200, 500], "Should accept .doc files"
-        
         if response.status_code == 200:
             data = response.json()
             assert data["status"] in ["success", "error"]
+        else:
+            assert response.status_code == 400
+            assert "convert" in response.json()["detail"].lower()
     
     def test_doc_in_config_supported_extensions(self):
         """Test that .doc is in the config's supported extensions."""

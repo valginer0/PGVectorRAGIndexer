@@ -96,6 +96,23 @@ def test_document_type_filter_includes_selection_in_search(monkeypatch, search_t
     assert captured.get("document_type") == "policy"
 
 
+def test_display_results_uses_relevance_score(search_tab):
+    results = [{
+        "relevance_score": 0.87654,
+        "source_uri": "/tmp/doc.txt",
+        "chunk_index": 2,
+        "text_content": "example"
+    }]
+
+    search_tab.display_results(results)
+
+    score_item = search_tab.results_table.item(0, 0)
+    chunk_item = search_tab.results_table.item(0, 2)
+
+    assert score_item.text() == "0.8765"
+    assert chunk_item.text() == "2"
+
+
 def test_open_source_path_no_path_shows_warning(monkeypatch, search_tab):
     captured = []
 

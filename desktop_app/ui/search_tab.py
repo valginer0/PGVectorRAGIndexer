@@ -245,7 +245,15 @@ class SearchTab(QWidget):
         
         for i, result in enumerate(results):
             # Score
-            score_item = QTableWidgetItem(f"{result.get('score', 0):.4f}")
+            raw_score = result.get('score')
+            if raw_score is None:
+                raw_score = result.get('relevance_score', 0)
+            try:
+                score_value = float(raw_score)
+            except (TypeError, ValueError):
+                score_value = 0.0
+
+            score_item = QTableWidgetItem(f"{score_value:.4f}")
             score_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 0, score_item)
             
@@ -254,7 +262,10 @@ class SearchTab(QWidget):
             self.results_table.setItem(i, 1, source_item)
             
             # Chunk number
-            chunk_item = QTableWidgetItem(str(result.get('chunk_number', 0)))
+            chunk_value = result.get('chunk_number')
+            if chunk_value is None:
+                chunk_value = result.get('chunk_index', 0)
+            chunk_item = QTableWidgetItem(str(chunk_value))
             chunk_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 2, chunk_item)
             
@@ -265,7 +276,10 @@ class SearchTab(QWidget):
             self.results_table.setItem(i, 3, content_item)
             
             # Store full result in row
-            self.results_table.item(i, 0).setData(Qt.UserRole, result)
+            augmented_result = dict(result)
+            augmented_result['display_score'] = score_value
+            augmented_result['display_chunk'] = chunk_value
+            self.results_table.item(i, 0).setData(Qt.UserRole, augmented_result)
         
         self.results_table.resizeRowsToContents()
 
@@ -277,8 +291,16 @@ class SearchTab(QWidget):
         if result:
             content = result.get('text_content', 'No content')
             source = result.get('source_uri', 'Unknown')
-            score = result.get('score', 0)
-            chunk = result.get('chunk_number', 0)
+            score = result.get('display_score')
+            if score is None:
+                score = result.get('score')
+            if score is None:
+                score = result.get('relevance_score', 0)
+            chunk = result.get('display_chunk')
+            if chunk is None:
+                chunk = result.get('chunk_number')
+            if chunk is None:
+                chunk = result.get('chunk_index', 0)
 
             msg = QMessageBox(self)
             msg.setWindowTitle("Full Content")

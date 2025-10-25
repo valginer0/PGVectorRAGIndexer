@@ -64,7 +64,10 @@ class UploadWorker(QThread):
 
 class UploadTab(QWidget):
     """Tab for uploading documents."""
-    
+    SUPPORTED_EXTENSIONS = {
+        '.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.pptx', '.html'
+    }
+
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
         self.api_client = api_client
@@ -204,11 +207,12 @@ class UploadTab(QWidget):
     
     def select_files(self):
         """Open file dialog to select multiple files."""
+        documents_filter = self._build_documents_filter()
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
             "Select Documents to Upload",
             "",
-            "Documents (*.txt *.md *.markdown *.pdf *.doc *.docx *.pptx *.html);;All Files (*)"
+            f"{documents_filter};;All Files (*)"
         )
         
         if file_paths:
@@ -228,95 +232,98 @@ class UploadTab(QWidget):
     
     def select_folder(self):
         """Open folder dialog to select a directory and index all supported files."""
-        folder_path = QFileDialog.getExistingDirectory(
+        documents_filter = self._build_documents_filter()
+        dialog = QFileDialog(self, "Select Folder to Index (Recursive)")
+        dialog.setFileMode(QFileDialog.Directory)
+        dialog.setOption(QFileDialog.ShowDirsOnly, False)
+        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
+        dialog.setNameFilter(f"{documents_filter};;All Files (*)")
+
+        if not dialog.exec():
+            return
+
+        selected = dialog.selectedFiles()
+        if not selected:
+            return
+
+        folder_path = selected[0]
+        folder = Path(folder_path)
+        found_files = self._find_supported_files(folder)
+
+        if not found_files:
+            QMessageBox.warning(
+                self,
+                "No Files Found",
+                f"No supported files found in:\n{folder_path}\n\nSupported: TXT, MD, PDF, DOC, DOCX, PPTX, HTML"
+            )
+            return
+        
+        # Show confirmation dialog with smart preview
+        count = len(found_files)
+        
+        # Build confirmation message based on file count
+        if count <= 15:
+            # Small number - show all files
+            preview = "\n".join(str(f.relative_to(folder)) for f in found_files)
+            message = (
+                f"Found {count} file(s) in:\n{folder_path}\n\n"
+                f"Files to index:\n{preview}\n\n"
+                f"Do you want to index all {count} file(s)?"
+            )
+        else:
+            # Large number - show statistics and sample
+            # Count by extension
+            ext_counts = {}
+            for f in found_files:
+                ext = f.suffix.lower()
+                ext_counts[ext] = ext_counts.get(ext, 0) + 1
+            
+            # Count by subdirectory depth
+            subdir_counts = {}
+            for f in found_files:
+                rel_path = f.relative_to(folder)
+                if len(rel_path.parts) > 1:
+                    subdir = rel_path.parts[0]
+                    subdir_counts[subdir] = subdir_counts.get(subdir, 0) + 1
+                else:
+                    subdir_counts["(root)"] = subdir_counts.get("(root)", 0) + 1
+            
+            # Build statistics
+            stats = "File types:\n"
+            for ext, cnt in sorted(ext_counts.items()):
+                stats += f"  {ext}: {cnt} file(s)\n"
+            
+            if len(subdir_counts) > 1:
+                stats += "\nTop subdirectories:\n"
+                for subdir, cnt in sorted(subdir_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
+                    stats += f"  {subdir}: {cnt} file(s)\n"
+            
+            # Show sample files
+            sample = "\n".join(str(f.relative_to(folder)) for f in found_files[:10])
+            
+            message = (
+                f"Found {count} file(s) in:\n{folder_path}\n\n"
+                f"{stats}\n"
+                f"Sample files (first 10):\n{sample}\n"
+                f"... and {count - 10} more files\n\n"
+                f"⚠️ Do you want to index all {count} file(s)?\n"
+                f"This may take several minutes."
+            )
+        
+        reply = QMessageBox.question(
             self,
-            "Select Folder to Index (Recursive)",
-            ""
+            "Confirm Folder Indexing",
+            message,
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
         )
         
-        if folder_path:
-            # Find all supported files recursively
-            supported_extensions = {'.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.pptx', '.html'}
-            folder = Path(folder_path)
-            found_files = []
-            
-            for ext in supported_extensions:
-                found_files.extend(folder.rglob(f'*{ext}'))
-            
-            if not found_files:
-                QMessageBox.warning(
-                    self,
-                    "No Files Found",
-                    f"No supported files found in:\n{folder_path}\n\nSupported: TXT, MD, PDF, DOC, DOCX, PPTX, HTML"
-                )
-                return
-            
-            # Show confirmation dialog with smart preview
-            count = len(found_files)
-            
-            # Build confirmation message based on file count
-            if count <= 15:
-                # Small number - show all files
-                preview = "\n".join(str(f.relative_to(folder)) for f in found_files)
-                message = (
-                    f"Found {count} file(s) in:\n{folder_path}\n\n"
-                    f"Files to index:\n{preview}\n\n"
-                    f"Do you want to index all {count} file(s)?"
-                )
-            else:
-                # Large number - show statistics and sample
-                # Count by extension
-                ext_counts = {}
-                for f in found_files:
-                    ext = f.suffix.lower()
-                    ext_counts[ext] = ext_counts.get(ext, 0) + 1
-                
-                # Count by subdirectory depth
-                subdir_counts = {}
-                for f in found_files:
-                    rel_path = f.relative_to(folder)
-                    if len(rel_path.parts) > 1:
-                        subdir = rel_path.parts[0]
-                        subdir_counts[subdir] = subdir_counts.get(subdir, 0) + 1
-                    else:
-                        subdir_counts["(root)"] = subdir_counts.get("(root)", 0) + 1
-                
-                # Build statistics
-                stats = "File types:\n"
-                for ext, cnt in sorted(ext_counts.items()):
-                    stats += f"  {ext}: {cnt} file(s)\n"
-                
-                if len(subdir_counts) > 1:
-                    stats += "\nTop subdirectories:\n"
-                    for subdir, cnt in sorted(subdir_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
-                        stats += f"  {subdir}: {cnt} file(s)\n"
-                
-                # Show sample files
-                sample = "\n".join(str(f.relative_to(folder)) for f in found_files[:10])
-                
-                message = (
-                    f"Found {count} file(s) in:\n{folder_path}\n\n"
-                    f"{stats}\n"
-                    f"Sample files (first 10):\n{sample}\n"
-                    f"... and {count - 10} more files\n\n"
-                    f"⚠️ Do you want to index all {count} file(s)?\n"
-                    f"This may take several minutes."
-                )
-            
-            reply = QMessageBox.question(
-                self,
-                "Confirm Folder Indexing",
-                message,
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
-            )
-            
-            if reply == QMessageBox.Yes:
-                self.selected_files = found_files
-                self.file_path_label.setText(f"✓ Selected {count} files from folder:\n{folder_path}")
-                self.file_path_label.setStyleSheet("color: #059669; padding: 10px; background: #d1fae5; border-radius: 5px; font-weight: bold;")
-                self.upload_btn.setEnabled(True)
-                self.log(f"Folder selected: {count} files found in {folder_path}")
+        if reply == QMessageBox.Yes:
+            self.selected_files = found_files
+            self.file_path_label.setText(f"✓ Selected {count} files from folder:\n{folder_path}")
+            self.file_path_label.setStyleSheet("color: #059669; padding: 10px; background: #d1fae5; border-radius: 5px; font-weight: bold;")
+            self.upload_btn.setEnabled(True)
+            self.log(f"Folder selected: {count} files found in {folder_path}")
     
     def upload_file(self):
         """Upload the selected files."""
@@ -409,3 +416,16 @@ class UploadTab(QWidget):
         self.log_text.verticalScrollBar().setValue(
             self.log_text.verticalScrollBar().maximum()
         )
+
+    @classmethod
+    def _build_documents_filter(cls) -> str:
+        patterns = " ".join(sorted(f"*{ext}" for ext in cls.SUPPORTED_EXTENSIONS))
+        return f"Documents ({patterns})"
+
+    @classmethod
+    def _find_supported_files(cls, folder: Path) -> list[Path]:
+        files: list[Path] = []
+        for path in folder.rglob('*'):
+            if path.is_file() and path.suffix.lower() in cls.SUPPORTED_EXTENSIONS:
+                files.append(path)
+        return files

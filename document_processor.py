@@ -172,6 +172,18 @@ class OfficeDocumentLoader(DocumentLoader):
         """Check if source is an Office document."""
         return any(source_uri.lower().endswith(ext) for ext in self.SUPPORTED_EXTENSIONS)
     
+    def load(self, source_uri: str) -> List[Document]:
+        """Load Office document based on extension."""
+        lowered = source_uri.lower()
+        if lowered.endswith(('.doc', '.docx')):
+            return self._load_word_document(source_uri)
+        if lowered.endswith('.html'):
+            return self._load_doc_with_unstructured(source_uri)
+        if lowered.endswith('.pptx'):
+            loader = UnstructuredFileLoader(source_uri)
+            return loader.load()
+        raise UnsupportedFormatError(f"Unsupported office extension for loader: {source_uri}")
+    
     def _load_doc_with_unstructured(self, source_uri: str) -> List[Document]:
         try:
             loader = UnstructuredFileLoader(source_uri)

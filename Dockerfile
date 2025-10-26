@@ -19,6 +19,13 @@ COPY static/ ./static/
 # Create directories
 RUN mkdir -p /app/documents
 
+# Ensure LibreOffice is available (needed for .doc conversion)
+RUN if ! command -v soffice >/dev/null 2>&1 && ! command -v libreoffice >/dev/null 2>&1; then \
+        apt-get update && \
+        apt-get install -y libreoffice && \
+        rm -rf /var/lib/apt/lists/*; \
+    fi
+
 # Expose API port
 EXPOSE 8000
 

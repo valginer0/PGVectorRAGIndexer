@@ -70,6 +70,7 @@ class RecentActivityTab(QWidget):
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        self.table.setTextElideMode(Qt.ElideNone)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.table)
@@ -170,6 +171,7 @@ class RecentActivityTab(QWidget):
         item = QTableWidgetItem(text)
         if path is not None:
             item.setData(Qt.UserRole, path)
+            item.setToolTip(text)
         return item
 
     def _build_actions_widget(self, path: str, queued: bool) -> QWidget:

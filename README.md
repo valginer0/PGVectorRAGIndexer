@@ -91,7 +91,7 @@ See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for details.
 
 ### Windows vs WSL Compose
 
-- Development flow builds and pushes a `:dev` image from WSL using `docker-compose.dev.yml`.
+- Development flow builds, verifies LibreOffice, and pushes the `:dev` image from WSL via `scripts/build_and_push_dev.sh` (which wraps `build_dev_image.sh`, `check_libreoffice.sh`, and `push_dev_image.sh`).
 - Windows pulls and runs that same `:dev` image via `update-dev.ps1`. Because the `image` is GHCR-qualified, Windows does not rebuild locally.
 - Release uses `:latest` (or a version tag) pulled by Windows scripts.
 

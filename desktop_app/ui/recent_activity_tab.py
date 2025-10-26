@@ -62,7 +62,9 @@ class RecentActivityTab(QWidget):
             "Last Error",
             "Actions",
         ])
-        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        header = self.table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Interactive)
+        header.resizeSection(0, 320)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)

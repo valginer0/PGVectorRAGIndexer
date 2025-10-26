@@ -4,6 +4,7 @@ from functools import partial
 from typing import Optional
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -13,9 +14,20 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QLabel,
+    QStyledItemDelegate,
+    QStyleOptionViewItem,
 )
 
 from .source_open_manager import SourceOpenManager, RecentEntry
+
+
+class _NoElideDelegate(QStyledItemDelegate):
+    """Ensure text is never elided in the Path column."""
+
+    def paint(self, painter, option, index):
+        no_elide = QStyleOptionViewItem(option)
+        no_elide.textElideMode = Qt.ElideNone
+        super().paint(painter, no_elide, index)
 
 
 class RecentActivityTab(QWidget):
@@ -63,14 +75,14 @@ class RecentActivityTab(QWidget):
             "Actions",
         ])
         header = self.table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.Interactive)
-        header.resizeSection(0, 320)
-        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
-        self.table.horizontalHeader().setSectionResizeMode(5, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(0, QHeaderView.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
         self.table.setTextElideMode(Qt.ElideNone)
+        self.table.setItemDelegateForColumn(0, _NoElideDelegate(self.table))
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         layout.addWidget(self.table)
@@ -171,7 +183,12 @@ class RecentActivityTab(QWidget):
         item = QTableWidgetItem(text)
         if path is not None:
             item.setData(Qt.UserRole, path)
-            item.setToolTip(text)
+            item.setToolTip(path)
+            item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+            font = item.font()
+            font.setUnderline(True)
+            item.setFont(font)
+            item.setForeground(QColor("#1a73e8"))
         return item
 
     def _build_actions_widget(self, path: str, queued: bool) -> QWidget:

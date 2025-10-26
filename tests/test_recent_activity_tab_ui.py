@@ -31,7 +31,7 @@ def recent_tab(qt_app):
 
 def test_recent_tab_path_column_resizable(recent_tab):
     header = recent_tab.table.horizontalHeader()
-    assert header.sectionResizeMode(0) == QHeaderView.Interactive
+    assert header.sectionResizeMode(0) == QHeaderView.Stretch
 
 
 def test_recent_tab_path_tooltip_and_elide_mode(recent_tab):
@@ -43,3 +43,4 @@ def test_recent_tab_path_tooltip_and_elide_mode(recent_tab):
     assert recent_tab.table.textElideMode() == Qt.ElideNone
     assert item is not None
     assert item.toolTip() == "/tmp/example.txt"
+    assert bool(item.font().underline()) is True

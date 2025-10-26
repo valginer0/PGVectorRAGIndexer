@@ -47,13 +47,18 @@ if ! command -v docker &> /dev/null; then
     exit 1
 fi
 
+# Ensure we are using the latest base image
+echo -e "${GREEN}Pulling latest base image...${NC}"
+docker pull ghcr.io/valginer0/pgvectorragindexer:base >/dev/null
+echo -e "${GREEN}✓ Base image updated${NC}"
+
 # Build Docker image with BuildKit for caching
 if [ "$USE_CACHE" = true ]; then
     echo -e "${GREEN}Building Docker image with BuildKit (cache enabled)...${NC}"
-    DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build app
+    DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build --pull app
 else
     echo -e "${GREEN}Building Docker image with BuildKit (cache disabled)...${NC}"
-    DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build --no-cache app
+    DOCKER_BUILDKIT=1 docker compose -f docker-compose.dev.yml build --pull --no-cache app
 fi
 BUILD_RESULT=$?
 if [ $BUILD_RESULT -ne 0 ]; then

@@ -217,7 +217,20 @@ Write-Host "  Update image: docker compose pull; docker compose up -d" -Foregrou
 Write-Host ""
 Write-Host "Upload files from ANY Windows location:" -ForegroundColor Blue
 Write-Host "  curl -X POST http://localhost:8000/upload-and-index ``" -ForegroundColor Yellow
-Write-Host "    -F ""file=@C:\Users\YourName\Documents\file.pdf""" -ForegroundColor Yellow
+Write-Host "    -F \"file=@C:\Users\YourName\Documents\file.pdf\"" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Or place documents in: $documentsDir" -ForegroundColor Blue
 Write-Host ""
+
+Write-Host "Launching desktop application..." -ForegroundColor Green
+$appScript = Join-Path $env:USERPROFILE "PGVectorRAGIndexer\run_desktop_app.ps1"
+if (Test-Path $appScript) {
+    & $appScript
+    $appExit = $LASTEXITCODE
+    if ($appExit -ne 0) {
+        Write-Host "Desktop app exited with code $appExit" -ForegroundColor Yellow
+    }
+} else {
+    Write-Host "run_desktop_app.ps1 not found. To install desktop app, run:" -ForegroundColor Yellow
+    Write-Host "  irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.ps1 | iex" -ForegroundColor Yellow
+}

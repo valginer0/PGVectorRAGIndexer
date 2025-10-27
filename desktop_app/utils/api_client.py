@@ -152,10 +152,41 @@ class APIClient:
         response.raise_for_status()
         data = response.json()
 
-        if not isinstance(data, dict) or "items" not in data:
-            raise requests.RequestException("Unexpected response structure from /documents endpoint")
+        # Legacy support: plain list response
+        if isinstance(data, list):
+            return {
+                "items": data,
+                "total": len(data),
+                "limit": limit,
+                "offset": offset,
+                "sort": {
+                    "by": sort_by,
+                    "direction": sort_dir,
+                },
+            }
 
-        return data
+        if isinstance(data, dict):
+            # Modern payload already in paginated shape
+            if "items" in data:
+                normalized = dict(data)  # shallow copy to avoid mutating original
+                normalized.setdefault("total", len(normalized.get("items", [])))
+                normalized.setdefault("limit", limit)
+                normalized.setdefault("offset", offset)
+                normalized.setdefault("sort", {"by": sort_by, "direction": sort_dir})
+                return normalized
+
+            # Backward compatibility for older keys ("documents")
+            if "documents" in data:
+                items = data.get("documents", [])
+                return {
+                    "items": items,
+                    "total": data.get("total", len(items)),
+                    "limit": data.get("limit", limit),
+                    "offset": data.get("offset", offset),
+                    "sort": data.get("sort", {"by": sort_by, "direction": sort_dir}),
+                }
+
+        raise requests.RequestException("Unexpected response structure from /documents endpoint")
     
     def get_document(self, document_id: str) -> Dict[str, Any]:
         """

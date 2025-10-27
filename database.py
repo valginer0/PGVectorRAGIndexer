@@ -7,6 +7,7 @@ for the PGVectorRAGIndexer system.
 
 import logging
 import json
+import os
 from contextlib import contextmanager, asynccontextmanager
 from typing import Optional, List, Dict, Any, Tuple, Union, Sequence
 from datetime import datetime
@@ -210,6 +211,10 @@ class DatabaseManager:
             }
 
 
+AUTO_ANALYZE_ENABLED = os.getenv("ENABLE_DB_ANALYZE", "true").lower() in ("1", "true", "yes")
+ANALYZE_INTERVAL_SECONDS = int(os.getenv("DB_ANALYZE_INTERVAL_SECONDS", "300"))
+
+
 class DocumentRepository:
     """Repository for document-related database operations."""
     
@@ -223,6 +228,37 @@ class DocumentRepository:
             normalized = normalized.replace('//', '/')
         return normalized
     
+    def _should_run_analyze(self) -> bool:
+        """Determine whether ANALYZE should run based on recency."""
+        if not AUTO_ANALYZE_ENABLED:
+            return False
+
+        if ANALYZE_INTERVAL_SECONDS <= 0:
+            return True
+
+        check_query = (
+            """
+            SELECT CASE
+                WHEN last_analyze IS NULL AND last_autoanalyze IS NULL THEN TRUE
+                ELSE NOW() - GREATEST(
+                    COALESCE(last_analyze, '-infinity'::timestamp),
+                    COALESCE(last_autoanalyze, '-infinity'::timestamp)
+                ) > (%s * INTERVAL '1 second')
+            END AS should_run
+            FROM pg_stat_all_tables
+            WHERE schemaname = 'public' AND relname = 'document_chunks'
+            """
+        )
+
+        try:
+            result = self.db.execute_query(check_query, (ANALYZE_INTERVAL_SECONDS,), fetch=True)
+            if not result:
+                return True
+            return bool(result[0][0])
+        except QueryError as exc:
+            logger.warning(f"Analyze check failed, defaulting to run ANALYZE: {exc}")
+            return True
+
     def insert_chunks(
         self,
         chunks: List[Tuple[str, int, str, str, List[float], Optional[Dict[str, Any]]]],
@@ -258,11 +294,12 @@ class DocumentRepository:
         self.db.execute_many(query, chunks_with_json, page_size=batch_size)
         logger.info(f"Inserted {len(chunks)} chunks into database")
 
-        # Ensure pgvector IVFFlat index statistics are up-to-date so searches remain stable
-        try:
-            self.db.execute_query("ANALYZE document_chunks")
-        except QueryError as exc:
-            logger.warning(f"Failed to analyze document_chunks after insert: {exc}")
+        # Optional ANALYZE throttled to avoid blocking hot ingestion
+        if self._should_run_analyze():
+            try:
+                self.db.execute_query("ANALYZE document_chunks")
+            except QueryError as exc:
+                logger.warning(f"Failed to analyze document_chunks after insert: {exc}")
 
         return len(chunks)
     

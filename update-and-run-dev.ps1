@@ -21,7 +21,7 @@ if (-not $SkipUpdate) {
     Write-Host "[OK] Containers refreshed" -ForegroundColor Green
     Write-Host ""
 } else {
-    Write-Host "[!] SkipUpdate flag detected — skipping container refresh." -ForegroundColor Yellow
+    Write-Host "[!] SkipUpdate flag detected - skipping container refresh." -ForegroundColor Yellow
     Write-Host ""
 }
 
@@ -30,9 +30,11 @@ Write-Host "[Step 2/2] Launching desktop application..." -ForegroundColor Yellow
 $appExitCode = $LASTEXITCODE
 
 if ($appExitCode -eq 0) {
-    Write-Host "\n[OK] Desktop app exited cleanly" -ForegroundColor Green
+    Write-Host ""
+    Write-Host "[OK] Desktop app exited cleanly" -ForegroundColor Green
 } else {
-    Write-Host "\n[WARNING] Desktop app exited with code $appExitCode" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "[WARNING] Desktop app exited with code $appExitCode" -ForegroundColor Yellow
 }
 
 exit $appExitCode

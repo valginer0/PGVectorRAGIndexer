@@ -79,6 +79,7 @@ class DocumentsTab(QWidget):
         self.page_size_options = [25, 50, 100]
         self.page_size = self.page_size_options[0]
         self.current_offset = 0
+        self._pending_offset = 0
         self.total_documents = 0
         self.total_estimated = False
         self.sort_fields: List[str] = ["indexed_at"]
@@ -201,6 +202,9 @@ class DocumentsTab(QWidget):
             "sort_dir": ",".join(self.sort_directions),
         }
         
+        # Track the offset we asked the backend for so we can reconcile with the payload
+        self._pending_offset = params["offset"]
+
         # Start worker
         self.documents_worker = DocumentsWorker(self.api_client, params)
         self.documents_worker.finished.connect(self.documents_loaded)
@@ -220,7 +224,7 @@ class DocumentsTab(QWidget):
                     "items": payload,
                     "total": len(payload),
                     "limit": self.page_size,
-                    "offset": self.current_offset,
+                    "offset": self._pending_offset,
                     "sort": {
                         "by": ",".join(self.sort_fields),
                         "direction": ",".join(self.sort_directions),
@@ -231,7 +235,9 @@ class DocumentsTab(QWidget):
             items = payload.get("items", [])
             total = payload.get("total", len(items))
             limit = payload.get("limit", self.page_size)
-            offset = payload.get("offset", self.current_offset)
+            offset = payload.get("offset", self._pending_offset)
+            if offset != self._pending_offset:
+                offset = self._pending_offset
             estimated = bool(payload.get("_total_estimated", False))
 
             if estimated:
@@ -268,9 +274,12 @@ class DocumentsTab(QWidget):
                 index = self.page_size_combo.findText(str(self.page_size))
                 if index != -1:
                     self.page_size_combo.setCurrentIndex(index)
-            
+
             self.current_documents = items
+            # Always refresh table contents to avoid stale column data after sorting
+            self.documents_table.setSortingEnabled(False)
             self.display_documents(items)
+            self.documents_table.setSortingEnabled(True)
             self.update_pagination_state(item_count=len(items))
         else:
             error_msg = data

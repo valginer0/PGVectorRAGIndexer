@@ -80,6 +80,7 @@ class DocumentsTab(QWidget):
         self.page_size = self.page_size_options[0]
         self.current_offset = 0
         self.total_documents = 0
+        self.total_estimated = False
         self.sort_fields: List[str] = ["indexed_at"]
         self.sort_directions: List[str] = ["desc"]
         self.is_loading = False
@@ -223,15 +224,26 @@ class DocumentsTab(QWidget):
                     "sort": {
                         "by": ",".join(self.sort_fields),
                         "direction": ",".join(self.sort_directions),
-                    }
+                    },
+                    "_total_estimated": True,
                 }
             
             items = payload.get("items", [])
             total = payload.get("total", len(items))
             limit = payload.get("limit", self.page_size)
             offset = payload.get("offset", self.current_offset)
+            estimated = bool(payload.get("_total_estimated", False))
+
+            if estimated:
+                total = max(total, offset + len(items))
+
+            if estimated and offset > 0 and not items:
+                # Revert to previous page if we overshoot total
+                self.current_offset = max(0, offset - max(1, limit))
+                self.load_documents()
+                return
             
-            if total > 0 and offset >= total and offset != 0:
+            if not estimated and total > 0 and offset >= total and offset != 0:
                 # Requested page beyond total, move back and reload
                 max_page_offset = max(0, (math.ceil(total / max(limit, 1)) - 1) * max(limit, 1))
                 if max_page_offset != self.current_offset:
@@ -240,6 +252,7 @@ class DocumentsTab(QWidget):
                     return
             
             self.total_documents = total
+            self.total_estimated = estimated
             self.page_size = max(1, limit)
             self.current_offset = max(0, offset)
             
@@ -505,7 +518,7 @@ class DocumentsTab(QWidget):
             return
         new_offset = self.current_offset + (step * self.page_size)
         new_offset = max(0, new_offset)
-        if self.total_documents and new_offset >= self.total_documents:
+        if not self.total_estimated and self.total_documents and new_offset >= self.total_documents:
             return
         if new_offset == self.current_offset:
             return
@@ -513,7 +526,7 @@ class DocumentsTab(QWidget):
         self.load_documents()
 
     def update_pagination_state(self, item_count: int) -> None:
-        if self.total_documents == 0:
+        if self.total_documents == 0 and item_count == 0:
             self.status_label.setText("No documents found")
             self.status_label.setStyleSheet("color: #666; font-style: italic;")
             self.prev_page_btn.setEnabled(False)
@@ -522,13 +535,22 @@ class DocumentsTab(QWidget):
         start_index = self.current_offset + 1
         end_index = self.current_offset + item_count
         page_number = (self.current_offset // self.page_size) + 1 if self.page_size else 1
-        total_pages = max(1, math.ceil(self.total_documents / self.page_size)) if self.page_size else 1
-        self.status_label.setText(
-            f"Showing {start_index}-{end_index} of {self.total_documents} documents (Page {page_number} of {total_pages})"
-        )
+        if self.total_estimated:
+            total_display = f"≥{self.total_documents}" if self.total_documents else "unknown"
+            pages_text = f"Page {page_number}"
+            self.status_label.setText(
+                f"Showing {start_index}-{end_index} of {total_display} documents ({pages_text})"
+            )
+            has_next = item_count >= self.page_size
+        else:
+            total_pages = max(1, math.ceil(self.total_documents / self.page_size)) if self.page_size else 1
+            self.status_label.setText(
+                f"Showing {start_index}-{end_index} of {self.total_documents} documents (Page {page_number} of {total_pages})"
+            )
+            has_next = end_index < self.total_documents
         self.status_label.setStyleSheet("color: #059669; font-style: italic;")
         self.prev_page_btn.setEnabled(self.current_offset > 0)
-        self.next_page_btn.setEnabled(end_index < self.total_documents)
+        self.next_page_btn.setEnabled(has_next)
 
     def handle_header_clicked(self, section: int) -> None:
         field = self.sort_column_mapping.get(section)

@@ -257,6 +257,13 @@ class DocumentRepository:
         
         self.db.execute_many(query, chunks_with_json, page_size=batch_size)
         logger.info(f"Inserted {len(chunks)} chunks into database")
+
+        # Ensure pgvector IVFFlat index statistics are up-to-date so searches remain stable
+        try:
+            self.db.execute_query("ANALYZE document_chunks")
+        except QueryError as exc:
+            logger.warning(f"Failed to analyze document_chunks after insert: {exc}")
+
         return len(chunks)
     
     def get_document_by_id(self, document_id: str) -> Optional[Dict[str, Any]]:

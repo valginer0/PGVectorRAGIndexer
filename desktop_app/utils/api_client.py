@@ -163,13 +163,19 @@ class APIClient:
                     "by": sort_by,
                     "direction": sort_dir,
                 },
+                "_total_estimated": True,
             }
 
         if isinstance(data, dict):
             # Modern payload already in paginated shape
             if "items" in data:
                 normalized = dict(data)  # shallow copy to avoid mutating original
-                normalized.setdefault("total", len(normalized.get("items", [])))
+                if normalized.get("total") is None:
+                    normalized["total"] = len(normalized.get("items", []))
+                    normalized["_total_estimated"] = True
+                else:
+                    normalized.setdefault("total", len(normalized.get("items", [])))
+                    normalized.setdefault("_total_estimated", False)
                 normalized.setdefault("limit", limit)
                 normalized.setdefault("offset", offset)
                 normalized.setdefault("sort", {"by": sort_by, "direction": sort_dir})
@@ -184,6 +190,7 @@ class APIClient:
                     "limit": data.get("limit", limit),
                     "offset": data.get("offset", offset),
                     "sort": data.get("sort", {"by": sort_by, "direction": sort_dir}),
+                    "_total_estimated": data.get("total") is None,
                 }
 
         raise requests.RequestException("Unexpected response structure from /documents endpoint")

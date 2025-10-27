@@ -94,3 +94,49 @@ def test_documents_tab_updates_status_with_pagination(qapp, monkeypatch):
 
     assert tab.documents_table.rowCount() == 2
     assert tab.status_label.text() == "Showing 3-4 of 5 documents (Page 2 of 3)"
+
+
+def test_change_page_requests_next_when_total_missing(qapp, monkeypatch):
+    class FakeApi:
+        def is_api_available(self):
+            return True
+
+        def list_documents(self, **_kwargs):
+            return []
+
+    # Prevent auto-loading during widget construction
+    monkeypatch.setattr(DocumentsTab, "load_documents", lambda self, reset_offset=False: None)
+
+    api = FakeApi()
+    tab = DocumentsTab(api_client=api)
+
+    # Simulate a full page response without total metadata
+    page_size = tab.page_size
+    items = [
+        {
+            "document_id": f"doc-{i}",
+            "source_uri": f"C:/tmp/doc-{i}.txt",
+            "chunk_count": 1,
+            "indexed_at": "2025-10-01T12:00:00Z",
+        }
+        for i in range(page_size)
+    ]
+
+    tab.documents_loaded(True, items)
+
+    load_calls = []
+
+    def capture_load(self, *, reset_offset=False):
+        load_calls.append({
+            "offset": self.current_offset,
+            "limit": self.page_size,
+            "reset": reset_offset,
+        })
+
+    monkeypatch.setattr(DocumentsTab, "load_documents", capture_load)
+
+    tab.change_page(1)
+
+    assert load_calls, "Expected next-page navigation to trigger a reload"
+    assert load_calls[-1]["offset"] == page_size
+    assert tab.current_offset == page_size

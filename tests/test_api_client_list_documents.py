@@ -44,6 +44,7 @@ def test_list_documents_accepts_plain_list(monkeypatch, api_client):
     assert result["limit"] == 25
     assert result["offset"] == 5
     assert result["sort"] == {"by": "indexed_at", "direction": "desc"}
+    assert result["_total_estimated"] is True
 
 
 def test_list_documents_accepts_legacy_documents_key(monkeypatch, api_client):
@@ -73,6 +74,7 @@ def test_list_documents_accepts_legacy_documents_key(monkeypatch, api_client):
     assert result["limit"] == 10
     assert result["offset"] == 0
     assert result["sort"] == {"by": "indexed_at", "direction": "desc"}
+    assert result["_total_estimated"] is False
 
 
 def test_list_documents_passthrough_for_paginated_payload(monkeypatch, api_client):
@@ -99,4 +101,9 @@ def test_list_documents_passthrough_for_paginated_payload(monkeypatch, api_clien
 
     result = api_client.list_documents(limit=25, offset=0, sort_by="indexed_at", sort_dir="desc")
 
-    assert result == paginated_payload
+    assert result["items"] == paginated_payload["items"]
+    assert result["total"] == paginated_payload["total"]
+    assert result["limit"] == paginated_payload["limit"]
+    assert result["offset"] == paginated_payload["offset"]
+    assert result["sort"] == paginated_payload["sort"]
+    assert result["_total_estimated"] is False

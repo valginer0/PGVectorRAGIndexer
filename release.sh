@@ -126,27 +126,23 @@ else
     echo -e "${YELLOW}⚠ Python not found, skipping tests${NC}"
 fi
 
-# Build Docker image locally
+# Build Docker image locally using production helper
 echo ""
-echo -e "${GREEN}Building Docker image locally...${NC}"
+echo -e "${GREEN}Building production Docker image...${NC}"
 if command -v docker &> /dev/null; then
-    docker compose -f docker-compose.dev.yml build app
+    ./scripts/build_prod_image.sh \
+        "ghcr.io/valginer0/pgvectorragindexer:$NEW_VERSION" \
+        "ghcr.io/valginer0/pgvectorragindexer:latest"
     BUILD_RESULT=$?
     if [ $BUILD_RESULT -ne 0 ]; then
         echo -e "${RED}✗ Docker build failed. Please fix before releasing.${NC}"
         exit 1
     fi
-    echo -e "${GREEN}✓ Docker image built successfully${NC}"
+    echo -e "${GREEN}✓ Production image built and tagged (v$NEW_VERSION, latest)${NC}"
 else
     echo -e "${RED}✗ Docker not found. Please install Docker first.${NC}"
     exit 1
 fi
-
-# Tag Docker image with version and latest
-echo -e "${GREEN}Tagging Docker image...${NC}"
-docker tag pgvectorragindexer:dev ghcr.io/valginer0/pgvectorragindexer:$NEW_VERSION
-docker tag pgvectorragindexer:dev ghcr.io/valginer0/pgvectorragindexer:latest
-echo -e "${GREEN}✓ Image tagged as v$NEW_VERSION and latest${NC}"
 
 # Check if logged into GHCR
 echo -e "${GREEN}Pushing Docker image to GitHub Container Registry...${NC}"

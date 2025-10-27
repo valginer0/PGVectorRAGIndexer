@@ -116,7 +116,7 @@ API_PORT=8000
 # Create docker-compose.yml
 Write-Host "Creating docker-compose.yml..." -ForegroundColor Green
 $composeFile = Join-Path $DeployDir "docker-compose.yml"
-$composeContent = @"
+$composeTemplate = @'
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -129,7 +129,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ${postgresVolume}:/var/lib/postgresql/data
+      - __POSTGRES_VOLUME__:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -153,8 +153,8 @@ services:
     ports:
       - "${API_PORT}:8000"
     volumes:
-      - ${unixDocumentsPath}:/app/documents
-      - ${modelVolume}:/root/.cache/huggingface
+      - __DOCUMENTS_PATH__:/app/documents
+      - __MODEL_VOLUME__:/root/.cache/huggingface
     depends_on:
       db:
         condition: service_healthy
@@ -162,15 +162,20 @@ services:
       - rag_network
 
 volumes:
-  ${postgresVolume}:
+  __POSTGRES_VOLUME__:
     external: true
-  ${modelVolume}:
+  __MODEL_VOLUME__:
     external: true
 
 networks:
   rag_network:
     driver: bridge
-"@
+'@
+
+$composeContent = $composeTemplate.Replace('__POSTGRES_VOLUME__', $postgresVolume)
+$composeContent = $composeContent.Replace('__MODEL_VOLUME__', $modelVolume)
+$composeContent = $composeContent.Replace('__DOCUMENTS_PATH__', $unixDocumentsPath)
+
 $composeContent | Out-File -FilePath $composeFile -Encoding UTF8
 
 # Download init-db.sql

@@ -39,6 +39,11 @@ if (-not (Test-Path $DeployDir)) {
 }
 Set-Location $DeployDir
 
+$postgresVolume = "pgvectorragindexer_postgres_data"
+$modelVolume = "pgvectorragindexer_model_cache"
+$documentsDir = Join-Path $env:USERPROFILE "PGVectorRAGIndexer\documents"
+$unixDocumentsPath = ($documentsDir -replace '\\','/')
+
 Write-Host "Deployment directory: $DeployDir" -ForegroundColor Green
 Write-Host ""
 
@@ -72,6 +77,17 @@ if ($existingContainers) {
 }
 Write-Host ""
 
+# Ensure shared Docker volumes exist
+Write-Host "Ensuring shared Docker volumes exist..." -ForegroundColor Green
+if (-not (docker volume ls -q --filter "name=$postgresVolume")) {
+    docker volume create $postgresVolume | Out-Null
+}
+if (-not (docker volume ls -q --filter "name=$modelVolume")) {
+    docker volume create $modelVolume | Out-Null
+}
+Write-Host "[OK] Shared volumes ready" -ForegroundColor Green
+Write-Host ""
+
 # Create .env file if it doesn't exist
 $envFile = Join-Path $DeployDir ".env"
 if (-not (Test-Path $envFile)) {
@@ -100,7 +116,7 @@ API_PORT=8000
 # Create docker-compose.yml
 Write-Host "Creating docker-compose.yml..." -ForegroundColor Green
 $composeFile = Join-Path $DeployDir "docker-compose.yml"
-$composeContent = @'
+$composeContent = @"
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -113,7 +129,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - $postgresVolume:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -137,8 +153,8 @@ services:
     ports:
       - "${API_PORT}:8000"
     volumes:
-      - ./documents:/app/documents
-      - model_cache:/root/.cache/huggingface
+      - $unixDocumentsPath:/app/documents
+      - $modelVolume:/root/.cache/huggingface
     depends_on:
       db:
         condition: service_healthy
@@ -146,13 +162,15 @@ services:
       - rag_network
 
 volumes:
-  postgres_data:
-  model_cache:
+  $postgresVolume:
+    external: true
+  $modelVolume:
+    external: true
 
 networks:
   rag_network:
     driver: bridge
-'@
+"@
 $composeContent | Out-File -FilePath $composeFile -Encoding UTF8
 
 # Download init-db.sql
@@ -162,7 +180,6 @@ $initDbFile = Join-Path $DeployDir "init-db.sql"
 Invoke-WebRequest -Uri $initDbUrl -OutFile $initDbFile
 
 # Create documents directory
-$documentsDir = Join-Path $DeployDir "documents"
 if (-not (Test-Path $documentsDir)) {
     New-Item -ItemType Directory -Path $documentsDir | Out-Null
 }

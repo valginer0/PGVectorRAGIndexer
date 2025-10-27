@@ -616,7 +616,7 @@ export EMBEDDING_BATCH_SIZE=16
 ### Run All Tests
 
 ```bash
-pytest
+bash scripts/run_all_tests.sh
 ```
 
 ### Run Specific Test Categories

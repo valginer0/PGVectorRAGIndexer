@@ -297,22 +297,30 @@ curl -X POST "http://localhost:8000/search/context" \
 ### 1. List All Documents
 
 ```bash
-curl http://localhost:8000/documents
+curl "http://localhost:8000/documents?limit=50&offset=0"
 ```
 
 **Response:**
+
 ```json
 {
-  "documents": [
+  "items": [
     {
       "document_id": "abc123...",
       "source_uri": "/app/documents/ai_overview.txt",
       "chunk_count": 3,
-      "indexed_at": "2025-10-15T12:00:00Z"
-    },
-    ...
+      "indexed_at": "2025-10-15T12:00:00Z",
+      "last_updated": "2025-10-18T09:30:00Z",
+      "document_type": "policy"
+    }
   ],
-  "total": 5
+  "total": 42,
+  "limit": 50,
+  "offset": 0,
+  "sort": {
+    "by": "indexed_at",
+    "direction": "desc"
+  }
 }
 ```
 
@@ -495,7 +503,9 @@ class RAGClient:
     
     def list_documents(self) -> List[Dict]:
         """List all documents."""
-        return requests.get(f"{self.base_url}/documents").json()["documents"]
+        response = requests.get(f"{self.base_url}/documents")
+        payload = response.json()
+        return payload.get("items", [])
     
     def delete_document(self, document_id: str) -> Dict:
         """Delete a document."""

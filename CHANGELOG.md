@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- `/documents` endpoint now returns a paginated payload (`items`, `total`, `limit`, `offset`, `sort`) and all clients/tests have been updated to read from `items`.
+
+### Added
+- `scripts/run_all_tests.sh` helper to activate the project virtual environment and run the full pytest suite consistently across environments.
+
 ## [2.1.0] - 2025-10-20
 
 ### Added

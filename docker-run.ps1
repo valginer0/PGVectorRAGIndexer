@@ -129,7 +129,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - $postgresVolume:/var/lib/postgresql/data
+      - ${postgresVolume}:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
@@ -153,8 +153,8 @@ services:
     ports:
       - "${API_PORT}:8000"
     volumes:
-      - $unixDocumentsPath:/app/documents
-      - $modelVolume:/root/.cache/huggingface
+      - ${unixDocumentsPath}:/app/documents
+      - ${modelVolume}:/root/.cache/huggingface
     depends_on:
       db:
         condition: service_healthy
@@ -162,9 +162,9 @@ services:
       - rag_network
 
 volumes:
-  $postgresVolume:
+  ${postgresVolume}:
     external: true
-  $modelVolume:
+  ${modelVolume}:
     external: true
 
 networks:

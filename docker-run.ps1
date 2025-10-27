@@ -50,15 +50,8 @@ Write-Host ""
 # Check for existing containers
 $existingContainers = docker ps -a --filter "name=vector_rag_" --format "{{.Names}}"
 if ($existingContainers) {
-    Write-Host "[WARN] Existing containers found" -ForegroundColor Yellow
-    $response = Read-Host "Stop and remove existing containers? (y/N)"
-    if ($response -ne 'y' -and $response -ne 'Y') {
-        Write-Host "[ERROR] Cannot proceed with existing containers. Exiting." -ForegroundColor Red
-        exit 1
-    }
-    
-    Write-Host "Stopping and removing existing containers..." -ForegroundColor Green
-    
+    Write-Host "[WARN] Existing containers found. Stopping and removing automatically..." -ForegroundColor Yellow
+
     # Try docker compose down if compose file exists
     $composeFile = Join-Path $DeployDir "docker-compose.yml"
     if (Test-Path $composeFile) {
@@ -239,10 +232,39 @@ Write-Host "  Update image: docker compose pull; docker compose up -d" -Foregrou
 Write-Host ""
 Write-Host "Upload files from ANY Windows location:" -ForegroundColor Blue
 Write-Host "  curl -X POST http://localhost:8000/upload-and-index ``" -ForegroundColor Yellow
-Write-Host "    -F \"file=@C:\Users\YourName\Documents\file.pdf\"" -ForegroundColor Yellow
+Write-Host "    -F \"file=@C:\\Users\\YourName\\Documents\\file.pdf\"" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Or place documents in: $documentsDir" -ForegroundColor Blue
 Write-Host ""
+
+Write-Host "Waiting for API to be ready..." -ForegroundColor Yellow
+$maxAttempts = 30
+$attempt = 0
+$apiReady = $false
+
+while ($attempt -lt $maxAttempts -and -not $apiReady) {
+    try {
+        $response = Invoke-WebRequest -Uri "http://localhost:8000/health" -TimeoutSec 2 -ErrorAction Stop -UseBasicParsing
+        if ($response.StatusCode -eq 200) {
+            $apiReady = $true
+            break
+        }
+    } catch {
+        # still starting
+    }
+
+    $attempt++
+    Start-Sleep -Seconds 2
+    Write-Host "." -NoNewline
+}
+
+Write-Host ""
+
+if ($apiReady) {
+    Write-Host "[OK] API is ready" -ForegroundColor Green
+} else {
+    Write-Host "[WARN] API health check timed out; continuing anyway" -ForegroundColor Yellow
+}
 
 Write-Host "Launching desktop application..." -ForegroundColor Green
 $appScript = Join-Path $env:USERPROFILE "PGVectorRAGIndexer\run_desktop_app.ps1"

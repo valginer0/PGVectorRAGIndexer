@@ -128,22 +128,34 @@ class APIClient:
         response.raise_for_status()
         return response.json()["results"]
     
-    def list_documents(self) -> List[Dict[str, Any]]:
-        """
-        Get list of all documents.
-        
-        Returns:
-            List of documents
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
+    def list_documents(
+        self,
+        *,
+        limit: int = 100,
+        offset: int = 0,
+        sort_by: str = "indexed_at",
+        sort_dir: str = "desc"
+    ) -> Dict[str, Any]:
+        """Retrieve documents with pagination metadata."""
+        params = {
+            "limit": limit,
+            "offset": offset,
+            "sort_by": sort_by,
+            "sort_dir": sort_dir,
+        }
+
         response = requests.get(
             f"{self.base_url}/documents",
+            params=params,
             timeout=self.timeout
         )
         response.raise_for_status()
-        return response.json()
+        data = response.json()
+
+        if not isinstance(data, dict) or "items" not in data:
+            raise requests.RequestException("Unexpected response structure from /documents endpoint")
+
+        return data
     
     def get_document(self, document_id: str) -> Dict[str, Any]:
         """

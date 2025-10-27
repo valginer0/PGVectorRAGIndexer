@@ -262,7 +262,8 @@ class TestMetadataListDocuments:
         response = client.get("/documents")
         
         assert response.status_code == 200
-        documents = response.json()  # API returns list directly
+        payload = response.json()
+        documents = payload.get("items", [])
         
         assert len(documents) >= 2
         
@@ -297,7 +298,8 @@ class TestMetadataListDocuments:
         response = client.get("/documents")
         
         assert response.status_code == 200
-        documents = response.json()  # API returns list directly
+        payload = response.json()
+        documents = payload.get("items", [])
         
         # Should include documents without type (document_type will be None)
         assert len(documents) > 0
@@ -352,8 +354,9 @@ class TestMetadataIntegration:
         # 3. List documents and verify types
         list_response = client.get("/documents")
         assert list_response.status_code == 200
-        documents = list_response.json()  # API returns list directly
-        
+        payload = list_response.json()
+        documents = payload.get("items", [])
+
         # Find our uploaded documents
         policy_doc = next((d for d in documents if d["document_id"] == policy_doc_id), None)
         assert policy_doc is not None

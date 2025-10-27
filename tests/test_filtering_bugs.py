@@ -202,8 +202,8 @@ class TestDocumentsListAPI:
             # List documents
             list_response = client.get("/documents")
             assert list_response.status_code == 200
-            
-            documents = list_response.json()  # Returns list directly, not wrapped
+            payload = list_response.json()
+            documents = payload.get("items", [])
             assert len(documents) > 0
             
             # Find our document

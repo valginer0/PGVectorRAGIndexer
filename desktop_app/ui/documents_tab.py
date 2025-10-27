@@ -4,14 +4,15 @@ Documents tab for viewing and managing indexed documents.
 
 import logging
 from typing import List, Dict, Any, Optional
+import math
 from datetime import datetime
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QGroupBox, QMenu
+    QHeaderView, QMessageBox, QGroupBox, QMenu, QComboBox
 )
-from PySide6.QtCore import Qt, QThread, Signal, QPoint
+from PySide6.QtCore import Qt, QThread, Signal, QPoint, QSignalBlocker
 from PySide6.QtGui import QColor
 
 import requests
@@ -26,16 +27,17 @@ logger = logging.getLogger(__name__)
 class DocumentsWorker(QThread):
     """Worker thread for loading documents."""
     
-    finished = Signal(bool, object)  # success, documents or error message
+    finished = Signal(bool, object)  # success, response or error message
     
-    def __init__(self, api_client):
+    def __init__(self, api_client, params: Dict[str, Any]):
         super().__init__()
         self.api_client = api_client
+        self.params = params
     
     def run(self):
         """Load documents list."""
         try:
-            documents = self.api_client.list_documents()
+            documents = self.api_client.list_documents(**self.params)
             self.finished.emit(True, documents)
         except requests.RequestException as e:
             self.finished.emit(False, str(e))
@@ -74,6 +76,20 @@ class DocumentsTab(QWidget):
         self.documents_worker = None
         self.delete_worker = None
         self.current_documents = []
+        self.page_size_options = [25, 50, 100]
+        self.page_size = self.page_size_options[0]
+        self.current_offset = 0
+        self.total_documents = 0
+        self.sort_fields: List[str] = ["indexed_at"]
+        self.sort_directions: List[str] = ["desc"]
+        self.is_loading = False
+        self.sort_column_mapping = {
+            0: "source_uri",
+            1: "document_type",
+            2: "chunk_count",
+            3: "indexed_at",
+            4: "last_updated",
+        }
         self.setup_ui()
     
     def setup_ui(self):
@@ -104,6 +120,11 @@ class DocumentsTab(QWidget):
             "Source URI", "Document Type", "Chunks", "Created", "Updated", "Actions"
         ])
         self.documents_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        header = self.documents_table.horizontalHeader()
+        header.setSectionsClickable(True)
+        header.sectionClicked.connect(self.handle_header_clicked)
+        header.setSortIndicatorShown(True)
+        header.setSortIndicator(3, Qt.DescendingOrder)
         self.documents_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.documents_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.documents_table.cellClicked.connect(self.handle_documents_cell_clicked)
@@ -112,7 +133,33 @@ class DocumentsTab(QWidget):
         self.documents_table.viewport().setCursor(Qt.PointingHandCursor)
         table_layout.addWidget(self.documents_table)
         
+        pagination_layout = QHBoxLayout()
+        page_size_label = QLabel("Rows per page:")
+        pagination_layout.addWidget(page_size_label)
+        
+        self.page_size_combo = QComboBox()
+        for size in self.page_size_options:
+            self.page_size_combo.addItem(str(size))
+        with QSignalBlocker(self.page_size_combo):
+            index = self.page_size_combo.findText(str(self.page_size))
+            if index != -1:
+                self.page_size_combo.setCurrentIndex(index)
+        self.page_size_combo.currentIndexChanged.connect(self.on_page_size_changed)
+        pagination_layout.addWidget(self.page_size_combo)
+        pagination_layout.addStretch()
+        
+        self.prev_page_btn = QPushButton("← Previous")
+        self.prev_page_btn.clicked.connect(lambda: self.change_page(-1))
+        self.prev_page_btn.setEnabled(False)
+        pagination_layout.addWidget(self.prev_page_btn)
+        
+        self.next_page_btn = QPushButton("Next →")
+        self.next_page_btn.clicked.connect(lambda: self.change_page(1))
+        self.next_page_btn.setEnabled(False)
+        pagination_layout.addWidget(self.next_page_btn)
+        
         layout.addWidget(table_group)
+        layout.addLayout(pagination_layout)
         
         # Status label
         self.status_label = QLabel("Click Refresh to load documents")
@@ -122,8 +169,13 @@ class DocumentsTab(QWidget):
         # Auto-load on first show
         self.load_documents()
     
-    def load_documents(self):
+    def load_documents(self, *, reset_offset: bool = False):
         """Load the list of documents."""
+        if reset_offset:
+            self.current_offset = 0
+        
+        if self.is_loading:
+            return
         if not self.api_client.is_api_available():
             QMessageBox.critical(
                 self,
@@ -134,11 +186,22 @@ class DocumentsTab(QWidget):
         
         # Disable UI during load
         self.refresh_btn.setEnabled(False)
+        self.page_size_combo.setEnabled(False)
+        self.prev_page_btn.setEnabled(False)
+        self.next_page_btn.setEnabled(False)
         self.status_label.setText("Loading documents...")
         self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
+        self.is_loading = True
+        
+        params = {
+            "limit": self.page_size,
+            "offset": self.current_offset,
+            "sort_by": ",".join(self.sort_fields),
+            "sort_dir": ",".join(self.sort_directions),
+        }
         
         # Start worker
-        self.documents_worker = DocumentsWorker(self.api_client)
+        self.documents_worker = DocumentsWorker(self.api_client, params)
         self.documents_worker.finished.connect(self.documents_loaded)
         self.documents_worker.start()
     
@@ -146,17 +209,65 @@ class DocumentsTab(QWidget):
         """Handle documents load completion."""
         # Re-enable UI
         self.refresh_btn.setEnabled(True)
+        self.page_size_combo.setEnabled(True)
+        self.is_loading = False
         
         if success:
-            self.current_documents = data
-            self.display_documents(data)
-            self.status_label.setText(f"Loaded {len(data)} documents")
-            self.status_label.setStyleSheet("color: #059669; font-style: italic;")
+            payload = data
+            if isinstance(payload, list):
+                payload = {
+                    "items": payload,
+                    "total": len(payload),
+                    "limit": self.page_size,
+                    "offset": self.current_offset,
+                    "sort": {
+                        "by": ",".join(self.sort_fields),
+                        "direction": ",".join(self.sort_directions),
+                    }
+                }
+            
+            items = payload.get("items", [])
+            total = payload.get("total", len(items))
+            limit = payload.get("limit", self.page_size)
+            offset = payload.get("offset", self.current_offset)
+            
+            if total > 0 and offset >= total and offset != 0:
+                # Requested page beyond total, move back and reload
+                max_page_offset = max(0, (math.ceil(total / max(limit, 1)) - 1) * max(limit, 1))
+                if max_page_offset != self.current_offset:
+                    self.current_offset = max_page_offset
+                    self.load_documents()
+                    return
+            
+            self.total_documents = total
+            self.page_size = max(1, limit)
+            self.current_offset = max(0, offset)
+            
+            if self.page_size not in self.page_size_options:
+                self.page_size_options.append(self.page_size)
+                self.page_size_options.sort()
+                with QSignalBlocker(self.page_size_combo):
+                    self.page_size_combo.clear()
+                    for size in self.page_size_options:
+                        self.page_size_combo.addItem(str(size))
+            
+            with QSignalBlocker(self.page_size_combo):
+                index = self.page_size_combo.findText(str(self.page_size))
+                if index != -1:
+                    self.page_size_combo.setCurrentIndex(index)
+            
+            self.current_documents = items
+            self.display_documents(items)
+            self.update_pagination_state(item_count=len(items))
         else:
             error_msg = data
+            if isinstance(error_msg, dict) and "detail" in error_msg:
+                error_msg = error_msg["detail"]
             QMessageBox.critical(self, "Load Failed", f"Failed to load documents: {error_msg}")
             self.status_label.setText("Load failed")
             self.status_label.setStyleSheet("color: #dc2626; font-style: italic;")
+            self.prev_page_btn.setEnabled(False)
+            self.next_page_btn.setEnabled(False)
     
     def display_documents(self, documents: List[Dict[str, Any]]):
         """Display documents in the table."""
@@ -256,6 +367,8 @@ class DocumentsTab(QWidget):
         if success:
             QMessageBox.information(self, "Success", message)
             # Reload documents
+            if self.total_documents > 0 and len(self.current_documents) <= 1 and self.current_offset > 0:
+                self.current_offset = max(0, self.current_offset - self.page_size)
             self.load_documents()
         else:
             QMessageBox.critical(self, "Delete Failed", f"Failed to delete document: {message}")
@@ -373,3 +486,66 @@ class DocumentsTab(QWidget):
                 "Open Failed",
                 f"Unable to open the file:\n{path}\n\nError: {exc}"
             )
+
+    def on_page_size_changed(self, index: int) -> None:
+        if index < 0:
+            return
+        try:
+            new_size = int(self.page_size_combo.itemText(index))
+        except ValueError:
+            return
+        if new_size == self.page_size:
+            return
+        self.page_size = new_size
+        self.current_offset = 0
+        self.load_documents()
+
+    def change_page(self, step: int) -> None:
+        if step == 0 or self.page_size <= 0:
+            return
+        new_offset = self.current_offset + (step * self.page_size)
+        new_offset = max(0, new_offset)
+        if self.total_documents and new_offset >= self.total_documents:
+            return
+        if new_offset == self.current_offset:
+            return
+        self.current_offset = new_offset
+        self.load_documents()
+
+    def update_pagination_state(self, item_count: int) -> None:
+        if self.total_documents == 0:
+            self.status_label.setText("No documents found")
+            self.status_label.setStyleSheet("color: #666; font-style: italic;")
+            self.prev_page_btn.setEnabled(False)
+            self.next_page_btn.setEnabled(False)
+            return
+        start_index = self.current_offset + 1
+        end_index = self.current_offset + item_count
+        page_number = (self.current_offset // self.page_size) + 1 if self.page_size else 1
+        total_pages = max(1, math.ceil(self.total_documents / self.page_size)) if self.page_size else 1
+        self.status_label.setText(
+            f"Showing {start_index}-{end_index} of {self.total_documents} documents (Page {page_number} of {total_pages})"
+        )
+        self.status_label.setStyleSheet("color: #059669; font-style: italic;")
+        self.prev_page_btn.setEnabled(self.current_offset > 0)
+        self.next_page_btn.setEnabled(end_index < self.total_documents)
+
+    def handle_header_clicked(self, section: int) -> None:
+        field = self.sort_column_mapping.get(section)
+        if not field:
+            return
+        current_field = self.sort_fields[0] if self.sort_fields else None
+        if current_field == field:
+            self.sort_directions[0] = "asc" if self.sort_directions[0] == "desc" else "desc"
+        else:
+            self.sort_fields = [field]
+            self.sort_directions = [self._default_sort_direction(field)]
+        header = self.documents_table.horizontalHeader()
+        order = Qt.AscendingOrder if self.sort_directions[0] == "asc" else Qt.DescendingOrder
+        header.setSortIndicator(section, order)
+        self.load_documents(reset_offset=True)
+
+    def _default_sort_direction(self, field: str) -> str:
+        if field in {"chunk_count", "indexed_at", "last_updated"}:
+            return "desc"
+        return "asc"

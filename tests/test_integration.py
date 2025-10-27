@@ -35,7 +35,7 @@ def repository(db_manager):
     return DocumentRepository(db_manager)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def processor():
     """Create document processor."""
     return DocumentProcessor()
@@ -74,42 +74,48 @@ def test_document():
         os.unlink(temp_path)
 
 
-@pytest.fixture(scope="class")
+@pytest.fixture(scope="function")
 def indexed_document(processor, repository, embedding_service, test_document):
-    """Index a document and return its ID for use in tests."""
-    # Process document
-    processed_doc = processor.process(test_document)
-    
-    # Check if already exists (from test_index_document)
-    if not repository.document_exists(processed_doc.document_id):
-        # Generate embeddings
-        embeddings = embedding_service.encode(
-            [chunk.page_content for chunk in processed_doc.chunks]
+    """Index a document copy and return its ID for use in tests."""
+    # Copy source document to unique temp file to avoid hash collisions
+    with open(test_document, "r", encoding="utf-8") as src:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as tmp:
+            tmp.write(src.read())
+            temp_path = tmp.name
+
+    processed_doc = processor.process(temp_path)
+
+    # Ensure fresh copy by deleting any existing record
+    repository.delete_document(processed_doc.document_id)
+
+    # Generate embeddings
+    embeddings = embedding_service.encode(
+        [chunk.page_content for chunk in processed_doc.chunks]
+    )
+
+    # Prepare chunks for database insertion
+    chunk_tuples = [
+        (
+            processed_doc.document_id,
+            i,
+            chunk.page_content,
+            processed_doc.source_uri,
+            embedding,
+            processed_doc.metadata
         )
-        
-        # Prepare chunks for database insertion
-        chunk_tuples = [
-            (
-                processed_doc.document_id,
-                i,
-                chunk.page_content,
-                processed_doc.source_uri,
-                embedding,
-                processed_doc.metadata
-            )
-            for i, (chunk, embedding) in enumerate(zip(processed_doc.chunks, embeddings))
-        ]
-        
-        # Store in database
-        repository.insert_chunks(chunk_tuples)
-    
-    yield processed_doc.document_id
-    
-    # Cleanup: delete the document after all tests
+        for i, (chunk, embedding) in enumerate(zip(processed_doc.chunks, embeddings))
+    ]
+
+    # Store in database
+    repository.insert_chunks(chunk_tuples)
+
     try:
-        repository.delete_document(processed_doc.document_id)
-    except:
-        pass  # Ignore if already deleted by test
+        yield processed_doc.document_id
+    finally:
+        try:
+            repository.delete_document(processed_doc.document_id)
+        finally:
+            os.unlink(temp_path)
 
 
 class TestIndexAndRetrieve:
@@ -193,7 +199,7 @@ class TestIndexAndRetrieve:
         assert len(results) > 0
         assert all(r['document_id'] == indexed_document for r in results)
     
-    def test_search_different_metrics(self, repository, embedding_service):
+    def test_search_different_metrics(self, repository, embedding_service, indexed_document):
         """Test search with different distance metrics."""
         query = "deep learning neural"
         query_embedding = embedding_service.encode(query)  # Single text returns 1D array
@@ -214,6 +220,8 @@ class TestIndexAndRetrieve:
         
         assert len(results_cosine) > 0
         assert len(results_l2) > 0
+        assert any(r['document_id'] == indexed_document for r in results_cosine)
+        assert any(r['document_id'] == indexed_document for r in results_l2)
         assert 'distance' in results_cosine[0]
     
     def test_get_document_by_id(self, repository, indexed_document):

@@ -125,7 +125,8 @@ class TestUploadAndIndex:
         document_id = data["document_id"]
         docs_response = client.get("/documents")
         assert docs_response.status_code == 200
-        docs = docs_response.json()
+        payload = docs_response.json()
+        docs = payload.get("items", [])
         
         # Find our document
         uploaded_doc = next((d for d in docs if d["document_id"] == document_id), None)
@@ -169,7 +170,8 @@ class TestUploadAndIndex:
         document_id = data["document_id"]
         docs_response = client.get("/documents")
         assert docs_response.status_code == 200
-        docs = docs_response.json()
+        payload = docs_response.json()
+        docs = payload.get("items", [])
         
         # Find our document
         uploaded_doc = next((d for d in docs if d["document_id"] == document_id), None)

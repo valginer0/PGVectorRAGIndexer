@@ -33,7 +33,8 @@ class TestManagePreviewPathFilter:
         # Fetch documents to verify how source_uri was stored
         docs_resp = client.get("/documents")
         assert docs_resp.status_code == 200
-        docs = docs_resp.json()
+        payload = docs_resp.json()
+        docs = payload.get("items", [])
         assert len(docs) >= 2
         # Find the resume doc and derive its directory prefix
         resume_doc = next(d for d in docs if d["source_uri"].endswith("resumeA.txt"))

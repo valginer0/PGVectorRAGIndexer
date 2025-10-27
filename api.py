@@ -85,6 +85,15 @@ class DocumentInfo(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class DocumentListResponse(BaseModel):
+    """Paginated list response for documents."""
+    items: List[DocumentInfo]
+    total: int
+    limit: int
+    offset: int
+    sort: Dict[str, str]
+
+
 class HealthResponse(BaseModel):
     """Response model for health check."""
     status: str
@@ -504,20 +513,36 @@ async def search_documents(request: SearchRequest):
         )
 
 
-@app.get("/documents", response_model=List[DocumentInfo], tags=["Documents"])
+@app.get("/documents", response_model=DocumentListResponse, tags=["Documents"])
 async def list_documents(
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum documents to return"),
-    offset: int = Query(default=0, ge=0, description="Number of documents to skip")
+    offset: int = Query(default=0, ge=0, description="Number of documents to skip"),
+    sort_by: str = Query(default="indexed_at", description="Field to sort by"),
+    sort_dir: str = Query(default="desc", description="Sort direction: asc or desc")
 ):
     """List all indexed documents."""
     try:
         idx = get_indexer()
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
-        
-        documents = repo.list_documents(limit=limit, offset=offset)
-        
-        return [
+        normalized_sort_by = sort_by.lower()
+        normalized_sort_dir = sort_dir.lower()
+
+        try:
+            documents, total = repo.list_documents(
+                limit=limit,
+                offset=offset,
+                sort_by=normalized_sort_by,
+                sort_dir=normalized_sort_dir,
+                with_total=True
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+
+        items = [
             DocumentInfo(
                 document_id=doc['document_id'],
                 source_uri=doc['source_uri'],
@@ -529,6 +554,19 @@ async def list_documents(
             )
             for doc in documents
         ]
+
+        return DocumentListResponse(
+            items=items,
+            total=total,
+            limit=limit,
+            offset=offset,
+            sort={
+                "by": normalized_sort_by,
+                "direction": normalized_sort_dir,
+            }
+        )
+    except HTTPException as exc:
+        raise exc
     except Exception as e:
         logger.error(f"Failed to list documents: {e}")
         raise HTTPException(
@@ -704,6 +742,11 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
+        if not request.filters:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one filter must be provided"
+            )
         
         if request.preview:
             # Preview mode - show what would be deleted
@@ -717,11 +760,8 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
                 chunks_deleted=chunks_deleted,
                 filters_applied=request.filters
             )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to bulk delete documents: {e}")
         raise HTTPException(

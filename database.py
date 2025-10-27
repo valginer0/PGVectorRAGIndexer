@@ -8,7 +8,7 @@ for the PGVectorRAGIndexer system.
 import logging
 import json
 from contextlib import contextmanager, asynccontextmanager
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Union, Sequence
 from datetime import datetime
 
 import psycopg2
@@ -320,19 +320,70 @@ class DocumentRepository:
     def list_documents(
         self,
         limit: int = 100,
-        offset: int = 0
-    ) -> List[Dict[str, Any]]:
+        offset: int = 0,
+        sort_by: Union[str, Sequence[str]] = "indexed_at",
+        sort_dir: Union[str, Sequence[str]] = "desc",
+        *,
+        with_total: bool = False
+    ) -> Union[List[Dict[str, Any]], Tuple[List[Dict[str, Any]], int]]:
         """
-        List all indexed documents with metadata.
-        
+        List indexed documents with optional pagination metadata.
+
         Args:
             limit: Maximum number of documents to return
             offset: Number of documents to skip
-            
+            sort_by: Field(s) to sort by (validated against whitelist)
+            sort_dir: Sort direction(s) ('asc' or 'desc')
+            with_total: If True, also return total document count
+
         Returns:
-            List of document metadata dictionaries
+            List of document metadata dictionaries or tuple(items, total)
         """
-        query = """
+        allowed_sorts = {
+            "indexed_at": "indexed_at",
+            "last_updated": "last_updated",
+            "source_uri": "source_uri",
+            "document_type": "document_type",
+            "chunk_count": "chunk_count",
+            "document_id": "document_id",
+        }
+
+        if isinstance(sort_by, str):
+            sort_fields = [field.strip() for field in sort_by.split(',') if field.strip()]
+        else:
+            sort_fields = [field.strip() for field in sort_by if field.strip()]
+
+        if not sort_fields:
+            sort_fields = ["indexed_at"]
+
+        if isinstance(sort_dir, str):
+            sort_dirs = [direction.strip().lower() for direction in sort_dir.split(',') if direction.strip()]
+        else:
+            sort_dirs = [direction.strip().lower() for direction in sort_dir if direction.strip()]
+
+        if not sort_dirs:
+            sort_dirs = ["desc"]
+
+        if len(sort_dirs) == 1 and len(sort_fields) > 1:
+            sort_dirs = sort_dirs * len(sort_fields)
+
+        if len(sort_dirs) != len(sort_fields):
+            raise ValueError("sort_dir must provide the same number of entries as sort_by")
+
+        order_clauses: List[str] = []
+        for field, direction in zip(sort_fields, sort_dirs):
+            if field not in allowed_sorts:
+                raise ValueError(f"Invalid sort_by field: {field}")
+            if direction not in {"asc", "desc"}:
+                raise ValueError(f"Invalid sort_dir: {direction}")
+            order_clauses.append(f"{allowed_sorts[field]} {direction.upper()}")
+
+        if not any(clause.startswith("document_id") for clause in order_clauses):
+            order_clauses.append("document_id ASC")
+
+        order_by_sql = ", ".join(order_clauses)
+
+        query = f"""
         SELECT 
             document_id,
             source_uri,
@@ -342,14 +393,23 @@ class DocumentRepository:
             (array_agg(metadata->>'type'))[1] as document_type
         FROM document_chunks
         GROUP BY document_id, source_uri
-        ORDER BY indexed_at DESC
+        ORDER BY {order_by_sql}
         LIMIT %s OFFSET %s
         """
-        
+
         with self.db.get_cursor(dict_cursor=True) as cursor:
             cursor.execute(query, (limit, offset))
-            results = cursor.fetchall()
-            return [dict(row) for row in results]
+            results = [dict(row) for row in cursor.fetchall()]
+
+        if not with_total:
+            return results
+
+        total_query = "SELECT COUNT(DISTINCT document_id) FROM document_chunks"
+        with self.db.get_cursor() as cursor:
+            cursor.execute(total_query)
+            total = cursor.fetchone()[0]
+
+        return results, total
     
     def search_similar(
         self,

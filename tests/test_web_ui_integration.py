@@ -104,7 +104,8 @@ class TestWebUIIntegration:
         # Step 3: Verify document appears in list
         docs_response = client.get("/documents")
         assert docs_response.status_code == 200
-        docs = docs_response.json()
+        payload = docs_response.json()
+        docs = payload.get("items", [])
         
         uploaded_doc = next((d for d in docs if d["document_id"] == document_id), None)
         assert uploaded_doc is not None
@@ -175,7 +176,8 @@ class TestWebUIIntegration:
         # Get documents list
         docs_response = client.get("/documents")
         assert docs_response.status_code == 200
-        docs = docs_response.json()
+        payload = docs_response.json()
+        docs = payload.get("items", [])
         
         # Find our document
         our_doc = next((d for d in docs if d["document_id"] == document_id), None)

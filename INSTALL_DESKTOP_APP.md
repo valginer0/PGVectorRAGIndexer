@@ -15,6 +15,16 @@ This will:
 4. ✅ Install dependencies
 5. ✅ Auto-start the desktop app after setup (no interactive prompt)
 
+After bootstrap completes, use the unified wrapper:
+
+```powershell
+cd %USERPROFILE%\PGVectorRAGIndexer
+./manage.ps1 -Action update      # refresh containers (prod by default)
+./manage.ps1 -Action run         # launch desktop app anytime
+```
+
+Need a development build? `./manage.ps1 -Action update -Channel dev`
+
 **If you get "execution policy" error:**
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
@@ -46,27 +56,22 @@ python -m desktop_app.main
 
 ### Option 2: Use WSL Path (More Complex)
 
-If you want to run from the WSL directory:
+If you want to run from the WSL directory, `manage.ps1` still works:
 
 ```powershell
-# Navigate to WSL path
 cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
-
-# Set execution policy (one-time)
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-
-# Run the PowerShell launcher
-.\run_desktop_app.ps1
+./manage.ps1 -Action update
+./manage.ps1 -Action run
 ```
 
-**Note:** This requires the execution policy change and works from UNC paths.
+> ℹ️ UNC paths are slower; prefer the Windows install dir when possible.
 
 ---
 
 ## See Also (Recommended Reading)
 
 - **Desktop App Data Fields** (where the Document Type comes from): See `README.md` → [Desktop App Data Fields](README.md#desktop-app-data-fields)
-- **Windows vs WSL Compose** (build in WSL, pull/run on Windows): See `README.md` → [Windows vs WSL Compose](README.md#windows-vs-wsl-compose)
 - **Troubleshooting UI Not Updating** (refresh steps and checks): See `README.md` → [Troubleshooting UI Not Updating](README.md#troubleshooting-ui-not-updating)
 
 ---
@@ -89,20 +94,20 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
    ```bash
    # From WSL
    cd /home/valginer0/projects/PGVectorRAGIndexer
-   docker compose up -d
+   ./manage.sh update dev
    ```
 3. **Run the desktop app:**
    ```powershell
    # From Windows
    cd %USERPROFILE%\PGVectorRAGIndexer
-   .\run_desktop_app.ps1
+   ./manage.ps1 -Action run
    ```
 
 ### Daily Use
 
 ```powershell
 cd %USERPROFILE%\PGVectorRAGIndexer
-.\run_desktop_app.ps1
+./manage.ps1 -Action run
 ```
 
 Or create a desktop shortcut to `run_desktop_app.ps1`!

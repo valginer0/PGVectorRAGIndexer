@@ -14,21 +14,30 @@ This guide is for Windows users who want to run PGVectorRAGIndexer **without WSL
 
 ## Quick Start
 
-### Option 1: PowerShell Script (Recommended)
+### Option 1: One-Liner Bootstrap (Recommended)
 
-Open **PowerShell** (not Command Prompt) and run:
+Open **PowerShell** (admin not required) and run:
 
 ```powershell
-# Download and run the deployment script
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.ps1" -OutFile "$env:TEMP\docker-run.ps1"
-PowerShell -ExecutionPolicy Bypass -File "$env:TEMP\docker-run.ps1"
+irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.ps1 | iex
 ```
 
-This will:
-- Create `%USERPROFILE%\pgvector-rag\` directory
-- Download configuration files
-- Start PostgreSQL and API containers
-- Initialize the database
+The bootstrap script:
+- Clones/updates `%USERPROFILE%\PGVectorRAGIndexer`
+- Installs desktop dependencies
+- Refreshes containers using the latest production image
+- Launches the desktop app once setup completes
+
+Afterwards, use the unified wrapper for daily tasks:
+
+```powershell
+cd %USERPROFILE%\PGVectorRAGIndexer
+./manage.ps1 -Action update      # refresh containers (prod by default)
+./manage.ps1 -Action run         # relaunch desktop app anytime
+./manage.ps1 -Action update -Channel dev  # optional dev build testing
+```
+
+More examples live in [WORKFLOW_GUIDE.md](WORKFLOW_GUIDE.md#windows-clients--testers).
 
 ### Option 2: Manual Setup
 

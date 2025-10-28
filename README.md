@@ -89,11 +89,13 @@ See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for details.
   See installation and Windows specifics in `INSTALL_DESKTOP_APP.md`.
 - **Metadata filters** are currently hidden in the search UI to avoid confusion. Advanced filtering remains available through the REST API and will return to the desktop app once metadata discovery is exposed to users.
 
-### Windows vs WSL Compose
+### Windows vs WSL Workflow
 
-- Development flow builds, verifies LibreOffice, and pushes the `:dev` image from WSL via `scripts/build_and_push_dev.sh` (which wraps `build_dev_image.sh`, `check_libreoffice.sh`, and `push_dev_image.sh`).
-- Windows pulls and runs that same `:dev` image via `update-dev.ps1`. Because the `image` is GHCR-qualified, Windows does not rebuild locally.
-- Release uses `:latest` (or a version tag) pulled by Windows scripts.
+- Windows users run everything through `manage.ps1` (`bootstrap`, `update`, `run`). The script selects `:latest` by default and can opt into the `:dev` tag when needed.
+- WSL/Linux contributors use `manage.sh` to rebuild (`update dev`), test (`run`), and release (`release patch|minor|major`).
+- Existing helper scripts remain available but are now implementation details behind the `manage.*` wrappers.
+
+See [WORKFLOW_GUIDE.md](WORKFLOW_GUIDE.md) for the full matrix of commands.
 
 ### Troubleshooting UI Not Updating
 

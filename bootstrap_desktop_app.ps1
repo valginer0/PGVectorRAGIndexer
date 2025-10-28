@@ -4,7 +4,9 @@
 param(
     [string]$GitHubRepo = "valginer0/PGVectorRAGIndexer",
     [string]$Branch = "main",
-    [string]$InstallDir = "$env:USERPROFILE\PGVectorRAGIndexer"
+    [string]$InstallDir = "$env:USERPROFILE\PGVectorRAGIndexer",
+    [ValidateSet("prod", "dev")]
+    [string]$Channel = "prod"
 )
 
 Write-Host "==========================================" -ForegroundColor Cyan
@@ -97,10 +99,11 @@ Write-Host "Installing dependencies..." -ForegroundColor Yellow
 
 Write-Host ""
 
-# Update Docker containers if update-dev.ps1 exists
-if (Test-Path ".\update-dev.ps1") {
-    Write-Host "Updating Docker containers..." -ForegroundColor Yellow
-    & ".\update-dev.ps1"
+# Update Docker containers if manage.ps1 exists
+$manageScript = ".\manage.ps1"
+if (Test-Path $manageScript) {
+    Write-Host "Updating Docker containers (channel: $Channel)..." -ForegroundColor Yellow
+    & $manageScript -Action update -Channel $Channel
     Write-Host ""
 }
 

@@ -215,10 +215,30 @@ class SourceOpenManager(QObject):
 
     def _reindex_entry(self, entry: RecentEntry) -> bool:
         try:
+            # Try to preserve existing document type
+            document_type = None
+            try:
+                # Search for the document to get its metadata
+                # We use search because list_documents doesn't support filtering by exact URI easily
+                # and we want to be robust.
+                results = self.api_client.search(
+                    query="", 
+                    top_k=1, 
+                    filters={"source_uri": entry.path}
+                )
+                if results:
+                    metadata = results[0].get("metadata", {})
+                    document_type = metadata.get("type")
+                    if document_type:
+                        logger.info(f"Preserving document type '{document_type}' for {entry.path}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch existing metadata for {entry.path}: {e}")
+
             response = self.api_client.upload_document(
                 Path(entry.path),
                 custom_source_uri=entry.path,
-                force_reindex=True
+                force_reindex=True,
+                document_type=document_type
             )
             entry.reindexed = True
             entry.queued = False

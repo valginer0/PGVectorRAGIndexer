@@ -323,6 +323,30 @@ def test_trigger_reindex_path(source_manager, mock_api_client):
         assert result is True
         mock_api_client.upload_document.assert_called_once()
 
+def test_reindex_preserves_type(source_manager, mock_api_client):
+    """Test that reindexing preserves the existing document type."""
+    path = "/home/user/contract.pdf"
+    entry = source_manager._track_recent(path)
+    source_manager._set_entry_queued(entry, True)
+    
+    # Mock search to return existing document with type
+    mock_api_client.search.return_value = [
+        {
+            "document_id": "123",
+            "source_uri": path,
+            "metadata": {"type": "Contract"}
+        }
+    ]
+    
+    mock_api_client.upload_document.return_value = {"status": "success"}
+    
+    source_manager._reindex_entry(entry)
+    
+    # Verify upload was called with the preserved type
+    mock_api_client.upload_document.assert_called_once()
+    call_args = mock_api_client.upload_document.call_args
+    assert call_args.kwargs.get("document_type") == "Contract"
+
 def test_clear_queue(source_manager):
     """Test clearing the queue status."""
     path = "/home/user/file.txt"

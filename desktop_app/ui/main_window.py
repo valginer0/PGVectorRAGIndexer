@@ -95,11 +95,11 @@ class MainWindow(QMainWindow):
         self.settings_tab = SettingsTab(self.docker_manager, self)
         self.recent_tab = RecentActivityTab(self.source_manager, self)
 
-        # Add tabs with icons
-        self.tabs.addTab(self.recent_tab, qta.icon('fa5s.clock', color='#9ca3af'), "Recent")
+        # Add tabs with icons (ordered by typical workflow)
         self.tabs.addTab(self.upload_tab, qta.icon('fa5s.cloud-upload-alt', color='#9ca3af'), "Upload")
         self.tabs.addTab(self.search_tab, qta.icon('fa5s.search', color='#9ca3af'), "Search")
         self.tabs.addTab(self.documents_tab, qta.icon('fa5s.book', color='#9ca3af'), "Documents")
+        self.tabs.addTab(self.recent_tab, qta.icon('fa5s.clock', color='#9ca3af'), "Recent")
         self.tabs.addTab(self.manage_tab, qta.icon('fa5s.trash-alt', color='#9ca3af'), "Manage")
         self.tabs.addTab(self.settings_tab, qta.icon('fa5s.cog', color='#9ca3af'), "Settings")
         

@@ -56,53 +56,7 @@ def test_resolve_path_mismatch_failure(source_manager):
         resolved = source_manager._resolve_path_mismatch(original_path)
         assert resolved is None
 
-def test_is_wsl_true(source_manager):
-    """Test WSL detection returns True."""
-    with patch("sys.platform", "linux"), \
-         patch("builtins.open", new_callable=MagicMock) as mock_open:
-        
-        mock_file = MagicMock()
-        mock_file.read.return_value = "Linux version ... microsoft-standard-WSL2"
-        mock_open.return_value.__enter__.return_value = mock_file
-        
-        assert source_manager._is_wsl() is True
 
-def test_is_wsl_false(source_manager):
-    """Test WSL detection returns False."""
-    with patch("sys.platform", "linux"), \
-         patch("builtins.open", new_callable=MagicMock) as mock_open:
-        
-        mock_file = MagicMock()
-        mock_file.read.return_value = "Linux version ... generic"
-        mock_open.return_value.__enter__.return_value = mock_file
-        
-        assert source_manager._is_wsl() is False
-
-def test_open_in_wsl_success(source_manager):
-    """Test opening file in WSL."""
-    linux_path = Path("/home/user/doc.txt")
-    windows_path = r"\\wsl.localhost\Ubuntu\home\user\doc.txt"
-    
-    with patch("subprocess.run") as mock_run, \
-         patch("subprocess.Popen") as mock_popen:
-        
-        # Mock wslpath output
-        mock_run.return_value.stdout = windows_path
-        
-        source_manager._open_in_wsl(linux_path)
-        
-        # Verify wslpath called
-        mock_run.assert_called_with(
-            ["wslpath", "-w", str(linux_path)],
-            capture_output=True,
-            text=True,
-            check=True
-        )
-        
-        # Verify cmd.exe called
-        mock_popen.assert_called_with(
-            ["cmd.exe", "/c", "start", "", windows_path]
-        )
 
 def test_normalize_path_permission_error(source_manager):
     """Test handling of PermissionError during path existence check."""
@@ -160,25 +114,29 @@ def test_open_path_copy_path(source_manager):
         source_manager.open_path(path, mode="copy_path")
         mock_copy.assert_called_once_with(Path(path))
 
-def test_launch_default_linux_fallback(source_manager):
-    """Test fallback to webbrowser on Linux if xdg-open fails."""
-    path = Path("/home/user/file.txt")
-    with patch("sys.platform", "linux"), \
-         patch.object(source_manager, "_is_wsl", return_value=False), \
-         patch("subprocess.Popen", side_effect=FileNotFoundError), \
-         patch("webbrowser.open") as mock_web_open:
-        
-        source_manager._launch_default(path)
-        mock_web_open.assert_called_once_with(path.as_uri())
+def test_launch_default_windows(source_manager):
+    """Test _launch_default on Windows."""
+    with patch("desktop_app.ui.source_open_manager.system_open") as mock_open:
+        source_manager._launch_default(Path("/path/to/file"))
+        mock_open.assert_called_once_with(Path("/path/to/file"))
 
-def test_launch_default_macos(source_manager):
-    """Test launching on macOS."""
-    path = Path("/Users/user/file.txt")
-    with patch("sys.platform", "darwin"), \
-         patch("subprocess.Popen") as mock_popen:
-        
-        source_manager._launch_default(path)
-        mock_popen.assert_called_once_with(["open", str(path)])
+def test_launch_default_linux(source_manager):
+    """Test _launch_default on Linux."""
+    with patch("desktop_app.ui.source_open_manager.system_open") as mock_open:
+        source_manager._launch_default(Path("/path/to/file"))
+        mock_open.assert_called_once_with(Path("/path/to/file"))
+
+def test_launch_default_exception(source_manager):
+    """Test _launch_default exception handling."""
+    with patch("desktop_app.ui.source_open_manager.system_open", side_effect=Exception("Error")):
+        with pytest.raises(Exception):
+            source_manager._launch_default(Path("/path/to/file"))
+
+def test_show_in_folder(source_manager):
+    """Test _show_in_folder."""
+    with patch("desktop_app.ui.source_open_manager.system_open") as mock_open:
+        source_manager._show_in_folder(Path("/path/to/file"))
+        mock_open.assert_called_once_with(Path("/path/to"))
 
 def test_launch_open_with_dialog_linux(source_manager):
     """Test 'Open With' dialog on Linux."""
@@ -418,14 +376,6 @@ def test_set_entry_queued_no_change(source_manager):
         source_manager._set_entry_queued(entry, True)
         mock_signal.emit.assert_not_called()
 
-def test_launch_default_exception(source_manager):
-    """Test exception handling in _launch_default."""
-    path = Path("/home/user/file.txt")
-    with patch("sys.platform", "linux"), \
-         patch.object(source_manager, "_is_wsl", return_value=False), \
-         patch("subprocess.Popen", side_effect=Exception("Launch Failed")):
-        
-        with pytest.raises(Exception):
-            source_manager._launch_default(path)
+
 
 

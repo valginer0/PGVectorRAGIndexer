@@ -15,6 +15,7 @@ import subprocess
 import webbrowser
 
 import logging
+from .shared import system_open
 
 logger = logging.getLogger(__name__)
 
@@ -240,63 +241,11 @@ class SourceOpenManager(QObject):
 
 
 
-    def _system_open(self, path: Path) -> None:
-        """Open a file or directory using the system default application."""
-        if sys.platform.startswith("win"):
-            os.startfile(str(path))  # type: ignore[attr-defined]
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(path)])
-        else:
-            # Linux/Unix
-            if self._is_wsl():
-                self._open_in_wsl(path)
-                return
-                
-            try:
-                subprocess.Popen(["xdg-open", str(path)])
-            except FileNotFoundError:
-                # Fallback if xdg-open is missing
-                logger.warning("xdg-open not found, falling back to webbrowser")
-                webbrowser.open(path.as_uri())
-
     def _launch_default(self, path: Path) -> None:
         try:
-            self._system_open(path)
+            system_open(path)
         except Exception as e:
             logger.error(f"Failed to open file {path}: {e}")
-            raise e
-
-    def _is_wsl(self) -> bool:
-        """Check if running in WSL."""
-        if sys.platform != "linux":
-            return False
-        try:
-            with open("/proc/version", "r") as f:
-                return "microsoft" in f.read().lower()
-        except Exception:
-            return False
-
-    def _open_in_wsl(self, path: Path) -> None:
-        """Open file using Windows default application via WSL."""
-        try:
-            # Convert Linux path to Windows path
-            result = subprocess.run(
-                ["wslpath", "-w", str(path)], 
-                capture_output=True, 
-                text=True, 
-                check=True
-            )
-            windows_path = result.stdout.strip()
-            
-            # Open using cmd.exe /c start
-            # We use Popen to not block
-            subprocess.Popen(["cmd.exe", "/c", "start", "", windows_path])
-            logger.info(f"Opened in Windows via WSL: {windows_path}")
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Failed to convert path in WSL: {e}")
-            raise e
-        except Exception as e:
-            logger.error(f"Failed to open in WSL: {e}")
             raise e
 
     def _launch_open_with_dialog(self, path: Path) -> None:
@@ -328,7 +277,7 @@ class SourceOpenManager(QObject):
             subprocess.Popen([app, str(path)])
 
     def _show_in_folder(self, path: Path) -> None:
-        self._system_open(path.parent)
+        system_open(path.parent)
 
     def _copy_to_clipboard(self, path: Path) -> None:
         clipboard = QGuiApplication.clipboard()

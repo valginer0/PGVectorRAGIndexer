@@ -52,3 +52,68 @@ def populate_document_type_combo(
 
     logger.info(f"Loaded {len(types)} document types for {log_context}")
     return len(types)
+
+
+import sys
+import os
+import subprocess
+import webbrowser
+from pathlib import Path
+import logging
+
+_logger = logging.getLogger(__name__)
+
+def system_open(path: Path) -> None:
+    """Open a file or directory using the system default application.
+    
+    Supports Windows, macOS, Linux, and WSL (opening in Windows).
+    """
+    if sys.platform.startswith("win"):
+        os.startfile(str(path))  # type: ignore[attr-defined]
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", str(path)])
+    else:
+        # Linux/Unix
+        if _is_wsl():
+            _open_in_wsl(path)
+            return
+            
+        try:
+            subprocess.Popen(["xdg-open", str(path)])
+        except FileNotFoundError:
+            # Fallback if xdg-open is missing
+            _logger.warning("xdg-open not found, falling back to webbrowser")
+            webbrowser.open(path.as_uri())
+
+def _is_wsl() -> bool:
+    """Check if running in WSL."""
+    if sys.platform != "linux":
+        return False
+    try:
+        with open("/proc/version", "r") as f:
+            return "microsoft" in f.read().lower()
+    except Exception:
+        return False
+
+def _open_in_wsl(path: Path) -> None:
+    """Open file using Windows default application via WSL."""
+    try:
+        # Convert Linux path to Windows path
+        result = subprocess.run(
+            ["wslpath", "-w", str(path)], 
+            capture_output=True, 
+            text=True, 
+            check=True
+        )
+        windows_path = result.stdout.strip()
+        
+        # Open using cmd.exe /c start
+        # We use Popen to not block
+        subprocess.Popen(["cmd.exe", "/c", "start", "", windows_path])
+        _logger.info(f"Opened in Windows via WSL: {windows_path}")
+    except subprocess.CalledProcessError as e:
+        _logger.error(f"Failed to convert path in WSL: {e}")
+        raise e
+    except Exception as e:
+        _logger.error(f"Failed to open in WSL: {e}")
+        raise e

@@ -3,6 +3,7 @@ Upload tab for selecting and uploading documents with full path preservation.
 """
 
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -74,6 +75,7 @@ class UploadTab(QWidget):
         self.selected_files: list[Path] = []  # Changed to list for multi-file support
         self.upload_worker: Optional[UploadWorker] = None
         self.current_upload_index = 0
+        self.upload_started_at: Optional[float] = None
         
         self.setup_ui()
     
@@ -346,6 +348,7 @@ class UploadTab(QWidget):
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, len(self.selected_files))
         self.progress_bar.setValue(0)
+        self.upload_started_at = time.perf_counter()
         
         # Start uploading files one by one
         self.current_upload_index = 0
@@ -401,6 +404,10 @@ class UploadTab(QWidget):
         total = len(self.selected_files)
         self.log(f"\n{'='*50}")
         self.log(f"✓ All uploads completed! ({total} file(s))")
+        if self.upload_started_at is not None:
+            elapsed = time.perf_counter() - self.upload_started_at
+            self.log(f"Total upload time: {self._format_elapsed(elapsed)}")
+            self.upload_started_at = None
         self.log(f"{'='*50}")
         
         # Clear selection
@@ -416,6 +423,13 @@ class UploadTab(QWidget):
         self.log_text.verticalScrollBar().setValue(
             self.log_text.verticalScrollBar().maximum()
         )
+
+    @staticmethod
+    def _format_elapsed(seconds: float) -> str:
+        total_seconds = int(seconds)
+        hours, remainder = divmod(total_seconds, 3600)
+        minutes, secs = divmod(remainder, 60)
+        return f"{hours:02d}:{minutes:02d}:{secs:02d} ({seconds:.2f}s)"
 
     @classmethod
     def _build_documents_filter(cls) -> str:

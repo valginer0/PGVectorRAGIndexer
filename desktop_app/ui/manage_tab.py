@@ -13,6 +13,10 @@ from PySide6.QtGui import QColor
 from typing import Optional
 
 import logging
+import sys
+import os
+import subprocess
+from pathlib import Path
 from .source_open_manager import SourceOpenManager
 from .shared import populate_document_type_combo
 

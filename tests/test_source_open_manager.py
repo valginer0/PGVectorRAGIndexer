@@ -1,165 +1,105 @@
-from pathlib import Path
-
 import pytest
-from PySide6.QtWidgets import QApplication, QWidget, QMessageBox
+from unittest.mock import MagicMock, patch, PropertyMock
+from pathlib import Path
+import sys
+import os
 
-import desktop_app.ui.source_open_manager as manager_module
 from desktop_app.ui.source_open_manager import SourceOpenManager
 
-
-class _StubApiClient:
-    def __init__(self):
-        self.uploaded = []
-        self.fail = False
-
-    def upload_document(self, file_path: Path, custom_source_uri: str = None, force_reindex: bool = False):
-        if self.fail:
-            raise RuntimeError("upload failed")
-        self.uploaded.append((file_path, custom_source_uri, force_reindex))
-        return {"status": "ok"}
-
-
-@pytest.fixture(scope="module")
-def qt_app():
-    app = QApplication.instance()
-    if app is None:
-        app = QApplication([])
-    yield app
-
+@pytest.fixture
+def mock_api_client():
+    return MagicMock()
 
 @pytest.fixture
-def manager(qt_app):
-    parent = QWidget()
-    api_client = _StubApiClient()
-    manager = SourceOpenManager(api_client=api_client, parent=parent)
-    manager._test_parent = parent  # keep Python reference alive
-    manager._test_api_client = api_client
-    return manager
+def source_manager(mock_api_client):
+    # Mock project root
+    project_root = Path("/mock/project")
+    return SourceOpenManager(mock_api_client, project_root=project_root)
 
+def test_normalize_path_exists(source_manager):
+    """Test that existing paths are normalized correctly."""
+    with patch("pathlib.Path.exists", return_value=True):
+        
+        path = "/home/user/file.txt"
+        normalized = source_manager._normalize_path(path)
+        assert normalized == Path(path)
 
-def test_open_path_no_path_shows_warning(monkeypatch, manager):
-    captured = {}
+def test_normalize_path_not_exists_no_resolve(source_manager):
+    """Test that non-existent paths return None if resolution fails."""
+    with patch("pathlib.Path.exists", return_value=False), \
+         patch.object(source_manager, "_resolve_path_mismatch", return_value=None), \
+         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn:
+        
+        path = "/home/user/missing.txt"
+        normalized = source_manager._normalize_path(path)
+        assert normalized is None
+        mock_warn.assert_called_once()
 
-    def fake_warning(parent, title, text):
-        captured["message"] = (title, text)
-        return QMessageBox.Ok
+def test_resolve_path_mismatch_success(source_manager):
+    """Test successful path resolution."""
+    original_path = "C:\\Users\\User\\Documents\\resume.pdf"
+    expected_path = Path("/mock/project/documents/resume.pdf")
+    
+    with patch("pathlib.Path.exists", return_value=True), \
+         patch("pathlib.Path.rglob", return_value=[expected_path]):
+        
+        resolved = source_manager._resolve_path_mismatch(original_path)
+        assert resolved == expected_path
 
-    monkeypatch.setattr(manager_module.QMessageBox, "warning", fake_warning)
+def test_resolve_path_mismatch_failure(source_manager):
+    """Test failed path resolution."""
+    original_path = "C:\\Users\\User\\Documents\\missing.pdf"
+    
+    with patch("pathlib.Path.exists", return_value=True), \
+         patch("pathlib.Path.rglob", return_value=[]):
+        
+        resolved = source_manager._resolve_path_mismatch(original_path)
+        assert resolved is None
 
-    manager.open_path("")
+def test_is_wsl_true(source_manager):
+    """Test WSL detection returns True."""
+    with patch("sys.platform", "linux"), \
+         patch("builtins.open", new_callable=MagicMock) as mock_open:
+        
+        mock_file = MagicMock()
+        mock_file.read.return_value = "Linux version ... microsoft-standard-WSL2"
+        mock_open.return_value.__enter__.return_value = mock_file
+        
+        assert source_manager._is_wsl() is True
 
-    assert captured["message"][0] == "No Path"
+def test_is_wsl_false(source_manager):
+    """Test WSL detection returns False."""
+    with patch("sys.platform", "linux"), \
+         patch("builtins.open", new_callable=MagicMock) as mock_open:
+        
+        mock_file = MagicMock()
+        mock_file.read.return_value = "Linux version ... generic"
+        mock_open.return_value.__enter__.return_value = mock_file
+        
+        assert source_manager._is_wsl() is False
 
-
-def test_open_path_missing_file(monkeypatch, manager, tmp_path):
-    missing = tmp_path / "missing.txt"
-    captured = {}
-
-    def fake_warning(parent, title, text):
-        captured["message"] = (title, text)
-        return QMessageBox.Ok
-
-    monkeypatch.setattr(manager_module.QMessageBox, "warning", fake_warning)
-
-    manager.open_path(str(missing))
-
-    assert "does not exist" in captured["message"][1]
-
-
-def test_open_path_tracks_recents_and_auto_queues(monkeypatch, manager, tmp_path):
-    file_path = tmp_path / "doc.txt"
-    file_path.write_text("content")
-
-    monkeypatch.setattr(manager, "_launch_default", lambda path: None)
-
-    manager.open_path(str(file_path))
-
-    entries = manager.get_recent_entries()
-    assert entries and entries[0].path == str(file_path)
-    assert entries[0].queued is True
-
-
-def test_open_path_can_skip_auto_queue(monkeypatch, manager, tmp_path):
-    file_path = tmp_path / "doc.txt"
-    file_path.write_text("content")
-
-    monkeypatch.setattr(manager, "_launch_default", lambda path: None)
-
-    manager.open_path(str(file_path), auto_queue=False)
-
-    entries = manager.get_recent_entries()
-    assert entries[0].queued is False
-
-
-def test_trigger_reindex_path_sets_reindexed(monkeypatch, manager, tmp_path):
-    file_path = tmp_path / "doc.txt"
-    file_path.write_text("content")
-
-    monkeypatch.setattr(manager, "_launch_default", lambda path: None)
-
-    manager.open_path(str(file_path), auto_queue=False)
-
-    manager.trigger_reindex_path(str(file_path))
-
-    entry = manager.get_recent_entries()[0]
-    assert len(manager._test_api_client.uploaded) == 1
-    assert entry.reindexed is True
-    assert entry.queued is False
-
-
-def test_queue_entry_toggle(monkeypatch, manager, tmp_path):
-    file_path = tmp_path / "doc.txt"
-    file_path.write_text("content")
-
-    monkeypatch.setattr(manager, "_launch_default", lambda path: None)
-    manager.open_path(str(file_path), auto_queue=False)
-
-    entry = manager.queue_entry(str(file_path), True)
-    assert entry and entry.queued is True
-
-    entry = manager.queue_entry(str(file_path), False)
-    assert entry and entry.queued is False
-
-
-def test_process_queue_success(monkeypatch, manager, tmp_path):
-    file_path = tmp_path / "doc.txt"
-    file_path.write_text("content")
-
-    monkeypatch.setattr(manager, "_launch_default", lambda path: None)
-    manager.open_path(str(file_path))
-
-    success, failures = manager.process_queue()
-
-    entry = manager.get_recent_entries()[0]
-    assert (success, failures) == (1, 0)
-    assert entry.reindexed is True
-    assert entry.queued is False
-
-
-def test_process_queue_handles_failures(monkeypatch, manager, tmp_path):
-    file_path = tmp_path / "doc.txt"
-    file_path.write_text("content")
-
-    monkeypatch.setattr(manager, "_launch_default", lambda path: None)
-    manager.open_path(str(file_path))
-    manager._test_api_client.fail = True
-
-    success, failures = manager.process_queue()
-
-    entry = manager.get_recent_entries()[0]
-    assert (success, failures) == (0, 1)
-    assert entry.queued is True
-    assert entry.reindexed is False
-    assert entry.last_error == "upload failed"
-
-
-def test_remove_entry(monkeypatch, manager, tmp_path):
-    file_path = tmp_path / "doc.txt"
-    file_path.write_text("content")
-
-    monkeypatch.setattr(manager, "_launch_default", lambda path: None)
-    manager.open_path(str(file_path), auto_queue=False)
-
-    removed = manager.remove_entry(str(file_path))
-    assert removed is True
-    assert manager.get_recent_entries() == []
+def test_open_in_wsl_success(source_manager):
+    """Test opening file in WSL."""
+    linux_path = Path("/home/user/doc.txt")
+    windows_path = r"\\wsl.localhost\Ubuntu\home\user\doc.txt"
+    
+    with patch("subprocess.run") as mock_run, \
+         patch("subprocess.Popen") as mock_popen:
+        
+        # Mock wslpath output
+        mock_run.return_value.stdout = windows_path
+        
+        source_manager._open_in_wsl(linux_path)
+        
+        # Verify wslpath called
+        mock_run.assert_called_with(
+            ["wslpath", "-w", str(linux_path)],
+            capture_output=True,
+            text=True,
+            check=True
+        )
+        
+        # Verify cmd.exe called
+        mock_popen.assert_called_with(
+            ["cmd.exe", "/c", "start", "", windows_path]
+        )

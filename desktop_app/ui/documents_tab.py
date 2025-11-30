@@ -3,6 +3,10 @@ Documents tab for viewing and managing indexed documents.
 """
 
 import logging
+import sys
+import os
+import subprocess
+from pathlib import Path
 from typing import List, Dict, Any, Optional
 import math
 from datetime import datetime

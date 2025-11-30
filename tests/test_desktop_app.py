@@ -28,7 +28,7 @@ def test_api_client_initialization():
         
         client = APIClient("http://localhost:8000")
         assert client.base_url == "http://localhost:8000"
-        assert client.timeout == 30
+        assert client.timeout == 300
     except ImportError:
         pytest.skip("Desktop app dependencies not installed")
 

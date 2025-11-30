@@ -11,8 +11,10 @@ from PySide6.QtWidgets import (
     QTabWidget, QStatusBar, QPushButton, QLabel,
     QMessageBox, QFileDialog, QProgressDialog
 )
-from PySide6.QtCore import Qt, QTimer, QThread, Signal
+from PySide6.QtCore import Qt, QTimer, QThread, Signal, QSize
 from PySide6.QtGui import QIcon
+
+import qtawesome as qta
 
 from .upload_tab import UploadTab
 from .search_tab import SearchTab
@@ -54,7 +56,7 @@ class MainWindow(QMainWindow):
         # Initialize managers
         self.docker_manager = DockerManager(self.project_path)
         self.api_client = APIClient()
-        self.source_manager = SourceOpenManager(self.api_client, parent=self)
+        self.source_manager = SourceOpenManager(self.api_client, parent=self, project_root=self.project_path)
         
         # Setup UI
         self.setup_ui()
@@ -65,7 +67,7 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         """Setup the user interface."""
         self.setWindowTitle("PGVectorRAGIndexer - Document Management")
-        self.setMinimumSize(1000, 700)
+        self.setMinimumSize(1100, 800)
         
         # Central widget
         central_widget = QWidget()
@@ -73,12 +75,15 @@ class MainWindow(QMainWindow):
         
         # Main layout
         layout = QVBoxLayout(central_widget)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(20)
         
         # Docker status bar at top
         self.create_docker_status_bar(layout)
         
         # Tab widget
         self.tabs = QTabWidget()
+        self.tabs.setIconSize(qta.icon('fa5s.home').actualSize(QSize(20, 20))) # Dummy size init
         layout.addWidget(self.tabs)
         
         # Create tabs
@@ -88,15 +93,15 @@ class MainWindow(QMainWindow):
         self.documents_tab.source_manager = self.source_manager
         self.manage_tab = ManageTab(self.api_client, source_manager=self.source_manager)
         self.settings_tab = SettingsTab(self.docker_manager, self)
-        
         self.recent_tab = RecentActivityTab(self.source_manager, self)
 
-        self.tabs.addTab(self.recent_tab, "🕓 Recent")
-        self.tabs.addTab(self.upload_tab, "📤 Upload")
-        self.tabs.addTab(self.search_tab, "🔍 Search")
-        self.tabs.addTab(self.documents_tab, "📚 Documents")
-        self.tabs.addTab(self.manage_tab, "🗑️ Manage")
-        self.tabs.addTab(self.settings_tab, "⚙️ Settings")
+        # Add tabs with icons
+        self.tabs.addTab(self.recent_tab, qta.icon('fa5s.clock', color='#9ca3af'), "Recent")
+        self.tabs.addTab(self.upload_tab, qta.icon('fa5s.cloud-upload-alt', color='#9ca3af'), "Upload")
+        self.tabs.addTab(self.search_tab, qta.icon('fa5s.search', color='#9ca3af'), "Search")
+        self.tabs.addTab(self.documents_tab, qta.icon('fa5s.book', color='#9ca3af'), "Documents")
+        self.tabs.addTab(self.manage_tab, qta.icon('fa5s.trash-alt', color='#9ca3af'), "Manage")
+        self.tabs.addTab(self.settings_tab, qta.icon('fa5s.cog', color='#9ca3af'), "Settings")
         
         # Status bar at bottom
         self.status_bar = QStatusBar()
@@ -106,28 +111,46 @@ class MainWindow(QMainWindow):
     def create_docker_status_bar(self, parent_layout):
         """Create the Docker status indicator bar."""
         status_widget = QWidget()
+        status_widget.setObjectName("dockerStatus")
+        status_widget.setStyleSheet("""
+            #dockerStatus {
+                background-color: #1f2937;
+                border-radius: 8px;
+                border: 1px solid #374151;
+            }
+        """)
         status_layout = QHBoxLayout(status_widget)
-        status_layout.setContentsMargins(10, 5, 10, 5)
+        status_layout.setContentsMargins(15, 10, 15, 10)
         
         # Docker status indicator
-        self.docker_status_label = QLabel("🔴 Docker: Checking...")
-        self.docker_status_label.setStyleSheet("font-weight: bold;")
+        self.docker_status_label = QLabel("Docker: Checking...")
+        self.docker_status_icon = QLabel()
+        self.docker_status_icon.setPixmap(qta.icon('fa5s.circle', color='#ef4444').pixmap(16, 16))
+        
+        status_layout.addWidget(self.docker_status_icon)
         status_layout.addWidget(self.docker_status_label)
+        status_layout.addSpacing(20)
         
         # API status indicator
-        self.api_status_label = QLabel("🔴 API: Checking...")
-        self.api_status_label.setStyleSheet("font-weight: bold;")
+        self.api_status_label = QLabel("API: Checking...")
+        self.api_status_icon = QLabel()
+        self.api_status_icon.setPixmap(qta.icon('fa5s.circle', color='#ef4444').pixmap(16, 16))
+        
+        status_layout.addWidget(self.api_status_icon)
         status_layout.addWidget(self.api_status_label)
         
         status_layout.addStretch()
         
         # Start/Stop button
         self.docker_control_btn = QPushButton("Start Containers")
+        self.docker_control_btn.setIcon(qta.icon('fa5s.play', color='white'))
+        self.docker_control_btn.setProperty("class", "primary")
         self.docker_control_btn.clicked.connect(self.toggle_docker)
         status_layout.addWidget(self.docker_control_btn)
         
         # Refresh button
-        refresh_btn = QPushButton("🔄 Refresh Status")
+        refresh_btn = QPushButton("Refresh Status")
+        refresh_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
         refresh_btn.clicked.connect(self.check_docker_status)
         status_layout.addWidget(refresh_btn)
         
@@ -155,8 +178,10 @@ class MainWindow(QMainWindow):
         """Check and update Docker and API status."""
         # Check Docker
         if not self.docker_manager.is_docker_available():
-            self.docker_status_label.setText("🔴 Docker: Not Available")
-            self.api_status_label.setText("🔴 API: Not Available")
+            self.docker_status_label.setText("Docker: Not Available")
+            self.docker_status_icon.setPixmap(qta.icon('fa5s.times-circle', color='#ef4444').pixmap(16, 16))
+            self.api_status_label.setText("API: Not Available")
+            self.api_status_icon.setPixmap(qta.icon('fa5s.times-circle', color='#ef4444').pixmap(16, 16))
             self.docker_control_btn.setEnabled(False)
             self.status_bar.showMessage("Docker is not available. Please install Docker Desktop.")
             return
@@ -165,18 +190,30 @@ class MainWindow(QMainWindow):
         db_running, app_running = self.docker_manager.get_container_status()
         
         if db_running and app_running:
-            self.docker_status_label.setText("🟢 Docker: Running")
+            self.docker_status_label.setText("Docker: Running")
+            self.docker_status_icon.setPixmap(qta.icon('fa5s.check-circle', color='#10b981').pixmap(16, 16))
             self.docker_control_btn.setText("Stop Containers")
+            self.docker_control_btn.setIcon(qta.icon('fa5s.stop', color='white'))
+            self.docker_control_btn.setProperty("class", "danger")
         else:
-            self.docker_status_label.setText("🔴 Docker: Stopped")
+            self.docker_status_label.setText("Docker: Stopped")
+            self.docker_status_icon.setPixmap(qta.icon('fa5s.stop-circle', color='#ef4444').pixmap(16, 16))
             self.docker_control_btn.setText("Start Containers")
+            self.docker_control_btn.setIcon(qta.icon('fa5s.play', color='white'))
+            self.docker_control_btn.setProperty("class", "primary")
+        
+        # Force style update
+        self.docker_control_btn.style().unpolish(self.docker_control_btn)
+        self.docker_control_btn.style().polish(self.docker_control_btn)
         
         # Check API
         if self.api_client.is_api_available():
-            self.api_status_label.setText("🟢 API: Ready")
+            self.api_status_label.setText("API: Ready")
+            self.api_status_icon.setPixmap(qta.icon('fa5s.check-circle', color='#10b981').pixmap(16, 16))
             self.status_bar.showMessage("Ready - All systems operational")
         else:
-            self.api_status_label.setText("🔴 API: Not Available")
+            self.api_status_label.setText("API: Not Available")
+            self.api_status_icon.setPixmap(qta.icon('fa5s.times-circle', color='#ef4444').pixmap(16, 16))
             if db_running and app_running:
                 self.status_bar.showMessage("Containers running but API not ready. Please wait...")
             else:

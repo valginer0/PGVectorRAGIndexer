@@ -1,9 +1,8 @@
-from __future__ import annotations
-
+import qtawesome as qta
 from functools import partial
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QWidget,
@@ -16,6 +15,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QStyledItemDelegate,
     QStyleOptionViewItem,
+    QGroupBox
 )
 
 from .source_open_manager import SourceOpenManager, RecentEntry
@@ -36,34 +36,54 @@ class RecentActivityTab(QWidget):
     def __init__(self, source_manager: SourceOpenManager, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.source_manager = source_manager
+        self.setup_ui()
 
+    def setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
+        
+        # Title
+        title = QLabel("Recent Activity")
+        title.setProperty("class", "header")
+        layout.addWidget(title)
 
         # Controls row
-        controls = QHBoxLayout()
+        controls_group = QGroupBox("Queue Management")
+        controls_layout = QHBoxLayout(controls_group)
+        
         self.queue_count_label = QLabel()
-        controls.addWidget(self.queue_count_label)
+        self.queue_count_label.setStyleSheet("font-weight: bold;")
+        controls_layout.addWidget(self.queue_count_label)
 
         self.status_label = QLabel()
-        controls.addWidget(self.status_label)
+        self.status_label.setStyleSheet("color: #9ca3af; font-style: italic;")
+        controls_layout.addWidget(self.status_label)
 
-        controls.addStretch()
+        controls_layout.addStretch()
 
         self.process_button = QPushButton("Reindex Queued")
+        self.process_button.setIcon(qta.icon('fa5s.sync-alt', color='white'))
         self.process_button.clicked.connect(self._handle_process_queue)
-        controls.addWidget(self.process_button)
+        self.process_button.setProperty("class", "primary")
+        controls_layout.addWidget(self.process_button)
 
         self.clear_queue_button = QPushButton("Clear Queue")
+        self.clear_queue_button.setIcon(qta.icon('fa5s.times', color='white'))
         self.clear_queue_button.clicked.connect(self._handle_clear_queue)
-        controls.addWidget(self.clear_queue_button)
+        controls_layout.addWidget(self.clear_queue_button)
 
         self.clear_list_button = QPushButton("Clear List")
+        self.clear_list_button.setIcon(qta.icon('fa5s.trash-alt', color='white'))
         self.clear_list_button.clicked.connect(self._handle_clear_list)
-        controls.addWidget(self.clear_list_button)
+        controls_layout.addWidget(self.clear_list_button)
 
-        layout.addLayout(controls)
+        layout.addWidget(controls_group)
 
         # Recent entries table
+        table_group = QGroupBox("Recent Documents")
+        table_layout = QVBoxLayout(table_group)
+        
         self.table = QTableWidget()
         self.table.setColumnCount(6)
         self.table.setHorizontalHeaderLabels([
@@ -85,7 +105,10 @@ class RecentActivityTab(QWidget):
         self.table.setItemDelegateForColumn(0, _NoElideDelegate(self.table))
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
-        layout.addWidget(self.table)
+        self.table.viewport().setCursor(Qt.PointingHandCursor)
+        table_layout.addWidget(self.table)
+        
+        layout.addWidget(table_group)
 
         # Wire SourceOpenManager events
         self.source_manager.entry_added.connect(self._handle_entry_added)
@@ -188,28 +211,42 @@ class RecentActivityTab(QWidget):
             font = item.font()
             font.setUnderline(True)
             item.setFont(font)
-            item.setForeground(QColor("#1a73e8"))
+            item.setForeground(QColor("#6366f1"))
         return item
 
     def _build_actions_widget(self, path: str, queued: bool) -> QWidget:
         container = QWidget()
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
 
-        open_btn = QPushButton("Open")
+        open_btn = QPushButton()
+        open_btn.setIcon(qta.icon('fa5s.folder-open', color='white'))
+        open_btn.setToolTip("Open")
         open_btn.clicked.connect(partial(self.source_manager.open_path, path, "default", False))
+        open_btn.setFixedSize(30, 30)
         layout.addWidget(open_btn)
 
-        queue_btn = QPushButton("Unqueue" if queued else "Queue")
+        queue_btn = QPushButton()
+        queue_btn.setIcon(qta.icon('fa5s.minus-circle' if queued else 'fa5s.plus-circle', color='white'))
+        queue_btn.setToolTip("Unqueue" if queued else "Queue")
         queue_btn.clicked.connect(partial(self._toggle_queue, path, not queued))
+        queue_btn.setFixedSize(30, 30)
         layout.addWidget(queue_btn)
 
-        reindex_btn = QPushButton("Reindex")
+        reindex_btn = QPushButton()
+        reindex_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
+        reindex_btn.setToolTip("Reindex")
         reindex_btn.clicked.connect(partial(self._trigger_reindex, path))
+        reindex_btn.setFixedSize(30, 30)
         layout.addWidget(reindex_btn)
 
-        remove_btn = QPushButton("Remove")
+        remove_btn = QPushButton()
+        remove_btn.setIcon(qta.icon('fa5s.trash-alt', color='white'))
+        remove_btn.setToolTip("Remove")
         remove_btn.clicked.connect(partial(self._remove_entry, path))
+        remove_btn.setProperty("class", "danger")
+        remove_btn.setFixedSize(30, 30)
         layout.addWidget(remove_btn)
 
         return container

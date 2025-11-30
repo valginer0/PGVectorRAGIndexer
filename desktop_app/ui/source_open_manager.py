@@ -12,6 +12,11 @@ from PySide6.QtGui import QGuiApplication
 import os
 import sys
 import subprocess
+import webbrowser
+
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -29,11 +34,82 @@ class SourceOpenManager(QObject):
     entry_removed = Signal(object)
     entries_cleared = Signal()
 
-    def __init__(self, api_client, parent=None, max_entries: int = 20):
+    def __init__(self, api_client, parent=None, max_entries: int = 20, project_root: Optional[Path] = None):
         super().__init__(parent)
         self.api_client = api_client
         self.max_entries = max_entries
+        self.project_root = project_root
         self._recent_entries: List[RecentEntry] = []
+
+    # ... (existing methods) ...
+
+    def _normalize_path(self, path: str, warn: bool = True) -> Optional[Path]:
+        if not path:
+            if warn:
+                QMessageBox.warning(
+                    self._parent_widget(),
+                    "No Path",
+                    "No source path is available to open."
+                )
+            return None
+            
+        normalized = Path(path).expanduser()
+        
+        if not normalized.exists():
+            # Try to resolve path mismatch (e.g. Windows path on Linux)
+            resolved = self._resolve_path_mismatch(path)
+            if resolved:
+                return resolved
+                
+            if warn:
+                QMessageBox.warning(
+                    self._parent_widget(),
+                    "File Not Found",
+                    f"The file does not exist:\n{path}\n\n"
+                    f"I also tried searching for '{normalized.name}' in the documents folder but couldn't find it."
+                )
+            return None
+            
+        return normalized
+
+    def _resolve_path_mismatch(self, original_path: str) -> Optional[Path]:
+        """Attempt to find the file in the local project directory."""
+        if not self.project_root:
+            logger.warning("Project root not set in SourceOpenManager")
+            return None
+            
+        filename = Path(original_path).name
+        documents_dir = self.project_root / "documents"
+        
+        logger.info(f"Attempting to resolve path mismatch for: {original_path}")
+        logger.info(f"Searching in: {documents_dir}")
+        
+        if not documents_dir.exists():
+            logger.warning(f"Documents directory not found: {documents_dir}")
+            return None
+            
+        # 1. Try to find by filename in documents directory (recursive)
+        try:
+            found = list(documents_dir.rglob(filename))
+            if found:
+                logger.info(f"Found {len(found)} candidate(s): {found}")
+                # If multiple found, try to match parent folder name
+                if len(found) > 1:
+                    parent_name = Path(original_path).parent.name
+                    for f in found:
+                        if f.parent.name == parent_name:
+                            logger.info(f"Matched parent folder '{parent_name}': {f}")
+                            return f
+                
+                logger.info(f"Returning first match: {found[0]}")
+                return found[0]
+            else:
+                logger.warning(f"No file named '{filename}' found in {documents_dir}")
+        except Exception as e:
+            logger.error(f"Error during path resolution: {e}")
+            pass
+            
+        return None
 
     def get_recent_entries(self) -> List[RecentEntry]:
         return list(self._recent_entries)
@@ -183,12 +259,59 @@ class SourceOpenManager(QObject):
         return normalized
 
     def _launch_default(self, path: Path) -> None:
-        if sys.platform.startswith("win"):
-            os.startfile(str(path))  # type: ignore[attr-defined]
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(path)])
-        else:
-            subprocess.Popen(["xdg-open", str(path)])
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(str(path))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                # Linux/Unix
+                if self._is_wsl():
+                    self._open_in_wsl(path)
+                    return
+                    
+                try:
+                    subprocess.Popen(["xdg-open", str(path)])
+                except FileNotFoundError:
+                    # Fallback if xdg-open is missing
+                    logger.warning("xdg-open not found, falling back to webbrowser")
+                    webbrowser.open(path.as_uri())
+        except Exception as e:
+            logger.error(f"Failed to open file {path}: {e}")
+            raise e
+
+    def _is_wsl(self) -> bool:
+        """Check if running in WSL."""
+        if sys.platform != "linux":
+            return False
+        try:
+            with open("/proc/version", "r") as f:
+                return "microsoft" in f.read().lower()
+        except Exception:
+            return False
+
+    def _open_in_wsl(self, path: Path) -> None:
+        """Open file using Windows default application via WSL."""
+        try:
+            # Convert Linux path to Windows path
+            result = subprocess.run(
+                ["wslpath", "-w", str(path)], 
+                capture_output=True, 
+                text=True, 
+                check=True
+            )
+            windows_path = result.stdout.strip()
+            
+            # Open using cmd.exe /c start
+            # We use Popen to not block
+            subprocess.Popen(["cmd.exe", "/c", "start", "", windows_path])
+            logger.info(f"Opened in Windows via WSL: {windows_path}")
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Failed to convert path in WSL: {e}")
+            raise e
+        except Exception as e:
+            logger.error(f"Failed to open in WSL: {e}")
+            raise e
 
     def _launch_open_with_dialog(self, path: Path) -> None:
         if sys.platform.startswith("win"):

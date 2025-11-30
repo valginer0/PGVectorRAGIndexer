@@ -7,32 +7,10 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QTextEdit, QMessageBox, QGridLayout
 )
-from PySide6.QtCore import QThread, Signal
+import qtawesome as qta
+from PySide6.QtCore import QThread, Signal, QSize
 
-import requests
-
-logger = logging.getLogger(__name__)
-
-
-class StatsWorker(QThread):
-    """Worker thread for loading statistics."""
-    
-    finished = Signal(bool, object)  # success, stats or error message
-    
-    def __init__(self, api_client):
-        super().__init__()
-        self.api_client = api_client
-    
-    def run(self):
-        """Load statistics."""
-        try:
-            stats = self.api_client.get_statistics()
-            self.finished.emit(True, stats)
-        except requests.RequestException as e:
-            self.finished.emit(False, str(e))
-        except Exception as e:
-            self.finished.emit(False, str(e))
-
+# ... imports ...
 
 class SettingsTab(QWidget):
     """Tab for settings and Docker management."""
@@ -50,12 +28,13 @@ class SettingsTab(QWidget):
     def setup_ui(self):
         """Setup the user interface."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Title
         header_layout = QHBoxLayout()
-        title = QLabel("⚙️ Settings & Management")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        title = QLabel("Settings & Management")
+        title.setProperty("class", "header")
         header_layout.addWidget(title)
         header_layout.addStretch()
         
@@ -84,7 +63,8 @@ class SettingsTab(QWidget):
             
             stats_layout.addLayout(self.stats_grid)
             
-            refresh_stats_btn = QPushButton("🔄 Refresh Statistics")
+            refresh_stats_btn = QPushButton("Refresh Statistics")
+            refresh_stats_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
             refresh_stats_btn.clicked.connect(self.load_statistics)
             stats_layout.addWidget(refresh_stats_btn)
             
@@ -98,14 +78,17 @@ class SettingsTab(QWidget):
         docker_group = QGroupBox("Docker Container Management")
         docker_layout = QVBoxLayout(docker_group)
         
-        restart_btn = QPushButton("🔄 Restart Containers")
+        restart_btn = QPushButton("Restart Containers")
+        restart_btn.setIcon(qta.icon('fa5s.redo', color='white'))
         restart_btn.clicked.connect(self.restart_containers)
-        restart_btn.setMinimumHeight(35)
+        restart_btn.setMinimumHeight(40)
+        restart_btn.setStyleSheet("background-color: #f59e0b; border: 1px solid #f59e0b;") # Warning color
         docker_layout.addWidget(restart_btn)
         
-        logs_btn = QPushButton("📋 View Application Logs")
+        logs_btn = QPushButton("View Application Logs")
+        logs_btn.setIcon(qta.icon('fa5s.file-alt', color='white'))
         logs_btn.clicked.connect(self.view_logs)
-        logs_btn.setMinimumHeight(35)
+        logs_btn.setMinimumHeight(40)
         docker_layout.addWidget(logs_btn)
         
         layout.addWidget(docker_group)

@@ -12,56 +12,11 @@ from PySide6.QtWidgets import (
     QLabel, QFileDialog, QCheckBox, QTextEdit,
     QProgressBar, QMessageBox, QGroupBox, QLineEdit, QComboBox
 )
-from PySide6.QtCore import Qt, QThread, Signal
+import qtawesome as qta
+from PySide6.QtCore import Qt, QThread, Signal, QSize
+from .workers import UploadWorker
 
-import requests
-
-logger = logging.getLogger(__name__)
-
-
-class UploadWorker(QThread):
-    """Worker thread for uploading files."""
-    
-    progress = Signal(str)
-    finished = Signal(bool, str)
-    
-    def __init__(self, api_client, file_path: Path, full_path: str, force_reindex: bool, document_type: Optional[str] = None):
-        super().__init__()
-        self.api_client = api_client
-        self.file_path = file_path
-        self.full_path = full_path
-        self.force_reindex = force_reindex
-        self.document_type = document_type
-    
-    def run(self):
-        """Upload the file."""
-        try:
-            self.progress.emit(f"Uploading {self.file_path.name}...")
-            
-            result = self.api_client.upload_document(
-                self.file_path,
-                custom_source_uri=self.full_path,
-                force_reindex=self.force_reindex,
-                document_type=self.document_type
-            )
-            
-            doc_id = result.get('document_id', 'unknown')
-            chunks = result.get('chunks_indexed', 0)
-            
-            self.progress.emit(f"✓ Uploaded successfully! Document ID: {doc_id}, Chunks: {chunks}")
-            self.finished.emit(True, f"Document uploaded successfully!\n\nDocument ID: {doc_id}\nChunks indexed: {chunks}\nPath preserved: {self.full_path}")
-            
-        except requests.RequestException as e:
-            error_msg = f"Upload failed: {str(e)}"
-            logger.error(error_msg)
-            self.progress.emit(f"✗ {error_msg}")
-            self.finished.emit(False, error_msg)
-        except Exception as e:
-            error_msg = f"Unexpected error: {str(e)}"
-            logger.error(error_msg)
-            self.progress.emit(f"✗ {error_msg}")
-            self.finished.emit(False, error_msg)
-
+# ... imports ...
 
 class UploadTab(QWidget):
     """Tab for uploading documents."""
@@ -76,21 +31,25 @@ class UploadTab(QWidget):
         self.upload_worker: Optional[UploadWorker] = None
         self.current_upload_index = 0
         self.upload_started_at: Optional[float] = None
+        self.success_count = 0
+        self.failure_count = 0
+        self.failed_uploads: list[dict] = []
         
         self.setup_ui()
     
     def setup_ui(self):
         """Setup the user interface."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Title
-        title = QLabel("📤 Upload Documents")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        title = QLabel("Upload Documents")
+        title.setProperty("class", "header")
         layout.addWidget(title)
         
         # Instructions
-        info_box = QGroupBox("ℹ️ How It Works")
+        info_box = QGroupBox("How It Works")
         info_layout = QVBoxLayout(info_box)
         info_text = QLabel(
             "This desktop app automatically preserves the full file path!\n\n"
@@ -101,6 +60,7 @@ class UploadTab(QWidget):
             "Supported formats: TXT, MD, PDF, DOC, DOCX, PPTX, HTML"
         )
         info_text.setWordWrap(True)
+        info_text.setStyleSheet("color: #9ca3af;")
         info_layout.addWidget(info_text)
         layout.addWidget(info_box)
         
@@ -110,12 +70,14 @@ class UploadTab(QWidget):
         
         select_btn_layout = QHBoxLayout()
         
-        self.select_files_btn = QPushButton("📁 Select Files")
+        self.select_files_btn = QPushButton("Select Files")
+        self.select_files_btn.setIcon(qta.icon('fa5s.file-alt', color='white'))
         self.select_files_btn.clicked.connect(self.select_files)
         self.select_files_btn.setMinimumHeight(40)
         select_btn_layout.addWidget(self.select_files_btn)
         
-        self.select_folder_btn = QPushButton("📂 Select Folder")
+        self.select_folder_btn = QPushButton("Select Folder")
+        self.select_folder_btn.setIcon(qta.icon('fa5s.folder-open', color='white'))
         self.select_folder_btn.clicked.connect(self.select_folder)
         self.select_folder_btn.setMinimumHeight(40)
         select_btn_layout.addWidget(self.select_folder_btn)
@@ -123,8 +85,9 @@ class UploadTab(QWidget):
         file_layout.addLayout(select_btn_layout)
         
         self.file_path_label = QLabel("No files selected")
-        self.file_path_label.setStyleSheet("color: #666; padding: 10px; background: #f5f5f5; border-radius: 5px;")
+        self.file_path_label.setStyleSheet("color: #9ca3af; padding: 10px; background: #1f2937; border-radius: 5px; border: 1px dashed #374151;")
         self.file_path_label.setWordWrap(True)
+        self.file_path_label.setAlignment(Qt.AlignCenter)
         file_layout.addWidget(self.file_path_label)
         
         layout.addWidget(file_group)
@@ -168,31 +131,33 @@ class UploadTab(QWidget):
         layout.addWidget(options_group)
         
         # Upload button
-        self.upload_btn = QPushButton("📤 Upload and Index")
+        self.upload_btn = QPushButton("Upload and Index")
+        self.upload_btn.setIcon(qta.icon('fa5s.cloud-upload-alt', color='white'))
         self.upload_btn.clicked.connect(self.upload_file)
         self.upload_btn.setEnabled(False)
         self.upload_btn.setMinimumHeight(50)
-        self.upload_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2563eb;
-                color: white;
-                font-size: 14px;
-                font-weight: bold;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #1d4ed8;
-            }
-            QPushButton:disabled {
-                background-color: #9ca3af;
-            }
-        """)
+        self.upload_btn.setProperty("class", "primary")
         layout.addWidget(self.upload_btn)
         
         # Progress
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
         layout.addWidget(self.progress_bar)
+
+        # Stats Label
+        self.stats_label = QLabel("")
+        self.stats_label.setAlignment(Qt.AlignCenter)
+        self.stats_label.setStyleSheet("font-weight: bold; margin-top: 5px;")
+        self.stats_label.setVisible(False)
+        layout.addWidget(self.stats_label)
+        
+        # View Errors Button
+        self.view_errors_btn = QPushButton("View Failures")
+        self.view_errors_btn.setIcon(qta.icon('fa5s.exclamation-triangle', color='white'))
+        self.view_errors_btn.setProperty("class", "danger")
+        self.view_errors_btn.clicked.connect(self.show_errors_dialog)
+        self.view_errors_btn.setVisible(False)
+        layout.addWidget(self.view_errors_btn)
         
         # Status log
         log_group = QGroupBox("Upload Log")
@@ -228,9 +193,11 @@ class UploadTab(QWidget):
                 if count > 5:
                     preview += f"\n... and {count - 5} more files"
                 self.file_path_label.setText(f"✓ Selected {count} files:\n{preview}")
-            self.file_path_label.setStyleSheet("color: #059669; padding: 10px; background: #d1fae5; border-radius: 5px; font-weight: bold;")
+            self.file_path_label.setStyleSheet("color: #10b981; padding: 10px; background: #1f2937; border-radius: 5px; border: 1px solid #10b981; font-weight: bold;")
             self.upload_btn.setEnabled(True)
             self.log(f"{count} file(s) selected")
+            self.stats_label.setVisible(False)
+            self.view_errors_btn.setVisible(False)
     
     def select_folder(self):
         """Open folder dialog to select a directory and index all supported files."""
@@ -323,9 +290,11 @@ class UploadTab(QWidget):
         if reply == QMessageBox.Yes:
             self.selected_files = found_files
             self.file_path_label.setText(f"✓ Selected {count} files from folder:\n{folder_path}")
-            self.file_path_label.setStyleSheet("color: #059669; padding: 10px; background: #d1fae5; border-radius: 5px; font-weight: bold;")
+            self.file_path_label.setStyleSheet("color: #10b981; padding: 10px; background: #1f2937; border-radius: 5px; border: 1px solid #10b981; font-weight: bold;")
             self.upload_btn.setEnabled(True)
             self.log(f"Folder selected: {count} files found in {folder_path}")
+            self.stats_label.setVisible(False)
+            self.view_errors_btn.setVisible(False)
     
     def upload_file(self):
         """Upload the selected files."""
@@ -350,51 +319,76 @@ class UploadTab(QWidget):
         self.progress_bar.setValue(0)
         self.upload_started_at = time.perf_counter()
         
-        # Start uploading files one by one
-        self.current_upload_index = 0
-        self.upload_next_file()
-    
-    def upload_next_file(self):
-        """Upload the next file in the queue."""
-        if self.current_upload_index >= len(self.selected_files):
-            # All files uploaded
-            self.upload_all_finished()
-            return
+        # Reset stats
+        self.success_count = 0
+        self.failure_count = 0
+        self.failed_uploads = []
+        self.stats_label.setText("Starting upload...")
+        self.stats_label.setStyleSheet("color: #6366f1; font-weight: bold;")
+        self.stats_label.setVisible(True)
+        self.view_errors_btn.setVisible(False)
         
-        file_path = self.selected_files[self.current_upload_index]
-        full_path = str(file_path.resolve())
-        
-        # Get document type (empty string if not set)
+        # Prepare files data
+        files_data = []
         document_type = self.document_type_combo.currentText().strip() or None
+        force_reindex = self.force_reindex_cb.isChecked()
         
-        self.log(f"[{self.current_upload_index + 1}/{len(self.selected_files)}] Uploading: {file_path.name}")
+        for file_path in self.selected_files:
+            files_data.append({
+                'path': file_path,
+                'full_path': str(file_path.resolve()),
+                'force_reindex': force_reindex,
+                'document_type': document_type
+            })
+            
+        self.log(f"Starting upload of {len(files_data)} files...")
         
-        # Start upload in background thread
-        self.upload_worker = UploadWorker(
-            self.api_client,
-            file_path,
-            full_path,
-            self.force_reindex_cb.isChecked(),
-            document_type
-        )
+        # Start upload worker
+        self.upload_worker = UploadWorker(self.api_client, files_data)
         self.upload_worker.progress.connect(self.log)
-        self.upload_worker.finished.connect(self.upload_finished)
+        self.upload_worker.file_finished.connect(self.on_file_finished)
+        self.upload_worker.all_finished.connect(self.on_all_finished)
         self.upload_worker.start()
     
-    def upload_finished(self, success: bool, message: str):
+    def on_file_finished(self, index: int, success: bool, message: str):
         """Handle single file upload completion."""
-        self.progress_bar.setValue(self.current_upload_index + 1)
+        self.progress_bar.setValue(index + 1)
         
         if success:
-            self.log(f"✓ File {self.current_upload_index + 1} uploaded successfully")
+            self.success_count += 1
+            self.log(f"✓ File {index + 1} uploaded successfully")
         else:
-            self.log(f"✗ File {self.current_upload_index + 1} failed: {message}")
+            self.failure_count += 1
+            
+            # Enhance error message
+            enhanced_msg = message
+            if "timed out" in message.lower():
+                enhanced_msg += "\n   ➜ Hint: File might be too large or server is busy."
+            elif "413" in message:
+                enhanced_msg += "\n   ➜ Hint: File exceeds server size limit."
+            elif "400" in message:
+                enhanced_msg += "\n   ➜ Hint: File might be empty or corrupted."
+            elif "connection" in message.lower():
+                enhanced_msg += "\n   ➜ Hint: Check your network or Docker status."
+                
+            self.log(f"✗ File {index + 1} failed: {message}")
+            
+            # Store failure details
+            file_name = self.selected_files[index].name
+            self.failed_uploads.append({
+                "file": file_name,
+                "error": enhanced_msg
+            })
         
-        # Move to next file
-        self.current_upload_index += 1
-        self.upload_next_file()
-    
-    def upload_all_finished(self):
+        # Update stats label
+        self.stats_label.setText(f"Success: {self.success_count} | Failed: {self.failure_count}")
+        if self.failure_count > 0:
+            self.stats_label.setStyleSheet("color: #ef4444; font-weight: bold;") # Red if any failures
+            self.view_errors_btn.setVisible(True)
+        else:
+            self.stats_label.setStyleSheet("color: #10b981; font-weight: bold;") # Green if all good
+            
+    def on_all_finished(self, ):
         """Handle completion of all uploads."""
         self.progress_bar.setVisible(False)
         self.select_files_btn.setEnabled(True)
@@ -413,8 +407,37 @@ class UploadTab(QWidget):
         # Clear selection
         self.selected_files = []
         self.file_path_label.setText("No files selected")
-        self.file_path_label.setStyleSheet("color: #666; padding: 10px; background: #f5f5f5; border-radius: 5px;")
+        self.file_path_label.setStyleSheet("color: #9ca3af; padding: 10px; background: #1f2937; border-radius: 5px; border: 1px dashed #374151;")
         self.upload_btn.setEnabled(False)
+        
+        # Cleanup worker
+        if self.upload_worker:
+            self.upload_worker.deleteLater()
+            self.upload_worker = None
+            
+    def show_errors_dialog(self):
+        """Show a dialog with details of failed uploads."""
+        if not self.failed_uploads:
+            return
+            
+        msg = QMessageBox(self)
+        msg.setWindowTitle("Upload Failures")
+        msg.setIcon(QMessageBox.Warning)
+        msg.setText(f"{len(self.failed_uploads)} file(s) failed to upload.")
+        
+        # Build detailed list
+        details = ""
+        for i, failure in enumerate(self.failed_uploads, 1):
+            details += f"{i}. {failure['file']}\n"
+            details += f"   Error: {failure['error']}\n\n"
+            
+        msg.setDetailedText(details)
+        
+        # Hack to force detailed text to be visible/expanded if possible, 
+        # or just encourage user to click "Show Details"
+        msg.setInformativeText("Click 'Show Details' to see the reasons.")
+        
+        msg.exec()
     
     def log(self, message: str):
         """Add a message to the log."""
@@ -441,5 +464,6 @@ class UploadTab(QWidget):
         files: list[Path] = []
         for path in folder.rglob('*'):
             if path.is_file() and path.suffix.lower() in cls.SUPPORTED_EXTENSIONS:
-                files.append(path)
+                if not path.name.startswith('~$'):
+                    files.append(path)
         return files

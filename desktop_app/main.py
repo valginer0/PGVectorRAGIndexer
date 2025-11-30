@@ -35,7 +35,22 @@ def main():
     app.setApplicationVersion("2.2.0")
     
     # Create and show main window
+    # Create and show main window
     window = MainWindow()
+    
+    # Load and apply QSS
+    try:
+        import os
+        style_path = os.path.join(os.path.dirname(__file__), "ui", "styles", "main.qss")
+        if os.path.exists(style_path):
+            with open(style_path, "r") as f:
+                app.setStyleSheet(f.read())
+            logger.info(f"Loaded stylesheet from {style_path}")
+        else:
+            logger.warning(f"Stylesheet not found at {style_path}")
+    except Exception as e:
+        logger.error(f"Failed to load stylesheet: {e}")
+
     window.show()
     
     logger.info("Desktop application started")

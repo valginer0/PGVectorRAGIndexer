@@ -7,22 +7,16 @@ from PySide6.QtWidgets import (
     QGroupBox, QComboBox, QMessageBox, QFileDialog,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit, QMenu
 )
-from PySide6.QtCore import Qt, QPoint
+import qtawesome as qta
+from PySide6.QtCore import Qt, QPoint, QSize
 from PySide6.QtGui import QColor
-import json
-from pathlib import Path
-import logging
-import os
-import sys
-import subprocess
-
 from typing import Optional
 
+import logging
 from .source_open_manager import SourceOpenManager
 from .shared import populate_document_type_combo
 
 logger = logging.getLogger(__name__)
-
 
 class ManageTab(QWidget):
     """Tab for managing documents (bulk delete, export, restore)."""
@@ -37,14 +31,16 @@ class ManageTab(QWidget):
     def init_ui(self):
         """Initialize the UI."""
         layout = QVBoxLayout(self)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Title
-        title = QLabel("🗂️ Manage Documents")
-        title.setStyleSheet("font-size: 18px; font-weight: bold; margin: 10px 0;")
+        title = QLabel("Manage Documents")
+        title.setProperty("class", "header")
         layout.addWidget(title)
         
         # Instructions
-        info_box = QGroupBox("ℹ️ Bulk Operations")
+        info_box = QGroupBox("Bulk Operations")
         info_layout = QVBoxLayout(info_box)
         info_text = QLabel(
             "Safely delete multiple documents at once:\n\n"
@@ -56,11 +52,12 @@ class ManageTab(QWidget):
             "⚠️ Always export a backup before deleting!"
         )
         info_text.setWordWrap(True)
+        info_text.setStyleSheet("color: #9ca3af;")
         info_layout.addWidget(info_text)
         layout.addWidget(info_box)
         
         # Filter selection
-        filter_group = QGroupBox("🔍 Filter Criteria (All filters combined with AND)")
+        filter_group = QGroupBox("Filter Criteria (All filters combined with AND)")
         filter_layout = QVBoxLayout(filter_group)
         
         # Document type filter with refresh button
@@ -76,9 +73,11 @@ class ManageTab(QWidget):
         self.type_combo.setToolTip("Filter by document type. Leave empty for all types.")
         type_layout.addWidget(self.type_combo, 1)
         
-        refresh_types_btn = QPushButton("🔄 Refresh Types")
+        refresh_types_btn = QPushButton()
+        refresh_types_btn.setIcon(qta.icon('fa5s.sync-alt', color='#9ca3af'))
         refresh_types_btn.clicked.connect(self.load_document_types)
         refresh_types_btn.setToolTip("Load document types from database")
+        refresh_types_btn.setFixedSize(30, 30)
         type_layout.addWidget(refresh_types_btn)
         filter_layout.addLayout(type_layout)
         
@@ -100,29 +99,32 @@ class ManageTab(QWidget):
         self.load_document_types()
         
         # Action buttons
-        button_group = QGroupBox("⚡ Actions")
+        button_group = QGroupBox("Actions")
         button_layout = QVBoxLayout(button_group)
         
         # Preview button
         preview_btn_layout = QHBoxLayout()
-        self.preview_btn = QPushButton("👁️ Preview Delete")
+        self.preview_btn = QPushButton("Preview Delete")
+        self.preview_btn.setIcon(qta.icon('fa5s.eye', color='white'))
         self.preview_btn.clicked.connect(self.preview_delete)
-        self.preview_btn.setStyleSheet("background-color: #3498db; color: white; padding: 10px; font-weight: bold;")
+        self.preview_btn.setProperty("class", "primary")
         preview_btn_layout.addWidget(self.preview_btn)
         button_layout.addLayout(preview_btn_layout)
         
         # Export and Delete buttons (side by side)
         action_btn_layout = QHBoxLayout()
         
-        self.export_btn = QPushButton("💾 Export Backup")
+        self.export_btn = QPushButton("Export Backup")
+        self.export_btn.setIcon(qta.icon('fa5s.save', color='white'))
         self.export_btn.clicked.connect(self.export_backup)
-        self.export_btn.setStyleSheet("background-color: #2ecc71; color: white; padding: 10px; font-weight: bold;")
+        self.export_btn.setStyleSheet("background-color: #10b981; border: 1px solid #10b981;") # Success color
         self.export_btn.setEnabled(False)
         action_btn_layout.addWidget(self.export_btn)
         
-        self.delete_btn = QPushButton("🗑️ Delete Documents")
+        self.delete_btn = QPushButton("Delete Documents")
+        self.delete_btn.setIcon(qta.icon('fa5s.trash-alt', color='white'))
         self.delete_btn.clicked.connect(self.delete_documents)
-        self.delete_btn.setStyleSheet("background-color: #e74c3c; color: white; padding: 10px; font-weight: bold;")
+        self.delete_btn.setProperty("class", "danger")
         self.delete_btn.setEnabled(False)
         action_btn_layout.addWidget(self.delete_btn)
         
@@ -130,9 +132,10 @@ class ManageTab(QWidget):
         
         # Undo button
         undo_btn_layout = QHBoxLayout()
-        self.undo_btn = QPushButton("↩️ Undo Last Delete (Restore)")
+        self.undo_btn = QPushButton("Undo Last Delete (Restore)")
+        self.undo_btn.setIcon(qta.icon('fa5s.undo', color='white'))
         self.undo_btn.clicked.connect(self.undo_delete)
-        self.undo_btn.setStyleSheet("background-color: #f39c12; color: white; padding: 10px; font-weight: bold;")
+        self.undo_btn.setStyleSheet("background-color: #f59e0b; border: 1px solid #f59e0b;") # Warning color
         self.undo_btn.setEnabled(False)
         undo_btn_layout.addWidget(self.undo_btn)
         button_layout.addLayout(undo_btn_layout)
@@ -363,7 +366,7 @@ class ManageTab(QWidget):
             font = item.font()
             font.setUnderline(True)
             item.setFont(font)
-            item.setForeground(QColor("#1a73e8"))
+            item.setForeground(QColor("#6366f1"))
             item.setToolTip("Open this file with the default application")
 
         return item

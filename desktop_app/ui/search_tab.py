@@ -10,59 +10,15 @@ from PySide6.QtWidgets import (
     QSpinBox, QDoubleSpinBox, QComboBox,
     QGroupBox, QTableWidget, QTableWidgetItem, QMessageBox, QMenu, QHeaderView
 )
-from PySide6.QtCore import Qt, QThread, Signal, QPoint
+import qtawesome as qta
+from PySide6.QtCore import Qt, QThread, Signal, QPoint, QSize
 from PySide6.QtGui import QColor
-
-import requests
-from pathlib import Path
-import os
-import sys
-import subprocess
-
-from .source_open_manager import SourceOpenManager
 from .shared import populate_document_type_combo
+from .workers import SearchWorker
+
+# ... imports ...
 
 logger = logging.getLogger(__name__)
-
-
-class SearchWorker(QThread):
-    """Worker thread for searching documents."""
-    
-    finished = Signal(bool, object)  # success, results or error message
-    
-    def __init__(
-        self,
-        api_client,
-        query: str,
-        top_k: int,
-        min_score: float,
-        metric: str,
-        document_type: Optional[str] = None
-    ):
-        super().__init__()
-        self.api_client = api_client
-        self.query = query
-        self.top_k = top_k
-        self.min_score = min_score
-        self.metric = metric
-        self.document_type = document_type or None
-
-    def run(self):
-        """Execute the search."""
-        try:
-            results = self.api_client.search(
-                self.query,
-                top_k=self.top_k,
-                min_score=self.min_score,
-                metric=self.metric,
-                document_type=self.document_type
-            )
-            self.finished.emit(True, results)
-        except requests.RequestException as e:
-            self.finished.emit(False, str(e))
-        except Exception as e:
-            self.finished.emit(False, str(e))
-
 
 class SearchTab(QWidget):
     """Tab for searching documents."""
@@ -77,11 +33,12 @@ class SearchTab(QWidget):
     def setup_ui(self):
         """Setup the user interface."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Title
-        title = QLabel("🔍 Search Documents")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        title = QLabel("Search Documents")
+        title.setProperty("class", "header")
         layout.addWidget(title)
         
         # Search input
@@ -91,23 +48,15 @@ class SearchTab(QWidget):
         query_layout = QHBoxLayout()
         self.query_input = QLineEdit()
         self.query_input.setPlaceholderText("Enter your search query...")
+        self.query_input.setMinimumHeight(40)
         self.query_input.returnPressed.connect(self.perform_search)
         query_layout.addWidget(self.query_input)
         
-        self.search_btn = QPushButton("🔍 Search")
+        self.search_btn = QPushButton("Search")
+        self.search_btn.setIcon(qta.icon('fa5s.search', color='white'))
         self.search_btn.clicked.connect(self.perform_search)
-        self.search_btn.setMinimumHeight(35)
-        self.search_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2563eb;
-                color: white;
-                font-weight: bold;
-                border-radius: 5px;
-            }
-            QPushButton:hover {
-                background-color: #1d4ed8;
-            }
-        """)
+        self.search_btn.setMinimumHeight(40)
+        self.search_btn.setProperty("class", "primary")
         query_layout.addWidget(self.search_btn)
         
         search_layout.addLayout(query_layout)
@@ -122,6 +71,7 @@ class SearchTab(QWidget):
         self.top_k_spin = QSpinBox()
         self.top_k_spin.setRange(1, 100)
         self.top_k_spin.setValue(10)
+        self.top_k_spin.setMinimumWidth(80)
         options_layout.addWidget(self.top_k_spin)
         
         # Min Score
@@ -130,12 +80,14 @@ class SearchTab(QWidget):
         self.min_score_spin.setRange(0.0, 1.0)
         self.min_score_spin.setSingleStep(0.05)
         self.min_score_spin.setValue(0.3)
+        self.min_score_spin.setMinimumWidth(80)
         options_layout.addWidget(self.min_score_spin)
         
         # Metric
         options_layout.addWidget(QLabel("Metric:"))
         self.metric_combo = QComboBox()
         self.metric_combo.addItems(["cosine", "euclidean", "dot_product"])
+        self.metric_combo.setMinimumWidth(120)
         options_layout.addWidget(self.metric_combo)
         
         options_layout.addStretch()
@@ -150,14 +102,17 @@ class SearchTab(QWidget):
         self.type_filter.addItem("")  # Empty = no filter
         self.type_filter.setPlaceholderText("(optional)")
         self.type_filter.setToolTip("Filter results by metadata.type value")
-        type_layout.addWidget(self.type_filter, 1)
+        self.type_filter.setMinimumWidth(200)
+        type_layout.addWidget(self.type_filter)
 
-        refresh_types_btn = QPushButton("🔄")
+        refresh_types_btn = QPushButton()
+        refresh_types_btn.setIcon(qta.icon('fa5s.sync-alt', color='#9ca3af'))
         refresh_types_btn.clicked.connect(self.load_document_types)
         refresh_types_btn.setToolTip("Refresh available document types")
-        refresh_types_btn.setMaximumWidth(40)
+        refresh_types_btn.setFixedSize(30, 30)
         type_layout.addWidget(refresh_types_btn)
-
+        
+        type_layout.addStretch()
         layout.addWidget(type_group)
 
         # Load document types on init
@@ -184,7 +139,7 @@ class SearchTab(QWidget):
         
         # Status label
         self.status_label = QLabel("Enter a query and click Search")
-        self.status_label.setStyleSheet("color: #666; font-style: italic;")
+        self.status_label.setProperty("class", "subtitle")
         layout.addWidget(self.status_label)
     
     def perform_search(self):
@@ -234,12 +189,12 @@ class SearchTab(QWidget):
             results = data
             self.display_results(results)
             self.status_label.setText(f"Found {len(results)} results")
-            self.status_label.setStyleSheet("color: #059669; font-style: italic;")
+            self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
         else:
             error_msg = data
             QMessageBox.critical(self, "Search Failed", f"Search failed: {error_msg}")
             self.status_label.setText("Search failed")
-            self.status_label.setStyleSheet("color: #dc2626; font-style: italic;")
+            self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
     
     def display_results(self, results: List[Dict[str, Any]]):
         """Display search results in the table."""
@@ -299,7 +254,7 @@ class SearchTab(QWidget):
             font = item.font()
             font.setUnderline(True)
             item.setFont(font)
-            item.setForeground(QColor("#1a73e8"))
+            item.setForeground(QColor("#6366f1"))
             item.setToolTip("Open this file with the default application")
 
         return item

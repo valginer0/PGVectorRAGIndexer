@@ -16,7 +16,7 @@ fi
 source venv/bin/activate
 
 # Check if PySide6 is installed
-if ! python -c "import PySide6" 2>/dev/null; then
+if ! python -c "import PySide6; import qtawesome" 2>/dev/null; then
     echo "Installing desktop app dependencies..."
     pip install -r requirements-desktop.txt
 fi

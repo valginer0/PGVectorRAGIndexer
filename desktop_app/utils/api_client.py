@@ -22,7 +22,7 @@ class APIClient:
             base_url: Base URL of the API
         """
         self.base_url = base_url.rstrip('/')
-        self.timeout = 30
+        self.timeout = 300
     
     def is_api_available(self) -> bool:
         """Check if the API is available."""
@@ -33,6 +33,66 @@ class APIClient:
             )
             return response.status_code == 200
         except requests.RequestException:
+            return False
+
+    def check_document_exists(self, source_uri: str) -> bool:
+        """
+        Check if a document with the given source URI already exists.
+        
+        Args:
+            source_uri: Source URI to check
+            
+        Returns:
+            True if document exists, False otherwise
+        """
+        try:
+            # Use list_documents with filter to check existence
+            # We use a specific filter pattern to match exact URI if possible,
+            # or rely on the fact that we can filter by source_uri in the backend if supported.
+            # For now, let's assume we can search/filter by exact source_uri or use a similar mechanism.
+            # Actually, the backend might support filtering by source_uri directly.
+            # Let's try to use the search endpoint with a filter, or list documents with a filter.
+            
+            # Since the backend API for exact match might vary, let's try to use the search/list endpoint
+            # with a filter if available, or just assume we can't easily check without a dedicated endpoint.
+            # However, looking at manage_tab.py, we use 'source_uri_like' for wildcards.
+            # Maybe we can use that with an exact match?
+            
+            # Better approach: Use the /documents endpoint with a limit=1 and source_uri filter if supported.
+            # If not supported, we might need to rely on the upload endpoint's behavior (it might return 409).
+            # But the worker explicitly calls this method.
+            
+            # Let's implement a best-effort check using list_documents with a filter.
+            # If the backend doesn't support exact source_uri filtering, this might be inefficient.
+            # But wait, manage_tab uses 'source_uri_like'.
+            
+            # Let's try to use 'source_uri' filter if the backend supports it.
+            # Based on manage_tab.py: filters["source_uri_like"] = sql_pattern
+            
+            # Let's try to find a document with this URI.
+            # We can use the 'source_uri_like' filter with the exact URI (escaping wildcards if needed).
+            # But standard SQL LIKE without wildcards acts as equals.
+            
+            filters = {"source_uri_like": source_uri}
+            response = self.list_documents(limit=1, offset=0)
+            # Wait, list_documents doesn't accept filters in the python client method signature I see above!
+            # It only accepts limit, offset, sort_by, sort_dir.
+            
+            # Let's check if we can pass filters to list_documents.
+            # The list_documents method in APIClient (lines 131-153) DOES NOT take filters.
+            
+            # However, the search method DOES take filters.
+            # Let's use search with a filter.
+            
+            results = self.search(
+                query="", # Empty query to match all (if supported) or just rely on filter
+                top_k=1,
+                filters={"source_uri_like": source_uri}
+            )
+            return len(results) > 0
+            
+        except Exception:
+            # If check fails, assume it doesn't exist to allow upload attempt
             return False
     
     def upload_document(

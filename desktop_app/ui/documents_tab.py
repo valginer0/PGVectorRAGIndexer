@@ -12,59 +12,12 @@ from PySide6.QtWidgets import (
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QGroupBox, QMenu, QComboBox
 )
-from PySide6.QtCore import Qt, QThread, Signal, QPoint, QSignalBlocker
+import qtawesome as qta
 from PySide6.QtGui import QColor
+from PySide6.QtCore import Qt, QThread, Signal, QPoint, QSignalBlocker, QSize
+from .workers import DocumentsWorker, DeleteWorker
 
-import requests
-from pathlib import Path
-import os
-import sys
-import subprocess
-
-logger = logging.getLogger(__name__)
-
-
-class DocumentsWorker(QThread):
-    """Worker thread for loading documents."""
-    
-    finished = Signal(bool, object)  # success, response or error message
-    
-    def __init__(self, api_client, params: Dict[str, Any]):
-        super().__init__()
-        self.api_client = api_client
-        self.params = params
-    
-    def run(self):
-        """Load documents list."""
-        try:
-            documents = self.api_client.list_documents(**self.params)
-            self.finished.emit(True, documents)
-        except requests.RequestException as e:
-            self.finished.emit(False, str(e))
-        except Exception as e:
-            self.finished.emit(False, str(e))
-
-
-class DeleteWorker(QThread):
-    """Worker thread for deleting a document."""
-    
-    finished = Signal(bool, str)  # success, message
-    
-    def __init__(self, api_client, document_id: str):
-        super().__init__()
-        self.api_client = api_client
-        self.document_id = document_id
-    
-    def run(self):
-        """Delete the document."""
-        try:
-            self.api_client.delete_document(self.document_id)
-            self.finished.emit(True, "Document deleted successfully")
-        except requests.RequestException as e:
-            self.finished.emit(False, str(e))
-        except Exception as e:
-            self.finished.emit(False, str(e))
-
+# ... imports ...
 
 class DocumentsTab(QWidget):
     """Tab for managing documents."""
@@ -97,16 +50,18 @@ class DocumentsTab(QWidget):
     def setup_ui(self):
         """Setup the user interface."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
+        layout.setSpacing(20)
+        layout.setContentsMargins(20, 20, 20, 20)
         
         # Title and refresh button
         header_layout = QHBoxLayout()
-        title = QLabel("📚 Document Library")
-        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        title = QLabel("Document Library")
+        title.setProperty("class", "header")
         header_layout.addWidget(title)
         header_layout.addStretch()
         
-        self.refresh_btn = QPushButton("🔄 Refresh")
+        self.refresh_btn = QPushButton("Refresh")
+        self.refresh_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
         self.refresh_btn.clicked.connect(self.load_documents)
         header_layout.addWidget(self.refresh_btn)
         
@@ -150,12 +105,15 @@ class DocumentsTab(QWidget):
         pagination_layout.addWidget(self.page_size_combo)
         pagination_layout.addStretch()
         
-        self.prev_page_btn = QPushButton("← Previous")
+        self.prev_page_btn = QPushButton("Previous")
+        self.prev_page_btn.setIcon(qta.icon('fa5s.chevron-left', color='white'))
         self.prev_page_btn.clicked.connect(lambda: self.change_page(-1))
         self.prev_page_btn.setEnabled(False)
         pagination_layout.addWidget(self.prev_page_btn)
         
-        self.next_page_btn = QPushButton("Next →")
+        self.next_page_btn = QPushButton("Next")
+        self.next_page_btn.setIcon(qta.icon('fa5s.chevron-right', color='white'))
+        self.next_page_btn.setLayoutDirection(Qt.RightToLeft) # Icon on right
         self.next_page_btn.clicked.connect(lambda: self.change_page(1))
         self.next_page_btn.setEnabled(False)
         pagination_layout.addWidget(self.next_page_btn)
@@ -165,7 +123,7 @@ class DocumentsTab(QWidget):
         
         # Status label
         self.status_label = QLabel("Click Refresh to load documents")
-        self.status_label.setStyleSheet("color: #666; font-style: italic;")
+        self.status_label.setProperty("class", "subtitle")
         layout.addWidget(self.status_label)
         
         # Auto-load on first show
@@ -192,7 +150,7 @@ class DocumentsTab(QWidget):
         self.prev_page_btn.setEnabled(False)
         self.next_page_btn.setEnabled(False)
         self.status_label.setText("Loading documents...")
-        self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
+        self.status_label.setStyleSheet("color: #6366f1; font-style: italic;")
         self.is_loading = True
         
         params = {
@@ -287,7 +245,7 @@ class DocumentsTab(QWidget):
                 error_msg = error_msg["detail"]
             QMessageBox.critical(self, "Load Failed", f"Failed to load documents: {error_msg}")
             self.status_label.setText("Load failed")
-            self.status_label.setStyleSheet("color: #dc2626; font-style: italic;")
+            self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
             self.prev_page_btn.setEnabled(False)
             self.next_page_btn.setEnabled(False)
     
@@ -341,18 +299,9 @@ class DocumentsTab(QWidget):
             self.documents_table.setItem(i, 4, updated_item)
             
             # Actions - Delete button
-            delete_btn = QPushButton("🗑️ Delete")
-            delete_btn.setStyleSheet("""
-                QPushButton {
-                    background-color: #dc2626;
-                    color: white;
-                    border-radius: 3px;
-                    padding: 5px 10px;
-                }
-                QPushButton:hover {
-                    background-color: #b91c1c;
-                }
-            """)
+            delete_btn = QPushButton("Delete")
+            delete_btn.setIcon(qta.icon('fa5s.trash-alt', color='white'))
+            delete_btn.setProperty("class", "danger")
             delete_btn.clicked.connect(lambda checked, doc_id=doc.get('document_id'): self.delete_document(doc_id))
             self.documents_table.setCellWidget(i, 5, delete_btn)
         
@@ -377,7 +326,7 @@ class DocumentsTab(QWidget):
         
         if reply == QMessageBox.Yes:
             self.status_label.setText(f"Deleting document...")
-            self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
+            self.status_label.setStyleSheet("color: #6366f1; font-style: italic;")
             
             # Start delete worker
             self.delete_worker = DeleteWorker(self.api_client, document_id)
@@ -395,7 +344,7 @@ class DocumentsTab(QWidget):
         else:
             QMessageBox.critical(self, "Delete Failed", f"Failed to delete document: {message}")
             self.status_label.setText("Delete failed")
-            self.status_label.setStyleSheet("color: #dc2626; font-style: italic;")
+            self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
 
     def _create_source_item(self, source_uri: str) -> QTableWidgetItem:
         """Create a hyperlink-style item for source URIs."""
@@ -409,7 +358,7 @@ class DocumentsTab(QWidget):
             font = item.font()
             font.setUnderline(True)
             item.setFont(font)
-            item.setForeground(QColor("#1a73e8"))
+            item.setForeground(QColor("#6366f1"))
             item.setToolTip("Open this file with the default application")
 
         return item
@@ -557,7 +506,7 @@ class DocumentsTab(QWidget):
                 f"Showing {start_index}-{end_index} of {self.total_documents} documents (Page {page_number} of {total_pages})"
             )
             has_next = end_index < self.total_documents
-        self.status_label.setStyleSheet("color: #059669; font-style: italic;")
+        self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
         self.prev_page_btn.setEnabled(self.current_offset > 0)
         self.next_page_btn.setEnabled(has_next)
 

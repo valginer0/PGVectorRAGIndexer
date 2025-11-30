@@ -276,7 +276,11 @@ class SearchTab(QWidget):
         if self.source_manager:
             self.source_manager.open_path(source_uri)
         else:
-            self.open_source_path(source_uri)
+            QMessageBox.warning(
+                self,
+                "Feature Unavailable",
+                "File opening is not available. Please restart the application."
+            )
 
     def show_results_context_menu(self, pos: QPoint) -> None:
         if not self.source_manager:
@@ -324,39 +328,6 @@ class SearchTab(QWidget):
             self.source_manager.trigger_reindex_path(source_uri)
         elif action == remove_action:
             self.source_manager.remove_entry(source_uri)
-
-    def open_source_path(self, path: str) -> None:
-        """Open the given path with the OS default application."""
-        if not path or path == "Unknown":
-            QMessageBox.warning(
-                self,
-                "No Path",
-                "No source path is available to open."
-            )
-            return
-
-        normalized = Path(path)
-        if not normalized.exists():
-            QMessageBox.warning(
-                self,
-                "File Not Found",
-                f"The file does not exist:\n{path}"
-            )
-            return
-
-        try:
-            if sys.platform.startswith("win"):
-                os.startfile(str(normalized))  # type: ignore[attr-defined]
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(normalized)])
-            else:
-                subprocess.Popen(["xdg-open", str(normalized)])
-        except Exception as exc:
-            QMessageBox.critical(
-                self,
-                "Open Failed",
-                f"Unable to open the file:\n{path}\n\nError: {exc}"
-            )
     
     def load_document_types(self) -> None:
         """Populate the document type filter from the API."""

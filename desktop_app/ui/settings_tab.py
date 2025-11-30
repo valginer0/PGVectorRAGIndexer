@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
 )
 import qtawesome as qta
 from PySide6.QtCore import QThread, Signal, QSize
+from .workers import StatsWorker
 
 # ... imports ...
 

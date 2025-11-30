@@ -125,3 +125,22 @@ class UploadWorker(QThread):
 
     def cancel(self):
         self.is_cancelled = True
+
+class StatsWorker(QThread):
+    """Worker thread for loading database statistics."""
+    finished = Signal(bool, object)
+
+    def __init__(self, api_client):
+        super().__init__()
+        self.api_client = api_client
+
+    def run(self):
+        try:
+            stats = self.api_client.get_statistics()
+            self.finished.emit(True, stats)
+        except Exception as e:
+            logger.error(f"Load statistics failed: {e}")
+            self.finished.emit(False, str(e))
+
+    def cancel(self):
+        self.is_cancelled = True

@@ -1,0 +1,27 @@
+Val -
+
+Thanks for taking the time to speak with Jon today.
+
+Here is the overview regarding the hibernate opening at Bank of 
+America.
+
+Senior developer/architect to design and develop J2EE-based financial
+applications. Project experience on large-scale enterprise applications
+is required and specific experience in portals and Capital Markets or
+other areas in financial services is desirable. Experience/Skills
+Required Java: 5+ years professional java development including
+servlets, JSP, EJB and JMS Project experience with web application
+frameworks such as Struts, Spring, WebWork2, Hibernate or others
+Application Servers: WebLogic Database: Oracle 9i, PL/SQL Portals:
+Epicentric/Vignette or similar Workflow: experience with Savvion SBM or
+similar workflow products is preferable Methodology: project experience
+with RUP or other structured software development methodologies
+
+If you could please cater your resume to highlight this experience I
+would appreciate it.
+
+Jon Bolton and I will get you over to the bank after receiving a word
+copy of your resume.
+
+Regards,
+Kate

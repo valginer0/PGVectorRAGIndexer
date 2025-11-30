@@ -1,0 +1,53 @@
+﻿Stacy Kemp <skemp@softworldinc.com>
+To	Val G. Today at 2:08 PM
+Hi Val,
+ 
+It was a pleasure speaking with you this afternoon. This email confirms your resume is being submitted to our client, Xaxis, for their Senior Python Engineer position at a confidential pay rate of $100 CTC. The company address, job description and requirements for working on CTC with Softworld are listed below. Feel free to contact me with any questions. Please confirm receipt. I’ll contact you as soon as we have feedback on your resume. Thanks for your time today.
+ 
+Softworld Client: 31 Penn Plaza 132 West 31st Street New York, NY  10001
+Duration: 12 month contract; potential for extension or conversion
+ 
+Description: 
+Your main focus will be on a high-profile internal product that uses data science and modeling to automate the process of digital advertising buying, and you’ll be working on everything from pipelining data to various ad exchanges to enabling our data scientists to make the best products they can. We love full-stack engineers who are not afraid to work on any part of the system that needs them, but for this role, we want someone who specializes in the backend components, and moonlights on the others.
+
+What You Will Be Doing
+• Developing our Python API services and job pipeline systems
+• Enhancing our modeling and algorithmic systems
+• Building AI automation that drives a lot of profit for the company
+• Building amazing user experiences that make their lives easier
+• Building cool architectures and implementations
+• Participating in epic Nerf gun battles
+Required Skills
+• These skills would be required for you to excel at this role.
+• 4+ years of experience in Python (we use Python 3, but any experience is fine)
+• 1+ years of experience in a compiled, OO language (C/C++, Java, etc) —
+• Although Python is dynamically typed, we take type-hinting (via the typing library) seriously
+• Experience with linux
+• Experience with RESTful interfaces (flask, requests, JSON)
+Desired Skills
+• These skills would be an awesome addition to our team.
+• Experience with pandas/NumPy
+• Some JavaScript experience
+• Experience using Git for version control
+• Experience launching and hosting in AWS
+• Experience working in an agile development environment (JIRA, Confluence, etc.)
+• Deep passionate love for technology and solving complex problems
+• Excellent debugging skills
+• Understanding of ad tech or exposure to supply & demand concepts in advertising
+• Any experience with data science, visualization, analytics, or big data systems
+• Good understanding of the balance between simplicity and elegance and delivery and strategy
+ 
+In order to pay you on C2C status, Softworld requires:
+1.      That you hold “Articles of Incorporation”
+2.      Federal ID number associated with your Corp.
+3.      Certificate of Insurance and updated to list Softworld as a certificate holder before making payment
+·        Insurance requirements: $500,000 in general liability coverage & state minimum of worker’s compensation insurance
+ 
+Stacy Kemp
+Delivery Manager
+Softworld, Inc.
+2722 Merrilee Dr., Suite 320, Fairfax, VA  22031
+Office: 781.373.8487| Cell:  301.704.0323  | Toll Free: 877.899.1166 ext. 487
+Fax: 781.466.9687
+www.softworldinc.com 
+

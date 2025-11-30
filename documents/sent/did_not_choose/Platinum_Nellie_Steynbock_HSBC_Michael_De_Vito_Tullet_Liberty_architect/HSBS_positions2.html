@@ -1,0 +1,1547 @@
+<html><head><!--web53609--><!--  -->
+
+<title>Yahoo! Mail - ginerv@yahoo.com</title><script type="text/javascript">
+<!-- 
+	if(typeof top.frames["wmailmain"] != "undefined") window.open("http://mail.yahoo.com", "_top");
+// -->
+</script>
+
+<link rel="stylesheet" href="HSBS_positions2_files/mail_blue_all.css" type="text/css" media="all"><script type="text/javascript" src="HSBS_positions2_files/mailcommonlib.js"></script><style type="text/css">.replbq{width:100%}</style><script type="text/javascript">
+<!-- 
+			
+			function ReplySMS(p_sFrom,p_sTo)
+			{
+				var oForm = document.showLetter;
+				var sURI = oForm.ymuri.value;
+				var sURLExtras = oForm.urlextras.value;
+				var sFrom = p_sFrom.replace(/\+/g, '%2b');
+				var sLocation = '/' + sURI + '/ComposeSMS?' + sURLExtras + '&To=' + sFrom + "&REP=1&From=" + p_sTo ;
+				window.location.href = sLocation;
+			};
+			
+			var pwWarningShown = false;
+			
+			function ShowPwWarning()
+			{
+				if(!pwWarningShown)
+				{
+					alert(document.showLetter.passwordwarningmessage.value);
+					pwWarningShown = true;
+				}
+			};
+			
+			var noFormWarning = false;
+			
+			function ShowFormWarning()
+			{
+				if(noFormWarning) return true;
+			
+				var oForm = document.showLetter;
+				if(window.showModalDialog)
+				{
+					var sURI = oForm.ymuri.value;
+					var sURLExtras = oForm.urlextras.value;
+					
+					var r = showModalDialog("/"+sURI+"/Static?file=FormWarning.html&"+sURLExtras,null,"dialogWidth:456px;dialogHeight:230px;center:yes;resizeable:no;status:no;help:no;scroll:no");
+			
+					if(r)
+					{
+						if(r.dontshow)
+						{
+							noFormWarning = true;
+							window.open("/"+sURI+"/Asynch?op=noformwarn&"+sURLExtras,"asynch");
+						}
+						return r.send;
+					}
+					return false;
+				}
+				else return confirm(oForm.formwarningmessage.value);
+			};
+
+			function ShowLinkWarning()
+			{
+				if(noFormWarning) return true;
+			
+				var oForm = document.showLetter;
+				if(window.showModalDialog)
+				{
+					var sURI = oForm.ymuri.value;
+					var sURLExtras = oForm.urlextras.value;
+					
+					var r = showModalDialog("/"+sURI+"/Static?file=LinkWarning.html&"+sURLExtras,null,"dialogWidth:456px;dialogHeight:230px;center:yes;resizeable:no;status:no;help:no;scroll:no");
+			
+					if(r)
+					{
+						if(r.dontshow)
+						{
+							noFormWarning = true;
+							window.open("/"+sURI+"/Asynch?op=noformwarn&"+sURLExtras,"asynch");
+						}
+						return r.send;
+					}
+					return false;
+				}
+				else return confirm(oForm.linkwarningmessage.value);
+			}
+			
+			function Reply_Click()
+			{
+
+				ResetFields();			
+				var oEvent = this.Event;
+				var nOffsetX = (oEvent.layerX) ? (oEvent.layerX) : oEvent.offsetX;
+				
+				if(nOffsetX > (this.offsetWidth-22)) this.Menu.Show();
+				else
+				{
+                	if( parent && parent.showCompose && document.showLetter.ICOK.value == "1" )
+						return doInstacomposeReply();
+
+					document.compose.REP.value = "1";
+					document.compose.submit();			
+				}
+			};
+			
+			function ReplyMenu_Click()
+			{
+
+				var oLI = this.Sender.tagName == "LI" ? this.Sender : this.Sender.parentNode;
+				if(parseInt(oLI.value) == 0) document.compose.REP.value = "1";
+				else document.compose.REPA.value = "1";
+
+            	if( parent && parent.showCompose && document.showLetter.ICOK.value == "1" )
+				{
+					return	document.compose.REPA.value == "1" ? doInstacomposeReplyAll() : doInstacomposeReply();
+				}
+
+				document.compose.submit();
+			};
+		
+			function doInstacomposeReply()
+			{
+            	parent.showCompose( document.showLetter.ICReplyBody.value, 
+						document.showLetter.ICReplyTo.value,
+						document.showLetter.ICReplySubj.value,
+						'',	
+						'Reply' );
+
+			};	
+
+			function doInstacomposeReplyAll()
+			{
+            	parent.showCompose( document.showLetter.ICReplyBody.value, 
+						document.showLetter.ICReplyAllTo.value,
+						document.showLetter.ICReplySubj.value,
+						document.showLetter.ICReplyAllCc.value,
+						'Reply' );
+
+			};	
+
+			function doInstacomposeForward()
+			{
+            	parent.showCompose( document.showLetter.ICFwdBody.value, 
+						 "",
+						 document.showLetter.ICFwdSubj.value,
+						 "",	
+						 'Forward' );
+
+			};	
+			
+			function Forward_Click()
+			{
+
+				ResetFields();
+				var oEvent = this.Event;
+				var nOffsetX = (oEvent.layerX) ? (oEvent.layerX) : oEvent.offsetX;
+			
+				if(nOffsetX > (this.offsetWidth-22)) this.Menu.Show();
+				else
+				{
+            		if( parent && parent.showCompose && document.showLetter.ICOK.value == "1" )
+						return doInstacomposeForward();
+					document.compose.FWD.value = "1";
+					document.compose.submit();				
+				}
+			};
+			
+			function ForwardMenu_Click()
+			{
+
+				var oLI = this.Sender.tagName == "LI" ? this.Sender : this.Sender.parentNode;
+				document.compose.FWD.value = "1";
+				document.compose.fwopt.value = (parseInt(oLI.value) == 0) ? 'quoted' : 'attach';
+
+            	if( document.compose.fwopt.value == 'quoted'
+					 && parent
+					 && parent.showCompose && document.showLetter.ICOK.value == "1" )
+					return doInstacomposeForward();
+
+				document.compose.submit();
+			};
+
+			function ResetFields() 
+			{
+				document.compose.REP.value = '';
+				document.compose.REPA.value = '';
+				document.compose.FWD.value = '';
+			}
+
+			function Delete_Click(p_oSender) 	 
+			{ 	 
+				var oForm = p_oSender.form; 	 
+				oForm.DEL.value = "Delete";
+				oForm.submit(); 	 
+			};			
+			
+			//-->
+</script><style type="text/css"><!--@import url("http://us.js1.yimg.com/us.yimg.com/lib/hdr/ygma5.css");body{margin:0px 4px;}--></style></head>
+
+ 
+
+
+
+
+
+
+
+
+
+<noscript>
+<META HTTP-EQUIV=Refresh CONTENT="0; URL=/ym/login?nojs=1">
+</noscript>
+
+
+        
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<body onload="doSync();">
+<span id="iObjectHere"></span>
+
+
+<form name="compose" method="post" action="/ym/Compose?box=Inbox&amp;Mid=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;inc=&amp;Search=&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">
+<input name="REP" value="" type="hidden">
+<input name="REPA" value="" type="hidden">
+<input name="FWD" value="" type="hidden">
+<input name="fwopt" value="attach" type="hidden">
+<input name="Idx" value="0" type="hidden">
+</form>
+
+<form name="spamform" method="post" action="/ym/blocksender2?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;inc=&amp;Search=&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">
+<input name=".crumb" value="2XsZ1KfajYM" type="hidden"><input name="NE" value="NSteynbok@PlatinumIT.com" type="hidden">
+<input name="ISSPAM" value="1" type="hidden">
+</form>
+		
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<script type="text/javascript">
+
+    function Help(link)
+    {
+		window.open(link,"help","width=400,height=500,scrollbars=yes,dependent=yes");
+    }
+
+    if(document.cookie != "" && document.cookie.indexOf("4I0ICB") == -1) window.open("http://mail.yahoo.com", "_top");
+
+    var newWin=null;
+    var onscreen=false;
+
+    function NewWin(url,name,xpos,ypos,width,height)
+    {
+       newWin=window.open(
+           url,
+           name,
+           "screenX="+xpos+",screenY="+ypos+",WIDTH="+width+",HEIGHT="+height+ 
+           ",location=0,resizable=1,status=0,titlebar=1,directories=0,toolbar=0,menubar=0,scrollbars=0,status=0"
+       );
+       newWin.focus();
+       onscreen=true; 
+    }
+
+</script>
+
+	<div id="ygma" align="center"><form name="yhdr_form" style="margin: 0pt;" action="http://srd.yahoo.com/loc=head&amp;st=yahoo/*http://search.yahoo.com/search" target="_blank"><input name="fr" value="ush1-mail" type="hidden"><table border="0" cellpadding="0" cellspacing="0" width="100%"><tbody><tr bgcolor="#efefef"><td id="ygmalinks" class="ygmabk" colspan="3" width="100%"><font face="arial,helvetica,sans-serif" size="-2"><a href="http://us.ard.yahoo.com/SIG=1298m9tkh/M=289534.5473431.6553392.5333790/D=mail/S=150500004:HEADR/EXP=1109737787/A=2378664/R=0/SIG=10mgpruen/*http://www.yahoo.com" target="_top"><font color="#000000">Yahoo!</font></a>   <a href="http://us.ard.yahoo.com/SIG=1298m9tkh/M=289534.5473431.6553392.5333790/D=mail/S=150500004:HEADR/EXP=1109737787/A=2378664/R=1/SIG=10l2nj3k8/*http://my.yahoo.com" target="_top"><font color="#000000">My Yahoo!</font></a>   <a href="http://us.ard.yahoo.com/SIG=1298m9tkh/M=289534.5473431.6553392.5333790/D=mail/S=150500004:HEADR/EXP=1109737787/A=2378664/R=2/SIG=10n3m6b64/*http://mail.yahoo.com" target="_top"><font color="#000000">Mail</font></a></font></td><td class="ygmatcrn"><spacer type="block" height="1" width="1"></td><td class="ygmabk" rowspan="2"><img src="HSBS_positions2_files/stw.gif" alt="Search the web" border="0" height="17" hspace="4" width="34"></td><td id="ygmasearch" class="ygmabk" rowspan="2" nowrap="nowrap"><font face="verdana,geneva,sans-serif" size="-2"><input name="p" size="12" title="Enter search terms here" maxlength="100" type="text"> <input class="ygbt" value="Search" title="Search" type="submit"></font></td></tr><tr><td rowspan="2" valign="top"><a href="http://us.ard.yahoo.com/SIG=1298m9tkh/M=289534.5473431.6553392.5333790/D=mail/S=150500004:HEADR/EXP=1109737787/A=2378664/R=3/SIG=10n3m6b64/*http://mail.yahoo.com"><img id="ygmalogo" src="HSBS_positions2_files/ma_mail_1.gif" alt="Yahoo! Mail" border="0" height="33" width="196"></a></td><td id="ygmagreet" rowspan="2" width="100%"><font face="verdana,geneva,sans-serif" size="-2">Welcome, <strong>ginerv</strong><br>[<a href="http://us.ard.yahoo.com/SIG=1298m9tkh/M=289534.5473431.6553392.5333790/D=mail/S=150500004:HEADR/EXP=1109737787/A=2378664/R=4/SIG=133erplvs/*http://login.yahoo.com/config/login?logout=1&amp;.done=http://mail.yahoo.com/&amp;.src=ym&amp;.lg=us&amp;.intl=us" target="_top">Sign Out</a>, <a href="http://us.ard.yahoo.com/SIG=1298m9tkh/M=289534.5473431.6553392.5333790/D=mail/S=150500004:HEADR/EXP=1109737787/A=2378664/R=5/SIG=12go3ih84/*http://edit.yahoo.com/config/eval_profile?.done=http://mail.yahoo.com/&amp;.src=ym" target="_top">My Account</a>]</font></td><td rowspan="2"><script language="JavaScript">
+var pb_target="_top";var pb_URL=new Array();
+pb_URL[1]="http://us.ard.yahoo.com/SIG=126flck78/M=294867.5495645.6574427.1284474/D=mail/S=150500004:PB/EXP=1109737787/A=2533947/R=0/id=flashurl/SIG=10tt88gbl/*http://poweredby.hpidea.com";
+var pb_flashfile="http://us.a1.yimg.com/us.yimg.com/a/1-/flash/hp/pb/pbhp_84x28_blu_yahoomail.swf";
+var pb_altURL="http://us.ard.yahoo.com/SIG=126flck78/M=294867.5495645.6574427.1284474/D=mail/S=150500004:PB/EXP=1109737787/A=2533947/R=1/id=altimgurl/SIG=10tt88gbl/*http://poweredby.hpidea.com";
+var pb_altimg="http://us.a1.yimg.com/us.yimg.com/a/1-/flash/hp/pb/pbhp_84x28_blu_yahoo.gif";
+var pb_width=84;var pb_height=28;
+var pb_FitNewWinHeight=new Array;var pb_FitNewWinWidth=new Array;
+pb_FitNewWinWidth[1]=790;pb_FitNewWinHeight[1]=590;</script>
+<script language="JavaScript" src="HSBS_positions2_files/fs_pb_fitted_072002b.js"></script><a href="http://us.ard.yahoo.com/SIG=126flck78/M=294867.5495645.6574427.1284474/D=mail/S=150500004:PB/EXP=1109737787/A=2533947/R=1/id=altimgurl/SIG=10tt88gbl/*http://poweredby.hpidea.com" target="_top"><img src="HSBS_positions2_files/pbhp_84x28_blu_yahoo.gif" border="0" height="28" width="84"></a>
+<noscript><a
+href="http://us.ard.yahoo.com/SIG=126flck78/M=294867.5495645.6574427.1284474/D=mail/S=150500004:PB/EXP=1109737787/A=2533947/R=2/id=noscript/SIG=10tt88gbl/*http://poweredby.hpidea.com"
+target=_top><img
+src="http://us.a1.yimg.com/us.yimg.com/a/1-/flash/hp/pb/pbhp_84x28_blu_yahoo.gif"
+width=84 height=28 alt="Powered by HP" border=0></a></noscript></td><td class="ygmacrn" height="14" nowrap="nowrap" valign="top" width="13"><spacer type="block" height="14" width="13"></td></tr><tr><td colspan="3" id="ygmaproplinks" align="right"><font face="verdana,geneva,sans-serif" size="-2"><a href="http://us.ard.yahoo.com/SIG=1298m9tkh/M=289534.5473431.6553392.5333790/D=mail/S=150500004:HEADR/EXP=1109737787/A=2378664/R=6/SIG=10n3m6b64/*http://mail.yahoo.com" target="_top">Mail Home</a> - <a href="http://us.ard.yahoo.com/SIG=1298m9tkh/M=289534.5473431.6553392.5333790/D=mail/S=150500004:HEADR/EXP=1109737787/A=2378664/R=7/SIG=12ruet0c4/*http://us.rd.yahoo.com/evt=30047/*http://help.yahoo.com/help/us/tutorials/mail/index.html" target="_top">Mail Tutorials</a> - <a href="http://us.ard.yahoo.com/SIG=1298m9tkh/M=289534.5473431.6553392.5333790/D=mail/S=150500004:HEADR/EXP=1109737787/A=2378664/R=8/SIG=115b35dfb/*http://help.yahoo.com/help/us/mail/" target="_top">Help</a></font></td></tr></tbody></table></form></div>
+
+
+
+<!-- START NORTH BANNER -->
+<div id="northbanner">
+<!-- adstart -->
+<!-- adend -->			
+</div>
+<!-- END NORTH BANNER -->			
+
+
+
+
+
+
+
+
+<script>
+    var oKey = new ylib_keyevt();
+    oKey.addKey(67,-1,"location='http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Inbox&YY=84105&order=down&sort=date&pos=0&view=a&head=b&YN=1'","shift+ctrl"); // Check Mail | CTRL-C
+    if( parent.showCompose )
+        oKey.addKey(80,-1,"parent.showCompose();","shift+ctrl"); // Compose | CTRL-P
+    else
+        oKey.addKey(80,-1,"location='http://us.f536.mail.yahoo.com/ym/Compose?YY=84105&order=down&sort=date&pos=0&view=a&head=b'","shift+ctrl"); // Compose | CTRL-P
+
+    oKey.addKey(70,-1,"location='http://us.f536.mail.yahoo.com/ym/Folders?YY=84105&order=down&sort=date&pos=0&view=a&head=b'","shift+ctrl"); // Folders | CTRL-F
+    oKey.addKey(83,-1,"location='http://us.f536.mail.yahoo.com/ym/Search?P=1&YY=84105&order=down&sort=date&pos=0&view=a&head=b'","shift+ctrl"); // Search | CTRL-S
+        oKey.addKey(72,-1,"location='http://help.yahoo.com/help/us/mail'","shift+ctrl"); // Help | CTRL-H
+    </script>
+
+<script language="javascript">
+
+    function init() 
+    { 
+		if(document.getElementById)
+		{
+			Tabs_Init();
+			LeftNav('popaccounts');
+			LeftNav('mailaccounts');
+			LeftNav('folderlist');
+			LeftNav('searchnav');
+			LeftNav('optionsnav');
+			
+	    	document.onkeydown = function(evt) { oKey.keyevent(evt); }
+			if(typeof OnLoad != 'undefined') OnLoad();
+		}
+    }
+
+    onload=init
+
+</script>
+
+<div id="topnav">
+	<div>
+		<span id="mailtab" class="first selected"><span><a href="http://us.rd.yahoo.com/mail_us/pimnav/mail/*http://us.f536.mail.yahoo.com/ym/welcome?YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">Mail Plus</a><a href="#mailshortcuts" class="jump"> <img src="HSBS_positions2_files/bt_dd_l_2.gif" alt="Mail shortcuts"></a><span>| </span></span></span>
+		<span class="" id="addressbooktab"><span><a target="_top" href="http://us.rd.yahoo.com/mail_us/pimnav/ab/*http://address.yahoo.com/yab/us">Addresses</a><a target="_top" href="#addressbookshortcuts" class="jump"> <img src="HSBS_positions2_files/bt_dd_2.gif" alt="Address Book shortcuts"></a><span>| </span></span></span>
+		<span id="calendartab"><span><a target="_top" href="http://us.rd.yahoo.com/mail_us/pimnav/cal/*http://calendar.yahoo.com">Calendar</a><a target="_top" href="#calendarshortcuts" class="jump"> <img src="HSBS_positions2_files/bt_dd_2.gif" alt="Calendar shortcuts"></a><span>| </span></span></span>
+		<span id="notepadtab"><span><a target="_top" href="http://us.rd.yahoo.com/mail_us/pimnav/np/*http://notepad.yahoo.com">Notepad</a><a target="_top" href="#notepadshortcuts" class="jump"> <img src="HSBS_positions2_files/bt_dd_2.gif" alt="Notepad shortcuts"></a></span></span>
+				<span class="last" id="searchtestopionlinks">
+	  	    	    		
+	                	            	            	            	    	    	
+									<a href="http://us.rd.yahoo.com/mail_us/nav/?http://billing.mail.yahoo.com/bm/Upgrades" target="_blank" title="Navigate to the Mail Upgrades page" style="text-decoration: underline;">Mail Upgrades</a> - 
+							<a href="http://us.f536.mail.yahoo.com/ym/Options?YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Mail Options page" style="text-decoration: underline;">Mail Options</a>
+	    			</span>
+	</div>
+</div>
+
+
+
+<div id="globalbuttonbartop" class="globalbuttonbar">
+<table border="0" cellpadding="0" cellspacing="0">
+<tbody><tr>
+<td nowrap="nowrap" width="1%">
+			
+<button type="button" onclick="window.location='/ym/ShowFolder?rb=Inbox&reset=1&YY=84105&order=down&sort=date&pos=0&view=a&head=b&YN=1';" title="Check for new mail (Shortcut keys: Control+Shift+C)">Check Mail</button>
+		
+		
+<button type="button" onclick="(parent&&parent.showCompose)?parent.showCompose():window.location='/ym/Compose?YY=84105&order=down&sort=date&pos=0&view=a&head=b';" title="Compose a new message (Shortcut keys: Control+Shift+P)">Compose</button>
+		
+		
+		
+			
+</td>
+<td align="right">
+		
+<!-- <span>TG: UI: SFI: SFV:</span> -->
+			
+<span id="searchtestfields">
+    
+
+<script>
+                    var url0 = "/ym/Search?Find=1&B=1&_p=top"; 
+    
+       function submitSearch(loc)
+    {
+ 	var S = document.getElementById("searchquery"+loc);
+        S = typeof S.length == "undefined" ? S : S[0];
+        S.value = S.value.replace(/^\s*/,"");
+        S.value = S.value.replace(/\s*$/,"");
+        if(S.value == "")
+	{
+	    //alert("Please enter a search term.");
+	    window.location = "/ym/Search?P=1&YY=84105&order=down&sort=date&pos=0&view=a&head=b";
+	    return;		
+	}
+
+	var obj = document.getElementById("searchField"+loc);
+	var field = obj.value;
+	if(field == "sender" || field == "subject")
+	    submitAdvancedSearch(loc, field, S);
+	else if (field == "message" || field == "body" || field == "header")
+	    submitBasicSearch(loc, field, S);
+	else if (field == "web")
+	    submitWebSearch(loc, field, S);
+	else
+	    alert("Please select valid field to search on from drop down.");
+    }
+
+    function submitBasicSearch(loc, field, S)
+    {
+	var url = (loc==0 ? url0 : url1);
+	url += "&ftyp="+"A";
+	if(field == "header")
+	    url += "&T="+"HDRS_ONLY";
+	else if(field == "body")
+	    url += "&T="+"BODY_ONLY";
+	else if(field == "message")
+	    url += "&T="+"WHOLE_MSG";
+
+	url += "&M="+"CONTAINS";
+        url += "&S="+escapeStr(S.value);
+
+	url += "&ymuri="+"ym";
+ 	url += "&folderscrumb="+"o./SqxP7ZC.";
+	url += "&sfi="+ (field == "message" ? "2" : (field == "header" ? "3" : "4"));
+  	url += "&urlextras="+"YY=84105&order=down&sort=date&pos=0&view=a&head=b";
+	window.location=url;
+    }
+
+    function submitAdvancedSearch(loc, field, S)
+    {
+	var url = (loc==0 ? url0 : url1) + "&P=1";
+	url += "&ftyp="+"A";
+	if(field == "sender")
+	{
+	    url += "&FM="+"CONTAINS";
+	    url += "&FS="+escapeStr(S.value);
+	}
+	else if(field == "subject")
+	{
+	    url += "&SM="+"CONTAINS";
+	    url += "&SS="+escapeStr(S.value);
+	}
+
+	url += "&ymuri="+"ym";
+ 	url += "&folderscrumb="+"o./SqxP7ZC.";
+	url += "&sfi="+ (field == "sender" ? "0" : "1");
+  	url += "&urlextras="+"YY=84105&order=down&sort=date&pos=0&view=a&head=b";
+
+	window.location=url;
+    }
+
+    function submitWebSearch(loc, field, S)
+    {
+        if(!S || typeof S == "undefined")
+  	    S = document.getElementById("searchquery"+loc);
+	
+	var value = S == null ? "" : S.value.replace(/^\s*/,"");
+	value = value.length == 0 ? "" : S.value;
+	var es = escapeStr(value);
+ 
+		
+	  var searchURL = es == "" ? "http://search.yahoo.com?fr=ush2-mail" : "http://search.yahoo.com/search?fr=ush2-mail&ei=UTF-8";
+		
+	searchURL += es == "" ? "" : "&p="+es
+	var searchWin = window.open(searchURL, "_blank");
+	searchWin.focus();
+    }
+
+    function escapeStr(str) 
+    {
+	var len = str.length;
+	var es = "";
+	var icode;
+
+	for (i = 0 ; i < len ; i++) 
+	{
+	    icode = str.charCodeAt(i);
+	    es += icode == 0x20 ? "+" : icode == 0x2B ? "%2B" : 
+		  icode < 0x80 ? escape(str.charAt(i)) : 
+		  encodeURI(str.charAt(i));
+	}
+	return es;
+    }
+
+    function SearchQuery_KeyPress(p_oSender,p_oEvent, loc)
+    {
+	var isMailView = "1"
+	var ui         = "";
+	if(p_oEvent.keyCode == 13)
+	{
+	    if(ui == "3" && isMailView != "1")
+		submitWebSearch(loc, "web");
+	    else
+		window.setTimeout("submitSearch("+loc+")",10);
+	}
+    }
+
+    function Search_Click_top()
+    {
+ 	var oEvent = this.Event;
+	var nOffsetX = (oEvent.layerX) ? (oEvent.layerX) : oEvent.offsetX;
+	if(nOffsetX > (this.offsetWidth-22)) 
+	    this.Menu.Show();
+	else
+  	    submitSearch("0");
+    }	
+
+    function Search_Click_bottom()
+    {
+ 	var oEvent = this.Event;
+	var nOffsetX = (oEvent.layerX) ? (oEvent.layerX) : oEvent.offsetX;
+	if(nOffsetX > (this.offsetWidth-22)) 
+	    this.Menu.Show();
+	else
+  	    submitSearch("1");
+    }	
+
+    function SearchMenu_Click()
+    {
+	window.location = "/ym/Search?P=1&YY=84105&order=down&sort=date&pos=0&view=a&head=b";
+    }
+   </script>
+	<table border="0" cellpadding="0" cellspacing="0">
+		<tbody><tr>
+			<td><input size="20" maxlength="50" name="searchquery0" id="searchquery0" value="" style="margin-right: 0.5em; vertical-align: baseline;" onkeypress="SearchQuery_KeyPress(this,event,0);" type="text"></td>
+			<td>
+				<input id="searchField0" name="searchField" value="header" type="hidden">
+			    <button id="searchmail0" type="button" name="searchmail0" value="Search Mail" class="hasdefaultstate">Search Mail</button>
+			    			        <button id="searchtheweb" type="button" name="searchtheweb" value="Search the Web" onclick="submitWebSearch(0)" style="width: 11em;">Search the Web</button>
+			    			
+			</td>
+		</tr>
+	</tbody></table>
+
+</span>
+			
+		
+</td>
+</tr>
+</tbody></table>
+
+
+
+
+</div>
+		
+<table class="applicationcontainer managementview" border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr valign="top">
+<td id="first" nowrap="nowrap" width="167">
+<script>
+    var noDelAllMsgWarning = false;
+    function EmptyFolder(folder)
+    {
+	if (!noDelAllMsgWarning) {
+	    if(!confirm("Are you sure you want to empty the folder?")) return;
+	}
+	var url = "/ym/ShowFolder?";
+	url += folder == "Trash" ? "ET" : "EB";
+	url += "=1&.crumb=F/NUcwfscEJ&reset=1&YY=84105&order=down&sort=date&pos=0&view=a&head=b";
+	window.open(url, "_top");
+    }
+</script>
+
+<div id="popaccountsbox" class="modulecontainer sidebar">
+<div class="first">
+<span class="first"></span>
+<span class="last"></span>
+</div>
+<div>
+<div id="popaccounts">
+<div><span>Check Other Mail</span> [<a href="http://us.f536.mail.yahoo.com/ym/Identities?YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Add or edit other mail accounts (POP)">Edit</a>]</div>
+<ul>	
+						
+																									
+						
+						
+<li class="label7"><a href="http://us.f536.mail.yahoo.com/ym/External?GET=1&amp;inbox=1&amp;.crumb=WOykCbsov2y&amp;Srvr=popd.ix.netcom.com&amp;Num=0&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Check mail from the popd.ix.netcom.com account">popd.ix.netcom.com</a></li>
+</ul>
+</div>
+</div>
+<div class="last">
+<span class="first"></span>
+<span class="last"></span>
+</div>
+</div>	
+	
+
+
+<div class="modulecontainer sidebar">
+<div class="first">
+<span class="first"></span>
+<span class="last"></span>
+</div>
+<div>
+
+<div id="folderlist">
+<div id="defaultfolders">
+<div>
+<span class="first">Folders</span>[<span id="addfoldercontrol">Add</span> - <a href="http://us.f536.mail.yahoo.com/ym/Folders?YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">Edit</a>]</div>
+<ul>
+<li id="inbox" class="selected" title="Navigate to the Inbox folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Inbox&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Inbox folder">Inbox (853)</a></li>
+<li id="draft" title="Navigate to the Draft folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Draft&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Draft folder">Draft</a></li>
+<li id="sent" title="Navigate to the Sent folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Sent&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Sent folder">Sent</a></li>
+<li id="bulk" class="newmessages" title="Navigate to the Bulk folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=%40B%40Bulk&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" class="first" title="Navigate to the Bulk folder">Bulk (63)</a><span>[<a href="javascript:EmptyFolder('@B@Bulk')" title="Empty all of the messages from the Bulk folder">Empty</a>]</span></li>
+<li id="trash" title="Navigate to the Trash folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Trash&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" class="first" title="Navigate to the Trash folder">Trash</a><span>[<a href="javascript:EmptyFolder('Trash')" title="Empty all of the messages from the Trash folder">Empty</a>]</span></li>
+</ul>
+</div>
+
+<div id="customfolders">
+<div><span class="first">My Folders</span>[<span id="personalfoldersdisplaytoggle">Hide</span>]</div>
+<ul>
+<li title="Navigate to the 0Important Reference - no clutter folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=0Important%20Reference%20%2d%20no%20clutter&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the 0Important Reference - no clutter folder">0Important Refe...</a></li>
+<li title="Navigate to the 1Finance folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=1Finance&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the 1Finance folder">1Finance</a></li>
+<li title="Navigate to the 2Technology folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=2Technology&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the 2Technology folder">2Technology</a></li>
+<li title="Navigate to the 3General News and Weather folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=3General%20News%20and%20Weather&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the 3General News and Weather folder">3General News a...</a></li>
+<li title="Navigate to the 4Junk of interest folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=4Junk%20of%20interest&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the 4Junk of interest folder">4Junk of interest</a></li>
+<li class="newmessages" title="Navigate to the 5Agents - work folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=5Agents%20%2d%20work&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the 5Agents - work folder">5Agents - work (6)</a></li>
+<li title="Navigate to the 6 Orders from Amazon and others folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=6%20Orders%20from%20Amazon%20and%20others&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the 6 Orders from Amazon and others folder">6 Orders from A...</a></li>
+<li title="Navigate to the AOlya folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=AOlya&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the AOlya folder">AOlya</a></li>
+<li title="Navigate to the Amazon folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Amazon&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Amazon folder">Amazon</a></li>
+<li title="Navigate to the Answering folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Answering&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Answering folder">Answering</a></li>
+<li title="Navigate to the Azarin folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Azarin&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Azarin folder">Azarin</a></li>
+<li class="newmessages" title="Navigate to the BoardFriends folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=BoardFriends&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the BoardFriends folder">BoardFriends (1)</a></li>
+<li title="Navigate to the CableTV folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=CableTV&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the CableTV folder">CableTV</a></li>
+<li title="Navigate to the Diana folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Diana&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Diana folder">Diana</a></li>
+<li title="Navigate to the Drugstore.com folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Drugstore.com&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Drugstore.com folder">Drugstore.com</a></li>
+<li class="newmessages" title="Navigate to the Ebay folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Ebay&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Ebay folder">Ebay (118)</a></li>
+<li title="Navigate to the FeigJeff folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=FeigJeff&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the FeigJeff folder">FeigJeff</a></li>
+<li title="Navigate to the Files folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Files&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Files folder">Files</a></li>
+<li title="Navigate to the Forbes folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Forbes&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Forbes folder">Forbes</a></li>
+<li class="newmessages" title="Navigate to the JefZazlow folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=JefZazlow&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the JefZazlow folder">JefZazlow (1)</a></li>
+<li class="newmessages" title="Navigate to the JohnMauldin folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=JohnMauldin&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the JohnMauldin folder">JohnMauldin (7)</a></li>
+<li title="Navigate to the Lancome folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Lancome&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Lancome folder">Lancome</a></li>
+<li title="Navigate to the LenyaP folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=LenyaP&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the LenyaP folder">LenyaP</a></li>
+<li title="Navigate to the MityaUdler folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=MityaUdler&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the MityaUdler folder">MityaUdler</a></li>
+<li title="Navigate to the Navellier folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Navellier&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Navellier folder">Navellier</a></li>
+<li title="Navigate to the NoahRatitz folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=NoahRatitz&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the NoahRatitz folder">NoahRatitz</a></li>
+<li title="Navigate to the Old or Replied Personal Mail folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Old%20or%20Replied%20Personal%20Mail&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Old or Replied Personal Mail folder">Old or Replied ...</a></li>
+<li title="Navigate to the Paypal folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Paypal&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Paypal folder">Paypal</a></li>
+<li title="Navigate to the RegistrationInfo folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=RegistrationInfo&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the RegistrationInfo folder">RegistrationInfo</a></li>
+<li title="Navigate to the SAGA_Software folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=SAGA%5fSoftware&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the SAGA_Software folder">SAGA_Software</a></li>
+<li title="Navigate to the Sitraka folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Sitraka&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Sitraka folder">Sitraka</a></li>
+<li title="Navigate to the StockVoting folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=StockVoting&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the StockVoting folder">StockVoting</a></li>
+<li title="Navigate to the TDWaterhouse folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=TDWaterhouse&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the TDWaterhouse folder">TDWaterhouse</a></li>
+<li title="Navigate to the TDWaterhouseConf folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=TDWaterhouseConf&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the TDWaterhouseConf folder">TDWaterhouseConf</a></li>
+<li title="Navigate to the Vasyaginer folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Vasyaginer&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Vasyaginer folder">Vasyaginer</a></li>
+<li title="Navigate to the VitKhus folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=VitKhus&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the VitKhus folder">VitKhus</a></li>
+<li title="Navigate to the VitUshakov folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=VitUshakov&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the VitUshakov folder">VitUshakov</a></li>
+<li title="Navigate to the Witcapital folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Witcapital&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Witcapital folder">Witcapital</a></li>
+<li title="Navigate to the Zhupanov folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Zhupanov&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the Zhupanov folder">Zhupanov</a></li>
+<li title="Navigate to the amirKamalati folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=amirKamalati&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the amirKamalati folder">amirKamalati</a></li>
+<li title="Navigate to the articles folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=articles&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the articles folder">articles</a></li>
+<li title="Navigate to the benoit folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=benoit&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the benoit folder">benoit</a></li>
+<li title="Navigate to the bobMarsh folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=bobMarsh&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the bobMarsh folder">bobMarsh</a></li>
+<li title="Navigate to the boryaGarger folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=boryaGarger&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the boryaGarger folder">boryaGarger</a></li>
+<li title="Navigate to the brain_bench folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=brain%5fbench&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the brain_bench folder">brain_bench</a></li>
+<li title="Navigate to the denisGrinchenko folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=denisGrinchenko&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the denisGrinchenko folder">denisGrinchenko</a></li>
+<li class="newmessages" title="Navigate to the eFax folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=eFax&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the eFax folder">eFax (1)</a></li>
+<li title="Navigate to the eXcelon folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=eXcelon&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the eXcelon folder">eXcelon</a></li>
+<li title="Navigate to the enmd folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=enmd&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the enmd folder">enmd</a></li>
+<li title="Navigate to the etrade folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=etrade&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the etrade folder">etrade</a></li>
+<li title="Navigate to the fanWu folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=fanWu&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the fanWu folder">fanWu</a></li>
+<li class="newmessages" title="Navigate to the gilder folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=gilder&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the gilder folder">gilder (2)</a></li>
+<li title="Navigate to the grantPoladian folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=grantPoladian&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the grantPoladian folder">grantPoladian</a></li>
+<li title="Navigate to the iraPodosheva folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=iraPodosheva&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the iraPodosheva folder">iraPodosheva</a></li>
+<li title="Navigate to the jackRoth folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=jackRoth&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the jackRoth folder">jackRoth</a></li>
+<li title="Navigate to the javaDevJournal folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=javaDevJournal&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the javaDevJournal folder">javaDevJournal</a></li>
+<li title="Navigate to the lenyaNabutovsky folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=lenyaNabutovsky&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the lenyaNabutovsky folder">lenyaNabutovsky</a></li>
+<li title="Navigate to the me folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=me&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the me folder">me</a></li>
+<li title="Navigate to the mishaOstrovskii folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=mishaOstrovskii&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the mishaOstrovskii folder">mishaOstrovskii</a></li>
+<li title="Navigate to the mishaYudin folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=mishaYudin&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the mishaYudin folder">mishaYudin</a></li>
+<li title="Navigate to the mkhusidm folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=mkhusidm&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the mkhusidm folder">mkhusidm</a></li>
+<li title="Navigate to the moneyNet folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=moneyNet&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the moneyNet folder">moneyNet</a></li>
+<li title="Navigate to the net-temps folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=net%2dtemps&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the net-temps folder">net-temps</a></li>
+<li title="Navigate to the netBulls folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=netBulls&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the netBulls folder">netBulls</a></li>
+<li class="newmessages" title="Navigate to the orders folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=orders&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the orders folder">orders (1)</a></li>
+<li class="newmessages" title="Navigate to the oxfordClub folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=oxfordClub&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the oxfordClub folder">oxfordClub (2)</a></li>
+<li title="Navigate to the petyaZeilczynski folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=petyaZeilczynski&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the petyaZeilczynski folder">petyaZeilczynski</a></li>
+<li title="Navigate to the ragingBull folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=ragingBull&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the ragingBull folder">ragingBull</a></li>
+<li class="newmessages" title="Navigate to the resumes folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=resumes&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the resumes folder">resumes (1)</a></li>
+<li title="Navigate to the rimma folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=rimma&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the rimma folder">rimma</a></li>
+<li title="Navigate to the rimmaKatz folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=rimmaKatz&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the rimmaKatz folder">rimmaKatz</a></li>
+<li title="Navigate to the rosa folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=rosa&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the rosa folder">rosa</a></li>
+<li title="Navigate to the sashaRussakovskii folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=sashaRussakovskii&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the sashaRussakovskii folder">sashaRussakovskii</a></li>
+<li title="Navigate to the scams folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=scams&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the scams folder">scams</a></li>
+<li title="Navigate to the securityComplains folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=securityComplains&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the securityComplains folder">securityComplains</a></li>
+<li title="Navigate to the serezhaSvetlichniy folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=serezhaSvetlichniy&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the serezhaSvetlichniy folder">serezhaSvetlichniy</a></li>
+<li title="Navigate to the small_caps folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=small%5fcaps&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the small_caps folder">small_caps</a></li>
+<li title="Navigate to the softwareDevolopmentJournal folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=softwareDevolopmentJournal&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the softwareDevolopmentJournal folder">softwareDevolop...</a></li>
+<li title="Navigate to the splitTrader folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=splitTrader&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the splitTrader folder">splitTrader</a></li>
+<li title="Navigate to the stockBottom folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=stockBottom&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the stockBottom folder">stockBottom</a></li>
+<li class="newmessages" title="Navigate to the vityaPopovsky folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=vityaPopovsky&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the vityaPopovsky folder">vityaPopovsky (2)</a></li>
+<li title="Navigate to the voting folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=voting&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the voting folder">voting</a></li>
+<li title="Navigate to the wallStreetCity folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=wallStreetCity&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the wallStreetCity folder">wallStreetCity</a></li>
+<li title="Navigate to the waterhouse folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=waterhouse&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the waterhouse folder">waterhouse</a></li>
+<li title="Navigate to the yahoo folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=yahoo&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the yahoo folder">yahoo</a></li>
+<li title="Navigate to the yuraPodoshev folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=yuraPodoshev&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the yuraPodoshev folder">yuraPodoshev</a></li>
+<li title="Navigate to the zhenyaLeonov folder"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=zhenyaLeonov&amp;reset=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" title="Navigate to the zhenyaLeonov folder">zhenyaLeonov</a></li>
+</ul>
+		
+</div>
+			
+</div>
+
+</div>
+<div class="last">
+<span class="first"></span>
+<span class="last"></span>
+</div>
+</div>
+
+
+<div id="swads">
+
+
+	
+
+	
+
+	
+
+
+	
+
+
+	
+
+
+	
+
+
+	
+	
+
+
+
+
+
+
+	
+</div>
+</td>
+<td id="spacer" nowrap="nowrap" width="3"><spacer type="block" width="3"></td>
+<td class="content">
+<!-- START MAIN APPLICATION CONTENT -->
+									
+
+
+<div class="contentnav">					
+<span class="first">
+							Previous
+							 | 
+<a href="http://us.f536.mail.yahoo.com/ym/ShowLetter?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;NEXT=1&amp;inc=&amp;num=&amp;Idx=0&amp;Search=&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" onmouseover="self.status='From: Paps - OSR Solutions, Subject: Immediate Opening in NYC';return true" onmouseout="window.status=window.defaultStatus;return true">Next</a>
+ 
+							| <a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?box=Inbox&amp;back=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" onmouseover="window.status='Folder: Inbox';return true" onmouseout="window.status=window.defaultStatus;return true">Back to Messages</a>
+</span>
+<span class="last">
+<a href="http://us.f536.mail.yahoo.com/ym/ShowLetter?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;Idx=0&amp;Search=&amp;PRINT=1&amp;ShowImages=&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" target="_blank">Printable View</a> - 
+<a href="http://us.f536.mail.yahoo.com/ym/ShowLetter?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;Idx=0&amp;Search=&amp;Nhead=f&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">Full Headers</a>
+</span>
+</div>
+
+<form name="showLetter" method="post" action="/ym/ShowLetter?Search=&amp;Idx=0&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">
+<input name=".crumb" value="t.BK7hrte8P" type="hidden"><input name="MsgId" value="3047_7365949_2661477_1404_5246_0_62911_12618_2588710876" type="hidden">
+<input name="box" value="Inbox" type="hidden">
+<input name="MOV" value="" type="hidden">
+<input name="NewFol" value="" type="hidden">
+<input name="destBox" value="" type="hidden">
+<input name="DEL" value="" type="hidden">
+<input name="formwarningmessage" value="Warning! You are about to send information to someone other than Yahoo! If you do not want anyone outside of Yahoo! to have this information, click &quot;Cancel&quot; now. Remember: Yahoo! will NEVER ask you for your password in an unsolicited phone call or an unsolicited email. Please change your preferences if you do not want to see this message again." type="hidden">
+<input name="linkwarningmessage" value="Warning! It appears that you are about to access a website that has non-standard web address format. Such sites may contain harmful entities such as viruses. We recommend you use extreme caution. Please change your preferences if you do not want to see this message again." type="hidden">
+<input name="passwordwarningmessage" value="Warning! You are about to enter a password in a form that will not be sent to Yahoo! Remember: Yahoo! will NEVER ask you for your password in an unsolicited phone call or an unsolicited email." type="hidden">
+
+<input name="newfoldermessage" id="newfoldermessage" value="Please enter a name for your folder." type="hidden">
+<input name="ymuri" id="ymuri" value="ym" type="hidden">
+<input name="folderscrumb" id="folderscrumb" value="o./SqxP7ZC." type="hidden">
+<input name="urlextras" id="urlextras" value="YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" type="hidden">
+<input name="doneurl" id="doneurl" value="/ym/ShowLetter?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;inc=&amp;num=&amp;Idx=0&amp;Search=&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" type="hidden"><input name="addfolderdoneurl" value="%2fym%2fShowLetter%3fMsgId%3d3047%5f7365949%5f2661477%5f1404%5f5246%5f0%5f62911%5f12618%5f2588710876%26box%3dInbox%26YY%3d84105%26order%3ddown%26sort%3ddate%26pos%3d0%26view%3da%26head%3db" type="hidden">
+<input name="ICOK" value="" type="hidden">
+<input name="ICReplyBody" value="" type="hidden">
+<input name="ICFwdBody" value="" type="hidden">
+<input name="ICReplyTo" value="" type="hidden">
+<input name="ICReplyAllTo" value="" type="hidden">
+<input name="ICReplyAllCc" value="" type="hidden">
+<input name="ICReplySubj" value="" type="hidden">
+<input name="ICFwdSubj" value="" type="hidden">
+						
+<div id="contentbuttonbartop" class="contentbuttonbar">
+<span class="first">
+<button type="button" name="delete" id="deletetop" value="Delete" onclick="Delete_Click(this);">Delete</button>
+	
+<button type="button" value="Reply" id="replytop" class="hasdefaultstate">Reply</button>
+	
+<button type="button" value="Forward" id="forwardtop" class="hasdefaultstate">Forward</button>
+	
+	
+<button type="button" value="Spam" onclick="document.spamform.submit();">Spam</button>
+	
+<button type="button" id="movetop" name="move" class="menubutton" title="Move selected message(s)">Move...</button>
+</span>
+</div>
+</form>
+<script type="text/javascript">
+						LHCol_Init();
+</script>
+<div class="messageinfo flaggedindicator">
+<p>This message is not flagged. [ <a href="http://us.f536.mail.yahoo.com/ym/ShowLetter?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;Idx=0&amp;Search=&amp;FLG=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">Flag Message</a> - <a href="http://us.f536.mail.yahoo.com/ym/ShowLetter?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;Idx=0&amp;Search=&amp;UNR=1&amp;.crumb=t.BK7hrte8P&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">Mark as Unread</a> ]</p>
+</div>
+<!-- START TOC -->					
+
+
+
+
+
+<table class="messageheader" border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr><td class="label" nowrap="nowrap">Subject:</td><td><a href="#attachments"><img src="HSBS_positions2_files/clip.gif" align="top" border="0" height="16" width="11"></a> RE: J2EE Architect</td></tr>
+<tr><td class="label" nowrap="nowrap">Date:</td><td> Mon, 28 Feb 2005 19:49:44 -0500</td></tr>
+<tr><td class="label" nowrap="nowrap">From:</td><td>"Nellie Steynbok" &lt;NSteynbok@PlatinumIT.com&gt;  <a href="javascript:document.frmAddAddrs.submit()"><img src="HSBS_positions2_files/abook_add_1.gif" alt="Add to Address Book" align="top" border="0" height="16" hspace="2" vspace="0" width="16">Add to Address Book</a></td></tr>
+<tr><td class="label" nowrap="nowrap">To:</td><td>"Val G." &lt;ginerv@yahoo.com&gt;</td></tr>
+</tbody></table>
+<form name="frmAddAddrs" action="http://address.mail.yahoo.com/yab/us?v=YM&amp;.rand=17071&amp;A=m&amp;simp=1" method="post">
+<input name="fn" value="Nellie" type="hidden">
+<input name="ln" value="Steynbok" type="hidden">
+<input name="e" value="nsteynbok@platinumit.com" type="hidden">
+<input name=".done" value="http://us.f536.mail.yahoo.com/ym/ShowLetter?MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;order=down&amp;inc=&amp;sort=date&amp;view=a&amp;head=b&amp;box=Inbox&amp;YY=84105" type="hidden">
+</form>
+
+
+
+
+<div id="message">
+
+
+
+
+<pre><tt>Hi Val:
+
+It was a pleasure speaking with you earlier today. Thank you, looks 
+good
+for now. If I will need any changes on your resume in the near future, 
+I
+will let you know. For now I'm submitting your resume to HSBC at
+$800/daily rate.
+
+I will keep you posted, please feel free to contact me if you have any
+questions or concerns, I can be reached at 212. 661. 8355 ext 128.
+
+Best Regards,
+
+Nellie L Steynbok
+Technical Recruiter
+Platinum IT Consulting
+tel 212. 661. 8355 ext 128
+fax 212. 687. 4347 attn: Nellie
+<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=nsteynbok@platinumIT.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">nsteynbok@platinumIT.com</a>
+ 
+
+-----Original Message-----
+From: Val G. [mailto:<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=ginerv@yahoo.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">ginerv@yahoo.com</a>] 
+Sent: Monday, February 28, 2005 6:27 PM
+To: Nellie Steynbok
+Subject: RE: J2EE Architect
+
+Nellie,
+
+Please find a copy of my resume attached.  (More C++ and there is
+something about math and derivatives).  How's it now? :) To make it
+better I'd need more time.
+
+
+--- Nellie Steynbok &lt;<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=NSteynbok@PlatinumIT.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">NSteynbok@PlatinumIT.com</a>&gt; wrote:
+
+&gt;  Yes, it is a professional day rate. Are you interested in the 
+&gt; opportunity? If you are please contact me ASAP to go over the 
+details,
+
+&gt; I can be reached at 212. 661. 8355 ext 128.
+&gt; 
+&gt; Thanks
+&gt;  Nellie
+&gt; 
+&gt; -----Original Message-----
+&gt; From: Val G. [mailto:<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=ginerv@yahoo.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">ginerv@yahoo.com</a>]
+&gt; Sent: Monday, February 28, 2005 4:48 PM
+&gt; To: Nellie Steynbok
+&gt; Subject: RE: J2EE Architect
+&gt; 
+&gt; Is it a "professional" day?  I mean, 7hr (meaning usually 12 :) ?)
+&gt; 
+&gt; --- Nellie Steynbok &lt;<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=NSteynbok@PlatinumIT.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">NSteynbok@PlatinumIT.com</a>&gt; wrote:
+&gt; 
+&gt; &gt; The rate is 600 - 750 a day. Let me know what you're currently
+making.
+&gt; &gt; Please contact me at your earliest convenience., I can be reached 
+at
+
+&gt; &gt; 212. 661. 8355 ext 128.
+&gt; &gt; 
+&gt; &gt; Thanks
+&gt; &gt; 
+&gt; &gt; Nellie L Steynbok
+&gt; &gt; Technical Recruiter
+&gt; &gt; Platinum IT Consulting
+&gt; &gt; tel 212. 661. 8355 ext 128
+&gt; &gt; fax 212. 687. 4347 attn: Nellie
+&gt; &gt; <a href="http://us.f536.mail.yahoo.com/ym/Compose?To=nsteynbok@platinumIT.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">nsteynbok@platinumIT.com</a>
+&gt; &gt; 
+&gt; &gt; 
+&gt; &gt; -----Original Message-----
+&gt; &gt; From: Val G. [mailto:<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=ginerv@yahoo.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">ginerv@yahoo.com</a>]
+&gt; &gt; Sent: Sunday, February 27, 2005 9:43 PM
+&gt; &gt; To: Nellie Steynbok
+&gt; &gt; Subject: RE: J2EE Architect
+&gt; &gt; 
+&gt; &gt; Hi Nellie,
+&gt; &gt; 
+&gt; &gt; Thank you for the information.
+&gt; &gt; 
+&gt; &gt; It seems that the #2 may be a fit.  What is the rate corp-to-corp?
+&gt; &gt; 
+&gt; &gt; Regards,
+&gt; &gt; 
+&gt; &gt; Val
+&gt; &gt; 
+&gt; &gt; 
+&gt; &gt; --- Nellie Steynbok &lt;<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=NSteynbok@PlatinumIT.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">NSteynbok@PlatinumIT.com</a>&gt; wrote:
+&gt; &gt; 
+&gt; &gt; &gt; Hi Val:
+&gt; &gt; &gt; 
+&gt; &gt; &gt; Thank you for your interest and for sending me your resume. After 
+&gt; &gt; &gt; reviewing your resume I feel that your background and your 
+&gt; &gt; &gt; experience can be a perfect match to a few different 
+opportunities
+
+&gt; &gt; &gt; I;m working
+&gt; &gt; on.
+&gt; &gt; &gt; Below please find 3 job descriptions for you to review. Please 
+&gt; &gt; &gt; contact
+&gt; &gt; 
+&gt; &gt; &gt; me at your earliest convenience to discuss in more details, I can 
+&gt; &gt; &gt; be
+&gt; 
+&gt; &gt; &gt; reached at 212. 661. 8355 ext 128.
+&gt; &gt; &gt; 
+&gt; &gt; &gt; Also, please send me an updated version of your resume as an 
+&gt; &gt; &gt; attachment in a word document.
+&gt; &gt; &gt; 
+&gt; &gt; &gt; If this is not a good match OR if you are not currently looking 
+&gt; &gt; &gt; please
+&gt; &gt; 
+&gt; &gt; &gt; feel free to pass this e-mail along to anyone you might know of 
+&gt; &gt; &gt; that
+&gt; 
+&gt; &gt; &gt; is qualified or interested. We pay great referral fees.
+&gt; &gt; &gt; 
+&gt; &gt; &gt; 1 - TITLE:  Unix C++  Fixed Income Developer    LOCATION: New
+York,
+&gt; NY
+&gt; &gt; &gt; Job Description: The Fixed Income Technology Team is responsible 
+&gt; &gt; &gt; for
+&gt; 
+&gt; &gt; &gt; building and delivering execution, pricing, STP, and middle tier 
+&gt; &gt; &gt; solutions for the Fixed Income Business. The team is responsible 
+&gt; &gt; &gt; for
+&gt; 
+&gt; &gt; &gt; full system life cycle from design, implement and support systems 
+&gt; &gt; &gt; for all of the Fixed Income trading desks such as Treasuries, 
+&gt; &gt; &gt; Agencies, Corporate, EM, MBS, ABS, and Repos. The team faces off 
+&gt; &gt; &gt; to various trading desks directly, and provides integration with 
+&gt; &gt; &gt; ECN platforms such as TradeWeb, Market Axess, eSpeed, BrokerTec, 
+&gt; &gt; &gt; and
+&gt; Garban.
+&gt; &gt; &gt; Experience required: Must have 5-7 years C++ / UNIX with strong 
+&gt; &gt; &gt; C++ design and coding skills. 5+ years of experience in a 
+&gt; &gt; &gt; financial development environment. years. 5+ Strong Fixed Income 
+&gt; &gt; &gt; securities knowledge. Direct exposure and interaction with 
+&gt; &gt; &gt; traders. Strong Unix
+&gt; 
+&gt; &gt; &gt; background. Prefer some Perl and SQL. Must have excellent 
+&gt; &gt; &gt; communication skills. Familiarity with MQSeries and Tibco.
+&gt; &gt; &gt; Main function of the job: To be a key member of a team dedicated 
+&gt; &gt; &gt; to design, develop, and support applications for various fixed 
+&gt; &gt; &gt; income pricing and trading functions in a fast paced, dynamic 
+&gt; &gt; &gt; real-time environment. Maintain and enhance Forest Trading 
+System.
+
+&gt; &gt; &gt; Must be comfortable with 80/20 developments to support ratio.
+&gt; &gt; &gt; Main Duties/Responsibilities: Supporting the US Broker/Dealer 
+deal
+
+&gt; &gt; &gt; capture and related processing including, Unix back end 
+processes,
+
+&gt; &gt; &gt; NT front-end, reporting facilities, and Sybase database. 
+Interface
+
+&gt; &gt; &gt; heavily with traders and back office personnel regarding trading 
+&gt; &gt; &gt; Treasuries, Agencies, Corporate, EM, MBS, ABS, and Repos
+securities.
+&gt; &gt; &gt; Team Structure: Role reports to the Sr. Vice President, Fixed 
+&gt; &gt; &gt; Income
+&gt; 
+&gt; &gt; &gt; Technology. The team consists of team lead, developers , and 
+&gt; &gt; &gt; dedicated
+&gt; &gt; 
+&gt; &gt; &gt; support individual.
+&gt; &gt; &gt; Qualifications /Education: Min 4 yr Degree with computer science, 
+&gt; &gt; &gt; mathematical, or engineering concentration from a top tier 
+&gt; &gt; &gt; university;
+&gt; &gt; 
+&gt; &gt; &gt; Solid work / track record.
+&gt; &gt; &gt; 
+&gt; &gt; &gt; 2 - TITLE: Senior Lead Credit Derivative Developer    LOCATION:
+New
+&gt; &gt; &gt; York, NY
+&gt; &gt; &gt; Candidate will have INTIMATE knowledge of Derivative Products.  
+&gt; &gt; &gt; This
+&gt; 
+&gt; &gt; &gt; role is NOT for a Quantitative Analyst/Developer.  The role will 
+&gt; &gt; &gt; be focused on integrating the Pricing Models with Vendor Specific 
+&gt; &gt; &gt; and Internally Developed Trading Systems.
+&gt; &gt; &gt; Technical Proficiencies: Java/C++, RDBMS, Trading Systems Role 
+&gt; &gt; &gt; Specific Projects will include:  -Design and implement Portfolio 
+&gt; &gt; &gt; Risk Calculation Engine for credit derivative desk.
+&gt; &gt; &gt; * Implement Option-Adjust-Spread model for fixed and floating 
+rate
+
+&gt; &gt; &gt; bonds with embedded options
+&gt; &gt; &gt; * Lead development, release and integration of credit derivative 
+&gt; &gt; &gt; and
+&gt; 
+&gt; &gt; &gt; bond analytics libraries with the trading systems
+&gt; &gt; &gt; * Work with traders and risk managers on the application of the 
+&gt; &gt; &gt; analytics developed in our team to satisfy their business needs - 
+&gt; &gt; &gt; curve constructions, derivative valuations, and risk calculations
+&gt; etc.
+&gt; &gt; &gt; * Work with credit derivative desk on the development and 
+&gt; &gt; &gt; improvement of pricing models for credit default swap, default 
+&gt; &gt; &gt; basket, default swaption, risky swap and walk-away swap etc.
+&gt; &gt; &gt; * Develop and implement a bond valuation suite that provides bond 
+&gt; &gt; &gt; analytics such as bond margin, forward price, repo pricing and 
+&gt; &gt; &gt; total
+&gt; 
+&gt; &gt; &gt; return swap pricing etc.
+&gt; &gt; &gt; * Work with prime services risk team on the development of 
+complex
+
+&gt; &gt; &gt; derivatives instrument pricing modules for prime services 
+&gt; &gt; &gt; Value-at-risk cross-margin application.
+&gt; &gt; &gt; 
+&gt; &gt; &gt; 3 - TITLE: MBS Trading Systems / Team Lead      LOCATION: New
+York,
+&gt; NY
+&gt; &gt; &gt; Responsibilities:
+&gt; &gt; &gt; Build and support systems for trading, risk reporting, pricing 
+and
+
+&gt; &gt; &gt; P
+&gt; 
+&gt; &gt; &gt; &amp;
+&gt; &gt; 
+&gt; &gt; &gt; L of MBS Products.
+&gt; &gt; &gt; Integrate vendor systems into the trade processing flow.
+&gt; &gt; &gt; Work with Trading, Sales, Operations, Finance and Risk Management 
+&gt; &gt; &gt; departments to enhance and support the trade flow.
+&gt; &gt; &gt; Work hands-on with a team of developers to design solutions, 
+&gt; &gt; &gt; define and assign tasks, supervise delivery and take 
+&gt; &gt; &gt; responsibility for project deadlines.
+&gt; &gt; &gt; Required Experience
+&gt; &gt; &gt; At least 6 years working at a sell side firm developing systems 
+&gt; &gt; &gt; supporting a Fixed Income trading department.
+&gt; &gt; &gt; At least 3 years working with MBS products.
+&gt; &gt; &gt; Must have developed at least one application or system through 
+&gt; &gt; &gt; every
+&gt; 
+&gt; &gt; &gt; phase of its lifecycle from inception to final delivery.
+&gt; &gt; &gt; Demonstrated success in leading a team of developers and 
+&gt; &gt; &gt; delivering to
+&gt; &gt; 
+&gt; &gt; &gt; schedule.
+&gt; &gt; &gt; Required Skills
+&gt; &gt; &gt; Very strong knowledge of MBS products and market practices.
+&gt; &gt; &gt; Understands TBA Allocation processing.     
+&gt; &gt; &gt; Good understanding of financial analytics applicable to MBS 
+&gt; &gt; &gt; pricing and risk analysis.
+&gt; &gt; &gt; Strong communication skills - comfortable and effective in 
+&gt; &gt; &gt; communicating with developers, business end users and operations
+&gt; &gt; staff.
+&gt; &gt; &gt; Familiar with any major software development methodology.
+&gt; &gt; &gt; Programming languages
+&gt; &gt; &gt; Java - 3+ years
+&gt; &gt; &gt; C++ - 3+ years
+&gt; &gt; &gt; Scripting - Perl or Shells
+&gt; &gt; &gt; GUI Development
+&gt; &gt; &gt; .NET or MFC
+&gt; &gt; &gt; Web front ends.
+&gt; &gt; &gt; Database
+&gt; &gt; &gt; Sybase (preferred but any major acceptable.)
+&gt; &gt; &gt; 
+&gt; &gt; &gt; Thank You
+&gt; &gt; &gt; 
+&gt; &gt; &gt; Nellie L Steynbok
+&gt; &gt; &gt; Technical Recruiter
+&gt; &gt; &gt; Platinum IT Consulting
+&gt; &gt; &gt; tel 212. 661. 8355 ext 128
+&gt; &gt; &gt; fax 212. 687. 4347 attn: Nellie
+&gt; &gt; &gt; <a href="http://us.f536.mail.yahoo.com/ym/Compose?To=nsteynbok@platinumIT.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">nsteynbok@platinumIT.com</a>
+&gt; &gt; &gt; 
+&gt; &gt; &gt; 
+&gt; &gt; &gt; -----Original Message-----
+&gt; &gt; &gt; From: Val G. [mailto:<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=ginerv@yahoo.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">ginerv@yahoo.com</a>]
+&gt; &gt; &gt; Sent: Sunday, January 30, 2005 11:21 PM
+&gt; &gt; &gt; To: Michael DeVito
+&gt; &gt; &gt; Subject: RE: J2EE Architect
+&gt; &gt; &gt; 
+&gt; &gt; &gt; Michael,
+&gt; &gt; &gt; 
+&gt; &gt; &gt; As per our conversation please find my resume attached here.
+&gt; &gt; &gt; 
+&gt; &gt; &gt; Regards,
+&gt; &gt; &gt; 
+&gt; &gt; &gt; Val
+&gt; &gt; &gt; 
+&gt; &gt; &gt; 
+&gt; &gt; &gt; --- Michael DeVito &lt;<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=MDevito@PlatinumIT.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">MDevito@PlatinumIT.com</a>&gt; wrote:
+&gt; &gt; &gt; 
+&gt; &gt; &gt; &gt; 80-100
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; -----Original Message-----
+&gt; &gt; &gt; &gt; From: Val G. [mailto:<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=ginerv@yahoo.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">ginerv@yahoo.com</a>]
+&gt; &gt; &gt; &gt; Sent: Friday, January 28, 2005 11:43 AM
+&gt; &gt; &gt; &gt; To: Michael DeVito
+&gt; &gt; &gt; &gt; Subject: Re: J2EE Architect
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; Michael,
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; Thank you for the information.
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; What is the rate on this position corp-to-corp?
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; Regards,
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; Val
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; --- Michael DeVito &lt;<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=MDevito@PlatinumIT.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">MDevito@PlatinumIT.com</a>&gt; wrote:
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; &gt; I Recently came across your resume and wanted to contact you 
+&gt; &gt; &gt; &gt; &gt; regarding a TEMP-PERM opportunity I have at a Downtown NYC 
+&gt; &gt; &gt; &gt; &gt; based
+&gt; 
+&gt; &gt; &gt; &gt; &gt; Wholesale Brokerage firm.  (All candidates must be eligible 
+to
+
+&gt; &gt; &gt; &gt; &gt; work for any employeer with in
+&gt; &gt; &gt; &gt; the
+&gt; &gt; &gt; &gt; &gt; US.. they will not sponsor!).
+&gt; &gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; &gt;  If this is not a good match OR if you are not currently 
+&gt; &gt; &gt; &gt; &gt; looking
+&gt; 
+&gt; &gt; &gt; &gt; &gt; please
+&gt; &gt; &gt; &gt; feel
+&gt; &gt; &gt; &gt; &gt; free to pass this e-mail along to anyone you might know of 
+&gt; &gt; &gt; &gt; &gt; that is
+&gt; &gt; &gt; &gt; qualified
+&gt; &gt; &gt; &gt; &gt; or interested.
+&gt; &gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; &gt; Client has merged with another brokerage firm and is looking 
+&gt; &gt; &gt; &gt; &gt; for
+&gt; 
+&gt; &gt; &gt; &gt; &gt; a
+&gt; &gt; 
+&gt; &gt; &gt; &gt; &gt; senior Developer/Architect to help merge trading system and 
+&gt; &gt; &gt; &gt; &gt; other financial sensitive applications.
+&gt; &gt; &gt; &gt; &gt; This is a lead role .
+&gt; &gt; &gt; &gt; &gt; Applicant must have extensive experience in Brokerage 
+&gt; &gt; &gt; &gt; &gt; including Trading systems experience (5+ years)
+&gt; &gt; &gt; &gt; &gt; 10+ years of IT Development experience.
+&gt; &gt; &gt; &gt; &gt; Strong Java/J2EE design and development experience.
+&gt; &gt; &gt; &gt; &gt; Must have worked on full project lifecycle.
+&gt; &gt; &gt; &gt; &gt; Must have excellent communication skills and able to speak 
+&gt; &gt; &gt; &gt; &gt; with senior managers and users.
+&gt; &gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; &gt; Please send a WORD VERSION OF YOUR RESUME ALONG WITH WHICH 
+&gt; &gt; &gt; &gt; &gt; POSITION YOU ARE APPLYING FOR (INCLUDE SALARY REQUIRMENTS &amp; a
+&gt; &gt; CONTACT #).
+&gt; &gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; &gt; Michael L. De Vito
+&gt; &gt; &gt; &gt; &gt; Recruiting Manager
+&gt; &gt; &gt; &gt; &gt; Platinumit
+&gt; &gt; &gt; &gt; &gt; 535 5th Avenue Suite 1004
+&gt; &gt; &gt; &gt; &gt; NY- (212)661-8355 ext. 131
+&gt; &gt; &gt; &gt; &gt; NJ- (973)822-9066
+&gt; &gt; &gt; &gt; &gt; Fax: 212 661 3420
+&gt; &gt; &gt; &gt; &gt; <a href="http://us.f536.mail.yahoo.com/ym/Compose?To=Mdevito@platinumit.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">Mdevito@platinumit.com</a>
+&gt; &gt; &gt; &gt; &gt; www.platinumit.com
+&gt; &gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; &gt;
+&gt; &gt; &gt; 
+&gt; &gt; &gt; 
+&gt; &gt; &gt; 
+&gt; &gt; &gt; BEGIN:VCARD
+&gt; &gt; VERSION:2.1
+&gt; &gt; N:Steynbok;Nellie
+&gt; &gt; FN:Nellie Steynbok
+&gt; &gt; EMAIL;PREF;INTERNET:<a href="http://us.f536.mail.yahoo.com/ym/Compose?To=NSteynbok@PlatinumIT.com&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">NSteynbok@PlatinumIT.com</a>
+&gt; &gt; REV:20041110T185713Z
+&gt; &gt; END:VCARD
+&gt; &gt; 
+&gt; 
+&gt; 
+&gt; 
+</tt></pre>
+
+
+
+
+
+
+
+
+<div class="infomodule">
+<a name="attachments"></a>
+<table border="0" cellpadding="0" cellspacing="0" width="500">
+<tbody><tr>
+<td>
+<table border="0" cellpadding="0" cellspacing="0" width="100%">
+<tbody><tr class="bgc" bgcolor="#3f6c96">
+<td rowspan="2" class="verd" height="15" nowrap="nowrap"><img src="HSBS_positions2_files/space.gif" height="1" width="140"><br>  <b>Attachment</b></td>
+<td valign="top"><img src="HSBS_positions2_files/tr14x15_1.gif" height="15" width="14"></td>
+<td class="bgf" align="right" width="99%">  </td>
+</tr>
+<tr class="bgc">
+<td colspan="2">
+<table border="0" cellpadding="0" cellspacing="0">
+<tbody><tr>
+<td height="3"></td>
+</tr>
+</tbody></table>
+</td>
+</tr>
+</tbody></table>
+</td>
+</tr>
+<tr>
+<td class="bgc">
+<table border="0" cellpadding="0" cellspacing="1">
+<tbody><tr>
+<td class="bgf" rowspan="2" align="center" width="200">
+<br>
+<b>Nellie_Steynbok.vcf</b><br>
+			    .vcf file<br><br>
+</td>
+<td class="pulldown" style="padding-left: 10px; padding-top: 6px;" bgcolor="#eeeeee" nowrap="nowrap" valign="top" width="300">
+
+<!-- BEGIN AD CALL AV --> 
+
+
+<div style="border-bottom: 1px solid rgb(204, 204, 204); margin-left: -10px; margin-top: -6px; margin-bottom: 0.5em;">
+<table border="0" cellpadding="4" cellspacing="0">
+<tbody><tr>
+<td style="font-family: verdana; font-size: 74%;" nowrap="nowrap" valign="middle">Attachment scanning provided by:</td>
+<td valign="middle"><table border="0" cellpadding="0" cellspacing="0"> <tbody><tr> <td><a href="http://us.ard.yahoo.com/SIG=12568n9f6/M=282940.5285557.6393238.5102359/D=mail/S=150500004:C/EXP=1109737787/A=2271944/R=0/SIG=114cinb64/*http://www.symantecstore.com/51946"><img src="HSBS_positions2_files/102004_nav2005_79x22.gif" alt="" border="0" height="22" width="79"></a></td></tr></tbody></table></td>
+</tr>
+</tbody></table>
+</div>
+ 
+<!-- END AD CALL AV --> 
+
+
+<span style="line-height: 2em;">
+<nobr>
+<a href="http://us.f536.mail.yahoo.com/ym/ShowLetter/Nellie%5fSteynbok.vcf?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;bodyPart=2&amp;DataName=&amp;filename=Nellie%5fSteynbok.vcf&amp;Briefcase=1&amp;tnef=&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">Save to my Yahoo! Briefcase</a>
+</nobr><br>
+<a href="http://us.f536.mail.yahoo.com/ym/ShowLetter/Nellie%5fSteynbok.vcf?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;bodyPart=2&amp;filename=Nellie%5fSteynbok.vcf&amp;tnef=&amp;download=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">Download File</a><br>
+<nobr><a href="http://us.f536.mail.yahoo.com/ym/ShowLetter?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;bodyPart=2&amp;tnef=&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b&amp;ViewAttach=1">View Attachment</a></nobr><br>
+</span>
+</td>
+</tr>
+</tbody></table>
+</td>
+</tr>
+</tbody></table>
+   
+</div>
+
+</div>
+
+<!-- END TOC -->				
+
+<form name="showLetter2" method="post" action="/ym/ShowLetter?Idx=0&amp;Search=&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">
+<input name=".crumb" value="t.BK7hrte8P" type="hidden"><input name="MsgId" value="3047_7365949_2661477_1404_5246_0_62911_12618_2588710876" type="hidden">
+<input name="box" value="Inbox" type="hidden">
+<input name="MOV" value="" type="hidden">
+<input name="NewFol" value="" type="hidden">
+<input name="destBox" value="" type="hidden">
+<input name="newfoldermessage" value="Please enter a name for your folder." type="hidden">
+<input name="DEL" value="" type="hidden">				
+<div id="contentbuttonbarbottom" class="contentbuttonbar">
+<span class="first">
+<button type="button" name="delete" id="deletebottom" value="Delete" onclick="Delete_Click(this);">Delete</button>
+	
+<button type="button" value="Reply" id="replybottom" class="hasdefaultstate">Reply</button>
+	
+<button type="button" value="Forward" id="forwardbottom" class="hasdefaultstate">Forward</button>
+	
+	
+<button type="button" value="Spam" onclick="document.spamform.submit();">Spam</button>
+
+<button type="button" id="movebottom" name="move" class="menubutton" title="Move selected message(s)">Move...</button>
+</span>
+</div>
+</form>
+
+<div class="contentnav">
+<span class="first">
+								Previous
+								 | 
+<a href="http://us.f536.mail.yahoo.com/ym/ShowLetter?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;NEXT=1&amp;inc=&amp;num=&amp;Idx=0&amp;Search=&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" onmouseover="self.status='From: Paps - OSR Solutions, Subject: Immediate Opening in NYC';return true" onmouseout="window.status=window.defaultStatus;return true">Next</a>
+								 | <a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?box=Inbox&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b" onmouseover="window.status='Folder: Inbox';return true" onmouseout="window.status=window.defaultStatus;return true">Back to Messages</a>
+</span>
+<span class="last">
+<a href="http://us.f536.mail.yahoo.com/ym/ShowLetter/file.txt?box=Inbox&amp;MsgId=3047_7365949_2661477_1404_5246_0_62911_12618_2588710876&amp;bodyPart=1&amp;filename=file.txt&amp;save=1&amp;download=1&amp;YY=84105&amp;order=down&amp;sort=date&amp;pos=0&amp;view=a&amp;head=b">Save Message Text</a></span>
+</div>
+</td>
+</tr>
+</tbody></table>
+
+<div id="globalbuttonbarbottom" class="globalbuttonbar">
+<table border="0" cellpadding="0" cellspacing="0">
+<tbody><tr>
+<td nowrap="nowrap" width="1%">
+			
+<button type="button" onclick="window.location='/ym/ShowFolder?rb=Inbox&reset=1&YY=84105&order=down&sort=date&pos=0&view=a&head=b&YN=1';" title="Check for new mail (Shortcut keys: Control+Shift+C)">Check Mail</button>
+		
+		
+<button type="button" onclick="(parent&&parent.showCompose)?parent.showCompose():window.location='/ym/Compose?YY=84105&order=down&sort=date&pos=0&view=a&head=b';" title="Compose a new message (Shortcut keys: Control+Shift+P)">Compose</button>
+		
+		
+		
+			
+</td>
+<td align="right">
+		
+<!-- <span>TG: UI: SFI: SFV:</span> -->
+			
+<span id="searchtestfields">
+
+
+<script>
+                    var url1 = "/ym/Search?Find=1&B=1&_p=bottom"; 
+    
+   </script>
+	<table border="0" cellpadding="0" cellspacing="0">
+		<tbody><tr>
+			<td><input size="20" maxlength="50" name="searchquery1" id="searchquery1" value="" style="margin-right: 0.5em; vertical-align: baseline;" onkeypress="SearchQuery_KeyPress(this,event,1);" type="text"></td>
+			<td>
+				<input id="searchField1" name="searchField" value="header" type="hidden">
+			    <button id="searchmail1" type="button" name="searchmail1" value="Search Mail" class="hasdefaultstate">Search Mail</button>
+			    			        <button id="searchtheweb" type="button" name="searchtheweb" value="Search the Web" onclick="submitWebSearch(1)" style="width: 11em;">Search the Web</button>
+			    			
+			</td>
+		</tr>
+	</tbody></table>
+
+</span>
+			
+		
+</td>
+</tr>
+</tbody></table>
+
+
+
+
+</div>
+		
+<div id="movemenu" class="buttonmenu">
+<strong>Move Options</strong>
+<ul><li value="0">[New Folder]</li><li value="1" title="0Important Reference - no clutter">0Important Refe...</li><li value="1" title="1Finance">1Finance</li><li value="1" title="2Technology">2Technology</li><li value="1" title="3General News and Weather">3General News a...</li><li value="1" title="4Junk of interest">4Junk of interest</li><li value="1" title="5Agents - work">5Agents - work</li><li value="1" title="6 Orders from Amazon and others">6 Orders from A...</li><li value="1" title="AOlya">AOlya</li><li value="1" title="Amazon">Amazon</li><li value="1" title="Answering">Answering</li><li value="1" title="Azarin">Azarin</li><li value="1" title="BoardFriends">BoardFriends</li><li value="1" title="CableTV">CableTV</li><li value="1" title="Diana">Diana</li><li value="1" title="Drugstore.com">Drugstore.com</li><li value="1" title="Ebay">Ebay</li><li value="1" title="FeigJeff">FeigJeff</li><li value="1" title="Files">Files</li><li value="1" title="Forbes">Forbes</li><li value="1" title="JefZazlow">JefZazlow</li><li value="1" title="JohnMauldin">JohnMauldin</li><li value="1" title="Lancome">Lancome</li><li value="1" title="LenyaP">LenyaP</li><li value="1" title="MityaUdler">MityaUdler</li><li value="1" title="Navellier">Navellier</li><li value="1" title="NoahRatitz">NoahRatitz</li><li value="1" title="Old or Replied Personal Mail">Old or Replied ...</li><li value="1" title="Paypal">Paypal</li><li value="1" title="RegistrationInfo">RegistrationInfo</li><li value="1" title="SAGA_Software">SAGA_Software</li><li value="1" title="Sitraka">Sitraka</li><li value="1" title="StockVoting">StockVoting</li><li value="1" title="TDWaterhouse">TDWaterhouse</li><li value="1" title="TDWaterhouseConf">TDWaterhouseConf</li><li value="1" title="Vasyaginer">Vasyaginer</li><li value="1" title="VitKhus">VitKhus</li><li value="1" title="VitUshakov">VitUshakov</li><li value="1" title="Witcapital">Witcapital</li><li value="1" title="Zhupanov">Zhupanov</li><li value="1" title="amirKamalati">amirKamalati</li><li value="1" title="articles">articles</li><li value="1" title="benoit">benoit</li><li value="1" title="bobMarsh">bobMarsh</li><li value="1" title="boryaGarger">boryaGarger</li><li value="1" title="brain_bench">brain_bench</li><li value="1" title="denisGrinchenko">denisGrinchenko</li><li value="1" title="eFax">eFax</li><li value="1" title="eXcelon">eXcelon</li><li value="1" title="enmd">enmd</li><li value="1" title="etrade">etrade</li><li value="1" title="fanWu">fanWu</li><li value="1" title="gilder">gilder</li><li value="1" title="grantPoladian">grantPoladian</li><li value="1" title="iraPodosheva">iraPodosheva</li><li value="1" title="jackRoth">jackRoth</li><li value="1" title="javaDevJournal">javaDevJournal</li><li value="1" title="lenyaNabutovsky">lenyaNabutovsky</li><li value="1" title="me">me</li><li value="1" title="mishaOstrovskii">mishaOstrovskii</li><li value="1" title="mishaYudin">mishaYudin</li><li value="1" title="mkhusidm">mkhusidm</li><li value="1" title="moneyNet">moneyNet</li><li value="1" title="net-temps">net-temps</li><li value="1" title="netBulls">netBulls</li><li value="1" title="orders">orders</li><li value="1" title="oxfordClub">oxfordClub</li><li value="1" title="petyaZeilczynski">petyaZeilczynski</li><li value="1" title="ragingBull">ragingBull</li><li value="1" title="resumes">resumes</li><li value="1" title="rimma">rimma</li><li value="1" title="rimmaKatz">rimmaKatz</li><li value="1" title="rosa">rosa</li><li value="1" title="sashaRussakovskii">sashaRussakovskii</li><li value="1" title="scams">scams</li><li value="1" title="securityComplains">securityComplains</li><li value="1" title="serezhaSvetlichniy">serezhaSvetlichniy</li><li value="1" title="small_caps">small_caps</li><li value="1" title="softwareDevolopmentJournal">softwareDevolop...</li><li value="1" title="splitTrader">splitTrader</li><li value="1" title="stockBottom">stockBottom</li><li value="1" title="vityaPopovsky">vityaPopovsky</li><li value="1" title="voting">voting</li><li value="1" title="wallStreetCity">wallStreetCity</li><li value="1" title="waterhouse">waterhouse</li><li value="1" title="yahoo">yahoo</li><li value="1" title="yuraPodoshev">yuraPodoshev</li><li value="1" title="zhenyaLeonov">zhenyaLeonov</li></ul>
+</div>		
+
+<div id="forwardmenu" class="buttonmenu">
+<strong>Forward Options</strong>
+<ul>
+<li value="0">As Inline Text</li>
+<li value="1">As Attachment</li>
+</ul>
+</div>
+
+<div id="replymenu" class="buttonmenu">
+<strong>Reply Options</strong>
+<ul>
+<li value="0">Reply To Sender</li>
+<li value="1">Reply To Everyone</li>
+</ul>		
+</div>
+		
+<script>
+function composeClickHandler(loc)
+{
+	if( parent.showCompose )
+		parent.showCompose();
+	else window.location = loc;
+}
+</script>
+<div id="mailshortcuts" class="shortcuts">
+	<strong><a name="mailshortcuts">Mail Shortcuts</a></strong>
+	<div>
+		<ul class="first">
+			<li class="special"><a href="http://us.f536.mail.yahoo.com/ym/ShowFolder?rb=Inbox&amp;YN=1&amp;YY=605669">Check Mail</a> Ctrl+<img src="HSBS_positions2_files/shift1.gif" alt="shift" border="0" height="8" width="9">+C</li>
+			<li class="special"><a href='javascript:if(typeof(composeClickHandler)!="undefined")composeClickHandler("http://us.f536.mail.yahoo.com/ym/Compose?YY=180901");else{window.location="http://us.f536.mail.yahoo.com/ym/Compose?YY=131038";}'>Compose</a> Ctrl+<img src="HSBS_positions2_files/shift1.gif" alt="shift" border="0" height="8" width="9">+P</li>
+		</ul>
+		<ul>
+			<li class="special"><a target="_top" href="http://us.f536.mail.yahoo.com/ym/Folders?YY=742106">Folders</a> Ctrl+<img src="HSBS_positions2_files/shift1.gif" alt="shift" border="0" height="8" width="9">+F</li>
+			<li class="special"><a target="_top" href="http://us.f536.mail.yahoo.com/ym/Search?P=1&amp;YY=584737">Advanced Search</a> Ctrl+<img src="HSBS_positions2_files/shift1.gif" alt="shift" border="0" height="8" width="9">+S</li>
+		</ul>
+		<ul class="last">
+			<li><a target="_top" href="http://us.f536.mail.yahoo.com/ym/Options?YY=396969">Options</a></li>
+			<li class="special"><a target="_top" href="http://help.yahoo.com/help/us/mail/">Help</a> Ctrl+<img src="HSBS_positions2_files/shift1.gif" alt="shift" border="0" height="8" width="9">+H</li>
+		</ul>
+	</div> 
+</div>
+
+<div id="addressbookshortcuts" class="shortcuts">
+	<strong><a target="_top" name="addressbookshortcuts">Address Book Shortcuts</a></strong>	
+	<div>
+		<ul class="first">
+			<li><a target="_top" href="http://address.yahoo.com/yab/us?addcontact">Add Contact</a></li>
+			<li><a target="_top" href="http://address.yahoo.com/yab/us?Add&amp;A=g">Add Category</a></li>
+			<li><a target="_top" href="http://address.yahoo.com/yab/us?edit_grp">Add List</a></li>
+		</ul>
+		<ul>			
+			<li><a target="_top" href="http://address.yahoo.com/yab/us">View Contacts</a></li>
+			<li><a target="_top" href="http://address.yahoo.com/yab/us?A=v&amp;cat=__ll">View Lists</a></li>
+		</ul>				
+		<ul>
+			<li><a target="_top" href="http://us.f536.mail.yahoo.com/ym/quickbuilder">Quickbuilder</a></li>
+			<li><a target="_top" href="http://address.yahoo.com/yab/us?A=B">Import Contacts</a></li>
+					<li><a target="_top" href="http://address.yahoo.com/yab/us?A=x&amp;A2=11">Synchronize</a></li>
+				</ul>
+		<ul class="last">							
+			<li><a target="_top" href="http://address.yahoo.com/yab/us?A=o">Addresses Options</a></li>
+			<li><a target="_top" href="http://help.yahoo.com/help/us/ab/">Addresses Help</a></li>
+		</ul>
+	</div> 
+</div>
+
+<div id="calendarshortcuts" class="shortcuts">
+	<strong><a target="_top" name="calendarshortcuts">Calendar Shortcuts</a></strong>
+	<div>
+		<ul class="first">
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=5">Add Event</a></li>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=33">Add Task</a></li>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=5&amp;evt_type=13">Add Birthday</a></li>
+		</ul>
+		<ul>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=0">Day</a></li>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=1">Week</a></li>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=2">Month</a></li>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=3">Year</a></li>
+		</ul>
+		<ul>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=42">Event List</a></li>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=42&amp;POS=0&amp;TYP=101&amp;MOD=0">Reminders</a></li>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=32">Tasks</a></li>
+		</ul>
+		<ul>
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=84">Sharing</a></li>
+					<li><a target="_top" href="http://calendar.yahoo.com/?v=120">Synchronize</a></li>
+				</ul>
+		<ul class="last">
+			<li><a target="_top" href="http://calendar.yahoo.com/?v=70">Calendar Options</a></li>
+			<li><a target="_top" href="http://help.yahoo.com/help/us/cal/">Calendar Help</a></li>
+		</ul>
+	</div>
+</div>
+
+<div id="notepadshortcuts" class="shortcuts">
+	<strong><a target="_top" name="notepadshortcuts">Notepad Shortcuts</a></strong>
+	<div>
+		<ul class="first">
+			<li><a target="_top" href="http://notepad.yahoo.com/?v=161">Add Note</a></li>
+			<li><a target="_top" href="http://notepad.yahoo.com/?v=168">Add Folder</a></li>
+		</ul>
+		<ul>
+			<li><a target="_top" href="http://notepad.yahoo.com/?v=164">View Notes</a></li>
+		</ul>
+		<ul class="last">
+			<li><a target="_top" href="http://notepad.yahoo.com/?v=165">Notepad Options</a></li>
+			<li><a target="_top" href="http://help.yahoo.com/help/us/notepad/">Notepad Help</a></li>
+		</ul>
+	</div> 
+</div>
+
+
+<div id="searchmenu" class="buttonmenu">
+<strong>Advanced Search</strong>
+<ul><li value="0">Advanced Search</li></ul>
+</div>
+
+<script type="text/javascript">
+
+	if(typeof Search_Click_top != 'undefined' && typeof Search_Click_bottom != 'undefined')
+	{
+	    var oSearchTop = MenuButton('searchmail0',Search_Click_top,'searchmenu',SearchMenu_Click);
+	    var oSearchBottom = MenuButton('searchmail1',Search_Click_bottom,'searchmenu',SearchMenu_Click);
+	}
+	
+</script>
+<br>
+
+<!-- SpaceID=150500004 loc=FOOT noad -->
+
+	<script language="javascript"> var ADFadids = "2378664,1052425"; function ADFlaunch() {var w; var l="http://us.ard.yahoo.com/SIG=1296sqhod/M=224039.2020109.3495275.1958505/D=mail/S=150500004:FOOT2/EXP=1109737787/A=1052425/R=0/id=adfeedback/SIG=12it695us/*http://surveys.yahoo.com/user_ad_feedback?source=150500004:FOOT2&.q28=mail&.q26="+ADFadids; w=window.open(l,"AdFeedbackWin","toolbar=no,scrollbars=yes,resizable,location=no,height=400,width=640"); }</script><center><small><br>Copyright © 1994-2005 <a href="http://us.ard.yahoo.com/SIG=1296sqhod/M=224039.2020109.3495275.1958505/D=mail/S=150500004:FOOT2/EXP=1109737787/A=1052425/R=1/mail_us/tos/SIG=10mgpruen/*http://www.yahoo.com" target="_top">Yahoo!</a> Inc. All rights reserved. <a href="http://us.ard.yahoo.com/SIG=1296sqhod/M=224039.2020109.3495275.1958505/D=mail/S=150500004:FOOT2/EXP=1109737787/A=1052425/R=2/SIG=1136qnvkg/*http://docs.yahoo.com/info/terms/" target="_top">Terms of Service</a> - <a href="http://us.ard.yahoo.com/SIG=1296sqhod/M=224039.2020109.3495275.1958505/D=mail/S=150500004:FOOT2/EXP=1109737787/A=1052425/R=3/SIG=11lp7krrc/*http://docs.yahoo.com/info/copyright/copyright.html" target="_top">Copyright Policy</a> - <a href="http://us.ard.yahoo.com/SIG=1296sqhod/M=224039.2020109.3495275.1958505/D=mail/S=150500004:FOOT2/EXP=1109737787/A=1052425/R=4/SIG=11he80eif/*http://docs.yahoo.com/info/guidelines/mail.html" target="_top">Guidelines</a> - <a href="javascript:ADFlaunch()">Ad Feedback</a><br>NOTICE: We collect personal information on this site.<br>To learn more about how we use your information, see our <a href="http://us.ard.yahoo.com/SIG=1296sqhod/M=224039.2020109.3495275.1958505/D=mail/S=150500004:FOOT2/EXP=1109737787/A=1052425/R=5/SIG=11b5p6lhe/*http://privacy.yahoo.com/privacy/us/mail/" target="_top">Privacy Policy</a></small></center> <!-- SpaceID=150500004 loc=FSRVY noad-spid -->
+
+
+
+
+<script type="text/javascript">
+		var oReplyTop = MenuButton('replytop',Reply_Click,'replymenu',ReplyMenu_Click);
+		var oReplyBottom = MenuButton('replybottom',Reply_Click,'replymenu',ReplyMenu_Click);
+	
+		var oForwardTop = MenuButton('forwardtop',Forward_Click,'forwardmenu',ForwardMenu_Click);
+		var oForwardBottom = MenuButton('forwardbottom',Forward_Click,'forwardmenu',ForwardMenu_Click);
+		
+		var oMoveTop = MenuButton('movetop',Move_Click,'movemenu',DestinationFolder_Click);
+		var oMoveBottom = MenuButton('movebottom',Move_Click,'movemenu',DestinationFolder_Click);	
+</script>
+<!-- v3.6.23.5.2 1101240052 -->
+<!-- 0.15906 -->
+<!-- web53609.mail.yahoo.com compressed/chunked Mon Feb 28 20:29:47 PST 2005 --></body></html>

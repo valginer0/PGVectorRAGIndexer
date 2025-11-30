@@ -1,0 +1,98 @@
+/* styles that will change */
+
+BODY, TD, P, DIV
+{
+font-family: Verdana, Arial, Helvetica, sans-serif;
+color: #000000;
+}
+
+.businessheader
+{color: #FFFFFF;
+font-size:  12px;
+text-decoration: none;}
+
+.businessheader:hover
+{color: #FFFFFF;
+text-decoration: underline;}
+
+.businessnav
+{color: #333333;
+font-size: 11px;
+text-decoration: none;
+}
+
+.pagetitle
+{
+  font-size:  16px;
+  font-weight: bold;}
+
+.formlinks
+{color: #000000;
+font-size:  12px;
+font-weight: bold;}
+
+A.homelinks 
+{color: #FF6600;
+font-size:  16px;
+font-weight: bold;
+text-decoration: none;}
+
+
+.homelinks a:hover
+{color: #333333;
+font-size:  16px;
+}
+
+.sublinks
+{color: #FF6600;
+font-size:  11px}
+
+.headerFont
+{color:#000000;
+font-size:  12px}
+
+.assessnav
+{background-color: #cccccc;
+border: 0;
+width:  100%}
+
+.assessnav2
+{background-color: #ff6600;
+border: 0;
+width:  100%}
+
+.rowheader
+{background-color: #cccccc;
+border: 0;
+width:  100%}
+
+A:hover
+{color: #FF6600;
+text-decoration: none}
+
+.rptheader
+{background-color: #cccccc;
+border: 0;
+width:  100%}
+
+.highlight 
+{background-color: #999999;
+font-weight: bold;
+}
+
+.highlight A
+{color: #ffffff !important;
+}
+
+.titlecolor
+{color: #FF6600;}
+
+.reportfont 
+{font-size: 11px;
+ font-weight: bold;}
+ 
+ .reportfontsub
+{color: #FFFFFF;
+font-size:  11px;
+font-weight: bold;}
+

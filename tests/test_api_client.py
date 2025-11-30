@@ -97,3 +97,166 @@ def test_error_handling(api_client):
         
         with pytest.raises(requests.RequestException):
             api_client.get_document("missing_id")
+
+def test_check_document_exists_true(api_client):
+    """Test check_document_exists returns True when found."""
+    with patch("requests.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"results": [{"id": "1"}]}
+        
+        assert api_client.check_document_exists("/path/to/doc") is True
+        
+        # Verify it called search
+        args = mock_post.call_args
+        assert args[0][0].endswith("/search")
+        assert args[1]["json"]["filters"]["source_uri_like"] == "/path/to/doc"
+
+def test_check_document_exists_false(api_client):
+    """Test check_document_exists returns False when not found."""
+    with patch("requests.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"results": []}
+        
+        assert api_client.check_document_exists("/path/to/doc") is False
+
+def test_check_document_exists_exception(api_client):
+    """Test check_document_exists returns False on error."""
+    with patch("requests.post", side_effect=Exception("API Error")):
+        assert api_client.check_document_exists("/path/to/doc") is False
+
+def test_list_documents_legacy_response(api_client):
+    """Test list_documents handles legacy list response."""
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = [{"id": "1"}, {"id": "2"}]
+        
+        response = api_client.list_documents()
+        
+        assert response["total"] == 2
+        assert len(response["items"]) == 2
+        assert response["_total_estimated"] is True
+
+def test_get_document_success(api_client):
+    """Test get_document success."""
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"id": "1", "content": "test"}
+        
+        doc = api_client.get_document("1")
+        assert doc["id"] == "1"
+        mock_get.assert_called_with("http://test-api/documents/1", timeout=300)
+
+def test_delete_document_success(api_client):
+    """Test delete_document success."""
+    with patch("requests.delete") as mock_delete:
+        mock_delete.return_value.status_code = 200
+        mock_delete.return_value.json.return_value = {"status": "deleted"}
+        
+        response = api_client.delete_document("1")
+        assert response["status"] == "deleted"
+        mock_delete.assert_called_with("http://test-api/documents/1", timeout=300)
+
+def test_get_statistics_success(api_client):
+    """Test get_statistics success."""
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"total_documents": 100}
+        
+        stats = api_client.get_statistics()
+        assert stats["total_documents"] == 100
+        mock_get.assert_called_with("http://test-api/statistics", timeout=300)
+
+def test_bulk_delete_preview(api_client):
+    """Test bulk_delete_preview."""
+    filters = {"type": "resume"}
+    with patch("requests.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"count": 5, "preview": []}
+        
+        response = api_client.bulk_delete_preview(filters)
+        assert response["count"] == 5
+        
+        mock_post.assert_called_with(
+            "http://test-api/documents/bulk-delete",
+            json={"filters": filters, "preview": True},
+            timeout=300
+        )
+
+def test_bulk_delete_execute(api_client):
+    """Test bulk_delete execution."""
+    filters = {"type": "resume"}
+    with patch("requests.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"chunks_deleted": 10}
+        
+        response = api_client.bulk_delete(filters)
+        assert response["chunks_deleted"] == 10
+        
+        mock_post.assert_called_with(
+            "http://test-api/documents/bulk-delete",
+            json={"filters": filters, "preview": False},
+            timeout=300
+        )
+
+def test_export_documents(api_client):
+    """Test export_documents."""
+    filters = {"type": "resume"}
+    with patch("requests.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"backup_data": []}
+        
+        response = api_client.export_documents(filters)
+        assert "backup_data" in response
+        
+        mock_post.assert_called_with(
+            "http://test-api/documents/export",
+            json={"filters": filters},
+            timeout=300
+        )
+
+def test_restore_documents(api_client):
+    """Test restore_documents."""
+    backup_data = [{"id": "1"}]
+    with patch("requests.post") as mock_post:
+        mock_post.return_value.status_code = 200
+        mock_post.return_value.json.return_value = {"chunks_restored": 1}
+        
+        response = api_client.restore_documents(backup_data)
+        assert response["chunks_restored"] == 1
+        
+        mock_post.assert_called_with(
+            "http://test-api/documents/restore",
+            json={"backup_data": backup_data},
+            timeout=300
+        )
+
+def test_get_metadata_keys(api_client):
+    """Test get_metadata_keys."""
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = ["author", "date"]
+        
+        keys = api_client.get_metadata_keys(pattern="auth%")
+        assert keys == ["author", "date"]
+        
+        mock_get.assert_called_with(
+            "http://test-api/metadata/keys",
+            params={"pattern": "auth%"},
+            timeout=300
+        )
+
+def test_get_metadata_values(api_client):
+    """Test get_metadata_values."""
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = ["John", "Jane"]
+        
+        values = api_client.get_metadata_values("author")
+        assert values == ["John", "Jane"]
+        
+        mock_get.assert_called_with(
+            "http://test-api/metadata/values",
+            params={"key": "author"},
+            timeout=300
+        )
+

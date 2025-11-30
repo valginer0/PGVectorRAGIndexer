@@ -15,6 +15,7 @@ from typing import Optional
 import logging
 import sys
 import os
+import json
 import subprocess
 from pathlib import Path
 from .source_open_manager import SourceOpenManager

@@ -73,14 +73,7 @@ class APIClient:
             # We can use the 'source_uri_like' filter with the exact URI (escaping wildcards if needed).
             # But standard SQL LIKE without wildcards acts as equals.
             
-            filters = {"source_uri_like": source_uri}
-            response = self.list_documents(limit=1, offset=0)
-            # Wait, list_documents doesn't accept filters in the python client method signature I see above!
-            # It only accepts limit, offset, sort_by, sort_dir.
-            
-            # Let's check if we can pass filters to list_documents.
-            # The list_documents method in APIClient (lines 131-153) DOES NOT take filters.
-            
+            # The list_documents method in APIClient DOES NOT take filters.
             # However, the search method DOES take filters.
             # Let's use search with a filter.
             

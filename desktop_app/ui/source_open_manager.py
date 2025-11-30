@@ -238,44 +238,30 @@ class SourceOpenManager(QObject):
             entry.reindexed = False
         self.entry_updated.emit(entry)
 
-    def _normalize_path(self, path: str, warn: bool = True) -> Optional[Path]:
-        if not path:
-            if warn:
-                QMessageBox.warning(
-                    self._parent_widget(),
-                    "No Path",
-                    "No source path is available to open."
-                )
-            return None
-        normalized = Path(path).expanduser()
-        if not normalized.exists():
-            if warn:
-                QMessageBox.warning(
-                    self._parent_widget(),
-                    "File Not Found",
-                    f"The file does not exist:\n{path}"
-                )
-            return None
-        return normalized
+
+
+    def _system_open(self, path: Path) -> None:
+        """Open a file or directory using the system default application."""
+        if sys.platform.startswith("win"):
+            os.startfile(str(path))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(path)])
+        else:
+            # Linux/Unix
+            if self._is_wsl():
+                self._open_in_wsl(path)
+                return
+                
+            try:
+                subprocess.Popen(["xdg-open", str(path)])
+            except FileNotFoundError:
+                # Fallback if xdg-open is missing
+                logger.warning("xdg-open not found, falling back to webbrowser")
+                webbrowser.open(path.as_uri())
 
     def _launch_default(self, path: Path) -> None:
         try:
-            if sys.platform.startswith("win"):
-                os.startfile(str(path))  # type: ignore[attr-defined]
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(path)])
-            else:
-                # Linux/Unix
-                if self._is_wsl():
-                    self._open_in_wsl(path)
-                    return
-                    
-                try:
-                    subprocess.Popen(["xdg-open", str(path)])
-                except FileNotFoundError:
-                    # Fallback if xdg-open is missing
-                    logger.warning("xdg-open not found, falling back to webbrowser")
-                    webbrowser.open(path.as_uri())
+            self._system_open(path)
         except Exception as e:
             logger.error(f"Failed to open file {path}: {e}")
             raise e
@@ -317,33 +303,32 @@ class SourceOpenManager(QObject):
         if sys.platform.startswith("win"):
             subprocess.Popen(["rundll32", "shell32.dll,OpenAs_RunDLL", str(path)])
             return
+            
+        # For macOS and Linux, we use QFileDialog to pick an app
         if sys.platform == "darwin":
-            app, _ = QFileDialog.getOpenFileName(
-                self._parent_widget(),
-                "Choose Application",
-                "/Applications",
-                "Applications (*.app)"
-            )
-            if app:
-                subprocess.Popen(["open", str(path), "-a", app])
-            return
+            base_dir = "/Applications"
+            filter_str = "Applications (*.app)"
+        else:
+            base_dir = "/usr/bin"
+            filter_str = "Executables (*)"
+            
         app, _ = QFileDialog.getOpenFileName(
             self._parent_widget(),
             "Choose Application",
-            "/usr/bin",
-            "Executables (*)"
+            base_dir,
+            filter_str
         )
-        if app:
+        
+        if not app:
+            return
+            
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", str(path), "-a", app])
+        else:
             subprocess.Popen([app, str(path)])
 
     def _show_in_folder(self, path: Path) -> None:
-        folder = path.parent
-        if sys.platform.startswith("win"):
-            os.startfile(str(folder))  # type: ignore[attr-defined]
-        elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(folder)])
-        else:
-            subprocess.Popen(["xdg-open", str(folder)])
+        self._system_open(path.parent)
 
     def _copy_to_clipboard(self, path: Path) -> None:
         clipboard = QGuiApplication.clipboard()

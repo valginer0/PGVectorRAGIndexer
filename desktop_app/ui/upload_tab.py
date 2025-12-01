@@ -373,10 +373,10 @@ class UploadTab(QWidget):
                 
             self.log(f"✗ File {index + 1} failed: {message}")
             
-            # Store failure details
-            file_name = self.selected_files[index].name
+            # Store failure details with full path
+            file_path = str(self.selected_files[index])
             self.failed_uploads.append({
-                "file": file_name,
+                "file": file_path,
                 "error": enhanced_msg
             })
         

@@ -112,11 +112,23 @@ cd %USERPROFILE%\PGVectorRAGIndexer
 
 Or create a desktop shortcut to `run_desktop_app.ps1`!
 
-### Working with SourceOpenManager features
+### Using the Desktop App
 
-- **Recent Activity tab** – The tab bar now includes `🕓 Recent`, which lists the last files you opened from `Search`, `Documents`, or `Manage`. Each entry shows when it was opened, whether it’s queued, reindexed, or has a last error.
-- **Queue and batch reindex** – Use the buttons in the Recent tab (Queue/Unqueue, Reindex, Remove) or the context menus in other tabs to queue items. Press **Reindex Queued** to submit every queued document at once. No pop-ups appear unless a critical error occurs.
-- **Context menu actions** – Right-click any `Source URI` entry to access `Open`, `Open with…`, `Show in Folder`, `Copy Path`, `Queue for Reindex`, `Reindex Now`, or `Remove from Recent`. Options stay consistent across tabs thanks to the shared `SourceOpenManager`.
+The desktop app has six tabs, ordered by typical workflow:
+
+1. **Upload** – Add documents to the system. Upload individual files or entire folders. Full file paths are preserved.
+2. **Search** – Find information across your indexed documents. Click on file paths to open them.
+3. **Documents** – Browse all indexed documents with pagination and sorting.
+4. **Recent** – Track files you've opened and manage reindexing. When you open a file (from Search or Documents), you might edit it—and edited files should be reindexed. Since there's no automatic way to detect significant edits, this tab lets you queue and batch-reindex files as needed.
+5. **Manage** – Bulk operations like filtering and deleting documents.
+6. **Settings** – View database statistics and manage Docker containers.
+
+### Working with the Recent Activity Tab
+
+- **Purpose** – Tracks files you've opened from Search or Documents. Opening a file often means editing it, and edited files need reindexing.
+- **Queue Management** – Files are automatically queued when opened. Use "Reindex Queued" to batch-reindex all queued files at once.
+- **Context Menu** – Right-click any file to access: Open, Open with…, Show in Folder, Copy Path, Queue/Unqueue, Reindex Now, or Remove from Recent.
+- **No Auto-Detection** – The system can't automatically detect if edits were significant, so manual reindexing control is provided here.
 
 ---
 

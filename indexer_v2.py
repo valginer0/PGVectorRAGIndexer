@@ -90,12 +90,15 @@ class DocumentIndexer:
             # Prepare chunks for insertion
             chunks_data = []
             for i, (chunk, embedding) in enumerate(zip(processed_doc.chunks, embeddings)):
+                # Extract metadata from chunk or use empty dict
+                chunk_metadata = chunk.metadata if hasattr(chunk, 'metadata') else {}
                 chunks_data.append((
                     processed_doc.document_id,
                     i,
                     chunk.page_content,
                     processed_doc.source_uri,
-                    embedding
+                    embedding,
+                    chunk_metadata  # Add metadata as 6th element
                 ))
             
             # Insert into database

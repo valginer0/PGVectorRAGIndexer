@@ -95,13 +95,24 @@ class TextDocumentLoader(DocumentLoader):
         return is_text_ext or is_text_filename
     
     def load(self, source_uri: str) -> List[Document]:
-        """Load text file."""
+        """Load text file with encoding detection."""
         try:
+            # Try default utf-8 first
             loader = TextLoader(source_uri, encoding='utf-8')
             return loader.load()
-        except Exception as e:
-            logger.error(f"Failed to load text file {source_uri}: {e}")
-            raise LoaderError(f"Text loading failed: {e}")
+        except Exception:
+            try:
+                # Try autodetect encoding
+                loader = TextLoader(source_uri, autodetect_encoding=True)
+                return loader.load()
+            except Exception:
+                try:
+                    # Fallback to latin-1 (common for Windows logs)
+                    loader = TextLoader(source_uri, encoding='latin-1')
+                    return loader.load()
+                except Exception as e:
+                    logger.error(f"Failed to load text file {source_uri}: {e}")
+                    raise LoaderError(f"Text loading failed: {e}")
     
     def get_metadata(self, source_uri: str) -> Dict[str, Any]:
         """Get text file metadata."""

@@ -67,8 +67,10 @@ function Invoke-ComposeUpdate {
     try {
         $envContent | Set-Content -Path $envFile -Encoding UTF8
         docker compose --file "docker-compose.yml" --env-file $envFile pull
-        docker compose --file "docker-compose.yml" --env-file $envFile down
-        docker compose --file "docker-compose.yml" --env-file $envFile up -d
+        # Add --remove-orphans to clean up any leftover containers
+        docker compose --file "docker-compose.yml" --env-file $envFile down --remove-orphans
+        # Add --force-recreate to ensure we get fresh containers
+        docker compose --file "docker-compose.yml" --env-file $envFile up -d --force-recreate
     }
     finally {
         Remove-Item -Path $envFile -ErrorAction SilentlyContinue

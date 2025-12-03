@@ -113,13 +113,7 @@ if command -v python3 &> /dev/null; then
         source venv/bin/activate
         # Run tests, skipping slow UI tests (they can be run separately)
         # This reduces test time from 40+ min to ~1-2 min
-        python -m pytest \
-            tests/test_config.py \
-            tests/test_database.py \
-            tests/test_regression_bugs.py \
-            tests/test_document_processor_office.py \
-            tests/test_yaml_and_license.py \
-            -v --tb=shorte
+        python -m pytest tests/ -v -m 'not slow'
         TEST_RESULT=$?
         if [ $TEST_RESULT -ne 0 ]; then
             echo -e "${RED}✗ Tests failed. Please fix before releasing.${NC}"

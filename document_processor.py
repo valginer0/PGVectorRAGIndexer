@@ -86,8 +86,13 @@ class TextDocumentLoader(DocumentLoader):
     """Loader for plain text files and Markdown."""
     
     def can_load(self, source_uri: str) -> bool:
-        """Check if source is a text or Markdown file."""
-        return source_uri.lower().endswith(('.txt', '.md', '.markdown'))
+        """Check if source is a text, Markdown, YAML, or allowed config file."""
+        path = Path(source_uri)
+        is_text_ext = path.suffix.lower() in ['.txt', '.md', '.markdown', '.yaml', '.yml']
+        # We can't easily access config here without passing it down, 
+        # but we can check common text filenames
+        is_text_filename = path.name in ['LICENSE', 'Dockerfile', 'Makefile', 'Jenkinsfile']
+        return is_text_ext or is_text_filename
     
     def load(self, source_uri: str) -> List[Document]:
         """Load text file."""
@@ -419,10 +424,13 @@ class DocumentProcessor:
                     f"(max: {max_size} bytes)"
                 )
         
-        # Check extension
-        if path.suffix.lower() not in self.config.supported_extensions:
+        # Check extension or filename
+        is_supported_extension = path.suffix.lower() in self.config.supported_extensions
+        is_supported_filename = path.name in self.config.supported_filenames
+        
+        if not (is_supported_extension or is_supported_filename):
             raise UnsupportedFormatError(
-                f"Unsupported file extension: {path.suffix}"
+                f"Unsupported file: {path.name} (extension: {path.suffix})"
             )
     
     def process(

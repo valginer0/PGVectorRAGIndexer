@@ -211,3 +211,6 @@ backups/
 *.sql
 *.sql.gz
 *.sql.gpg
+
+# User documents (should not be in version control)
+documents/

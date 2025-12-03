@@ -200,8 +200,12 @@ class AppConfig(BaseSettings):
     # Application settings
     max_file_size_mb: int = Field(default=50, description='Maximum file size in MB')
     supported_extensions: list[str] = Field(
-        default=['.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.xlsx', '.csv', '.html', '.pptx'],
+        default=['.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.xlsx', '.csv', '.html', '.pptx', '.yaml', '.yml'],
         description='Supported file extensions'
+    )
+    supported_filenames: list[str] = Field(
+        default=['LICENSE', 'Dockerfile', 'Makefile', 'Jenkinsfile'],
+        description='Supported filenames without extensions'
     )
     cache_embeddings: bool = Field(default=True, description='Cache embeddings in memory')
     enable_deduplication: bool = Field(default=True, description='Enable document deduplication')

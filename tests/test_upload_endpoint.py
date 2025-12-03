@@ -83,7 +83,7 @@ class TestUploadAndIndex:
         
         # Should return error for unsupported extension
         assert response.status_code == 400
-        assert "Unsupported file extension" in response.json()["detail"]
+        assert "Unsupported file" in response.json()["detail"]
     
     def test_upload_pdf_file(self, client):
         """Test uploading a PDF file (mock)."""

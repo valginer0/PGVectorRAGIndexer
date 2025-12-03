@@ -478,6 +478,12 @@ class DocumentProcessor:
         # Load document
         try:
             documents = loader.load(source_uri)
+            
+            # Sanitize content (remove null bytes which Postgres rejects)
+            for doc in documents:
+                if doc.page_content:
+                    doc.page_content = doc.page_content.replace('\x00', '')
+
             if not documents:
                 raise LoaderError("No content loaded from document")
         except DocumentProcessingError:

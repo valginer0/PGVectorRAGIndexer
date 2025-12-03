@@ -1,0 +1,80 @@
+
+=========================================================================================================================
+The prompt to setup the environment (move back to python 3.11
+=========================================================================================================================
+The prompt:
+=========================================================================================================================
+I want to set up a uv environment to run the repository at the current directory, that correspond to an old PR. Ideally I want to use python 3.11, but could downgrade down to 3.9 if necessary (but first try to get it working with 3.11). I want to be able to run tests with "pytest", including the new tests that I just added (see unstaged changes).The script I have is this, but it does not work for me (it looks like the pytest is not at the right version):
+uv venv --python 3.11 source .venv/bin/activate uv pip install -e . uv sync --all-extras uv pip install -r test_requirements.txt
+Can you try this and investigate what the problem is. If any libraries need down grading, please do so. At the end, tell me what are the correct commands to set up the env. The setup is complete when pytest is running fully.
+=========================================================================================================================
+=========================================================================================================================
+Correct Setup Commands
+
+----------------------------------------------------------------------
+  Or, more concisely, you can combine some of the pip installs (this is a corrected concise version):
+  
+  -----------------------------------------------------------------------------------------------
+   uv venv --python 3.11 .venv
+  source .venv/bin/activate
+  uv pip install -e ".[d,jupyter,python2]"
+  uv pip install -r test_requirements.txt
+  uv pip install uv pip install "pytest>=6.1.1,<7" "pytest-xdist>=2.2.1,<3" "click>=7.1.2,<8" "pytest-timeout>=2.1.0,<2.2" typing_extensions
+  -----------------------------------------------------------------------------------------------
+  -----------------------------------------------------------------------------------------------
+  Here I am preparing the script to put into "Dockerfile Configuration" section, 
+  added uv pip install pytest-timeout , which is present in the Dockerfile:
+  -----------------------------------------------------------------------------------------------
+  RUN cd /workdir/black && \ 
+  uv venv --python 3.11 .venv && \ 
+  source .venv/bin/activate && \ 
+  uv pip install -e ".[d,jupyter,python2]" && \ 
+  uv pip install -r test_requirements.txt && \ 
+  uv pip install uv pip install "pytest>=6.1.1,<7" "pytest-xdist>=2.2.1,<3" \ 
+  "click>=7.1.2,<8" "pytest-timeout>=2.1.0,<2.2" typing_extensions && \ 
+  uv pip install pytest-timeout
+  -----------------------------------------------------------------------------------------------
+  -----------------------------------------------------------------------------------------------
+  -----------------------------------------------------------------------------------------------
+  -----------------------------------------------------------------------------------------------
+  The script below is from the manual Guidlines, they do not work, so I added the 3rd lineTo test, geves the same 13 test failures:
+  -----------------------------------------------------------------------------------------------
+  We are NOT going to use it:
+  -----------------------------------------------------------------------------------------------
+  # uv venv --python 3.11 && \ 
+  source .venv/bin/activate && \ 
+  uv pip install -e ".[d,jupyter,python2]" && \ 
+uv pip install -e . && \ 
+uv pip install -r test_requirements.txt && \ 
+uv pip install "click>=7.1.2,<8.0" "pytest>=6.0,<7.0" "pytest-xdist>=2.0,<3.0" "typing_extensions" "ipython>=7.8.0,<8.0" "tokenize-rt>=3.2.0,<5.0"
+  -----------------------------------------------------------------------------------------------
+=========================================================================================================================
+=========================================================================================================================
+There are problems with the tests:
+
+The test failures you're seeing actually fall into two categories:
+
+  1. FileNotFoundError for notebook files (when running all tests together)
+
+  This is a test ordering/side-effect issue, NOT a missing file problem. The notebook files do exist, and all ipynb tests pass when run in isolation. Some test in test_black.py is changing the working directory, which affects subsequent tests. This
+   is not an environment setup issue.
+
+
+2. test_set_input failure
+
+  This is a real test failure from your new PR code. Looking at the test:
+def test_set_input() -> None:
+      src = "a = b??"
+      with pytest.raises(NothingChanged):
+          format_cell(src, fast=True, mode=JUPYTER_MODE)
+
+  The test expects format_cell() to raise NothingChanged when given "a = b??", but it's currently not raising that exception. This is part of your PR's new/modified code and needs to be fixed by you.
+=========================================================================================================================
+=========================================================================================================================
+Open the "Dockerfile Configuration" section and replace the dependenciesinstallation RUN command with this: ...
+We have changed what to replace with.
+=========================================================================================================================
+=========================================================================================================================
+=========================================================================================================================
+=========================================================================================================================
+=========================================================================================================================

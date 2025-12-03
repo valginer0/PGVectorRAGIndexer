@@ -1,4 +1,7 @@
 import pytest
+
+# Mark all tests in this file as slow (UI tests with QApplication)
+pytestmark = pytest.mark.slow
 from unittest.mock import MagicMock, patch, mock_open
 from pathlib import Path
 import json

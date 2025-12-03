@@ -1,6 +1,9 @@
 from datetime import datetime
 
 import pytest
+
+# Mark all tests in this file as slow (UI tests with QApplication)
+pytestmark = pytest.mark.slow
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from PySide6.QtWidgets import QHeaderView

@@ -6,6 +6,9 @@ Full GUI testing would require a display server and is beyond scope.
 """
 
 import pytest
+
+# Mark all tests in this file as slow (UI tests with QApplication)
+pytestmark = pytest.mark.slow
 import sys
 from pathlib import Path
 

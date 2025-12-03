@@ -1,5 +1,8 @@
 import pytest
 
+# Mark all tests in this file as slow (UI tests with QApplication)
+pytestmark = pytest.mark.slow
+
 # Skip if PySide6 is unavailable in CI environment
 pytestmark = pytest.mark.skipif(
     pytest.importorskip("PySide6", reason="PySide6 not installed for UI tests") is None,

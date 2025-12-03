@@ -1,0 +1,4 @@
+[ZoneTransfer]
+ZoneId=3
+ReferrerUrl=https://claude.ai/chat/504faa18-26df-42b1-b57c-78fb0cbd4045
+HostUrl=https://claude.ai/api/organizations/543fb151-7bab-49d5-8e51-1057aac20850/conversations/504faa18-26df-42b1-b57c-78fb0cbd4045/wiggle/download-file?path=%2Fmnt%2Fuser-data%2Foutputs%2Ftest-driven-issue-generator.skill

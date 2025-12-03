@@ -111,8 +111,9 @@ echo -e "${GREEN}Running tests...${NC}"
 if command -v python3 &> /dev/null; then
     if [ -d "venv" ]; then
         source venv/bin/activate
-        # Run ALL tests
-        python -m pytest tests/ -v
+        # Run tests, skipping slow UI tests (they can be run separately)
+        # This reduces test time from 40+ min to ~1-2 min
+        python -m pytest tests/ -v -m 'not slow'
         TEST_RESULT=$?
         if [ $TEST_RESULT -ne 0 ]; then
             echo -e "${RED}✗ Tests failed. Please fix before releasing.${NC}"

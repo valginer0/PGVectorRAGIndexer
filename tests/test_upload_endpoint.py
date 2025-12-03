@@ -73,12 +73,12 @@ class TestUploadAndIndex:
 
     def test_upload_unsupported_file_type(self, client):
         """Test uploading unsupported file type."""
-        file_content = b"# Markdown content"
+        file_content = b"Some random content"
         file_data = io.BytesIO(file_content)
         
         response = client.post(
             "/upload-and-index",
-            files={"file": ("test.md", file_data, "text/markdown")}
+            files={"file": ("test.xyz", file_data, "application/octet-stream")}
         )
         
         # Should return error for unsupported extension

@@ -122,9 +122,7 @@ class UploadTab(QWidget):
         
         options_layout.addLayout(type_layout)
         
-        self.force_reindex_cb = QCheckBox("Force reindex if document already exists")
-        self.force_reindex_cb.setToolTip("Check this to reindex the document even if it already exists in the database")
-        options_layout.addWidget(self.force_reindex_cb)
+
         
         layout.addWidget(options_group)
         
@@ -329,7 +327,7 @@ class UploadTab(QWidget):
         # Prepare files data
         files_data = []
         document_type = self.document_type_combo.currentText().strip() or None
-        force_reindex = self.force_reindex_cb.isChecked()
+        force_reindex = False
         
         for file_path in self.selected_files:
             files_data.append({

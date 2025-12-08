@@ -33,6 +33,8 @@ class SearchResult:
     source_uri: str
     distance: float
     relevance_score: float
+    metadata: Optional[Dict[str, Any]] = None
+    document_type: Optional[str] = None
     
     def __str__(self) -> str:
         """Format result as string."""
@@ -134,7 +136,9 @@ class DocumentRetriever:
                     text_content=result['text_content'],
                     source_uri=result['source_uri'],
                     distance=result['distance'],
-                    relevance_score=relevance_score
+                    relevance_score=relevance_score,
+                    metadata=result.get('metadata'),
+                    document_type=result.get('metadata', {}).get('type')
                 ))
         
         # Limit to top_k after filtering

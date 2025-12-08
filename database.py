@@ -521,6 +521,7 @@ class DocumentRepository:
             text_content,
             source_uri,
             indexed_at,
+            metadata,
             embedding {operator} %s::vector AS distance
         FROM document_chunks
         {where_sql}

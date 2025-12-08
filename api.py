@@ -64,6 +64,8 @@ class SearchResultModel(BaseModel):
     source_uri: str
     distance: float
     relevance_score: float
+    metadata: Optional[Dict[str, Any]] = None
+    document_type: Optional[str] = None
 
 
 class SearchResponse(BaseModel):
@@ -494,7 +496,9 @@ async def search_documents(request: SearchRequest):
                 text_content=r.text_content,
                 source_uri=r.source_uri,
                 distance=r.distance,
-                relevance_score=r.relevance_score
+                relevance_score=r.relevance_score,
+                metadata=r.metadata,
+                document_type=r.document_type
             )
             for r in results
         ]

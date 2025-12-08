@@ -107,12 +107,20 @@ class UploadWorker(QThread):
                         # Check hash
                         metadata = doc.get('metadata') or {}
                         remote_hash = metadata.get('file_hash')
+                        remote_type = metadata.get('type')
                         
                         # Calculate local hash
                         self.progress.emit(f"Checking existing document: {file_path.name}...")
                         local_hash = calculate_file_hash(file_path)
                         
-                        if remote_hash and remote_hash == local_hash:
+                        hash_match = (remote_hash and remote_hash == local_hash)
+                        
+                        # If user specified a type, ensure it matches remote, otherwise we must update
+                        type_match = True
+                        if document_type:
+                            type_match = (remote_type == document_type)
+
+                        if hash_match and type_match:
                             self.file_finished.emit(i, True, "Document unchanged (skipped)")
                             continue
                     # If document doesn't exist (doc is None) or hashes differ, we proceed to upload.

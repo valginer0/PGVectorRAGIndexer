@@ -128,9 +128,9 @@ class SearchTab(QWidget):
         results_layout = QVBoxLayout(results_group)
         
         self.results_table = QTableWidget()
-        self.results_table.setColumnCount(4)
-        self.results_table.setHorizontalHeaderLabels(["Score", "Source", "Chunk", "Content Preview"])
-        self.results_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self.results_table.setColumnCount(5)
+        self.results_table.setHorizontalHeaderLabels(["Score", "Type", "Source", "Chunk", "Content Preview"])
+        self.results_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
         self.results_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.results_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.results_table.cellClicked.connect(self.handle_results_cell_clicked)
@@ -213,28 +213,31 @@ class SearchTab(QWidget):
         for i, result in enumerate(results):
             augmented = self._augment_result(result)
 
+            # Score
             score_item = QTableWidgetItem(f"{augmented['display_score']:.4f}")
             score_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 0, score_item)
             
-            # Source URI
+            # Document Type (Col 1)
+            doc_type = result.get('document_type') or result.get('metadata', {}).get('type') or "-"
+            type_item = QTableWidgetItem(str(doc_type))
+            type_item.setTextAlignment(Qt.AlignCenter)
+            self.results_table.setItem(i, 1, type_item)
+
+            # Source URI (Col 2)
             source_item = self._create_source_item(result.get('source_uri', 'Unknown'))
-            self.results_table.setItem(i, 1, source_item)
+            self.results_table.setItem(i, 2, source_item)
             
-            # Chunk number
+            # Chunk number (Col 3)
             chunk_item = QTableWidgetItem(str(augmented['display_chunk']))
             chunk_item.setTextAlignment(Qt.AlignCenter)
-            self.results_table.setItem(i, 2, chunk_item)
+            self.results_table.setItem(i, 3, chunk_item)
             
-            # Content preview (first 100 chars)
-            # Add Document Type to preview if available
-            doc_type = result.get('document_type') or result.get('metadata', {}).get('type')
-            type_label = f"[{doc_type}] " if doc_type else ""
-            
+            # Content preview (Col 4)
             content = result.get('text_content', '')
-            preview = f"{type_label}{content[:100]}..." if len(content) > 100 else f"{type_label}{content}"
+            preview = f"{content[:100]}..." if len(content) > 100 else f"{content}"
             content_item = QTableWidgetItem(preview)
-            self.results_table.setItem(i, 3, content_item)
+            self.results_table.setItem(i, 4, content_item)
             
             # Store full result in row
             self.results_table.item(i, 0).setData(Qt.UserRole, augmented)
@@ -251,10 +254,11 @@ class SearchTab(QWidget):
             source = result.get('source_uri', 'Unknown')
             score = result.get('display_score', 0.0)
             chunk = result.get('display_chunk', 0)
+            doc_type = result.get('document_type') or result.get('metadata', {}).get('type') or "Unknown"
 
             msg = QMessageBox(self)
             msg.setWindowTitle("Full Content")
-            msg.setText(f"Source: {source}\nChunk: {chunk}\nScore: {score:.4f}")
+            msg.setText(f"Source: {source}\nType: {doc_type}\nChunk: {chunk}\nScore: {score:.4f}")
             msg.setDetailedText(content)
             msg.exec()
 
@@ -275,7 +279,8 @@ class SearchTab(QWidget):
 
     def handle_results_cell_clicked(self, row: int, column: int) -> None:
         """Handle clicks on the results table."""
-        if column != 1:
+        # Source is now in column 2 (0=Score, 1=Type, 2=Source)
+        if column != 2:
             return
 
         item = self.results_table.item(row, column)
@@ -297,7 +302,8 @@ class SearchTab(QWidget):
             return
 
         index = self.results_table.indexAt(pos)
-        if not index.isValid() or index.column() != 1:
+        # Source is in column 2
+        if not index.isValid() or index.column() != 2:
             return
 
         item = self.results_table.item(index.row(), index.column())

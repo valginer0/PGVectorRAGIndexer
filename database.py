@@ -503,7 +503,8 @@ class DocumentRepository:
                     params.append(value)
                 elif key in ['type', 'namespace', 'category']:
                     # Backward compatibility: bare key names for common metadata fields
-                    where_clauses.append(f"metadata->>'{key}' = %s")
+                    # Use ILIKE for case-insensitive matching
+                    where_clauses.append(f"metadata->>'{key}' ILIKE %s")
                     params.append(value)
                 else:
                     # Direct column match (e.g., document_id, source_uri)

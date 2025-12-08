@@ -318,7 +318,8 @@ class DocumentRepository:
             document_id,
             source_uri,
             COUNT(*) as chunk_count,
-            MIN(indexed_at) as indexed_at
+            MIN(indexed_at) as indexed_at,
+            (array_agg(metadata))[1] as metadata
         FROM document_chunks
         WHERE document_id = %s
         GROUP BY document_id, source_uri

@@ -118,6 +118,7 @@ def indexed_document(processor, repository, embedding_service, test_document):
             os.unlink(temp_path)
 
 
+@pytest.mark.slow
 class TestIndexAndRetrieve:
     """Test full indexing and retrieval workflow."""
     

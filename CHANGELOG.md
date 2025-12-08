@@ -13,6 +13,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `scripts/run_all_tests.sh` helper to activate the project virtual environment and run the full pytest suite consistently across environments.
 
+## [2.2.0] - 2025-12-08
+
+### Added
+- **Incremental Indexing** - Smartly detects changed files
+  - Calculates file hashes (`xxHash`) to detect content changes efficiently
+  - Skips re-indexing unchanged files, saving significant processing time and DB IO
+  - Automatically updates modified files
+  - O(1) existence checks using ID-based lookup for faster client-side scans
+- **Wildcard Search Support**
+  - Search Tab now supports `*` wildcard for Document Type to query all types
+  - Search results now display the document type (e.g., `[Resume] ...`)
+- **Dynamic Upload UI**
+  - Upload Tab document type dropdown is now dynamic, populating from the database
+  - Added "Refresh" button to update available types
+- **Demo Script**
+  - `scripts/demo_incremental.sh` for verifying the incremental indexing workflow
+
 ## [2.1.0] - 2025-10-20
 
 ### Added

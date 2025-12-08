@@ -53,8 +53,8 @@ class RecentActivityTab(QWidget):
         info_layout = QVBoxLayout(info_box)
         info_text = QLabel(
             "This tab tracks files you've <b>opened</b> from Search or Documents. "
-            "When you open a file, you might edit it—and edited files should be reindexed. "
-            "Since there's no automatic way to detect significant edits, files are queued here for manual reindexing when needed."
+            "The system now <b>automatically detects content changes</b> when you re-upload files. "
+            "You can use this list to quickly find recently accessed files and manually queue them for reindexing if preferred."
         )
         info_text.setWordWrap(True)
         info_text.setStyleSheet("color: #9ca3af; padding: 5px;")

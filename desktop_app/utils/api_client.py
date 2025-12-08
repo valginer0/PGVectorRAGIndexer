@@ -7,6 +7,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 
 import requests
+from desktop_app.utils.hashing import calculate_source_id
 
 logger = logging.getLogger(__name__)
 
@@ -45,48 +46,39 @@ class APIClient:
         Returns:
             True if document exists, False otherwise
         """
+        return self.get_document_metadata(source_uri) is not None
+
+    def get_document_metadata(self, source_uri: str) -> Optional[Dict[str, Any]]:
+        """
+        Get metadata for a document by source URI.
+        
+        Args:
+            source_uri: Source URI to check
+            
+        Returns:
+            Document metadata dict if exists, None otherwise
+        """
         try:
-            # Use list_documents with filter to check existence
-            # We use a specific filter pattern to match exact URI if possible,
-            # or rely on the fact that we can filter by source_uri in the backend if supported.
-            # For now, let's assume we can search/filter by exact source_uri or use a similar mechanism.
-            # Actually, the backend might support filtering by source_uri directly.
-            # Let's try to use the search endpoint with a filter, or list documents with a filter.
+            # Calculate deterministic ID locally (O(1))
+            document_id = calculate_source_id(source_uri)
             
-            # Since the backend API for exact match might vary, let's try to use the search/list endpoint
-            # with a filter if available, or just assume we can't easily check without a dedicated endpoint.
-            # However, looking at manage_tab.py, we use 'source_uri_like' for wildcards.
-            # Maybe we can use that with an exact match?
+            # Fetch document details directly
+            doc = self.get_document(document_id)
             
-            # Better approach: Use the /documents endpoint with a limit=1 and source_uri filter if supported.
-            # If not supported, we might need to rely on the upload endpoint's behavior (it might return 409).
-            # But the worker explicitly calls this method.
+            # Return the full document response which includes 'metadata'
+            # The API returns dict with keys: document_id, source_uri, chunks_indexed, metadata, etc.
+            # But get_document returns the result from /documents/{id}.
+            # Let's verify what /documents/{id} returns.
+            # It usually returns { "document_id": ..., "metadata": ... }
+            return doc
             
-            # Let's implement a best-effort check using list_documents with a filter.
-            # If the backend doesn't support exact source_uri filtering, this might be inefficient.
-            # But wait, manage_tab uses 'source_uri_like'.
-            
-            # Let's try to use 'source_uri' filter if the backend supports it.
-            # Based on manage_tab.py: filters["source_uri_like"] = sql_pattern
-            
-            # Let's try to find a document with this URI.
-            # We can use the 'source_uri_like' filter with the exact URI (escaping wildcards if needed).
-            # But standard SQL LIKE without wildcards acts as equals.
-            
-            # The list_documents method in APIClient DOES NOT take filters.
-            # However, the search method DOES take filters.
-            # Let's use search with a filter.
-            
-            results = self.search(
-                query="", # Empty query to match all (if supported) or just rely on filter
-                top_k=1,
-                filters={"source_uri_like": source_uri}
-            )
-            return len(results) > 0
-            
-        except Exception:
-            # If check fails, assume it doesn't exist to allow upload attempt
-            return False
+        except requests.HTTPError as e:
+            if e.response.status_code == 404:
+                return None
+            raise
+        except Exception as e:
+            logger.error(f"Error checking document status: {e}")
+            return None
     
     def upload_document(
         self,

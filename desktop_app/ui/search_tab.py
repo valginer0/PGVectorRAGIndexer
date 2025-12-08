@@ -103,9 +103,10 @@ class SearchTab(QWidget):
         type_layout.addWidget(QLabel("Document Type:"))
         self.type_filter = QComboBox()
         self.type_filter.setEditable(True)
-        self.type_filter.addItem("")  # Empty = no filter
+        # We will populate this dynamically, but default is *
+        self.type_filter.addItem("*")
         self.type_filter.setPlaceholderText("(optional)")
-        self.type_filter.setToolTip("Filter results by metadata.type value")
+        self.type_filter.setToolTip("Filter by document type. Use * for all, or leave empty for no type.")
         self.type_filter.setMinimumWidth(200)
         type_layout.addWidget(self.type_filter)
 
@@ -170,7 +171,12 @@ class SearchTab(QWidget):
         
         # Start search worker
         selected_type = self.type_filter.currentText().strip() if hasattr(self, "type_filter") else ""
-        document_type = selected_type or None
+        
+        # Handle wildcard and empty type
+        if selected_type == "*":
+            document_type = None  # No filter (all types)
+        else:
+            document_type = selected_type  # Specific type or empty string (for "No Type")
 
         self.search_worker = SearchWorker(
             self.api_client,
@@ -221,8 +227,12 @@ class SearchTab(QWidget):
             self.results_table.setItem(i, 2, chunk_item)
             
             # Content preview (first 100 chars)
+            # Add Document Type to preview if available
+            doc_type = result.get('document_type') or result.get('metadata', {}).get('type')
+            type_label = f"[{doc_type}] " if doc_type else ""
+            
             content = result.get('text_content', '')
-            preview = content[:100] + "..." if len(content) > 100 else content
+            preview = f"{type_label}{content[:100]}..." if len(content) > 100 else f"{type_label}{content}"
             content_item = QTableWidgetItem(preview)
             self.results_table.setItem(i, 3, content_item)
             
@@ -338,8 +348,11 @@ class SearchTab(QWidget):
             self.type_filter,
             self.api_client,
             logger,
+            blank_option="*",
             log_context="Search tab"
         )
+        # Add explicit option for empty/no type
+        self.type_filter.addItem("", "No Type")
 
     def _augment_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
         augmented = dict(result)

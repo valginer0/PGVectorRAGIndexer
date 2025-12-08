@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 import qtawesome as qta
 from PySide6.QtCore import Qt, QThread, Signal, QSize
 from .workers import UploadWorker
+from .shared import populate_document_type_combo
 
 # ... imports ...
 
@@ -104,24 +105,21 @@ class UploadTab(QWidget):
         
         self.document_type_combo = QComboBox()
         self.document_type_combo.setEditable(True)
-        self.document_type_combo.addItems([
-            "",  # Empty for no type
-            "resume",
-            "policy",
-            "report",
-            "email",
-            "memo",
-            "contract",
-            "invoice",
-            "manual",
-            "guide",
-            "specification",
-            "research",
-            "presentation"
-        ])
-        self.document_type_combo.setToolTip("Optional: Categorize your document for easier filtering")
-        self.document_type_combo.setPlaceholderText("(optional)")
+        self.document_type_combo.setToolTip("Arbitrary tag (e.g. 'Invoice', 'Memo'). Leave empty to ignore.")
+        self.document_type_combo.setPlaceholderText("Type or select tag (optional)")
+        self.document_type_combo.setMinimumWidth(200)
         type_layout.addWidget(self.document_type_combo)
+        
+        refresh_types_btn = QPushButton()
+        refresh_types_btn.setIcon(qta.icon('fa5s.sync-alt', color='#9ca3af'))
+        refresh_types_btn.clicked.connect(self.load_document_types)
+        refresh_types_btn.setToolTip("Refresh available document types")
+        refresh_types_btn.setFixedSize(30, 30)
+        type_layout.addWidget(refresh_types_btn)
+        
+        # Load initial types
+        self.load_document_types()
+        
         options_layout.addLayout(type_layout)
         
         self.force_reindex_cb = QCheckBox("Force reindex if document already exists")
@@ -467,3 +465,16 @@ class UploadTab(QWidget):
                 if not path.name.startswith('~$'):
                     files.append(path)
         return files
+
+    def load_document_types(self) -> None:
+        """Populate the document type combo from the API."""
+        if not hasattr(self, "document_type_combo"):
+            return
+
+        populate_document_type_combo(
+            self.document_type_combo,
+            self.api_client,
+            logging.getLogger(__name__),
+            blank_option="",
+            log_context="Upload tab"
+        )

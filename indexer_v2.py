@@ -62,20 +62,30 @@ class DocumentIndexer:
             processed_doc = self.processor.process(source_uri, custom_metadata)
             
             # Check if document already exists
-            if not force_reindex and self.repository.document_exists(processed_doc.document_id):
-                logger.warning(
-                    f"Document {processed_doc.document_id} already indexed. "
-                    f"Use --force to reindex."
-                )
-                return {
-                    'status': 'skipped',
-                    'document_id': processed_doc.document_id,
-                    'reason': 'already_exists',
-                    'message': 'Document already indexed (use --force to reindex)'
-                }
-            
-            # Delete existing if force reindex
-            if force_reindex and self.repository.document_exists(processed_doc.document_id):
+            existing_doc = self.repository.get_document_by_id(processed_doc.document_id)
+            if existing_doc:
+                if not force_reindex:
+                    # Check for file hash match
+                    existing_hash = existing_doc.get('metadata', {}).get('file_hash')
+                    new_hash = processed_doc.metadata.get('file_hash')
+                    
+                    if new_hash and existing_hash and new_hash == existing_hash:
+                        logger.info(
+                            f"Document {processed_doc.document_id} unchanged (Hash match). Skipping."
+                        )
+                        return {
+                            'status': 'skipped',
+                            'document_id': processed_doc.document_id,
+                            'reason': 'unchanged',
+                            'message': 'Document content unchanged (skip)'
+                        }
+                    
+                    if new_hash and existing_hash:
+                        logger.info(f"Document content changed (Hash mismatch). Reindexing.")
+                    else:
+                        logger.info(f"Document exists but hash missing. Reindexing.")
+
+                # If we are here, we are reindexing (either forced or changed)
                 logger.info(f"Removing existing document: {processed_doc.document_id}")
                 self.repository.delete_document(processed_doc.document_id)
             

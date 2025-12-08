@@ -100,28 +100,26 @@ def test_error_handling(api_client):
 
 def test_check_document_exists_true(api_client):
     """Test check_document_exists returns True when found."""
-    with patch("requests.post") as mock_post:
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {"results": [{"id": "1"}]}
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"id": "1", "metadata": {"file_hash": "abc"}}
         
         assert api_client.check_document_exists("/path/to/doc") is True
         
-        # Verify it called search
-        args = mock_post.call_args
-        assert args[0][0].endswith("/search")
-        assert args[1]["json"]["filters"]["source_uri_like"] == "/path/to/doc"
+        # Verify it called get document
+        args = mock_get.call_args
+        assert "/documents/" in args[0][0]
 
 def test_check_document_exists_false(api_client):
     """Test check_document_exists returns False when not found."""
-    with patch("requests.post") as mock_post:
-        mock_post.return_value.status_code = 200
-        mock_post.return_value.json.return_value = {"results": []}
+    with patch("requests.get") as mock_get:
+        mock_get.return_value.raise_for_status.side_effect = requests.HTTPError(response=MagicMock(status_code=404))
         
         assert api_client.check_document_exists("/path/to/doc") is False
 
 def test_check_document_exists_exception(api_client):
     """Test check_document_exists returns False on error."""
-    with patch("requests.post", side_effect=Exception("API Error")):
+    with patch("requests.get", side_effect=Exception("API Error")):
         assert api_client.check_document_exists("/path/to/doc") is False
 
 def test_list_documents_legacy_response(api_client):

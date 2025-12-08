@@ -2,6 +2,8 @@
 psycopg2-binary>=2.9.9
 pgvector>=0.2.4
 python-dotenv>=1.0.0
+watchdog>=3.0.0
+xxhash>=3.4.1
 
 # Configuration and validation
 pydantic>=2.5.0

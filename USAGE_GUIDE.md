@@ -70,6 +70,8 @@ curl http://localhost:8000/health
 
 **Supported formats:** TXT, PDF, DOCX, MD
 
+> **💡 Pro Tip:** The system uses **Incremental Indexing**. If you upload a file that hasn't changed, it will be skipped automatically to save time. Modified files are detected and updated instantly.
+
 ### Method 2: Using API
 
 **Prepare your document:**

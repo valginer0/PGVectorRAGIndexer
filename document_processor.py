@@ -13,7 +13,8 @@ import tempfile
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+import mimetypes
 
 import pandas as pd
 from langchain_community.document_loaders import (
@@ -28,6 +29,18 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 from config import get_config
+
+try:
+    from desktop_app.utils.hashing import calculate_file_hash
+except ImportError:
+    # Fallback if desktop_app not available (e.g. strict server environment)
+    import xxhash
+    def calculate_file_hash(path: Path) -> str:
+        hasher = xxhash.xxh64()
+        with open(path, 'rb') as f:
+            while chunk := f.read(8192):
+                hasher.update(chunk)
+        return hasher.hexdigest()
 
 logger = logging.getLogger(__name__)
 
@@ -423,8 +436,8 @@ class DocumentProcessor:
         
         # Check if it's a local file
         path = Path(source_uri)
-        if not path.exists():
-            raise DocumentProcessingError(f"Source not found: {source_uri}")
+        if not os.path.exists(source_uri):
+            raise FileNotFoundError(f"Source file not found: {source_uri}")
         
         # Check file size
         if path.is_file():
@@ -467,6 +480,11 @@ class DocumentProcessor:
         
         # Validate source
         self._validate_source(source_uri)
+        
+        # Calculate file hash if it's a local file
+        file_hash = None
+        if not source_uri.startswith(('http://', 'https://')):
+            file_hash = calculate_file_hash(Path(source_uri))
         
         # Get appropriate loader
         loader = self._get_loader(source_uri)
@@ -518,7 +536,9 @@ class DocumentProcessor:
             'chunking_config': {
                 'chunk_size': self.config.chunking.size,
                 'chunk_overlap': self.config.chunking.overlap
-            }
+            },
+            'file_hash': file_hash,
+            'processed_at': datetime.utcnow().isoformat()
         })
         
         # Add custom metadata

@@ -1,5 +1,6 @@
 import logging
 from PySide6.QtCore import QThread, Signal
+from desktop_app.utils.hashing import calculate_file_hash
 
 logger = logging.getLogger(__name__)
 
@@ -98,12 +99,22 @@ class UploadWorker(QThread):
             document_type = file_data.get('document_type')
             
             try:
-                # Check if exists
+                # Check if exists and compare hash
                 if not force_reindex:
-                    exists = self.api_client.check_document_exists(full_path)
-                    if exists:
-                        self.file_finished.emit(i, True, "Document already exists (skipped)")
-                        continue
+                    # Get remote document metadata
+                    doc = self.api_client.get_document_metadata(full_path)
+                    if doc:
+                        # Check hash
+                        remote_hash = doc.get('metadata', {}).get('file_hash')
+                        
+                        # Calculate local hash
+                        self.progress.emit(f"Checking existing document: {file_path.name}...")
+                        local_hash = calculate_file_hash(file_path)
+                        
+                        if remote_hash and remote_hash == local_hash:
+                            self.file_finished.emit(i, True, "Document unchanged (skipped)")
+                            continue
+                        # If hashes differ or remote has no hash, we proceed to upload.
 
                 self.progress.emit(f"Uploading {file_path.name}...")
                 

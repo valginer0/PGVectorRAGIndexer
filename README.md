@@ -2,9 +2,15 @@
 
 A production-ready, modular semantic document search system using PostgreSQL with pgvector extension. Built for RAG (Retrieval-Augmented Generation) applications with enterprise-grade features.
 
-## 🎯 What's New in v2.1
+## 🎯 What's New in v2.2
 
-### 🆕 Latest Features (v2.1)
+### 🆕 Latest Features (v2.2)
+
+- **✅ Incremental Indexing**: Smart content change detection using `xxHash`. Skips unchanged files, saving bandwidth and processing time.
+- **✅ Wildcard Search**: Document type filter now supports `*` for "All Types".
+- **✅ Dynamic UI**: Upload tab automatically fetches available document types from the database.
+
+### Previous Releases (v2.1)
 
 - **✅ Document Type System**: Organize documents with custom types (policy, resume, report, etc.)
 - **✅ Bulk Delete with Preview**: Safely delete multiple documents with preview before action

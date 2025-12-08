@@ -105,7 +105,8 @@ class UploadWorker(QThread):
                     doc = self.api_client.get_document_metadata(full_path)
                     if doc:
                         # Check hash
-                        remote_hash = doc.get('metadata', {}).get('file_hash')
+                        metadata = doc.get('metadata') or {}
+                        remote_hash = metadata.get('file_hash')
                         
                         # Calculate local hash
                         self.progress.emit(f"Checking existing document: {file_path.name}...")
@@ -114,7 +115,7 @@ class UploadWorker(QThread):
                         if remote_hash and remote_hash == local_hash:
                             self.file_finished.emit(i, True, "Document unchanged (skipped)")
                             continue
-                        # If hashes differ or remote has no hash, we proceed to upload.
+                    # If document doesn't exist (doc is None) or hashes differ, we proceed to upload.
 
                 self.progress.emit(f"Uploading {file_path.name}...")
                 

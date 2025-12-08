@@ -147,9 +147,10 @@ curl -X POST "http://localhost:8000/upload-and-index" \
   -F "file=@/home/user/documents/file.txt"
 ```
 
-**With force reindex:**
+
+**Example:**
 ```bash
-curl -X POST "http://localhost:8000/upload-and-index?force_reindex=true" \
+curl -X POST "http://localhost:8000/upload-and-index" \
   -F "file=@C:\path\to\file.pdf"
 ```
 

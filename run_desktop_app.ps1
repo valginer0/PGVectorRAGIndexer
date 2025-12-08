@@ -29,8 +29,8 @@ if (-not (Test-Path "venv-windows")) {
     python -m venv venv-windows
 }
 
-# Check if PySide6 is installed
-$pyside6Installed = & ".\venv-windows\Scripts\python.exe" -c "import PySide6" 2>&1
+# Check if dependencies are installed (PySide6 AND xxhash)
+$depsInstalled = & ".\venv-windows\Scripts\python.exe" -c "import PySide6; import xxhash" 2>&1
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Installing desktop app dependencies..." -ForegroundColor Yellow
     & ".\venv-windows\Scripts\pip.exe" install -r requirements-desktop.txt

@@ -30,8 +30,11 @@ if (-not (Test-Path "venv-windows")) {
 }
 
 # Check if dependencies are installed (PySide6 AND xxhash)
-$depsInstalled = & ".\venv-windows\Scripts\python.exe" -c "import PySide6; import xxhash" 2>&1
-if ($LASTEXITCODE -ne 0) {
+try {
+    # Try importing dependencies. StandardError stream is redirected to Null to prevent PowerShell interpreting stderr as script error
+    & ".\venv-windows\Scripts\python.exe" -c "import PySide6; import xxhash" 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "Missing deps" }
+} catch {
     Write-Host "Installing desktop app dependencies..." -ForegroundColor Yellow
     & ".\venv-windows\Scripts\pip.exe" install -r requirements-desktop.txt
 }

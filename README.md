@@ -2,6 +2,12 @@
 
 A production-ready, modular semantic document search system using PostgreSQL with pgvector extension. Built for RAG (Retrieval-Augmented Generation) applications with enterprise-grade features.
 
+### 🤔 In Plain English (What does this actually do?)
+
+> **Imagine a magic bookshelf** that reads and understands every book, document, and note you put on it. When you have a question, you don't have to search for keywords yourself—you just ask the bookshelf in plain English (like "How do I fix the printer?" or "What was our revenue last year?"), and it instantly hands you the exact page with the answer.
+>
+> **Best of all? It lives 100% on your computer.** Your documents never get sent to the "cloud" or some stranger's server. It's your personal librarian that keeps your secrets safe.
+
 ## 🎯 What's New in v2.2
 
 ### 🆕 Latest Features (v2.2)

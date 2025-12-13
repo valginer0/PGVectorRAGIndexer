@@ -31,6 +31,6 @@ jobs:
       # We skip tests that require the DB/Docker since we can't run Docker seamlessly on macOS Github Runners yet
       # This verifies that the Python code, file handling, and desktop app logic work on macOS
       env:
-        QT_QPA_PLATFORM: offscreen
+        QT_QPA_PLATFORM: minimal
       run: |
         pytest -v -m "not integration and not database"

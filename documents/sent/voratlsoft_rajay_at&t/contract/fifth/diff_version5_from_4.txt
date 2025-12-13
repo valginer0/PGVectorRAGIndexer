@@ -1,1 +1,0 @@
-changed "CONTRACTOR and CONSULTANT will pay" to "CONTRACTOR will pay" in item 5

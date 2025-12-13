@@ -1,0 +1,7 @@
+# Desktop App Dependencies for macOS Catalina (10.15)
+# PySide6 6.6+ requires macOS 11+, so we use the LTS 6.5.x series here.
+
+PySide6>=6.5.0,<6.6.0
+requests>=2.31.0
+qtawesome>=1.3.1
+xxhash>=3.4.1

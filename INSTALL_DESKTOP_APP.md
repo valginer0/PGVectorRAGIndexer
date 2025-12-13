@@ -73,6 +73,33 @@ chmod +x manage.sh
 
 ---
 
+## macOS Catalina (10.15) Setup
+
+If you are running macOS Catalina, you must use specific versions of Docker and the desktop app dependencies.
+
+### 1. Docker Desktop Requirement
+You must use **Docker Desktop 4.15.0**. Newer versions require macOS 11+.
+- **Download**: [Docker Desktop 4.15.0 for Mac (Intel)](https://desktop.docker.com/mac/main/amd64/93002/Docker.dmg)
+- Do **not** update Docker Desktop if prompted, as newer versions will fail to start on Catalina.
+
+### 2. Installation
+Follow the standard [macOS & Linux Installation](#macos--linux-installation) steps, but in **Step 2**, use the Catalina-specific requirements file:
+
+```bash
+# Create virtual environment (standard step)
+python3 -m venv venv
+
+# Activate (standard step)
+source venv/bin/activate
+
+# INSTALL SPECIAL DEPENDENCIES (Critical for Catalina)
+pip install -r requirements-desktop-catalina.txt
+```
+
+Then proceed to [Run the App](#3-run-the-app).
+
+---
+
 ## Alternative: Manual Installation (Windows)
 
 ### Option 1: Clone to Windows Directory

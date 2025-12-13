@@ -38,7 +38,9 @@ Then run the install command again.
 ## macOS & Linux Installation
 
 **Prerequisites:**
-- **Python 3.10+**: `brew install python` (macOS) or `apt install python3` (Linux)
+- **Python 3.10+**:
+  - **Option 1 (Recommended)**: `brew install python` (requires [Homebrew](https://brew.sh/))
+  - **Option 2 (Manual)**: Download from [Python.org](https://www.python.org/downloads/macos/) (macOS installer package)
 - **Docker**: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux)
 
 ### 1. Clone the Repository
@@ -80,9 +82,14 @@ If you are running macOS Catalina, you must use specific versions of Docker and 
 ### 1. Docker Desktop Requirement
 You must use **Docker Desktop 4.15.0**. Newer versions require macOS 11+.
 - **Download**: [Docker Desktop 4.15.0 for Mac (Intel)](https://desktop.docker.com/mac/main/amd64/93002/Docker.dmg)
-- Do **not** update Docker Desktop if prompted, as newer versions will fail to start on Catalina.
+- do **not** update Docker Desktop if prompted, as newer versions will fail to start on Catalina.
 
-### 2. Installation
+### 2. Python Requirement
+If you don't have Homebrew (`brew`), install Python manually:
+- **Download**: [Python 3.10.11 macOS Universal Installer](https://www.python.org/ftp/python/3.10.11/python-3.10.11-macos11.pkg)
+- Run the installer and ensure you check **"Install Certificates"** (usually a separate script in the Python folder after install).
+
+### 3. Installation
 Follow the standard [macOS & Linux Installation](#macos--linux-installation) steps, but in **Step 2**, use the Catalina-specific requirements file:
 
 ```bash

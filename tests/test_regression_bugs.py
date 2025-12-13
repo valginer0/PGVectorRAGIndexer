@@ -65,6 +65,7 @@ class TestMarkdownFileSupport:
             pytest.fail(f".markdown file validation failed: {e}")
 
 
+@pytest.mark.database
 class TestIndexerMetadataTuple:
     """
     Regression test for Bug #2: Metadata tuple mismatch.

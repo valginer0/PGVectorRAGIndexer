@@ -1,12 +1,24 @@
-# PGVectorRAGIndexer v2.0
-
-A production-ready, modular semantic document search system using PostgreSQL with pgvector extension. Built for RAG (Retrieval-Augmented Generation) applications with enterprise-grade features.
+# PGVectorRAGIndexer v2.2
 
 ### 🤔 In Plain English (What does this actually do?)
 
 > **Imagine a magic bookshelf** that reads and understands every book, document, and note you put on it. When you have a question, you don't have to search for keywords yourself—you just ask the bookshelf in plain English (like "How do I fix the printer?" or "What was our revenue last year?"), and it instantly hands you the exact page with the answer.
 >
 > **Best of all? It lives 100% on your computer.** Your documents never get sent to the "cloud" or some stranger's server. It's your personal librarian that keeps your secrets safe.
+
+Most search bars are dumb—they only find exact word matches. If you search for **"dog"**, they won't find **"puppy"**.
+
+**This system is smart.** It reads your documents, understands the _meaning_ behind the text, and lets you ask questions in natural language.
+
+---
+
+This project provides a **Smart Document Search** system using:
+- **Backend**: FastAPI, PostgreSQL (pgvector), and **Local Embeddings** (SentenceTransformers).
+- **Frontend**: A modern PySide6 desktop application (Windows, macOS, & Linux).
+- **Core Features**:
+    - **100% Free & Offline**: Uses local AI models, so no API keys or costs required for search.
+    - Semantic Search (find by meaning, not just keywords).
+    - **Privacy Focused**: Your data stays on your machine. No cloud uploads, no external servers.
 
 ## 🎯 What's New in v2.2
 

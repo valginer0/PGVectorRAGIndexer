@@ -1,6 +1,8 @@
 # Desktop App Installation Guide
 
-## One-Line Install (Recommended)
+## Windows Installation
+
+### One-Line Install (Recommended)
 
 **From Windows PowerShell (as Administrator or with execution policy set):**
 
@@ -33,7 +35,45 @@ Then run the install command again.
 
 ---
 
-## Alternative: Manual Installation
+## macOS & Linux Installation
+
+**Prerequisites:**
+- **Python 3.10+**: `brew install python` (macOS) or `apt install python3` (Linux)
+- **Docker**: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux)
+
+### 1. Clone the Repository
+Open Terminal:
+```bash
+cd ~/Projects  # or wherever you keep code
+git clone https://github.com/valginer0/PGVectorRAGIndexer.git
+cd PGVectorRAGIndexer
+```
+
+### 2. Setup & Install
+```bash
+# Create virtual environment
+python3 -m venv venv
+
+# Activate and install dependencies
+source venv/bin/activate
+pip install -r requirements-desktop.txt
+```
+
+### 3. Run the App
+```bash
+# Make the helper script executable
+chmod +x manage.sh
+
+# Start backend containers (requires Docker running)
+./manage.sh update dev
+
+# Run the desktop app
+./manage.sh run
+```
+
+---
+
+## Alternative: Manual Installation (Windows)
 
 ### Option 1: Clone to Windows Directory
 

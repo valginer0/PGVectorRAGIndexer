@@ -119,6 +119,8 @@ def indexed_document(processor, repository, embedding_service, test_document):
 
 
 @pytest.mark.slow
+@pytest.mark.integration
+@pytest.mark.database
 class TestIndexAndRetrieve:
     """Test full indexing and retrieval workflow."""
     
@@ -246,6 +248,8 @@ class TestIndexAndRetrieve:
         assert doc is None
 
 
+@pytest.mark.integration
+@pytest.mark.database
 class TestDatabaseQueries:
     """Test database query functionality."""
     
@@ -264,6 +268,7 @@ class TestDatabaseQueries:
         assert isinstance(stats['total_chunks'], int)
 
 
+@pytest.mark.integration
 class TestEmbeddingConsistency:
     """Test embedding generation consistency."""
     

@@ -33,4 +33,4 @@ jobs:
       env:
         QT_QPA_PLATFORM: minimal
       run: |
-        pytest -v -m "not integration and not database"
+        pytest -v -m "not integration and not database and not slow"

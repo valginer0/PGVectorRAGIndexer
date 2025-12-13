@@ -11,6 +11,8 @@ import embeddings
 import retriever_v2
 
 
+@pytest.mark.integration
+@pytest.mark.database
 class TestWebUIIntegration:
     """Integration tests for Web UI with real data."""
     

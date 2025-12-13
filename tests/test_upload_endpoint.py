@@ -8,6 +8,8 @@ from fastapi.testclient import TestClient
 from api import app
 
 
+@pytest.mark.integration
+@pytest.mark.database
 class TestUploadAndIndex:
     """Tests for /upload-and-index endpoint."""
     

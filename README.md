@@ -37,7 +37,7 @@ This project provides a **Smart Document Search** system using:
 - **✅ Desktop App Manage Tab**: Full GUI for bulk operations with backup/restore
 - **✅ Legacy Word Support**: Added .doc (Office 97-2003) file support
 
-> ℹ️ **Legacy .doc conversion**: Automatic conversion relies on LibreOffice. Install it on the host and expose the `soffice` binary to the backend (e.g. `export LIBREOFFICE_PATH="/mnt/c/Program Files/LibreOffice/program/soffice.exe"` when running under WSL). Without it, legacy `.doc` uploads will return an error asking for manual conversion.
+> ℹ️ **Legacy .doc conversion**: Automatic conversion relies on LibreOffice. **Docker users (recommended) have this pre-installed.** Manual/Local developers must install it and expose the `soffice` binary (e.g., `export LIBREOFFICE_PATH` in `.env`).
 
 ### Major Improvements (v2.0)
 

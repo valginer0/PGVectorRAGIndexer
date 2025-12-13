@@ -6,8 +6,12 @@ Tests the full workflow: index document -> search -> retrieve results.
 
 import pytest
 import os
+import sys
 import tempfile
 from pathlib import Path
+
+if sys.platform == "darwin":
+    pytest.skip("Skipping integration tests on macOS due to missing DB", allow_module_level=True)
 
 from config import get_config
 from database import get_db_manager, DocumentRepository

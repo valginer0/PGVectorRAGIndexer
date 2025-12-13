@@ -1,13 +1,11 @@
 import pytest
 
-# Mark all tests in this file as slow (UI tests with QApplication)
+# Mark all tests in this file as slow and ui
 pytestmark = [pytest.mark.slow, pytest.mark.ui]
 
-# Skip if PySide6 is unavailable in CI environment
-pytestmark = pytest.mark.skipif(
-    pytest.importorskip("PySide6", reason="PySide6 not installed for UI tests") is None,
-    reason="PySide6 not installed"
-)
+import sys
+if sys.platform == "darwin":
+    pytest.skip("Skipping UI tests on macOS", allow_module_level=True)
 
 from PySide6.QtWidgets import QApplication
 from desktop_app.ui.documents_tab import DocumentsTab

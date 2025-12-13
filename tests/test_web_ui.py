@@ -45,6 +45,7 @@ class TestWebUI:
         assert "docs" in data
         assert data["name"] == "PGVectorRAGIndexer API"
     
+    @pytest.mark.database
     def test_health_endpoint_still_works(self, client):
         """Test that health endpoint still works after UI changes."""
         response = client.get("/health")

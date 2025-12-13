@@ -86,86 +86,34 @@ This project provides a **Smart Document Search** system using:
 - **Error Handling**: Comprehensive error responses with detailed messages
 - **Async Support**: Asynchronous operations for better performance
 
-## Desktop Application
+## 🚀 Getting Started (Desktop App)
+**This is the recommended way to use the app.** It gives you the full experience with the native interface.
 
-**One-line install for Windows:**
+### � [Read the Full Installation Guide](INSTALL_DESKTOP_APP.md)
+*(Includes detailed steps for Windows, macOS, and Linux)*
 
+**Windows Quick Install:**
+Run this in PowerShell (Admin):
 ```powershell
 irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.ps1 | iex
 ```
 
-Features:
-- 📁 **Native file picker** - Access Windows files directly
-- 🔒 **Full path preservation** - Store complete file paths (e.g., `C:\Projects\file.txt`)
-- 🏷️ **Document types** - Organize with custom types (policy, resume, report, etc.)
-- 🔍 **Search & manage** - Full document management UI
-- 🗑️ **Bulk delete** - Preview, export backup, delete, and undo
-- 💾 **Backup/Restore** - Export documents as JSON and restore with one click
-- 🐳 **Docker control** - Start/stop containers from the app
-
-See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for details.
-
 ---
 
-### Desktop App Data Fields
-
-- **Document Type** shown in the Desktop app comes from `metadata.type` returned by the API, not from a separate database column. The backend aggregates per-document info and includes a `metadata` object in `/documents` responses so the UI can render the type.
-  See installation and Windows specifics in `INSTALL_DESKTOP_APP.md`.
-- **Metadata filters** are currently hidden in the search UI to avoid confusion. Advanced filtering remains available through the REST API and will return to the desktop app once metadata discovery is exposed to users.
-
-### Windows vs WSL Workflow
-
-- Windows users run everything through `manage.ps1` (`bootstrap`, `update`, `run`). The script selects `:latest` by default and can opt into the `:dev` tag when needed.
-- WSL/Linux contributors use `manage.sh` to rebuild (`update dev`), test (`run`), and release (`release patch|minor|major`).
-- Existing helper scripts remain available but are now implementation details behind the `manage.*` wrappers.
-
-See [WORKFLOW_GUIDE.md](WORKFLOW_GUIDE.md) for the full matrix of commands.
-
-### Troubleshooting UI Not Updating
-
-- After pulling new code, restart the Desktop app to load updated UI components.
-- Verify backend endpoints by checking `GET /openapi.json` and `GET /docs`.
-- If the Documents tab type column is empty, ensure `/documents` returns a `metadata` object with a `type` field.
-
-## 🚀 Quick Start
+## 🛠️ Technical Capability: Web Server Mode (Advanced)
+**NOTE**: Use this ONLY if you want to run the application as a headless server or strictly use the Web UI. For the normal desktop experience, see the section above.
 
 ### Prerequisites
+- **Docker** (required)
 
-- **Docker** (required): Docker Desktop or Rancher Desktop
-- That's it! Everything else runs in containers.
-
-### Installation (Recommended: Docker-Only)
-
-#### For Linux/macOS/WSL:
-
+### One-line Command (Linux/macOS/WSL)
 ```bash
 curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
 ```
 
-#### For Windows (Native - No WSL Required):
-
-Open **PowerShell** and run:
-
-```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.ps1" -OutFile "$env:TEMP\docker-run.ps1"
-PowerShell -ExecutionPolicy Bypass -File "$env:TEMP\docker-run.ps1"
-```
-
-📖 **See [WINDOWS_SETUP.md](WINDOWS_SETUP.md) for detailed Windows instructions**
-
-This automatically:
-- ✅ Downloads pre-built Docker image from GitHub Container Registry
-- ✅ Sets up PostgreSQL with pgvector extension
-- ✅ Initializes database schema
-- ✅ Starts API server
-- ✅ No repository clone needed
-- ✅ No Python installation needed
-
 **Services will be available at:**
-- 🌐 **Web UI**: `http://localhost:8000` (User-friendly interface)
-- 📚 **API Docs**: `http://localhost:8000/docs` (Interactive API documentation)
-- 🔧 **API**: `http://localhost:8000/api` (REST API endpoints)
-- 🗄️ **Database**: `localhost:5432` (PostgreSQL with pgvector)
+- 🌐 **Web UI**: `http://localhost:8000`
+- 📚 **API Docs**: `http://localhost:8000/docs`
 
 ### Basic Usage
 

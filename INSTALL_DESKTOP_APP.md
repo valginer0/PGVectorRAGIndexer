@@ -84,17 +84,22 @@ You must use **Docker Desktop 4.15.0**. Newer versions require macOS 11+.
 - **Download**: [Docker Desktop 4.15.0 for Mac (Intel)](https://desktop.docker.com/mac/main/amd64/93002/Docker.dmg)
 - do **not** update Docker Desktop if prompted, as newer versions will fail to start on Catalina.
 
-### 2. Python Requirement
-If you don't have Homebrew (`brew`), install Python manually:
-- **Download**: [Python 3.10.11 macOS Universal Installer](https://www.python.org/ftp/python/3.10.11/python-3.10.11-macos11.pkg)
-- Run the installer and ensure you check **"Install Certificates"** (usually a separate script in the Python folder after install).
+### 2. Python Requirement (Critical)
+**You must use Python 3.10 or 3.11.**
+By default, Homebrew installs the *latest* Python (often 3.12+ or 3.13), which is **incompatible** with the PySide6 version available for Catalina.
+
+**Recommended Solution:**
+1.  Uninstall any existing python from brew if it's too new (`brew uninstall python`).
+2.  **Download & Install Python 3.11.9**:
+    *   [Python 3.11.9 macOS Universal Installer](https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg)
+3.  Run the installer and check "Install Certificates".
 
 ### 3. Installation
 Follow the standard [macOS & Linux Installation](#macos--linux-installation) steps, but in **Step 2**, use the Catalina-specific requirements file:
 
 ```bash
-# Create virtual environment (standard step)
-python3 -m venv venv
+# Create virtual environment (make sure to use the specific python version)
+/usr/local/bin/python3.11 -m venv venv
 
 # Activate (standard step)
 source venv/bin/activate

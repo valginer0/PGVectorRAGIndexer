@@ -39,8 +39,8 @@ Then run the install command again.
 
 **Prerequisites:**
 - **Python 3.10+**:
-  - **Option 1 (Recommended)**: `brew install python` (requires [Homebrew](https://brew.sh/))
-  - **Option 2 (Manual)**: Download from [Python.org](https://www.python.org/downloads/macos/) (macOS installer package)
+  - **Option 1 (Recommended)**: Download from [Python.org](https://www.python.org/downloads/macos/) (macOS installer package) - *Fastest method*
+  - **Option 2 (Homebrew)**: `brew install python` (requires [Homebrew](https://brew.sh/))
 - **Docker**: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux)
 
 ### 1. Clone the Repository

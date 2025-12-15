@@ -8,9 +8,25 @@
 
 Most search bars are dumb—they only find exact word matches. If you search for **"dog"**, they won't find **"puppy"**.
 
-**This system is smart.** It reads your documents, understands the _meaning_ behind the text, and lets you ask questions in natural language.
+**This system is smart.** It reads your documents, understands the _meaning_ behind the text, and lets you search using natural language.
 
 ---
+
+### 🔒 Designed for Trust, Not the Cloud
+
+What this system does **not** do is just as important as what it does.
+
+PGVectorRAGIndexer does **not** upload your documents, open a public server, or rely on any external AI service.  
+Everything runs locally on your computer, using local models and a local database.
+
+This design is intentional. It means:
+- Your files never leave your machine
+- There are no accounts, subscriptions, or hidden data flows
+- You can use it safely with personal, private, or sensitive documents
+
+Unlike chat-based tools, this app focuses on **search and discovery**, not conversation.
+It helps you *find and rediscover* documents by meaning — even when you don’t remember the exact words
+
 
 This project provides a **Smart Document Search** system using:
 - **Backend**: FastAPI, PostgreSQL (pgvector), and **Local Embeddings** (SentenceTransformers).
@@ -72,7 +88,7 @@ This project provides a **Smart Document Search** system using:
 
 ### User Interface
 
-- **Modern Web UI**: Beautiful, responsive web interface for non-technical users
+
 - **Search Interface**: Intuitive search with semantic and hybrid options
 - **Drag & Drop Upload**: Easy file upload with progress tracking
 - **Document Browser**: View and manage all indexed documents

@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("bootstrap", "update", "run", "help")]
+    [ValidateSet("bootstrap", "update", "run", "shortcut", "help")]
     [string]$Action = "help",
 
     [ValidateSet("prod", "dev")]
@@ -21,11 +21,13 @@ function Show-Usage {
     Write-Host "  .\\manage.ps1 -Action bootstrap [-Channel prod|dev] [-InstallDir <path>]" -ForegroundColor Yellow
     Write-Host "  .\\manage.ps1 -Action update [-Channel prod|dev] [-DryRun]" -ForegroundColor Yellow
     Write-Host "  .\\manage.ps1 -Action run [-DryRun]" -ForegroundColor Yellow
+    Write-Host "  .\\manage.ps1 -Action shortcut" -ForegroundColor Yellow
     Write-Host "" 
     Write-Host "Actions:" -ForegroundColor Cyan
     Write-Host "  bootstrap  Clone or refresh the repository and prepare the desktop app" -ForegroundColor White
     Write-Host "  update     Pull the selected Docker image and restart containers" -ForegroundColor White
     Write-Host "  run        Launch the desktop application" -ForegroundColor White
+    Write-Host "  shortcut   Create a desktop shortcut for the app" -ForegroundColor White
     Write-Host "  help       Show this message" -ForegroundColor White
 }
 
@@ -150,6 +152,23 @@ function Invoke-RunDesktopApp {
     }
 }
 
+function Invoke-CreateShortcut {
+    param(
+        [switch]$Preview
+    )
+    
+    $shortcutScript = Join-Path $ScriptRoot "create_desktop_shortcut.ps1"
+    if (-not (Test-Path $shortcutScript)) {
+        throw "create_desktop_shortcut.ps1 not found at $shortcutScript"
+    }
+
+    if ($Preview) {
+        Write-Host "[DRY RUN] \"$shortcutScript\"" -ForegroundColor Yellow
+    } else {
+        & $shortcutScript
+    }
+}
+
 switch ($Action.ToLowerInvariant()) {
     "bootstrap" {
         Invoke-Bootstrap -SelectedChannel $Channel -TargetDir $InstallDir -Preview:$DryRun
@@ -160,6 +179,9 @@ switch ($Action.ToLowerInvariant()) {
     }
     "run" {
         Invoke-RunDesktopApp -Preview:$DryRun
+    }
+    "shortcut" {
+        Invoke-CreateShortcut -Preview:$DryRun
     }
     default {
         Show-Usage

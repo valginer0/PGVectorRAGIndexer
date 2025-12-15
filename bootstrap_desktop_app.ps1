@@ -107,6 +107,12 @@ if (Test-Path $manageScript) {
     Write-Host ""
 }
 
+# Create desktop shortcut
+if (Test-Path "create_desktop_shortcut.ps1") {
+    Write-Host "Creating Desktop Shortcut..." -ForegroundColor Yellow
+    & ".\create_desktop_shortcut.ps1"
+}
+
 Write-Host "==========================================" -ForegroundColor Green
 Write-Host "Installation Complete!" -ForegroundColor Green
 Write-Host "==========================================" -ForegroundColor Green

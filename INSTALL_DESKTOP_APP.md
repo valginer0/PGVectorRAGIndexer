@@ -15,7 +15,8 @@ This will:
 2. ✅ Clone the repository to `%USERPROFILE%\PGVectorRAGIndexer`
 3. ✅ Create virtual environment
 4. ✅ Install dependencies
-5. ✅ Auto-start the desktop app after setup (no interactive prompt)
+5. ✅ Create a Desktop Shortcut for easy access
+6. ✅ Auto-start the desktop app after setup (no interactive prompt)
 
 After bootstrap completes, use the unified wrapper:
 
@@ -33,7 +34,30 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 Then run the install command again.
 
+### Create a Desktop Shortcut
+You can automatically create a "One-Click" desktop shortcut at any time:
+
+```powershell
+./manage.ps1 -Action shortcut
+```
+
+This will create a `PGVectorRAGIndexer` shortcut on your desktop. Double-click it to start the app!
+
+
+
 ---
+
+### Daily Usage (Windows)
+To run the app later, you can use:
+1.  **The Desktop Shortcut** (Recommended)
+2.  Or Run via PowerShell:
+    ```powershell
+    cd %USERPROFILE%\PGVectorRAGIndexer
+    ./manage.ps1 -Action run
+    ```
+
+---
+
 
 ## macOS & Linux Installation
 
@@ -112,41 +136,7 @@ Then proceed to [Run the App](#3-run-the-app).
 
 ---
 
-## Alternative: Manual Installation (Windows)
 
-### Option 1: Clone to Windows Directory
-
-```powershell
-# Clone to your home directory
-cd $env:USERPROFILE
-git clone https://github.com/valginer0/PGVectorRAGIndexer.git
-cd PGVectorRAGIndexer
-
-# Create virtual environment
-python -m venv venv-windows
-
-# Activate and install
-.\venv-windows\Scripts\Activate.ps1
-pip install -r requirements-desktop.txt
-
-# Run the app
-python -m desktop_app.main
-```
-
-### Option 2: Use WSL Path (More Complex)
-
-If you want to run from the WSL directory, `manage.ps1` still works:
-
-```powershell
-cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
-Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
-./manage.ps1 -Action update
-./manage.ps1 -Action run
-```
-
-> ℹ️ UNC paths are slower; prefer the Windows install dir when possible.
-
----
 
 ## See Also (Recommended Reading)
 
@@ -164,34 +154,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ---
 
-## Quick Start After Installation
-
-### First Time Setup
-
-1. **Start Docker/Rancher Desktop**
-2. **Start the backend containers:**
-   ```bash
-   # From WSL
-   cd /home/valginer0/projects/PGVectorRAGIndexer
-   ./manage.sh update dev
-   ```
-3. **Run the desktop app:**
-   ```powershell
-   # From Windows
-   cd %USERPROFILE%\PGVectorRAGIndexer
-   ./manage.ps1 -Action run
-   ```
-
-### Daily Use
-
-```powershell
-cd %USERPROFILE%\PGVectorRAGIndexer
-./manage.ps1 -Action run
-```
-
-Or create a desktop shortcut to `run_desktop_app.ps1`!
-
-### Using the Desktop App
+## Software User Interface Guide
 
 The desktop app has six tabs, ordered by typical workflow:
 
@@ -199,7 +162,7 @@ The desktop app has six tabs, ordered by typical workflow:
 2. **Search** – Find information across your indexed documents. Click on file paths to open them.
 3. **Documents** – Browse all indexed documents with pagination and sorting.
 4. **Recent** – Track files you've opened and manage reindexing. When you open a file (from Search or Documents), you might edit it—and edited files should be reindexed. Since there's no automatic way to detect significant edits, this tab lets you queue and batch-reindex files as needed.
-5. **Manage** – Bulk operations like filtering and deleting documents.
+5. **Manage** – Bulk operations like filtering, deleting, and backing up documents. Includes features to export backups before deletion and restore from previously saved backups.
 6. **Settings** – View database statistics and manage Docker containers.
 
 ### Working with the Recent Activity Tab
@@ -238,7 +201,45 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ---
 
-## Uninstall
+---
+
+## Alternative: Manual Installation (Windows - Advanced)
+
+This section is for developers or advanced users who want full control over the installation process.
+
+### Option 1: Clone to Windows Directory
+
+```powershell
+# Clone to your home directory
+cd $env:USERPROFILE
+git clone https://github.com/valginer0/PGVectorRAGIndexer.git
+cd PGVectorRAGIndexer
+
+# Create virtual environment
+python -m venv venv-windows
+
+# Activate and install
+.\venv-windows\Scripts\Activate.ps1
+pip install -r requirements-desktop.txt
+
+# Run the app
+python -m desktop_app.main
+```
+
+### Option 2: Use WSL Path (More Complex)
+
+If you want to run from the WSL directory, `manage.ps1` still works:
+
+```powershell
+cd \\wsl.localhost\Ubuntu\home\valginer0\projects\PGVectorRAGIndexer
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+./manage.ps1 -Action update
+./manage.ps1 -Action run
+```
+
+> ℹ️ UNC paths are slower; prefer the Windows install dir when possible.
+
+
 
 ```powershell
 # Remove the installation directory

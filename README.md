@@ -99,6 +99,7 @@ This project provides a **Smart Document Search** system using:
 ### Core Capabilities
 
 - **Multi-Format Support**: PDF, DOC, DOCX, XLSX, TXT, HTML, PPTX, CSV, and web URLs
+- **OCR Support**: Extract text from scanned PDFs and images (PNG, JPG, TIFF, BMP) using Tesseract
 - **Semantic Search**: Vector similarity search using sentence transformers
 - **Hybrid Search**: Combine vector and full-text search with configurable weights
 - **Document Management**: Full CRUD operations for indexed documents
@@ -291,6 +292,11 @@ python indexer_v2.py index https://example.com/article
 # Force reindex existing document
 python indexer_v2.py index document.pdf --force
 
+# Index with OCR mode (for scanned documents)
+python indexer_v2.py index scanned_doc.pdf --ocr-mode auto  # Smart fallback (default)
+python indexer_v2.py index native_doc.pdf --ocr-mode skip   # Skip OCR (fastest)
+python indexer_v2.py index image.jpg --ocr-mode only        # OCR-only files
+
 # List indexed documents
 python indexer_v2.py list
 
@@ -387,6 +393,24 @@ curl "http://localhost:8000/health"
 curl -X POST "http://localhost:8000/upload-and-index" \
   -F "file=@document.pdf" \
   -F "document_type=policy"
+```
+
+**Upload with OCR mode** (for scanned documents/images):
+```bash
+# Auto mode (default) - uses OCR only when native text extraction fails
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@scanned_contract.pdf" \
+  -F "ocr_mode=auto"
+
+# Skip mode - faster, never uses OCR (skips scanned docs)
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@native_doc.pdf" \
+  -F "ocr_mode=skip"
+
+# Only mode - process only files that require OCR
+curl -X POST "http://localhost:8000/upload-and-index" \
+  -F "file=@photo_of_text.jpg" \
+  -F "ocr_mode=only"
 ```
 
 **Discover metadata keys**:

@@ -150,6 +150,37 @@ class RetrievalConfig(BaseSettings):
         return v
 
 
+class OCRConfig(BaseSettings):
+    """OCR (Optical Character Recognition) configuration."""
+    
+    model_config = SettingsConfigDict(env_prefix='OCR_', case_sensitive=False)
+    
+    mode: Literal['skip', 'only', 'auto'] = Field(
+        default='auto',
+        description='OCR processing mode: skip=no OCR, only=OCR files only, auto=smart fallback'
+    )
+    language: str = Field(
+        default='eng',
+        description='Tesseract language code (e.g., eng, fra, deu)'
+    )
+    timeout: int = Field(
+        default=300,
+        description='Timeout in seconds for OCR processing per file'
+    )
+    dpi: int = Field(
+        default=300,
+        description='DPI for PDF to image conversion'
+    )
+    
+    @field_validator('timeout', 'dpi')
+    @classmethod
+    def validate_positive(cls, v: int) -> int:
+        """Validate timeout and dpi are positive."""
+        if v <= 0:
+            raise ValueError('Value must be positive')
+        return v
+
+
 class APIConfig(BaseSettings):
     """API server configuration."""
     
@@ -196,11 +227,12 @@ class AppConfig(BaseSettings):
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)
     api: APIConfig = Field(default_factory=APIConfig)
+    ocr: OCRConfig = Field(default_factory=OCRConfig)
     
     # Application settings
     max_file_size_mb: int = Field(default=50, description='Maximum file size in MB')
     supported_extensions: list[str] = Field(
-        default=['.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.xlsx', '.csv', '.html', '.pptx', '.yaml', '.yml'],
+        default=['.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.xlsx', '.csv', '.html', '.pptx', '.yaml', '.yml', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp'],
         description='Supported file extensions'
     )
     supported_filenames: list[str] = Field(
@@ -218,7 +250,8 @@ class AppConfig(BaseSettings):
             embedding=EmbeddingConfig(),
             chunking=ChunkingConfig(),
             retrieval=RetrievalConfig(),
-            api=APIConfig()
+            api=APIConfig(),
+            ocr=OCRConfig()
         )
     
     def is_production(self) -> bool:

@@ -43,7 +43,8 @@ class DocumentIndexer:
         self,
         source_uri: str,
         force_reindex: bool = False,
-        custom_metadata: Optional[Dict[str, Any]] = None
+        custom_metadata: Optional[Dict[str, Any]] = None,
+        ocr_mode: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Index a single document.
@@ -52,6 +53,7 @@ class DocumentIndexer:
             source_uri: Path or URL to document
             force_reindex: If True, reindex even if document exists
             custom_metadata: Optional custom metadata
+            ocr_mode: OCR mode ('skip', 'only', 'auto', or None for config default)
             
         Returns:
             Dictionary with indexing results
@@ -59,7 +61,7 @@ class DocumentIndexer:
         try:
             # Process document
             logger.info(f"Processing document: {source_uri}")
-            processed_doc = self.processor.process(source_uri, custom_metadata)
+            processed_doc = self.processor.process(source_uri, custom_metadata, ocr_mode=ocr_mode)
             
             # Check if document already exists
             existing_doc = self.repository.get_document_by_id(processed_doc.document_id)
@@ -273,6 +275,12 @@ Examples:
         action='store_true',
         help='Force reindex if document already exists'
     )
+    index_parser.add_argument(
+        '--ocr-mode',
+        choices=['skip', 'only', 'auto'],
+        default=None,
+        help='OCR processing mode: skip=no OCR, only=OCR-required files only, auto=smart fallback (default: from config)'
+    )
     
     # List command
     list_parser = subparsers.add_parser('list', help='List indexed documents')
@@ -313,7 +321,10 @@ Examples:
             # Convert Windows path if needed
             source = convert_windows_path(args.source)
             
-            result = indexer.index_document(source, force_reindex=args.force)
+            # Get OCR mode from args (None uses config default)
+            ocr_mode = getattr(args, 'ocr_mode', None)
+            
+            result = indexer.index_document(source, force_reindex=args.force, ocr_mode=ocr_mode)
             
             if result['status'] == 'success':
                 print(f"\n✓ Document indexed successfully!")

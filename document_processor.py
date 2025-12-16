@@ -5,6 +5,7 @@ Supports multiple document formats with extensible loader architecture.
 """
 
 import hashlib
+import inspect
 import logging
 import os
 import shutil
@@ -29,6 +30,18 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 
 from config import get_config
+
+# OCR support (optional - graceful fallback if not installed)
+try:
+    import pytesseract
+    from PIL import Image
+    from pdf2image import convert_from_path
+    OCR_AVAILABLE = True
+except ImportError:
+    OCR_AVAILABLE = False
+    pytesseract = None
+    Image = None
+    convert_from_path = None
 
 try:
     from desktop_app.utils.hashing import calculate_file_hash
@@ -138,20 +151,91 @@ class TextDocumentLoader(DocumentLoader):
 
 
 class PDFDocumentLoader(DocumentLoader):
-    """Loader for PDF files."""
+    """Loader for PDF files with OCR fallback for scanned documents."""
+    
+    # Image extensions we support for OCR
+    IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp']
     
     def can_load(self, source_uri: str) -> bool:
         """Check if source is a PDF file."""
         return source_uri.lower().endswith('.pdf')
     
-    def load(self, source_uri: str) -> List[Document]:
-        """Load PDF file."""
+    def load(self, source_uri: str, ocr_mode: str = 'auto') -> List[Document]:
+        """
+        Load PDF file with optional OCR fallback.
+        
+        Args:
+            source_uri: Path to PDF file
+            ocr_mode: 'skip' (no OCR), 'only' (OCR only), 'auto' (native first, OCR fallback)
+        """
         try:
-            loader = PyPDFLoader(source_uri)
-            return loader.load()
+            # Try native text extraction first (unless ocr_mode is 'only')
+            if ocr_mode != 'only':
+                loader = PyPDFLoader(source_uri)
+                documents = loader.load()
+                
+                # Check if we got meaningful text
+                total_text = ''.join(doc.page_content for doc in documents)
+                if total_text.strip() and len(total_text.strip()) > 50:
+                    logger.debug(f"PDF has native text ({len(total_text)} chars)")
+                    return documents
+                
+                # If skip mode, return what we have (even if empty)
+                if ocr_mode == 'skip':
+                    logger.info(f"PDF has little/no text, OCR skipped (mode=skip)")
+                    return documents
+            
+            # OCR fallback
+            if not OCR_AVAILABLE:
+                if ocr_mode == 'only':
+                    raise LoaderError("OCR mode=only but pytesseract not installed")
+                logger.warning(f"PDF appears scanned but OCR not available")
+                return documents if ocr_mode != 'only' else []
+            
+            logger.info(f"Attempting OCR extraction for PDF: {source_uri}")
+            return self._extract_with_ocr(source_uri)
+            
         except Exception as e:
             logger.error(f"Failed to load PDF {source_uri}: {e}")
             raise LoaderError(f"PDF loading failed: {e}")
+    
+    def _extract_with_ocr(self, source_uri: str) -> List[Document]:
+        """Extract text from PDF using OCR."""
+        config = get_config()
+        documents = []
+        
+        try:
+            # Convert PDF pages to images
+            images = convert_from_path(
+                source_uri,
+                dpi=config.ocr.dpi,
+                fmt='png'
+            )
+            
+            for page_num, image in enumerate(images, start=1):
+                # Run OCR on each page
+                text = pytesseract.image_to_string(
+                    image,
+                    lang=config.ocr.language,
+                    timeout=config.ocr.timeout
+                )
+                
+                if text.strip():
+                    documents.append(Document(
+                        page_content=text,
+                        metadata={
+                            'source': source_uri,
+                            'page': page_num,
+                            'extraction_method': 'ocr'
+                        }
+                    ))
+            
+            logger.info(f"OCR extracted {len(documents)} pages from PDF")
+            return documents
+            
+        except Exception as e:
+            logger.error(f"OCR extraction failed: {e}")
+            raise LoaderError(f"OCR extraction failed: {e}")
     
     def get_metadata(self, source_uri: str) -> Dict[str, Any]:
         """Get PDF metadata."""
@@ -160,6 +244,73 @@ class PDFDocumentLoader(DocumentLoader):
             'file_type': 'pdf',
             'file_size': path.stat().st_size if path.exists() else 0,
             'file_extension': '.pdf'
+        }
+
+
+class ImageDocumentLoader(DocumentLoader):
+    """Loader for image files using OCR."""
+    
+    SUPPORTED_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp']
+    
+    def can_load(self, source_uri: str) -> bool:
+        """Check if source is an image file."""
+        return any(source_uri.lower().endswith(ext) for ext in self.SUPPORTED_EXTENSIONS)
+    
+    def load(self, source_uri: str, ocr_mode: str = 'auto') -> List[Document]:
+        """
+        Load image file using OCR.
+        
+        Args:
+            source_uri: Path to image file
+            ocr_mode: 'skip' returns empty, 'only'/'auto' runs OCR
+        """
+        if ocr_mode == 'skip':
+            logger.info(f"Skipping image (OCR mode=skip): {source_uri}")
+            return []
+        
+        if not OCR_AVAILABLE:
+            raise LoaderError(
+                f"Cannot process image {source_uri}: pytesseract not installed. "
+                "Install OCR support: pip install pytesseract Pillow"
+            )
+        
+        try:
+            config = get_config()
+            image = Image.open(source_uri)
+            
+            # Run OCR
+            text = pytesseract.image_to_string(
+                image,
+                lang=config.ocr.language,
+                timeout=config.ocr.timeout
+            )
+            
+            if not text.strip():
+                logger.warning(f"No text extracted from image: {source_uri}")
+                return []
+            
+            return [Document(
+                page_content=text,
+                metadata={
+                    'source': source_uri,
+                    'extraction_method': 'ocr',
+                    'image_format': image.format,
+                    'image_size': f"{image.width}x{image.height}"
+                }
+            )]
+            
+        except Exception as e:
+            logger.error(f"Failed to OCR image {source_uri}: {e}")
+            raise LoaderError(f"Image OCR failed: {e}")
+    
+    def get_metadata(self, source_uri: str) -> Dict[str, Any]:
+        """Get image metadata."""
+        path = Path(source_uri)
+        ext = path.suffix.lower()
+        return {
+            'file_type': 'image',
+            'file_size': path.stat().st_size if path.exists() else 0,
+            'file_extension': ext
         }
 
 
@@ -403,6 +554,7 @@ class DocumentProcessor:
         self.loaders: List[DocumentLoader] = [
             TextDocumentLoader(),
             PDFDocumentLoader(),
+            ImageDocumentLoader(),  # OCR for images
             WebDocumentLoader(),
             OfficeDocumentLoader(),
             SpreadsheetLoader()
@@ -460,7 +612,8 @@ class DocumentProcessor:
     def process(
         self,
         source_uri: str,
-        custom_metadata: Optional[Dict[str, Any]] = None
+        custom_metadata: Optional[Dict[str, Any]] = None,
+        ocr_mode: Optional[str] = None
     ) -> ProcessedDocument:
         """
         Process document from source URI.
@@ -468,6 +621,7 @@ class DocumentProcessor:
         Args:
             source_uri: Path or URL to document
             custom_metadata: Optional custom metadata to add
+            ocr_mode: OCR processing mode ('skip', 'only', 'auto', or None for config default)
             
         Returns:
             ProcessedDocument with chunks and metadata
@@ -477,6 +631,10 @@ class DocumentProcessor:
             UnsupportedFormatError: If format is not supported
         """
         logger.info(f"Processing document: {source_uri}")
+        
+        # Use config default if not specified
+        if ocr_mode is None:
+            ocr_mode = self.config.ocr.mode
         
         # Validate source
         self._validate_source(source_uri)
@@ -493,9 +651,14 @@ class DocumentProcessor:
                 f"No loader available for: {source_uri}"
             )
         
-        # Load document
+        # Load document (pass ocr_mode if loader supports it)
         try:
-            documents = loader.load(source_uri)
+            # Check if loader accepts ocr_mode parameter
+            sig = inspect.signature(loader.load)
+            if 'ocr_mode' in sig.parameters:
+                documents = loader.load(source_uri, ocr_mode=ocr_mode)
+            else:
+                documents = loader.load(source_uri)
             
             # Sanitize content (remove null bytes which Postgres rejects)
             for doc in documents:

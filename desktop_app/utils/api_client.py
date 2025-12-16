@@ -85,7 +85,8 @@ class APIClient:
         file_path: Path,
         custom_source_uri: Optional[str] = None,
         force_reindex: bool = False,
-        document_type: Optional[str] = None
+        document_type: Optional[str] = None,
+        ocr_mode: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Upload and index a document.
@@ -95,6 +96,7 @@ class APIClient:
             custom_source_uri: Custom source URI (full path) to preserve
             force_reindex: Whether to force reindexing if document exists
             document_type: Optional document type/category (e.g., 'resume', 'policy', 'report')
+            ocr_mode: OCR mode ('auto', 'skip', 'only') - defaults to API config
             
         Returns:
             Response data from the API
@@ -102,7 +104,7 @@ class APIClient:
         Raises:
             requests.RequestException: If the request fails
         """
-        logger.info(f"Uploading document: {file_path} (type: {document_type})")
+        logger.info(f"Uploading document: {file_path} (type: {document_type}, ocr: {ocr_mode})")
         
         with open(file_path, 'rb') as f:
             files = {'file': (file_path.name, f)}
@@ -113,6 +115,9 @@ class APIClient:
             
             if document_type:
                 data['document_type'] = document_type
+            
+            if ocr_mode:
+                data['ocr_mode'] = ocr_mode
             
             response = requests.post(
                 f"{self.base_url}/upload-and-index",

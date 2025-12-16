@@ -22,7 +22,8 @@ from .shared import populate_document_type_combo
 class UploadTab(QWidget):
     """Tab for uploading documents."""
     SUPPORTED_EXTENSIONS = {
-        '.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.pptx', '.html'
+        '.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.pptx', '.html',
+        '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp'  # OCR-enabled image formats
     }
 
     def __init__(self, api_client, parent=None):
@@ -58,7 +59,7 @@ class UploadTab(QWidget):
             "• Click 'Select Folder' to index all files in a directory (recursive)\n"
             "• The full path (e.g., C:\\Projects\\file.txt) is automatically captured\n"
             "• Upload to index the documents with their full paths preserved\n\n"
-            "Supported formats: TXT, MD, PDF, DOC, DOCX, PPTX, HTML"
+            "Supported formats: TXT, MD, PDF, DOC, DOCX, PPTX, HTML, PNG, JPG, TIFF (images via OCR)"
         )
         info_text.setWordWrap(True)
         info_text.setStyleSheet("color: #9ca3af;")
@@ -122,7 +123,26 @@ class UploadTab(QWidget):
         
         options_layout.addLayout(type_layout)
         
-
+        # OCR Mode
+        ocr_layout = QHBoxLayout()
+        ocr_label = QLabel("OCR Mode:")
+        ocr_label.setMinimumWidth(120)
+        ocr_layout.addWidget(ocr_label)
+        
+        self.ocr_mode_combo = QComboBox()
+        self.ocr_mode_combo.addItem("Auto (smart fallback)", "auto")
+        self.ocr_mode_combo.addItem("Skip (fast, no OCR)", "skip")
+        self.ocr_mode_combo.addItem("Only (OCR files only)", "only")
+        self.ocr_mode_combo.setToolTip(
+            "Auto: Use OCR only when native text extraction fails\n"
+            "Skip: Never use OCR (fastest, skips scanned docs)\n"
+            "Only: Only process files that require OCR"
+        )
+        self.ocr_mode_combo.setMinimumWidth(200)
+        ocr_layout.addWidget(self.ocr_mode_combo)
+        ocr_layout.addStretch()
+        
+        options_layout.addLayout(ocr_layout)
         
         layout.addWidget(options_group)
         
@@ -327,6 +347,7 @@ class UploadTab(QWidget):
         # Prepare files data
         files_data = []
         document_type = self.document_type_combo.currentText().strip() or None
+        ocr_mode = self.ocr_mode_combo.currentData()  # Get 'auto', 'skip', or 'only'
         force_reindex = False
         
         for file_path in self.selected_files:
@@ -334,7 +355,8 @@ class UploadTab(QWidget):
                 'path': file_path,
                 'full_path': str(file_path.resolve()),
                 'force_reindex': force_reindex,
-                'document_type': document_type
+                'document_type': document_type,
+                'ocr_mode': ocr_mode
             })
             
         self.log(f"Starting upload of {len(files_data)} files...")

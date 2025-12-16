@@ -317,7 +317,8 @@ async def upload_and_index(
     file: UploadFile = File(...),
     force_reindex: bool = Form(default=False),
     custom_source_uri: Optional[str] = Form(default=None),
-    document_type: Optional[str] = Form(default=None)
+    document_type: Optional[str] = Form(default=None),
+    ocr_mode: Optional[str] = Form(default=None)
 ):
     """
     Upload a file and index it immediately.
@@ -328,13 +329,17 @@ async def upload_and_index(
     Args:
         file: The file to upload and index
         force_reindex: Force reindex if file already exists
+        custom_source_uri: Custom source URI (full path) to preserve
+        document_type: Document type/category tag
+        ocr_mode: OCR processing mode ('auto', 'skip', 'only')
         
     Returns:
         IndexResponse with indexing results
         
     Example:
         curl -X POST "http://localhost:8000/upload-and-index" \\
-          -F "file=@C:\\Users\\YourName\\Documents\\file.pdf"
+          -F "file=@C:\\Users\\YourName\\Documents\\file.pdf" \\
+          -F "ocr_mode=auto"
     """
     import tempfile
     import os
@@ -370,7 +375,8 @@ async def upload_and_index(
         
         processed_doc = idx.processor.process(
             source_uri=temp_path,
-            custom_metadata=metadata
+            custom_metadata=metadata,
+            ocr_mode=ocr_mode  # Pass OCR mode to processor
         )
         
         # Regenerate document_id based on the display name (not temp path)

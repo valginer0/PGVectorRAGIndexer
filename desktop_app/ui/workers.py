@@ -82,6 +82,7 @@ class UploadWorker(QThread):
                 - full_path: str
                 - force_reindex: bool
                 - document_type: str (optional)
+                - ocr_mode: str (optional) - 'auto', 'skip', or 'only'
         """
         super().__init__()
         self.api_client = api_client
@@ -97,6 +98,7 @@ class UploadWorker(QThread):
             full_path = file_data['full_path']
             force_reindex = file_data['force_reindex']
             document_type = file_data.get('document_type')
+            ocr_mode = file_data.get('ocr_mode', 'auto')
             
             try:
                 # Check if exists and compare hash
@@ -132,7 +134,8 @@ class UploadWorker(QThread):
                     file_path=file_path,
                     custom_source_uri=full_path,
                     force_reindex=force_reindex,
-                    document_type=document_type
+                    document_type=document_type,
+                    ocr_mode=ocr_mode
                 )
                 
                 self.file_finished.emit(i, True, "Upload successful")

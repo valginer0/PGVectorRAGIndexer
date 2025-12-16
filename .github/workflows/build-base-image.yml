@@ -22,6 +22,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Lowercase Repo Name
+        run: |
+          echo "REPO=${GITHUB_REPOSITORY,,}" >>${GITHUB_ENV}
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -41,7 +45,7 @@ jobs:
           context: .
           file: Dockerfile.base
           push: true
-          tags: ghcr.io/${{ github.repository }}:base
+          tags: ghcr.io/${{ env.REPO }}:base
           platforms: linux/amd64,linux/arm64
           cache-from: type=gha
           cache-to: type=gha,mode=max

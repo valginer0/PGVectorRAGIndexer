@@ -6,6 +6,7 @@
 set -e
 
 USE_CACHE=false
+SKIP_BASE_PULL=false
 
 for arg in "$@"; do
     case "$arg" in
@@ -13,12 +14,17 @@ for arg in "$@"; do
             USE_CACHE=true
             shift
             ;;
+        --no-base-pull)
+            SKIP_BASE_PULL=true
+            shift
+            ;;
         -h|--help)
             cat <<EOF
-Usage: ./push-dev.sh [--use-cache]
+Usage: ./push-dev.sh [--use-cache] [--no-base-pull]
 
 Builds and pushes the :dev Docker image.
-  --use-cache   Build with Docker layer cache (default is --no-cache)
+  --use-cache     Build with Docker layer cache (default is --no-cache)
+  --no-base-pull  Skip pulling the latest base image (use local)
 EOF
             exit 0
             ;;
@@ -48,9 +54,13 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # Ensure we are using the latest base image
-echo -e "${GREEN}Pulling latest base image...${NC}"
-docker pull ghcr.io/valginer0/pgvectorragindexer:base >/dev/null
-echo -e "${GREEN}✓ Base image updated${NC}"
+if [ "$SKIP_BASE_PULL" = false ]; then
+    echo -e "${GREEN}Pulling latest base image...${NC}"
+    docker pull ghcr.io/valginer0/pgvectorragindexer:base >/dev/null
+    echo -e "${GREEN}✓ Base image updated${NC}"
+else
+    echo -e "${YELLOW}Skipping base image pull (using local)...${NC}"
+fi
 
 # Build Docker image with BuildKit for caching
 if [ "$USE_CACHE" = true ]; then

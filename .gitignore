@@ -214,3 +214,4 @@ backups/
 
 # User documents (should not be in version control)
 documents/
+docs/internal/

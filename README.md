@@ -27,6 +27,28 @@ This design is intentional. It means:
 Unlike chat-based tools, this app focuses on **search and discovery**, not conversation.
 It helps you *find and rediscover* documents by meaning — even when you don’t remember the exact words
 
+---
+
+### 🖥️ Two Ways to Deploy (Both 100% Local)
+
+| Mode | Best For | Interface |
+|------|----------|-----------|
+| **Desktop App** | Personal use, everyday search | Native GUI (Windows/Mac/Linux) |
+| **Docker/Server** | Teams, servers, NAS, automation | Web UI + REST API |
+
+Both modes run **entirely on your hardware** — no cloud, no external services.
+
+- **Desktop App**: Recommended for most users. Just install and use.
+- **Docker/Server**: Run on a headless Linux server, NAS (Synology/QNAP), or shared office machine.
+
+> **💡 CLI is also available** in both modes for power users:
+> - **Batch processing** — index many files from terminal
+> - **Quick commands** — faster than opening the GUI for simple tasks  
+> - **Scripting** — integrate into shell aliases, cron jobs, or pipelines
+>
+> CLI requires the backend running (via Docker or Desktop App).
+
+---
 
 This project provides a **Smart Document Search** system using:
 - **Backend**: FastAPI, PostgreSQL (pgvector), and **Local Embeddings** (SentenceTransformers).

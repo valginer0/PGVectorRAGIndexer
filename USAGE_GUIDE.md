@@ -58,6 +58,32 @@ curl http://localhost:8000/health
 
 ---
 
+## 🖥️ Server & Headless Deployment
+
+All examples in this guide work identically whether you're running on your laptop or a headless server. Common deployment scenarios:
+
+| Scenario | Description |
+|----------|-------------|
+| **Home NAS** | Run on Synology, QNAP, or TrueNAS for always-on document search |
+| **Office Server** | Shared document search for your team on a local network machine |
+| **Automation** | Integrate with scripts, cron jobs, or CI/CD pipelines |
+
+### Scheduled Indexing with Cron
+
+Set up automatic re-indexing of a documents folder:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add line to re-index every night at 2 AM
+0 2 * * * curl -X POST "http://localhost:8000/index/folder" -H "Content-Type: application/json" -d '{"path": "/app/documents", "recursive": true}' >> /var/log/rag-index.log 2>&1
+```
+
+> **💡 Note:** All processing happens locally on your server. No data is sent to external services.
+
+---
+
 ## Indexing Documents
 
 ### Method 1: Using Web UI (Easiest)

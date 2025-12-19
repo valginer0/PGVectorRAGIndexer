@@ -10,14 +10,14 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QCheckBox, QTextEdit,
-    QProgressBar, QMessageBox, QGroupBox, QLineEdit, QComboBox,
-    QListWidget, QListWidgetItem
+    QProgressBar, QMessageBox, QGroupBox, QLineEdit, QComboBox
 )
 import qtawesome as qta
 from PySide6.QtCore import Qt, QThread, Signal, QSize
 from .workers import UploadWorker
 from .shared import populate_document_type_combo
 from .upload_results_dialog import UploadResultsDialog
+from .encrypted_pdfs_dialog import EncryptedPDFsDialog
 
 # ... imports ...
 
@@ -188,45 +188,12 @@ class UploadTab(QWidget):
         
         layout.addWidget(log_group)
         
-        # Encrypted PDFs section (hidden until populated)
-        self.encrypted_group = QGroupBox("🔒 Encrypted PDFs (0 found)")
-        self.encrypted_group.setVisible(False)  # Hidden until we have encrypted PDFs
-        encrypted_layout = QVBoxLayout(self.encrypted_group)
-        
-        self.encrypted_list = QListWidget()
-        self.encrypted_list.setMaximumHeight(100)  # Reduced height
-        self.encrypted_list.setStyleSheet("""
-            QListWidget::item {
-                color: #6366f1;
-                text-decoration: underline;
-                padding: 3px;
-            }
-            QListWidget::item:hover {
-                background: #374151;
-                cursor: pointer;
-            }
-        """)
-        self.encrypted_list.setToolTip("Click a file to open it in your PDF viewer")
-        self.encrypted_list.itemClicked.connect(self.open_encrypted_pdf)
-        encrypted_layout.addWidget(self.encrypted_list)
-        
-        # Buttons row
-        enc_btn_layout = QHBoxLayout()
-        
-        self.export_encrypted_btn = QPushButton("📥 Export")
-        self.export_encrypted_btn.clicked.connect(self.export_encrypted_list)
-        self.export_encrypted_btn.setMaximumWidth(90)
-        enc_btn_layout.addWidget(self.export_encrypted_btn)
-        
-        self.clear_encrypted_btn = QPushButton("Clear")
-        self.clear_encrypted_btn.clicked.connect(self.clear_encrypted_list)
-        self.clear_encrypted_btn.setMaximumWidth(70)
-        enc_btn_layout.addWidget(self.clear_encrypted_btn)
-        
-        enc_btn_layout.addStretch()
-        encrypted_layout.addLayout(enc_btn_layout)
-        
-        layout.addWidget(self.encrypted_group)
+        # Encrypted PDFs button (opens dialog, hidden until we have encrypted PDFs)
+        self.view_encrypted_btn = QPushButton("🔒 Encrypted PDFs (0)")
+        self.view_encrypted_btn.setIcon(qta.icon('fa5s.lock', color='#f59e0b'))
+        self.view_encrypted_btn.clicked.connect(self.show_encrypted_dialog)
+        self.view_encrypted_btn.setVisible(False)
+        layout.addWidget(self.view_encrypted_btn)
         
         layout.addStretch()
     
@@ -552,72 +519,25 @@ class UploadTab(QWidget):
             log_context="Upload tab"
         )
 
-    def open_encrypted_pdf(self, item: QListWidgetItem):
-        """Open encrypted PDF in system's default PDF viewer."""
-        import sys
-        import os
-        import subprocess
-        
-        path = item.data(Qt.UserRole)
-        if not path:
-            return
-        
-        try:
-            if sys.platform.startswith("win"):
-                os.startfile(str(path))  # type: ignore[attr-defined]
-            elif sys.platform == "darwin":
-                subprocess.Popen(["open", str(path)])
-            else:
-                subprocess.Popen(["xdg-open", str(path)])
-        except Exception as e:
-            QMessageBox.warning(
-                self,
-                "Open Failed",
-                f"Could not open file:\n{path}\n\nError: {e}"
-            )
-    
     def add_encrypted_pdf(self, file_path: str):
         """Add an encrypted PDF to the tracking list."""
         if file_path not in self.encrypted_pdfs:
             self.encrypted_pdfs.append(file_path)
             
-            item = QListWidgetItem(file_path)
-            item.setData(Qt.UserRole, file_path)
-            item.setToolTip(f"Click to open in PDF viewer: {file_path}")
-            self.encrypted_list.addItem(item)
-            
-            # Update count in title and show section
+            # Update button text and show it
             count = len(self.encrypted_pdfs)
-            self.encrypted_group.setTitle(f"🔒 Encrypted PDFs ({count} found)")
-            self.encrypted_group.setVisible(True)  # Show when we have items
+            self.view_encrypted_btn.setText(f"🔒 Encrypted PDFs ({count})")
+            self.view_encrypted_btn.setVisible(True)
     
-    def export_encrypted_list(self):
-        """Export encrypted PDFs list to CSV."""
-        if not self.encrypted_pdfs:
-            QMessageBox.information(self, "No Data", "No encrypted PDFs to export.")
-            return
-        
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Encrypted PDFs List",
-            "encrypted_pdfs.csv",
-            "CSV Files (*.csv)"
-        )
-        
-        if file_path:
-            try:
-                with open(file_path, 'w', encoding='utf-8') as f:
-                    f.write("File Path\n")
-                    for path in self.encrypted_pdfs:
-                        f.write(f'"{path}"\n')
-                self.log(f"📥 Exported {len(self.encrypted_pdfs)} encrypted PDFs to {file_path}")
-            except Exception as e:
-                QMessageBox.warning(self, "Export Failed", f"Error: {e}")
+    def show_encrypted_dialog(self):
+        """Show dialog with encrypted PDFs."""
+        if self.encrypted_pdfs:
+            dialog = EncryptedPDFsDialog(self.encrypted_pdfs, self)
+            dialog.exec()
     
     def clear_encrypted_list(self):
         """Clear the encrypted PDFs list."""
         self.encrypted_pdfs.clear()
-        self.encrypted_list.clear()
-        self.encrypted_group.setTitle("🔒 Encrypted PDFs (0 found)")
-        self.encrypted_group.setVisible(False)  # Hide when empty
+        self.view_encrypted_btn.setText("🔒 Encrypted PDFs (0)")
+        self.view_encrypted_btn.setVisible(False)
         self.log("Cleared encrypted PDFs list")

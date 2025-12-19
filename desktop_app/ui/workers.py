@@ -1,4 +1,5 @@
 import logging
+import time
 from PySide6.QtCore import QThread, Signal
 from desktop_app.utils.hashing import calculate_file_hash
 
@@ -90,6 +91,13 @@ class UploadWorker(QThread):
         self.is_cancelled = False
 
     def run(self):
+        # Timing instrumentation
+        total_metadata_time = 0.0
+        total_hash_time = 0.0
+        total_upload_time = 0.0
+        skipped_count = 0
+        uploaded_count = 0
+        
         for i, file_data in enumerate(self.files_data):
             if self.is_cancelled:
                 break
@@ -104,7 +112,10 @@ class UploadWorker(QThread):
                 # Check if exists and compare hash
                 if not force_reindex:
                     # Get remote document metadata
+                    t0 = time.perf_counter()
                     doc = self.api_client.get_document_metadata(full_path)
+                    total_metadata_time += time.perf_counter() - t0
+                    
                     if doc:
                         # Check hash
                         metadata = doc.get('metadata') or {}
@@ -113,7 +124,9 @@ class UploadWorker(QThread):
                         
                         # Calculate local hash
                         self.progress.emit(f"Checking existing document: {file_path.name}...")
+                        t0 = time.perf_counter()
                         local_hash = calculate_file_hash(file_path)
+                        total_hash_time += time.perf_counter() - t0
                         
                         hash_match = (remote_hash and remote_hash == local_hash)
                         
@@ -124,12 +137,14 @@ class UploadWorker(QThread):
 
                         if hash_match and type_match:
                             self.file_finished.emit(i, True, "Document unchanged (skipped)")
+                            skipped_count += 1
                             continue
                     # If document doesn't exist (doc is None) or hashes differ, we proceed to upload.
 
                 self.progress.emit(f"Uploading {file_path.name}...")
                 
                 # Upload
+                t0 = time.perf_counter()
                 self.api_client.upload_document(
                     file_path=file_path,
                     custom_source_uri=full_path,
@@ -137,12 +152,34 @@ class UploadWorker(QThread):
                     document_type=document_type,
                     ocr_mode=ocr_mode
                 )
+                total_upload_time += time.perf_counter() - t0
+                uploaded_count += 1
                 
                 self.file_finished.emit(i, True, "Upload successful")
                 
             except Exception as e:
+                error_msg = str(e)
+                
+                # Detect encrypted PDF errors from API response
+                if "encrypted_pdf" in error_msg.lower() or "403" in error_msg:
+                    # Try to extract if this is specifically an encrypted PDF error
+                    if "encrypted" in error_msg.lower() or "password" in error_msg.lower():
+                        error_msg = f"[ENCRYPTED_PDF]{full_path}|{error_msg}"
+                
                 logger.error(f"Upload failed for {file_path}: {e}")
-                self.file_finished.emit(i, False, str(e))
+                self.file_finished.emit(i, False, error_msg)
+        
+        # Log timing summary
+        total_files = len(self.files_data)
+        logger.info(f"\n=== UPLOAD TIMING SUMMARY ===")
+        logger.info(f"Total files: {total_files} (uploaded: {uploaded_count}, skipped: {skipped_count})")
+        logger.info(f"Metadata API calls: {total_metadata_time:.2f}s ({total_metadata_time/max(total_files,1)*1000:.1f}ms avg)")
+        logger.info(f"Local hash calc:    {total_hash_time:.2f}s ({total_hash_time/max(skipped_count,1)*1000:.1f}ms avg per skipped)")
+        logger.info(f"Actual uploads:     {total_upload_time:.2f}s ({total_upload_time/max(uploaded_count,1)*1000:.1f}ms avg)")
+        logger.info(f"=============================\n")
+        
+        # Also emit to UI
+        self.progress.emit(f"⏱️ Timing: metadata={total_metadata_time:.1f}s, hash={total_hash_time:.1f}s, upload={total_upload_time:.1f}s")
         
         self.all_finished.emit()
 

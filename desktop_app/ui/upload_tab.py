@@ -10,7 +10,8 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QCheckBox, QTextEdit,
-    QProgressBar, QMessageBox, QGroupBox, QLineEdit, QComboBox
+    QProgressBar, QMessageBox, QGroupBox, QLineEdit, QComboBox,
+    QListWidget, QListWidgetItem
 )
 import qtawesome as qta
 from PySide6.QtCore import Qt, QThread, Signal, QSize
@@ -37,6 +38,7 @@ class UploadTab(QWidget):
         self.success_count = 0
         self.failure_count = 0
         self.failed_uploads: list[dict] = []
+        self.encrypted_pdfs: list[str] = []  # Track encrypted PDFs for display
         
         self.setup_ui()
     
@@ -186,6 +188,46 @@ class UploadTab(QWidget):
         log_layout.addWidget(self.log_text)
         
         layout.addWidget(log_group)
+        
+        # Encrypted PDFs section (collapsible)
+        self.encrypted_group = QGroupBox("🔒 Encrypted PDFs (0 found)")
+        self.encrypted_group.setCheckable(True)
+        self.encrypted_group.setChecked(False)  # Collapsed by default
+        encrypted_layout = QVBoxLayout(self.encrypted_group)
+        
+        self.encrypted_list = QListWidget()
+        self.encrypted_list.setMaximumHeight(120)
+        self.encrypted_list.setStyleSheet("""
+            QListWidget::item {
+                color: #6366f1;
+                text-decoration: underline;
+                padding: 4px;
+            }
+            QListWidget::item:hover {
+                background: #374151;
+            }
+        """)
+        self.encrypted_list.setToolTip("Click a file to open it in your PDF viewer")
+        self.encrypted_list.itemClicked.connect(self.open_encrypted_pdf)
+        encrypted_layout.addWidget(self.encrypted_list)
+        
+        # Buttons row
+        enc_btn_layout = QHBoxLayout()
+        
+        self.export_encrypted_btn = QPushButton("📥 Export List")
+        self.export_encrypted_btn.clicked.connect(self.export_encrypted_list)
+        self.export_encrypted_btn.setMaximumWidth(120)
+        enc_btn_layout.addWidget(self.export_encrypted_btn)
+        
+        self.clear_encrypted_btn = QPushButton("Clear")
+        self.clear_encrypted_btn.clicked.connect(self.clear_encrypted_list)
+        self.clear_encrypted_btn.setMaximumWidth(80)
+        enc_btn_layout.addWidget(self.clear_encrypted_btn)
+        
+        enc_btn_layout.addStretch()
+        encrypted_layout.addLayout(enc_btn_layout)
+        
+        layout.addWidget(self.encrypted_group)
         
         layout.addStretch()
     
@@ -393,9 +435,21 @@ class UploadTab(QWidget):
         else:
             self.failure_count += 1
             
+            # Check for encrypted PDF error (prefixed by worker)
+            encrypted_file_path = None
+            if message.startswith("[ENCRYPTED_PDF]"):
+                # Extract: [ENCRYPTED_PDF]path|original_message
+                parts = message[len("[ENCRYPTED_PDF]"):].split("|", 1)
+                if len(parts) == 2:
+                    encrypted_file_path = parts[0]
+                    message = parts[1]  # Use original message for display
+            
             # Enhance error message
             enhanced_msg = message
-            if "timed out" in message.lower():
+            if encrypted_file_path:
+                enhanced_msg = "🔒 Password-protected PDF (cannot be indexed)"
+                self.add_encrypted_pdf(encrypted_file_path)
+            elif "timed out" in message.lower():
                 enhanced_msg += "\n   ➜ Hint: File might be too large or server is busy."
             elif "413" in message:
                 enhanced_msg += "\n   ➜ Hint: File exceeds server size limit."
@@ -404,7 +458,7 @@ class UploadTab(QWidget):
             elif "connection" in message.lower():
                 enhanced_msg += "\n   ➜ Hint: Check your network or Docker status."
                 
-            self.log(f"✗ File {index + 1} failed: {message}")
+            self.log(f"✗ File {index + 1} failed: {enhanced_msg[:100]}...")
             
             # Store failure details with full path
             file_path = str(self.selected_files[index])
@@ -498,3 +552,71 @@ class UploadTab(QWidget):
             blank_option="",
             log_context="Upload tab"
         )
+
+    def open_encrypted_pdf(self, item: QListWidgetItem):
+        """Open encrypted PDF in system's default PDF viewer."""
+        import sys
+        import os
+        import subprocess
+        
+        path = item.data(Qt.UserRole)
+        if not path:
+            return
+        
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(str(path))  # type: ignore[attr-defined]
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(path)])
+            else:
+                subprocess.Popen(["xdg-open", str(path)])
+        except Exception as e:
+            QMessageBox.warning(
+                self,
+                "Open Failed",
+                f"Could not open file:\n{path}\n\nError: {e}"
+            )
+    
+    def add_encrypted_pdf(self, file_path: str):
+        """Add an encrypted PDF to the tracking list."""
+        if file_path not in self.encrypted_pdfs:
+            self.encrypted_pdfs.append(file_path)
+            
+            item = QListWidgetItem(file_path)
+            item.setData(Qt.UserRole, file_path)
+            item.setToolTip(f"Click to open in PDF viewer: {file_path}")
+            self.encrypted_list.addItem(item)
+            
+            # Update count in title
+            count = len(self.encrypted_pdfs)
+            self.encrypted_group.setTitle(f"🔒 Encrypted PDFs ({count} found)")
+    
+    def export_encrypted_list(self):
+        """Export encrypted PDFs list to CSV."""
+        if not self.encrypted_pdfs:
+            QMessageBox.information(self, "No Data", "No encrypted PDFs to export.")
+            return
+        
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Encrypted PDFs List",
+            "encrypted_pdfs.csv",
+            "CSV Files (*.csv)"
+        )
+        
+        if file_path:
+            try:
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write("File Path\n")
+                    for path in self.encrypted_pdfs:
+                        f.write(f'"{path}"\n')
+                self.log(f"📥 Exported {len(self.encrypted_pdfs)} encrypted PDFs to {file_path}")
+            except Exception as e:
+                QMessageBox.warning(self, "Export Failed", f"Error: {e}")
+    
+    def clear_encrypted_list(self):
+        """Clear the encrypted PDFs list."""
+        self.encrypted_pdfs.clear()
+        self.encrypted_list.clear()
+        self.encrypted_group.setTitle("🔒 Encrypted PDFs (0 found)")
+        self.log("Cleared encrypted PDFs list")

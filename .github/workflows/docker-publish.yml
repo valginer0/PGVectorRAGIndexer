@@ -22,6 +22,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Free Disk Space
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -46,6 +54,18 @@ jobs:
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
 
+      # Determine platforms: multi-platform for releases, amd64-only for dev builds
+      - name: Set build platforms
+        id: platforms
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "platforms=linux/amd64,linux/arm64" >> $GITHUB_OUTPUT
+            echo "Building multi-platform for release tag"
+          else
+            echo "platforms=linux/amd64" >> $GITHUB_OUTPUT
+            echo "Building amd64-only for faster dev builds"
+          fi
+
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v5
@@ -56,7 +76,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ steps.platforms.outputs.platforms }}
 
       # Attestation is optional and requires id-token permission
       # Uncomment if you want to enable it:

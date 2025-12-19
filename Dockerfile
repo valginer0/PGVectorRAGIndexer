@@ -22,7 +22,7 @@ RUN mkdir -p /app/documents
 # Ensure LibreOffice is available (needed for .doc conversion)
 RUN if ! command -v soffice >/dev/null 2>&1 && ! command -v libreoffice >/dev/null 2>&1; then \
         apt-get update && \
-        apt-get install -y libreoffice && \
+        apt-get install -y libreoffice-writer-nogui && \
         rm -rf /var/lib/apt/lists/*; \
     fi
 

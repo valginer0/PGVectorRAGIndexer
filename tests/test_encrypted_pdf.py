@@ -53,8 +53,9 @@ class TestEncryptedPDFDetection:
             assert len(result) > 0
 
 
+@pytest.mark.database
 class TestEncryptedPDFAPI:
-    """Tests for encrypted PDF API endpoints."""
+    """Tests for encrypted PDF API endpoints (requires database)."""
     
     @pytest.fixture
     def client(self):

@@ -53,19 +53,14 @@ class UploadTab(QWidget):
         title.setProperty("class", "header")
         layout.addWidget(title)
         
-        # Instructions
-        info_box = QGroupBox("How It Works")
-        info_layout = QVBoxLayout(info_box)
+        # Instructions (simple text, no wrapper)
         info_text = QLabel(
-            "This desktop app automatically preserves the full file path!\n"
-            "• Select Files/Folder → Upload to index with paths preserved\n"
-            "• Formats: TXT, MD, PDF, DOC, DOCX, PPTX, HTML, PNG, JPG, TIFF (OCR)"
+            "<b>How It Works:</b> Select Files/Folder → Upload to index with full paths preserved.<br>"
+            "<span style='color: #6b7280;'>Formats: TXT, MD, PDF, DOC, DOCX, PPTX, HTML, PNG, JPG, TIFF (OCR)</span>"
         )
         info_text.setWordWrap(True)
-        info_text.setStyleSheet("color: #9ca3af;")
-        info_text.setMinimumHeight(60)  # Ensure text isn't cut off
-        info_layout.addWidget(info_text)
-        layout.addWidget(info_box)
+        info_text.setStyleSheet("color: #9ca3af; padding: 8px; margin-bottom: 5px;")
+        layout.addWidget(info_text)
         
         # File selection
         file_group = QGroupBox("Select File")

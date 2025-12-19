@@ -66,6 +66,10 @@ class EncryptedPDFsDialog(QDialog):
         export_btn.clicked.connect(self.export_list)
         btn_layout.addWidget(export_btn)
         
+        clear_btn = QPushButton("🗑️ Clear List")
+        clear_btn.clicked.connect(self.clear_list)
+        btn_layout.addWidget(clear_btn)
+        
         btn_layout.addStretch()
         
         close_btn = QPushButton("Close")
@@ -73,6 +77,17 @@ class EncryptedPDFsDialog(QDialog):
         btn_layout.addWidget(close_btn)
         
         layout.addLayout(btn_layout)
+    
+    def clear_list(self):
+        """Clear the list and notify parent."""
+        self.encrypted_pdfs.clear()
+        self.list_widget.clear()
+        
+        # Clear in parent if it has the method
+        if hasattr(self.parent(), 'clear_encrypted_list'):
+            self.parent().clear_encrypted_list()
+        
+        self.accept()  # Close dialog after clearing
     
     def open_file(self, item: QListWidgetItem):
         """Open the file in system's default PDF viewer."""

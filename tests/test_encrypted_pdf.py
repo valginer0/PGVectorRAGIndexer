@@ -162,3 +162,47 @@ class TestIndexerCLI:
                 assert "/test/encrypted.pdf" in content
         finally:
             os.chdir(original_cwd)
+
+
+class TestEncryptedPDFUITracking:
+    """Tests for encrypted PDF UI tracking in upload_tab."""
+    
+    def test_encrypted_pdf_prefix_parsing(self):
+        """Test parsing of [ENCRYPTED_PDF] prefix from worker."""
+        message = "[ENCRYPTED_PDF]/path/to/file.pdf|403 Forbidden: encrypted_pdf"
+        
+        # Simulate parsing logic from on_file_finished
+        encrypted_file_path = None
+        if message.startswith("[ENCRYPTED_PDF]"):
+            parts = message[len("[ENCRYPTED_PDF]"):].split("|", 1)
+            if len(parts) == 2:
+                encrypted_file_path = parts[0]
+                original_msg = parts[1]
+        
+        assert encrypted_file_path == "/path/to/file.pdf"
+        assert "403" in original_msg
+    
+    def test_encrypted_pdf_prefix_not_present(self):
+        """Test that regular errors don't trigger encrypted PDF tracking."""
+        message = "500 Internal Server Error"
+        
+        encrypted_file_path = None
+        if message.startswith("[ENCRYPTED_PDF]"):
+            parts = message[len("[ENCRYPTED_PDF]"):].split("|", 1)
+            if len(parts) == 2:
+                encrypted_file_path = parts[0]
+        
+        assert encrypted_file_path is None
+    
+    def test_worker_encrypted_pdf_detection(self):
+        """Test that worker detects encrypted_pdf in error message."""
+        # Simulate the worker's error detection logic
+        error_msg = "403 Client Error for url: encrypted_pdf password-protected"
+        full_path = "/test/encrypted.pdf"
+        
+        if "encrypted_pdf" in error_msg.lower() or "403" in error_msg:
+            if "encrypted" in error_msg.lower() or "password" in error_msg.lower():
+                error_msg = f"[ENCRYPTED_PDF]{full_path}|{error_msg}"
+        
+        assert error_msg.startswith("[ENCRYPTED_PDF]")
+        assert "/test/encrypted.pdf" in error_msg

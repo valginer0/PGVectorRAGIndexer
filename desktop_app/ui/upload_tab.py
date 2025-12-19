@@ -104,15 +104,14 @@ class UploadTab(QWidget):
         # Document Type
         type_layout = QHBoxLayout()
         type_label = QLabel("Document Type:")
-        type_label.setMinimumWidth(120)
+        type_label.setMinimumWidth(100)
         type_layout.addWidget(type_label)
         
         self.document_type_combo = QComboBox()
         self.document_type_combo.setEditable(True)
         self.document_type_combo.setToolTip("Arbitrary tag (e.g. 'Invoice', 'Memo'). Leave empty to ignore.")
         self.document_type_combo.setPlaceholderText("Type or select tag (optional)")
-        self.document_type_combo.setMinimumWidth(200)
-        type_layout.addWidget(self.document_type_combo)
+        type_layout.addWidget(self.document_type_combo, 1)  # Stretch factor 1 to expand
         
         refresh_types_btn = QPushButton()
         refresh_types_btn.setIcon(qta.icon('fa5s.sync-alt', color='#9ca3af'))
@@ -120,7 +119,6 @@ class UploadTab(QWidget):
         refresh_types_btn.setToolTip("Refresh available document types")
         refresh_types_btn.setFixedSize(30, 30)
         type_layout.addWidget(refresh_types_btn)
-        type_layout.addStretch()  # Prevent combo from stretching too wide
         
         # Load initial types
         self.load_document_types()
@@ -130,7 +128,7 @@ class UploadTab(QWidget):
         # OCR Mode
         ocr_layout = QHBoxLayout()
         ocr_label = QLabel("OCR Mode:")
-        ocr_label.setMinimumWidth(120)
+        ocr_label.setMinimumWidth(100)
         ocr_layout.addWidget(ocr_label)
         
         self.ocr_mode_combo = QComboBox()
@@ -142,9 +140,8 @@ class UploadTab(QWidget):
             "Skip: Never use OCR (fastest, skips scanned docs)\n"
             "Only: Only process files that require OCR"
         )
-        self.ocr_mode_combo.setMinimumWidth(200)
-        ocr_layout.addWidget(self.ocr_mode_combo)
-        ocr_layout.addStretch()
+        ocr_layout.addWidget(self.ocr_mode_combo, 1)  # Stretch factor 1 to expand
+        ocr_layout.addSpacing(30)  # Match the refresh button width
         
         options_layout.addLayout(ocr_layout)
         

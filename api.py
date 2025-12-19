@@ -460,8 +460,22 @@ async def upload_and_index(
             }
         )
     except (UnsupportedFormatError, DocumentProcessingError) as e:
+        error_message = str(e) if str(e) else ""
+        
+        # Check if this is an OCR mode "only" skip (not an error, just skipped)
+        if error_message.startswith("Skipped:"):
+            logger.info(f"File skipped due to OCR mode: {file.filename}")
+            # Return success with 0 chunks to indicate skip
+            return IndexResponse(
+                status='skipped',
+                document_id='',
+                source_uri=custom_source_uri if custom_source_uri else (file.filename or ''),
+                chunks_indexed=0,
+                message=error_message
+            )
+        
         logger.error(f"Upload and index failed: {e}")
-        detail_message = str(e) if str(e) else ""
+        detail_message = error_message
         if (
             file.filename
             and file.filename.lower().endswith(".doc")

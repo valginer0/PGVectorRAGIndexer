@@ -452,11 +452,18 @@ class UploadTab(QWidget):
         self.upload_btn.setEnabled(True)
         
         total = len(self.selected_files)
+        
+        # Check if was cancelled
+        was_cancelled = self.upload_worker and self.upload_worker.is_cancelled
+        
         self.log(f"\n{'='*50}")
-        self.log(f"✓ All uploads completed! ({total} file(s))")
+        if was_cancelled:
+            self.log(f"⚠️ Upload CANCELLED (processed {self.success_count} of {total} files)")
+        else:
+            self.log(f"✓ All uploads completed! (Success: {self.success_count}, Failed: {self.failure_count})")
         if self.upload_started_at is not None:
             elapsed = time.perf_counter() - self.upload_started_at
-            self.log(f"Total upload time: {self._format_elapsed(elapsed)}")
+            self.log(f"Total time: {self._format_elapsed(elapsed)}")
             self.upload_started_at = None
         self.log(f"{'='*50}")
         

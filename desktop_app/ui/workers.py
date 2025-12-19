@@ -159,12 +159,29 @@ class UploadWorker(QThread):
                 
             except Exception as e:
                 error_msg = str(e)
+                is_encrypted = False
                 
-                # Detect encrypted PDF errors from API response
-                if "encrypted_pdf" in error_msg.lower() or "403" in error_msg:
-                    # Try to extract if this is specifically an encrypted PDF error
+                # For HTTP errors, check response body for encrypted_pdf error type
+                # because exception message doesn't include response content
+                if hasattr(e, 'response') and e.response is not None:
+                    try:
+                        response_json = e.response.json()
+                        detail = response_json.get('detail', {})
+                        if isinstance(detail, dict):
+                            error_type = detail.get('error_type', '')
+                            if error_type == 'encrypted_pdf':
+                                is_encrypted = True
+                                error_msg = detail.get('message', error_msg)
+                    except Exception:
+                        pass  # Response wasn't JSON
+                
+                # Fallback: check message for encrypted/password keywords
+                if not is_encrypted and "403" in str(e):
                     if "encrypted" in error_msg.lower() or "password" in error_msg.lower():
-                        error_msg = f"[ENCRYPTED_PDF]{full_path}|{error_msg}"
+                        is_encrypted = True
+                
+                if is_encrypted:
+                    error_msg = f"[ENCRYPTED_PDF]{full_path}|{error_msg}"
                 
                 logger.error(f"Upload failed for {file_path}: {e}")
                 self.file_finished.emit(i, False, error_msg)

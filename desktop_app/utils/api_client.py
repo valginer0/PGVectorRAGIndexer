@@ -23,7 +23,7 @@ class APIClient:
             base_url: Base URL of the API
         """
         self.base_url = base_url.rstrip('/')
-        self.timeout = 300
+        self.timeout = 7200  # 2 hours for very large OCR files (200+ pages)
     
     def is_api_available(self) -> bool:
         """Check if the API is available."""

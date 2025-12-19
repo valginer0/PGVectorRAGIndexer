@@ -144,7 +144,7 @@ class UploadWorker(QThread):
                 self.progress.emit(f"Uploading {file_path.name}...")
                 
                 # Upload
-                t0 = time.perf_counter()
+                file_start_time = time.perf_counter()
                 self.api_client.upload_document(
                     file_path=file_path,
                     custom_source_uri=full_path,
@@ -152,10 +152,16 @@ class UploadWorker(QThread):
                     document_type=document_type,
                     ocr_mode=ocr_mode
                 )
-                total_upload_time += time.perf_counter() - t0
+                file_elapsed = time.perf_counter() - file_start_time
+                total_upload_time += file_elapsed
                 uploaded_count += 1
                 
-                self.file_finished.emit(i, True, "Upload successful")
+                # Include timing in success message
+                if file_elapsed < 60:
+                    time_str = f"{file_elapsed:.1f}s"
+                else:
+                    time_str = f"{file_elapsed/60:.1f}m"
+                self.file_finished.emit(i, True, f"Upload successful ({time_str})")
                 
             except Exception as e:
                 error_msg = str(e)

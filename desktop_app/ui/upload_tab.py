@@ -120,6 +120,7 @@ class UploadTab(QWidget):
         refresh_types_btn.setToolTip("Refresh available document types")
         refresh_types_btn.setFixedSize(30, 30)
         type_layout.addWidget(refresh_types_btn)
+        type_layout.addStretch()  # Prevent combo from stretching too wide
         
         # Load initial types
         self.load_document_types()
@@ -189,21 +190,22 @@ class UploadTab(QWidget):
         
         layout.addWidget(log_group)
         
-        
-        # Encrypted PDFs section
+        # Encrypted PDFs section (hidden until populated)
         self.encrypted_group = QGroupBox("🔒 Encrypted PDFs (0 found)")
+        self.encrypted_group.setVisible(False)  # Hidden until we have encrypted PDFs
         encrypted_layout = QVBoxLayout(self.encrypted_group)
         
         self.encrypted_list = QListWidget()
-        self.encrypted_list.setMaximumHeight(120)
+        self.encrypted_list.setMaximumHeight(100)  # Reduced height
         self.encrypted_list.setStyleSheet("""
             QListWidget::item {
                 color: #6366f1;
                 text-decoration: underline;
-                padding: 4px;
+                padding: 3px;
             }
             QListWidget::item:hover {
                 background: #374151;
+                cursor: pointer;
             }
         """)
         self.encrypted_list.setToolTip("Click a file to open it in your PDF viewer")
@@ -213,14 +215,14 @@ class UploadTab(QWidget):
         # Buttons row
         enc_btn_layout = QHBoxLayout()
         
-        self.export_encrypted_btn = QPushButton("📥 Export List")
+        self.export_encrypted_btn = QPushButton("📥 Export")
         self.export_encrypted_btn.clicked.connect(self.export_encrypted_list)
-        self.export_encrypted_btn.setMaximumWidth(120)
+        self.export_encrypted_btn.setMaximumWidth(90)
         enc_btn_layout.addWidget(self.export_encrypted_btn)
         
         self.clear_encrypted_btn = QPushButton("Clear")
         self.clear_encrypted_btn.clicked.connect(self.clear_encrypted_list)
-        self.clear_encrypted_btn.setMaximumWidth(80)
+        self.clear_encrypted_btn.setMaximumWidth(70)
         enc_btn_layout.addWidget(self.clear_encrypted_btn)
         
         enc_btn_layout.addStretch()
@@ -586,9 +588,10 @@ class UploadTab(QWidget):
             item.setToolTip(f"Click to open in PDF viewer: {file_path}")
             self.encrypted_list.addItem(item)
             
-            # Update count in title
+            # Update count in title and show section
             count = len(self.encrypted_pdfs)
             self.encrypted_group.setTitle(f"🔒 Encrypted PDFs ({count} found)")
+            self.encrypted_group.setVisible(True)  # Show when we have items
     
     def export_encrypted_list(self):
         """Export encrypted PDFs list to CSV."""
@@ -618,4 +621,5 @@ class UploadTab(QWidget):
         self.encrypted_pdfs.clear()
         self.encrypted_list.clear()
         self.encrypted_group.setTitle("🔒 Encrypted PDFs (0 found)")
+        self.encrypted_group.setVisible(False)  # Hide when empty
         self.log("Cleared encrypted PDFs list")

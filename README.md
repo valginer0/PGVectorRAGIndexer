@@ -62,6 +62,11 @@ This project provides a **Smart Document Search** system using:
 
 ### 🆕 Latest Features (v2.2)
 
+- **✅ Encrypted PDF Detection**: Password-protected PDFs are gracefully detected and skipped
+  - Returns 403 with `error_type: encrypted_pdf` for clear error handling
+  - `GET /documents/encrypted` endpoint to list all skipped encrypted PDFs
+  - CLI logs encrypted PDFs to `encrypted_pdfs.log` for headless mode tracking
+- **✅ Improved Error Panel**: Desktop app now shows a resizable dialog with filter tabs (All/Encrypted/Other) and CSV export
 - **✅ Incremental Indexing**: Smart content change detection using `xxHash`. Skips unchanged files, saving bandwidth and processing time.
 - **✅ Wildcard Search**: Document type filter now supports `*` for "All Types".
 - **✅ Dynamic UI**: Upload tab automatically fetches available document types from the database.

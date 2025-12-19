@@ -10,7 +10,8 @@ from typing import Optional
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QCheckBox, QTextEdit,
-    QProgressBar, QMessageBox, QGroupBox, QLineEdit, QComboBox
+    QProgressBar, QMessageBox, QGroupBox, QLineEdit, QComboBox,
+    QScrollArea
 )
 import qtawesome as qta
 from PySide6.QtCore import Qt, QThread, Signal, QSize
@@ -44,9 +45,23 @@ class UploadTab(QWidget):
     
     def setup_ui(self):
         """Setup the user interface."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(20, 20, 20, 20)
+        # Main layout for this widget
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Scroll area to handle small windows
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QScrollArea.NoFrame)
+        
+        # Content widget inside scroll area
+        content_widget = QWidget()
+        layout = QVBoxLayout(content_widget)
+        layout.setSpacing(15)  # Reduced from 20
+        layout.setContentsMargins(15, 15, 15, 15)  # Reduced from 20
+        
+        scroll.setWidget(content_widget)
+        main_layout.addWidget(scroll)
         
         # Title
         title = QLabel("Upload Documents")

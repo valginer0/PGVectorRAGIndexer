@@ -13,7 +13,7 @@ from datetime import datetime
 from config import get_config
 from database import get_db_manager, DocumentRepository
 from embeddings import get_embedding_service
-from document_processor import DocumentProcessor, convert_windows_path, DocumentProcessingError
+from document_processor import DocumentProcessor, convert_windows_path, DocumentProcessingError, EncryptedPDFError
 
 # Configure logging
 logging.basicConfig(
@@ -38,6 +38,18 @@ class DocumentIndexer:
         self.repository = DocumentRepository(self.db_manager)
         self.embedding_service = get_embedding_service()
         self.processor = DocumentProcessor()
+    
+    def _log_encrypted_pdf(self, source_uri: str):
+        """Log encrypted PDF to file for headless mode tracking."""
+        from pathlib import Path
+        log_file = Path("encrypted_pdfs.log")
+        timestamp = datetime.utcnow().isoformat()
+        try:
+            with open(log_file, "a", encoding="utf-8") as f:
+                f.write(f"{timestamp}\t{source_uri}\n")
+            logger.info(f"Logged encrypted PDF to {log_file}")
+        except Exception as e:
+            logger.warning(f"Failed to log encrypted PDF: {e}")
     
     def index_document(
         self,
@@ -128,6 +140,16 @@ class DocumentIndexer:
                 'indexed_at': processed_doc.processed_at.isoformat()
             }
             
+        except EncryptedPDFError as e:
+            # Log encrypted PDFs to a separate file for headless tracking
+            logger.warning(f"🔒 Encrypted PDF skipped: {source_uri}")
+            self._log_encrypted_pdf(source_uri)
+            return {
+                'status': 'error',
+                'error_type': 'encrypted_pdf',
+                'source_uri': source_uri,
+                'message': str(e)
+            }
         except DocumentProcessingError as e:
             logger.error(f"Document processing failed: {e}")
             return {

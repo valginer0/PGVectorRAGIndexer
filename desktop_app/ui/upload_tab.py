@@ -16,6 +16,7 @@ import qtawesome as qta
 from PySide6.QtCore import Qt, QThread, Signal, QSize
 from .workers import UploadWorker
 from .shared import populate_document_type_combo
+from .upload_results_dialog import UploadResultsDialog
 
 # ... imports ...
 
@@ -199,13 +200,27 @@ class UploadTab(QWidget):
         )
         
         if file_paths:
-            self.selected_files = [Path(fp) for fp in file_paths]
+            # Filter out Office temp files (~$*)
+            filtered_paths = [
+                Path(fp) for fp in file_paths 
+                if not Path(fp).name.startswith('~$')
+            ]
+            
+            skipped = len(file_paths) - len(filtered_paths)
+            if skipped > 0:
+                self.log(f"⚠️ Skipped {skipped} Office temp file(s) (~$*)")
+            
+            if not filtered_paths:
+                self.log("No valid files selected (all were temp files)")
+                return
+                
+            self.selected_files = filtered_paths
             count = len(self.selected_files)
             # Display the FULL paths
             if count == 1:
-                self.file_path_label.setText(f"✓ Selected: {file_paths[0]}")
+                self.file_path_label.setText(f"✓ Selected: {str(filtered_paths[0])}")
             else:
-                preview = "\n".join(file_paths[:5])
+                preview = "\n".join(str(p) for p in filtered_paths[:5])
                 if count > 5:
                     preview += f"\n... and {count - 5} more files"
                 self.file_path_label.setText(f"✓ Selected {count} files:\n{preview}")
@@ -434,28 +449,13 @@ class UploadTab(QWidget):
             self.upload_worker = None
             
     def show_errors_dialog(self):
-        """Show a dialog with details of failed uploads."""
+        """Show a resizable dialog with details of failed uploads."""
         if not self.failed_uploads:
             return
-            
-        msg = QMessageBox(self)
-        msg.setWindowTitle("Upload Failures")
-        msg.setIcon(QMessageBox.Warning)
-        msg.setText(f"{len(self.failed_uploads)} file(s) failed to upload.")
         
-        # Build detailed list
-        details = ""
-        for i, failure in enumerate(self.failed_uploads, 1):
-            details += f"{i}. {failure['file']}\n"
-            details += f"   Error: {failure['error']}\n\n"
-            
-        msg.setDetailedText(details)
-        
-        # Hack to force detailed text to be visible/expanded if possible, 
-        # or just encourage user to click "Show Details"
-        msg.setInformativeText("Click 'Show Details' to see the reasons.")
-        
-        msg.exec()
+        # Use the new resizable dialog with table and filters
+        dialog = UploadResultsDialog(self.failed_uploads, self)
+        dialog.exec()
     
     def log(self, message: str):
         """Add a message to the log."""

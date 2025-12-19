@@ -18,7 +18,7 @@ from pydantic import BaseModel, Field
 from config import get_config
 from database import get_db_manager, close_db_manager, DocumentRepository
 from embeddings import get_embedding_service
-from document_processor import DocumentProcessor, UnsupportedFormatError, DocumentProcessingError
+from document_processor import DocumentProcessor, UnsupportedFormatError, DocumentProcessingError, EncryptedPDFError
 from indexer_v2 import DocumentIndexer
 from retriever_v2 import DocumentRetriever, SearchResult
 
@@ -194,6 +194,10 @@ if os.path.exists(static_dir):
 # Initialize services (will be created on first request)
 indexer: Optional[DocumentIndexer] = None
 retriever: Optional[DocumentRetriever] = None
+
+# Track encrypted PDFs encountered (in-memory, cleared on restart)
+# Format: [{"source_uri": "...", "detected_at": "...", "filename": "..."}]
+encrypted_pdfs_encountered: List[Dict[str, Any]] = []
 
 
 def get_indexer() -> DocumentIndexer:
@@ -435,6 +439,26 @@ async def upload_and_index(
         
     except HTTPException:
         raise
+    except EncryptedPDFError as e:
+        # Return 403 with specific error type for encrypted PDFs
+        source = custom_source_uri or file.filename
+        logger.warning(f"Encrypted PDF detected: {source}")
+        
+        # Record for later querying
+        encrypted_pdfs_encountered.append({
+            "source_uri": source,
+            "filename": file.filename,
+            "detected_at": datetime.utcnow().isoformat()
+        })
+        
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "error_type": "encrypted_pdf",
+                "message": str(e),
+                "source_uri": source
+            }
+        )
     except (UnsupportedFormatError, DocumentProcessingError) as e:
         logger.error(f"Upload and index failed: {e}")
         detail_message = str(e) if str(e) else ""
@@ -583,6 +607,45 @@ async def list_documents(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to list documents: {str(e)}"
         )
+
+
+@app.get("/documents/encrypted", tags=["Documents"])
+async def list_encrypted_pdfs(
+    since: Optional[str] = Query(default=None, description="Return only PDFs detected after this ISO datetime"),
+    clear: bool = Query(default=False, description="Clear the list after returning it")
+):
+    """
+    List encrypted PDFs that were skipped during indexing.
+    
+    These are password-protected PDFs that could not be indexed.
+    The list is stored in-memory and cleared on server restart.
+    """
+    global encrypted_pdfs_encountered
+    
+    result = encrypted_pdfs_encountered.copy()
+    
+    # Filter by 'since' if provided
+    if since:
+        try:
+            since_dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
+            result = [
+                item for item in result
+                if datetime.fromisoformat(item['detected_at']) > since_dt
+            ]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid datetime format: {since}"
+            )
+    
+    # Clear if requested
+    if clear:
+        encrypted_pdfs_encountered = []
+    
+    return {
+        "count": len(result),
+        "encrypted_pdfs": result
+    }
 
 
 @app.get("/documents/{document_id}", response_model=DocumentInfo, tags=["Documents"])

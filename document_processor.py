@@ -73,6 +73,11 @@ class LoaderError(DocumentProcessingError):
     pass
 
 
+class EncryptedPDFError(DocumentProcessingError):
+    """Exception for password-protected PDF files that cannot be indexed."""
+    pass
+
+
 @dataclass
 class ProcessedDocument:
     """Container for processed document data."""
@@ -167,7 +172,25 @@ class PDFDocumentLoader(DocumentLoader):
         Args:
             source_uri: Path to PDF file
             ocr_mode: 'skip' (no OCR), 'only' (OCR only), 'auto' (native first, OCR fallback)
+            
+        Raises:
+            EncryptedPDFError: If PDF is password-protected
         """
+        # Check for encryption first using pypdf directly
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(source_uri)
+            if reader.is_encrypted:
+                logger.warning(f"PDF is password-protected: {source_uri}")
+                raise EncryptedPDFError(
+                    f"PDF is password-protected and cannot be indexed: {source_uri}"
+                )
+        except EncryptedPDFError:
+            raise  # Re-raise our custom exception
+        except Exception as e:
+            # If we can't even open the file, let the normal loader handle the error
+            logger.debug(f"Could not pre-check PDF encryption: {e}")
+        
         try:
             # Try native text extraction first (unless ocr_mode is 'only')
             if ocr_mode != 'only':

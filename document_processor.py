@@ -632,6 +632,62 @@ class DocumentProcessor:
                 f"Unsupported file: {path.name} (extension: {path.suffix})"
             )
     
+    # File extensions that are purely image-based (always need OCR)
+    IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.tiff', '.tif', '.bmp', '.webp'}
+    
+    # File extensions that always have native text (never need OCR)
+    NATIVE_TEXT_EXTENSIONS = {'.txt', '.md', '.doc', '.docx', '.pptx', '.html'}
+    
+    def _is_ocr_only_file(self, source_uri: str) -> bool:
+        """
+        Check if file requires OCR (image) vs has native text.
+        
+        Returns True for files that REQUIRE OCR:
+        - Image files (.png, .jpg, .tiff, etc.)
+        - Scanned PDFs (detected by trying native extraction first)
+        
+        Returns False for files that have NATIVE TEXT:
+        - .txt, .md, .doc, .docx, .pptx, .html
+        - PDFs with extractable native text
+        """
+        ext = Path(source_uri).suffix.lower()
+        
+        # Images always require OCR
+        if ext in self.IMAGE_EXTENSIONS:
+            return True
+        
+        # Native text files never require OCR
+        if ext in self.NATIVE_TEXT_EXTENSIONS:
+            return False
+        
+        # PDFs need checking - try native extraction first
+        if ext == '.pdf':
+            try:
+                from pypdf import PdfReader
+                reader = PdfReader(source_uri)
+                
+                # Check if encrypted (can't determine, let it process)
+                if reader.is_encrypted:
+                    return False  # Will fail with EncryptedPDFError later
+                
+                # Try to extract text from first few pages
+                text_found = False
+                for i, page in enumerate(reader.pages[:3]):  # Check first 3 pages
+                    text = page.extract_text() or ''
+                    if text.strip():
+                        text_found = True
+                        break
+                
+                # If no native text found, it's likely scanned
+                return not text_found
+                
+            except Exception:
+                # If we can't read it, let it proceed normally
+                return False
+        
+        # Unknown - let it process normally
+        return False
+    
     def process(
         self,
         source_uri: str,
@@ -658,6 +714,15 @@ class DocumentProcessor:
         # Use config default if not specified
         if ocr_mode is None:
             ocr_mode = self.config.ocr.mode
+        
+        # OCR mode "only" - skip files that don't require OCR
+        if ocr_mode == 'only':
+            if not source_uri.startswith(('http://', 'https://')):
+                if not self._is_ocr_only_file(source_uri):
+                    logger.info(f"Skipping non-OCR file (ocr_mode=only): {source_uri}")
+                    raise DocumentProcessingError(
+                        f"Skipped: file has native text (ocr_mode=only): {source_uri}"
+                    )
         
         # Validate source
         self._validate_source(source_uri)

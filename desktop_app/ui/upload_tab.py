@@ -189,10 +189,9 @@ class UploadTab(QWidget):
         
         layout.addWidget(log_group)
         
-        # Encrypted PDFs section (collapsible)
+        
+        # Encrypted PDFs section
         self.encrypted_group = QGroupBox("🔒 Encrypted PDFs (0 found)")
-        self.encrypted_group.setCheckable(True)
-        self.encrypted_group.setChecked(False)  # Collapsed by default
         encrypted_layout = QVBoxLayout(self.encrypted_group)
         
         self.encrypted_list = QListWidget()

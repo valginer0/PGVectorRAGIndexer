@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Encrypted PDF Detection** - Password-protected PDFs are now detected and handled gracefully
+  - `EncryptedPDFError` raised when attempting to index encrypted PDFs
+  - API returns 403 with `error_type: encrypted_pdf` for password-protected PDFs
+  - `GET /documents/encrypted` endpoint to list all encrypted PDFs encountered
+  - CLI (`indexer_v2.py`) logs encrypted PDFs to `encrypted_pdfs.log` for headless mode tracking
+  - 8 new tests for encrypted PDF handling
+- **Improved Error Panel** - Replaced small popup with resizable dialog
+  - Minimum size 700x500, resizable
+  - Scrollable table with File, Error Type, and Details columns
+  - Filter tabs: All | 🔒 Encrypted | ⚠️ Other Errors
+  - Export to CSV button for error reports
+- **Office Temp File Filter** - `~$*` files (Office temporary/lock files) now filtered from uploads
+
 ### Changed
 - `/documents` endpoint now returns a paginated payload (`items`, `total`, `limit`, `offset`, `sort`) and all clients/tests have been updated to read from `items`.
 

@@ -149,6 +149,15 @@ class UploadTab(QWidget):
         self.upload_btn.setProperty("class", "primary")
         layout.addWidget(self.upload_btn)
         
+        # Cancel button (shown during upload)
+        self.cancel_btn = QPushButton("Cancel Upload")
+        self.cancel_btn.setIcon(qta.icon('fa5s.stop-circle', color='white'))
+        self.cancel_btn.clicked.connect(self.cancel_upload)
+        self.cancel_btn.setMinimumHeight(40)
+        self.cancel_btn.setProperty("class", "danger")
+        self.cancel_btn.setVisible(False)
+        layout.addWidget(self.cancel_btn)
+        
         # Progress
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
@@ -345,7 +354,8 @@ class UploadTab(QWidget):
         # Disable buttons during upload
         self.select_files_btn.setEnabled(False)
         self.select_folder_btn.setEnabled(False)
-        self.upload_btn.setEnabled(False)
+        self.upload_btn.setVisible(False)  # Hide upload button
+        self.cancel_btn.setVisible(True)   # Show cancel button
         self.progress_bar.setVisible(True)
         self.progress_bar.setRange(0, len(self.selected_files))
         self.progress_bar.setValue(0)
@@ -450,6 +460,12 @@ class UploadTab(QWidget):
             self.upload_started_at = None
         self.log(f"{'='*50}")
         
+        # Restore buttons
+        self.cancel_btn.setVisible(False)
+        self.cancel_btn.setEnabled(True)
+        self.cancel_btn.setText("Cancel Upload")
+        self.upload_btn.setVisible(True)
+        
         # Clear selection
         self.selected_files = []
         self.file_path_label.setText("No files selected")
@@ -534,3 +550,11 @@ class UploadTab(QWidget):
         self.view_encrypted_btn.setText("🔒 Encrypted PDFs (0)")
         self.view_encrypted_btn.setVisible(False)
         self.log("Cleared encrypted PDFs list")
+    
+    def cancel_upload(self):
+        """Cancel the ongoing upload."""
+        if self.upload_worker:
+            self.upload_worker.is_cancelled = True
+            self.log("⚠️ Cancelling upload... (waiting for current file to finish)")
+            self.cancel_btn.setEnabled(False)
+            self.cancel_btn.setText("Cancelling...")

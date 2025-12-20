@@ -165,6 +165,9 @@ The desktop app has six tabs, ordered by typical workflow:
      - `Only`: Process only files that require OCR (useful for image-only batches)
    - **Incremental Indexing**: Files with unchanged content are automatically skipped (hash-based detection)
    - **Encrypted PDFs**: Password-protected PDFs are detected and listed for review
+     - A **"🔒 Encrypted PDFs (N)"** button appears after upload if any were found
+     - Click to see the full list with filter, copy path, and open folder options
+     - Decrypt the files externally, then re-upload them
 2. **Search** – Find information across your indexed documents. Click on file paths to open them.
 3. **Documents** – Browse all indexed documents with pagination and sorting.
 4. **Recent** – Track files you've opened and manage reindexing. When you open a file (from Search or Documents), you might edit it—and edited files should be reindexed. Since there's no automatic way to detect significant edits, this tab lets you queue and batch-reindex files as needed.

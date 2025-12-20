@@ -130,6 +130,32 @@ This project provides a **Smart Document Search** system using:
 - **Error Handling**: Comprehensive error responses with detailed messages
 - **Async Support**: Asynchronous operations for better performance
 
+### 🔐 Encrypted PDF Handling
+
+Password-protected PDFs cannot be indexed without decryption. Instead of crashing or failing silently, PGVectorRAGIndexer handles them gracefully:
+
+**How it works:**
+1. When a password-protected PDF is encountered during upload, it's detected immediately
+2. The file is skipped (not indexed) and added to a special "encrypted PDFs" list
+3. Processing continues with the remaining files — one encrypted file won't stop your batch
+4. You can review all encrypted PDFs after the upload completes
+
+**Desktop App:**
+- After upload, an **"🔒 Encrypted PDFs (N)"** button appears if any were detected
+- Click to see a filterable list of all encrypted files with their paths
+- You can copy paths or open the folder to manually decrypt files
+- Re-upload the decrypted versions when ready
+
+**API:**
+- `GET /documents/encrypted` — List all encrypted PDFs encountered
+- Upload returns `403` with `error_type: encrypted_pdf` for individual encrypted files
+
+**CLI (Headless Mode):**
+- Encrypted PDFs are logged to `encrypted_pdfs.log` for later review
+- Processing continues without interruption
+
+> **Note:** The app cannot decrypt PDFs for you — you'll need the password and a PDF tool to unlock them first.
+
 ## 🚀 Getting Started (Desktop App)
 **This is the recommended way to use the app.** It gives you the full experience with the native interface.
 

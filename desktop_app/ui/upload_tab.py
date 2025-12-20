@@ -67,6 +67,16 @@ class UploadTab(QWidget):
         scroll.setWidget(content_widget)
         main_layout.addWidget(scroll)
         
+        # Encrypted PDFs button OUTSIDE scroll area - always visible at bottom
+        # This is in main_layout, not in content layout, so it stays visible
+        self.view_encrypted_btn = QPushButton("🔒 Encrypted PDFs (0)")
+        self.view_encrypted_btn.setIcon(qta.icon('fa5s.lock', color='#f59e0b'))
+        self.view_encrypted_btn.clicked.connect(self.show_encrypted_dialog)
+        self.view_encrypted_btn.setVisible(False)
+        self.view_encrypted_btn.setMinimumHeight(40)
+        self.view_encrypted_btn.setStyleSheet("margin: 5px 15px;")
+        main_layout.addWidget(self.view_encrypted_btn)
+        
         # Title
         title = QLabel("Upload Documents")
         title.setProperty("class", "header")
@@ -208,15 +218,6 @@ class UploadTab(QWidget):
         log_layout.addWidget(self.log_text)
         
         layout.addWidget(log_group)
-        
-        # Encrypted PDFs button (opens dialog, hidden until we have encrypted PDFs)
-        # Placed right after log - no stretch needed since scroll area handles overflow
-        self.view_encrypted_btn = QPushButton("🔒 Encrypted PDFs (0)")
-        self.view_encrypted_btn.setIcon(qta.icon('fa5s.lock', color='#f59e0b'))
-        self.view_encrypted_btn.clicked.connect(self.show_encrypted_dialog)
-        self.view_encrypted_btn.setVisible(False)
-        self.view_encrypted_btn.setMinimumHeight(40)
-        layout.addWidget(self.view_encrypted_btn)
     
     def select_files(self):
         """Open file dialog to select multiple files."""

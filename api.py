@@ -681,7 +681,10 @@ async def get_document(document_id: str):
             document_id=doc['document_id'],
             source_uri=doc['source_uri'],
             chunk_count=doc['chunk_count'],
-            indexed_at=doc['indexed_at']
+            indexed_at=doc['indexed_at'],
+            last_updated=doc.get('last_updated'),
+            document_type=doc.get('document_type'),
+            metadata=doc.get('metadata')  # Include metadata with file_hash!
         )
     except HTTPException:
         raise

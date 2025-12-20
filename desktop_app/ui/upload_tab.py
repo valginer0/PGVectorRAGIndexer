@@ -57,11 +57,12 @@ class UploadTab(QWidget):
         
         # Content widget inside scroll area
         content_widget = QWidget()
-        # Prevent vertical expansion - widget only takes space it needs
-        content_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
+        # Prevent vertical expansion - cap at natural size
+        content_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         layout = QVBoxLayout(content_widget)
-        layout.setSpacing(15)  # Reduced from 20
-        layout.setContentsMargins(15, 15, 15, 15)  # Reduced from 20
+        layout.setSpacing(10)  # Reduced spacing
+        layout.setContentsMargins(15, 15, 15, 15)
+        layout.setAlignment(Qt.AlignTop)  # Align content to top
         
         scroll.setWidget(content_widget)
         main_layout.addWidget(scroll)

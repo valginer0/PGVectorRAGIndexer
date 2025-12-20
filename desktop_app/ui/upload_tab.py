@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 import qtawesome as qta
 from PySide6.QtCore import Qt, QThread, Signal, QSize
+from PySide6.QtWidgets import QSizePolicy
 from .workers import UploadWorker
 from .shared import populate_document_type_combo
 from .upload_results_dialog import UploadResultsDialog
@@ -56,6 +57,8 @@ class UploadTab(QWidget):
         
         # Content widget inside scroll area
         content_widget = QWidget()
+        # Prevent vertical expansion - widget only takes space it needs
+        content_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Minimum)
         layout = QVBoxLayout(content_widget)
         layout.setSpacing(15)  # Reduced from 20
         layout.setContentsMargins(15, 15, 15, 15)  # Reduced from 20

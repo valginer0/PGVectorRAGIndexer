@@ -89,6 +89,7 @@ class UploadTab(QWidget):
         self.file_path_label.setStyleSheet("color: #9ca3af; padding: 10px; background: #1f2937; border-radius: 5px; border: 1px dashed #374151;")
         self.file_path_label.setWordWrap(True)
         self.file_path_label.setAlignment(Qt.AlignCenter)
+        self.file_path_label.setMinimumHeight(40)  # Ensure visibility
         file_layout.addWidget(self.file_path_label)
         
         layout.addWidget(file_group)
@@ -107,6 +108,7 @@ class UploadTab(QWidget):
         self.document_type_combo.setEditable(True)
         self.document_type_combo.setToolTip("Arbitrary tag (e.g. 'Invoice', 'Memo'). Leave empty to ignore.")
         self.document_type_combo.setPlaceholderText("Type or select tag (optional)")
+        self.document_type_combo.setMinimumHeight(35)  # Ensure visibility
         type_layout.addWidget(self.document_type_combo, 1)  # Stretch factor 1 to expand
         
         refresh_types_btn = QPushButton()

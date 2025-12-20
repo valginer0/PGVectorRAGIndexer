@@ -1,4 +1,4 @@
-# Deployment Guide - PGVectorRAGIndexer v2.0
+# Deployment Guide - PGVectorRAGIndexer v2.2
 
 > **📌 Note:** For quick Docker-only deployment (recommended for most users), see:
 > - **Windows**: [WINDOWS_SETUP.md](WINDOWS_SETUP.md)

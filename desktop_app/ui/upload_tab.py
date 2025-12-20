@@ -132,7 +132,7 @@ class UploadTab(QWidget):
         self.ocr_mode_combo = QComboBox()
         self.ocr_mode_combo.addItem("Auto (smart fallback)", "auto")
         self.ocr_mode_combo.addItem("Skip (fast, no OCR)", "skip")
-        self.ocr_mode_combo.addItem("Only (OCR files only)", "only")
+        self.ocr_mode_combo.addItem("Only OCR (scanned docs)", "only")
         self.ocr_mode_combo.setToolTip(
             "Auto: Use OCR only when native text extraction fails\n"
             "Skip: Never use OCR (fastest, skips scanned docs)\n"

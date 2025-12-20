@@ -67,7 +67,7 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         """Setup the user interface."""
         self.setWindowTitle("PGVectorRAGIndexer - Document Management")
-        self.setMinimumSize(1100, 800)
+        self.setMinimumSize(1100, 900)  # Increased height for more content
         
         # Central widget
         central_widget = QWidget()

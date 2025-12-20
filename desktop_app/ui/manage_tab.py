@@ -44,22 +44,11 @@ class ManageTab(QWidget):
         title.setProperty("class", "header")
         layout.addWidget(title)
         
-        # Instructions
-        info_box = QGroupBox("Bulk Operations")
-        info_layout = QVBoxLayout(info_box)
-        info_text = QLabel(
-            "Safely delete multiple documents at once:\n\n"
-            "1. Select filter criteria (document type, path wildcards)\n"
-            "2. Preview what will be deleted\n"
-            "3. Export backup (recommended!)\n"
-            "4. Delete documents\n"
-            "5. Undo if needed (restore from backup)\n\n"
-            "⚠️ Always export a backup before deleting!"
-        )
-        info_text.setWordWrap(True)
-        info_text.setStyleSheet("color: #9ca3af;")
-        info_layout.addWidget(info_text)
-        layout.addWidget(info_box)
+        # Instructions - simplified to single line
+        info_label = QLabel("<b>Bulk Operations:</b> Filter by type/path → Preview → Export Backup → Delete. <span style='color:#f59e0b'>⚠️ Always backup first!</span>")
+        info_label.setWordWrap(True)
+        info_label.setStyleSheet("color: #9ca3af; padding: 10px; background: #1f2937; border-radius: 5px;")
+        layout.addWidget(info_label)
         
         # Filter selection
         filter_group = QGroupBox("Filter Criteria (All filters combined with AND)")
@@ -92,9 +81,9 @@ class ManageTab(QWidget):
         path_label.setMinimumWidth(120)
         path_layout.addWidget(path_label)
         
-        self.path_filter = QLineEdit()
+        self.path_filter = QLineEdit("*")  # Default to match all
         self.path_filter.setPlaceholderText("e.g., *resume*, C:\\Projects\\*, */2024/*")
-        self.path_filter.setToolTip("Use wildcards: * for any characters, ? for single character")
+        self.path_filter.setToolTip("Use wildcards: * for any characters, ? for single character. Default '*' matches all files.")
         path_layout.addWidget(self.path_filter)
         filter_layout.addLayout(path_layout)
         

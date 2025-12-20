@@ -78,7 +78,7 @@ class DocumentsTab(QWidget):
         self.documents_table = QTableWidget()
         self.documents_table.setColumnCount(6)
         self.documents_table.setHorizontalHeaderLabels([
-            "Source URI", "Document Type", "Chunks", "Created", "Updated", "Actions"
+            "Source URI", "Type", "Chunks", "Created", "Updated", "Actions"
         ])
         self.documents_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         header = self.documents_table.horizontalHeader()

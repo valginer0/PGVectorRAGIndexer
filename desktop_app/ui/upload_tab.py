@@ -202,8 +202,8 @@ class UploadTab(QWidget):
         
         self.log_text = QTextEdit()
         self.log_text.setReadOnly(True)
-        self.log_text.setMinimumHeight(100)  # At least 4-5 lines visible
-        self.log_text.setMaximumHeight(150)
+        self.log_text.setMinimumHeight(80)   # ~3-4 lines visible
+        self.log_text.setMaximumHeight(100)  # Cap height to leave room for button
         log_layout.addWidget(self.log_text)
         
         layout.addWidget(log_group)

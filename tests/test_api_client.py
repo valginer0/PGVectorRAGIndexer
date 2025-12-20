@@ -87,7 +87,7 @@ def test_list_documents_pagination(api_client):
         mock_get.assert_called_with(
             "http://test-api/documents",
             params={"limit": 10, "offset": 0, "sort_by": "indexed_at", "sort_dir": "desc"},
-            timeout=300
+            timeout=7200
         )
 
 def test_error_handling(api_client):
@@ -142,7 +142,7 @@ def test_get_document_success(api_client):
         
         doc = api_client.get_document("1")
         assert doc["id"] == "1"
-        mock_get.assert_called_with("http://test-api/documents/1", timeout=300)
+        mock_get.assert_called_with("http://test-api/documents/1", timeout=7200)
 
 def test_delete_document_success(api_client):
     """Test delete_document success."""
@@ -152,7 +152,7 @@ def test_delete_document_success(api_client):
         
         response = api_client.delete_document("1")
         assert response["status"] == "deleted"
-        mock_delete.assert_called_with("http://test-api/documents/1", timeout=300)
+        mock_delete.assert_called_with("http://test-api/documents/1", timeout=7200)
 
 def test_get_statistics_success(api_client):
     """Test get_statistics success."""
@@ -162,7 +162,7 @@ def test_get_statistics_success(api_client):
         
         stats = api_client.get_statistics()
         assert stats["total_documents"] == 100
-        mock_get.assert_called_with("http://test-api/statistics", timeout=300)
+        mock_get.assert_called_with("http://test-api/statistics", timeout=7200)
 
 def test_bulk_delete_preview(api_client):
     """Test bulk_delete_preview."""
@@ -177,7 +177,7 @@ def test_bulk_delete_preview(api_client):
         mock_post.assert_called_with(
             "http://test-api/documents/bulk-delete",
             json={"filters": filters, "preview": True},
-            timeout=300
+            timeout=7200
         )
 
 def test_bulk_delete_execute(api_client):
@@ -193,7 +193,7 @@ def test_bulk_delete_execute(api_client):
         mock_post.assert_called_with(
             "http://test-api/documents/bulk-delete",
             json={"filters": filters, "preview": False},
-            timeout=300
+            timeout=7200
         )
 
 def test_export_documents(api_client):
@@ -209,7 +209,7 @@ def test_export_documents(api_client):
         mock_post.assert_called_with(
             "http://test-api/documents/export",
             json={"filters": filters},
-            timeout=300
+            timeout=7200
         )
 
 def test_restore_documents(api_client):
@@ -225,7 +225,7 @@ def test_restore_documents(api_client):
         mock_post.assert_called_with(
             "http://test-api/documents/restore",
             json={"backup_data": backup_data},
-            timeout=300
+            timeout=7200
         )
 
 def test_get_metadata_keys(api_client):
@@ -240,7 +240,7 @@ def test_get_metadata_keys(api_client):
         mock_get.assert_called_with(
             "http://test-api/metadata/keys",
             params={"pattern": "auth%"},
-            timeout=300
+            timeout=7200
         )
 
 def test_get_metadata_values(api_client):
@@ -255,6 +255,6 @@ def test_get_metadata_values(api_client):
         mock_get.assert_called_with(
             "http://test-api/metadata/values",
             params={"key": "author"},
-            timeout=300
+            timeout=7200
         )
 

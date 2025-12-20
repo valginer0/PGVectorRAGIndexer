@@ -159,6 +159,12 @@ Then proceed to [Run the App](#3-run-the-app).
 The desktop app has six tabs, ordered by typical workflow:
 
 1. **Upload** – Add documents to the system. Upload individual files or entire folders. Full file paths are preserved.
+   - **OCR Mode**: Choose how scanned documents are handled:
+     - `Auto` (default): Uses OCR only when native text extraction fails
+     - `Skip`: Faster, never uses OCR (good for native text documents)
+     - `Only`: Process only files that require OCR (useful for image-only batches)
+   - **Incremental Indexing**: Files with unchanged content are automatically skipped (hash-based detection)
+   - **Encrypted PDFs**: Password-protected PDFs are detected and listed for review
 2. **Search** – Find information across your indexed documents. Click on file paths to open them.
 3. **Documents** – Browse all indexed documents with pagination and sorting.
 4. **Recent** – Track files you've opened and manage reindexing. When you open a file (from Search or Documents), you might edit it—and edited files should be reindexed. Since there's no automatic way to detect significant edits, this tab lets you queue and batch-reindex files as needed.

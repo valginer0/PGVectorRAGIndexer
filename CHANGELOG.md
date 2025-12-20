@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.2.1] - 2025-12-20
 
 ### Added
 - **Encrypted PDF Detection** - Password-protected PDFs are now detected and handled gracefully
@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - API returns 403 with `error_type: encrypted_pdf` for password-protected PDFs
   - `GET /documents/encrypted` endpoint to list all encrypted PDFs encountered
   - CLI (`indexer_v2.py`) logs encrypted PDFs to `encrypted_pdfs.log` for headless mode tracking
+  - Desktop app shows "🔒 Encrypted PDFs (N)" button with filterable dialog
   - 8 new tests for encrypted PDF handling
 - **Improved Error Panel** - Replaced small popup with resizable dialog
   - Minimum size 700x500, resizable
@@ -20,12 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Filter tabs: All | 🔒 Encrypted | ⚠️ Other Errors
   - Export to CSV button for error reports
 - **Office Temp File Filter** - `~$*` files (Office temporary/lock files) now filtered from uploads
+- **Per-file Timing** - Upload log now shows processing time for each file
+- `scripts/run_all_tests.sh` helper to activate the project virtual environment and run the full pytest suite consistently across environments
+
+### Fixed
+- **Hash Check Not Working** - API `GET /documents/{id}` now returns `metadata` field with `file_hash`, fixing incremental indexing skip logic
+- **Upload Tab Layout** - Removed scroll area, proper element heights, all content visible without scrolling
+- **OCR Mode Label** - Changed "Only (OCR files only)" to clearer "Only OCR (scanned docs)"
 
 ### Changed
-- `/documents` endpoint now returns a paginated payload (`items`, `total`, `limit`, `offset`, `sort`) and all clients/tests have been updated to read from `items`.
-
-### Added
-- `scripts/run_all_tests.sh` helper to activate the project virtual environment and run the full pytest suite consistently across environments.
+- `/documents` endpoint now returns a paginated payload (`items`, `total`, `limit`, `offset`, `sort`) and all clients/tests have been updated to read from `items`
+- API timeout increased from 5 minutes to 2 hours for large OCR files
+- Minimum window height increased to 950px to fit all Upload tab content
 
 ## [2.2.0] - 2025-12-08
 

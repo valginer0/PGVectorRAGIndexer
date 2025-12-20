@@ -46,36 +46,10 @@ class UploadTab(QWidget):
     
     def setup_ui(self):
         """Setup the user interface."""
-        # Main layout for this widget
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Scroll area to handle small windows
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
-        
-        # Content widget inside scroll area
-        content_widget = QWidget()
-        # Prevent vertical expansion - cap at natural size
-        content_widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
-        layout = QVBoxLayout(content_widget)
-        layout.setSpacing(10)  # Reduced spacing
+        # Simple direct layout - no scroll area needed since window min height is sufficient
+        layout = QVBoxLayout(self)
+        layout.setSpacing(10)
         layout.setContentsMargins(15, 15, 15, 15)
-        layout.setAlignment(Qt.AlignTop)  # Align content to top
-        
-        scroll.setWidget(content_widget)
-        main_layout.addWidget(scroll)
-        
-        # Encrypted PDFs button OUTSIDE scroll area - always visible at bottom
-        # This is in main_layout, not in content layout, so it stays visible
-        self.view_encrypted_btn = QPushButton("🔒 Encrypted PDFs (0)")
-        self.view_encrypted_btn.setIcon(qta.icon('fa5s.lock', color='#f59e0b'))
-        self.view_encrypted_btn.clicked.connect(self.show_encrypted_dialog)
-        self.view_encrypted_btn.setVisible(False)
-        self.view_encrypted_btn.setMinimumHeight(40)
-        self.view_encrypted_btn.setStyleSheet("margin: 5px 15px;")
-        main_layout.addWidget(self.view_encrypted_btn)
         
         # Title
         title = QLabel("Upload Documents")
@@ -218,6 +192,14 @@ class UploadTab(QWidget):
         log_layout.addWidget(self.log_text)
         
         layout.addWidget(log_group)
+        
+        # Encrypted PDFs button (visible when encrypted PDFs are detected)
+        self.view_encrypted_btn = QPushButton("🔒 Encrypted PDFs (0)")
+        self.view_encrypted_btn.setIcon(qta.icon('fa5s.lock', color='#f59e0b'))
+        self.view_encrypted_btn.clicked.connect(self.show_encrypted_dialog)
+        self.view_encrypted_btn.setVisible(False)
+        self.view_encrypted_btn.setMinimumHeight(40)
+        layout.addWidget(self.view_encrypted_btn)
     
     def select_files(self):
         """Open file dialog to select multiple files."""

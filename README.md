@@ -159,6 +159,8 @@ Password-protected PDFs cannot be indexed without decryption. Instead of crashin
 ## 🚀 Getting Started (Desktop App)
 **This is the recommended way to use the app.** It gives you the full experience with the native interface.
 
+> **Most users only need this guide.** The additional documents are for advanced deployment, customization, or maintenance scenarios.
+
 ### � [Read the Full Installation Guide](INSTALL_DESKTOP_APP.md)
 *(Includes detailed steps for Windows, macOS, and Linux)*
 

@@ -621,4 +621,4 @@ EMBEDDING_BATCH_SIZE=16
 
 ---
 
-**Need Help?** Check the main README.md or review application logs for detailed error messages.
+**Troubleshooting:** If something goes wrong, check logs and documentation first. Review `docker compose logs -f` for detailed error messages.

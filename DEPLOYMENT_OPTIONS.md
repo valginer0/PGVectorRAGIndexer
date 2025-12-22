@@ -154,7 +154,9 @@ cd ~/pgvector-rag
 docker compose up -d
 ```
 
-## Need Help?
+## Additional Resources
+
+If something goes wrong, check logs and documentation first:
 
 - **Windows Setup**: [WINDOWS_SETUP.md](WINDOWS_SETUP.md)
 - **Linux/WSL Setup**: [QUICK_START.md](QUICK_START.md)

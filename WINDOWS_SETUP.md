@@ -244,7 +244,10 @@ winget install curl
 - See [README.md](README.md) for architecture details
 - Visit http://localhost:8000/docs for interactive API documentation
 
-## Need Help?
+## Troubleshooting Resources
 
-- GitHub Issues: https://github.com/valginer0/PGVectorRAGIndexer/issues
-- Documentation: https://github.com/valginer0/PGVectorRAGIndexer
+If something goes wrong, check logs and documentation first:
+
+- **Logs**: `docker compose logs -f`
+- **Documentation**: [README.md](README.md) and [USAGE_GUIDE.md](USAGE_GUIDE.md)
+- **GitHub Issues**: https://github.com/valginer0/PGVectorRAGIndexer/issues

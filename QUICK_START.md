@@ -1,33 +1,32 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.1
+# Quick Start Guide - PGVectorRAGIndexer v2.2
 
-Get up and running in 5 minutes with Docker-only deployment!
+Get up and running in 5 minutes!
 
-## 🆕 What's New in v2.1
+## 🆕 What's New in v2.2
 
-- **Document Types**: Organize documents with custom types (policy, resume, report, etc.)
-- **Bulk Delete**: Preview, export backup, delete, and undo multiple documents
-- **Metadata Discovery**: Dynamically discover available metadata fields
-- **Legacy Word Support**: Added .doc (Office 97-2003) file support
-- **Desktop App Manage Tab**: Full GUI for bulk operations with backup/restore
+- **macOS/Linux One-Line Install**: New `bootstrap_desktop_app.sh` for easy setup
+- **Encrypted PDF Detection**: Password-protected PDFs are detected and listed for review
+- **OCR Mode Selection**: Choose Auto, Skip, or Only for scanned document handling
+- **Incremental Indexing**: Files with unchanged content are automatically skipped
+- **Desktop App for All Platforms**: Windows, macOS, and Linux desktop app support
 
-## ⚡ Installation (1 minute)
+## ⚡ Desktop App Installation (Recommended)
 
-### For Linux/macOS/WSL:
+### For macOS / Linux / WSL:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
+curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.sh | bash
 ```
 
-### For Windows (Native - No WSL):
+### For Windows:
 
 Open **PowerShell** and run:
 
 ```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.ps1" -OutFile "$env:TEMP\docker-run.ps1"
-PowerShell -ExecutionPolicy Bypass -File "$env:TEMP\docker-run.ps1"
+irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.ps1 | iex
 ```
 
-📖 **See [WINDOWS_SETUP.md](WINDOWS_SETUP.md) for detailed Windows instructions**
+📖 **See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for detailed instructions**
 
 ---
 

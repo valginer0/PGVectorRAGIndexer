@@ -3,7 +3,8 @@ Copyright (c) 2025 Valery Giner
 
 Permission is hereby granted, free of charge, to any individual or organization to use
 this software and its associated documentation (the "Software") for personal,
-educational, research, or evaluation purposes, subject to the following conditions:
+educational, research, or non-commercial evaluation purposes, subject to the following
+conditions:
 
 1. You may fork and modify the Software for your own personal, educational, or research
    use only. Redistribution of the Software or modified versions, sublicensing, or
@@ -27,6 +28,9 @@ PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDER
 LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
 TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 OR OTHER DEALINGS IN THE SOFTWARE.
+
+PGVectorRAGIndexer is provided as a self-service project and does not include 
+installation assistance, support services, or service level guarantees.
 
 For commercial licensing, redistribution, or integration inquiries, please contact:
 valginer0@gmail.com

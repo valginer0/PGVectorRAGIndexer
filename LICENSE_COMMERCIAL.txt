@@ -23,9 +23,9 @@ LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTR
 TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 OR OTHER DEALINGS IN THE SOFTWARE.
 
-PRICING & LICENSING GUIDANCE
+Commercial Licensing Guidance (Non-Binding)
 
-Commercial licenses are granted based on organization size and deployment scope.
+Commercial licenses are categorized by organization size and deployment scope.
 
 Typical commercial categories include:
 - Startup / Small teams
@@ -41,8 +41,7 @@ installation services, ongoing support, or service level guarantees.
 
 To request a commercial license, contact:
 valginer0@gmail.com
-
-Please include a brief description of your organization and intended use.
+with a brief description of your organization and intended use.
 
 PGVectorRAGIndexer is offered as a self-service product and is best suited 
 for teams comfortable operating and maintaining local software independently.

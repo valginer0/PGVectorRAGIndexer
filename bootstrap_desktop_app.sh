@@ -149,24 +149,26 @@ VENV_DIR="venv"
 if [ ! -d "$VENV_DIR" ]; then
     echo -e "${YELLOW}Creating virtual environment...${NC}"
     
-    # Check if venv module is available, if not try to install it (Debian/Ubuntu)
-    if ! $PYTHON_CMD -c "import venv" 2>/dev/null; then
-        if [ "$OS_TYPE" = "linux" ]; then
-            echo -e "${YELLOW}Installing python3-venv (required for virtual environments)...${NC}"
-            PY_VER=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-            sudo apt update -qq && sudo apt install -y python${PY_VER}-venv
-            if [ $? -ne 0 ]; then
-                echo -e "${RED}✗ ERROR: Failed to install python3-venv${NC}"
-                echo -e "${YELLOW}  Please run manually: sudo apt install python${PY_VER}-venv${NC}"
-                exit 1
-            fi
-        else
-            echo -e "${RED}✗ ERROR: Python venv module not available${NC}"
+    # Check if ensurepip is available (this is what's actually missing on Debian/Ubuntu)
+    if $PYTHON_CMD -c "import ensurepip" 2>/dev/null; then
+        # Standard venv works
+        $PYTHON_CMD -m venv "$VENV_DIR"
+    else
+        # ensurepip not available - use virtualenv as fallback (no sudo needed)
+        echo -e "${YELLOW}ensurepip not available, using virtualenv instead...${NC}"
+        
+        # Install virtualenv via pip (user install, no sudo)
+        $PYTHON_CMD -m pip install --user virtualenv 2>/dev/null || pip install --user virtualenv
+        
+        # Create venv using virtualenv
+        $PYTHON_CMD -m virtualenv "$VENV_DIR"
+        
+        if [ $? -ne 0 ]; then
+            echo -e "${RED}✗ ERROR: Failed to create virtual environment${NC}"
+            echo -e "${YELLOW}  Try: pip install --user virtualenv${NC}"
             exit 1
         fi
     fi
-    
-    $PYTHON_CMD -m venv "$VENV_DIR"
 fi
 
 # Activate virtual environment

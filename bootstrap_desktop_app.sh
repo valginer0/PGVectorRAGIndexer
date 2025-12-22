@@ -148,6 +148,24 @@ echo ""
 VENV_DIR="venv"
 if [ ! -d "$VENV_DIR" ]; then
     echo -e "${YELLOW}Creating virtual environment...${NC}"
+    
+    # Check if venv module is available, if not try to install it (Debian/Ubuntu)
+    if ! $PYTHON_CMD -c "import venv" 2>/dev/null; then
+        if [ "$OS_TYPE" = "linux" ]; then
+            echo -e "${YELLOW}Installing python3-venv (required for virtual environments)...${NC}"
+            PY_VER=$($PYTHON_CMD -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+            sudo apt update -qq && sudo apt install -y python${PY_VER}-venv
+            if [ $? -ne 0 ]; then
+                echo -e "${RED}✗ ERROR: Failed to install python3-venv${NC}"
+                echo -e "${YELLOW}  Please run manually: sudo apt install python${PY_VER}-venv${NC}"
+                exit 1
+            fi
+        else
+            echo -e "${RED}✗ ERROR: Python venv module not available${NC}"
+            exit 1
+        fi
+    fi
+    
     $PYTHON_CMD -m venv "$VENV_DIR"
 fi
 

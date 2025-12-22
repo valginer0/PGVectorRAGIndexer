@@ -149,30 +149,19 @@ VENV_DIR="venv"
 if [ ! -d "$VENV_DIR" ]; then
     echo -e "${YELLOW}Creating virtual environment...${NC}"
     
-    # Check if ensurepip is available (this is what's actually missing on Debian/Ubuntu)
-    if $PYTHON_CMD -c "import ensurepip" 2>/dev/null; then
-        # Standard venv works
-        $PYTHON_CMD -m venv "$VENV_DIR"
-    else
-        # ensurepip not available - use virtualenv as fallback (no sudo needed)
-        echo -e "${YELLOW}ensurepip not available, using virtualenv instead...${NC}"
-        
-        # Install virtualenv via pip (user install, no sudo)
-        $PYTHON_CMD -m pip install --user virtualenv 2>/dev/null || pip install --user virtualenv
-        
-        # Create venv using virtualenv
-        $PYTHON_CMD -m virtualenv "$VENV_DIR"
-        
-        if [ $? -ne 0 ]; then
-            echo -e "${RED}✗ ERROR: Failed to create virtual environment${NC}"
-            echo -e "${YELLOW}  Try: pip install --user virtualenv${NC}"
-            exit 1
-        fi
-    fi
+    # Use --without-pip to avoid ensurepip dependency (works on all systems)
+    $PYTHON_CMD -m venv --without-pip "$VENV_DIR"
+    
+    # Activate and install pip manually via get-pip.py
+    source "$VENV_DIR/bin/activate"
+    echo -e "${YELLOW}Installing pip...${NC}"
+    curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+    $PYTHON_CMD /tmp/get-pip.py --quiet
+    rm -f /tmp/get-pip.py
+else
+    # Just activate existing venv
+    source "$VENV_DIR/bin/activate"
 fi
-
-# Activate virtual environment
-source "$VENV_DIR/bin/activate"
 
 # Determine which requirements file to use
 if [ "$USE_CATALINA_REQUIREMENTS" = true ] && [ -f "requirements-desktop-catalina.txt" ]; then

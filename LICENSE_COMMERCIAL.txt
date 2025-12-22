@@ -23,17 +23,15 @@ LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTR
 TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 OR OTHER DEALINGS IN THE SOFTWARE.
 
-PRICING GUIDANCE:
+PRICING & LICENSING GUIDANCE
 
-Commercial licenses are tailored to your specific use case and organization size.
-Indicative pricing tiers:
+Commercial licenses are granted based on organization size and deployment scope.
 
-- **Startup** (< 10 employees): Contact for startup-friendly pricing
-- **SMB** (10-100 employees): Contact for standard commercial license
-- **Enterprise** (100+ employees): Contact for enterprise license
-- **OEM/Redistribution**: Custom licensing available for integration partners
-
-Commercial License Scope:
+Typical commercial categories include:
+- Startup / Small teams
+- SMB
+- Enterprise
+- OEM / Redistribution
 
 A commercial license grants the right to deploy and use PGVectorRAGIndexer 
 in commercial environments or products.
@@ -41,11 +39,10 @@ in commercial environments or products.
 The software is provided on an "as-is" basis and does not include 
 installation services, ongoing support, or service level guarantees.
 
-For a detailed quote and to discuss your specific needs, please contact:
+To request a commercial license, contact:
 valginer0@gmail.com
 
-Include in your inquiry:
-- Organization name and size
-- Intended use case
-- Expected deployment scale
-- Any specific requirements
+Please include a brief description of your organization and intended use.
+
+PGVectorRAGIndexer is offered as a self-service product and is best suited 
+for teams comfortable operating and maintaining local software independently.

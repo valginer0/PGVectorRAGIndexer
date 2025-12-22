@@ -1,5 +1,7 @@
 # Release Instructions
 
+> **Audience:** Project maintainer only. Not relevant for end users.
+
 ## Quick Release
 
 To create a new release, simply run:

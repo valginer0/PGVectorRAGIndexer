@@ -1,5 +1,7 @@
 # Desktop App Installation Guide
 
+> **Quick Start:** If you just want to get started quickly, see [QUICK_START.md](QUICK_START.md). This document provides detailed installation steps and platform-specific notes.
+
 ## Windows Installation
 
 ### One-Line Install (Recommended)

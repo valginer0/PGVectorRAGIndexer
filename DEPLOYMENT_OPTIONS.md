@@ -110,7 +110,7 @@ curl -X POST "http://localhost:8000/index" \
   -d '{"source_uri": "/app/documents/file.pdf"}'
 ```
 
-## Which Should You Choose?
+## Choosing a Deployment Method
 
 ### Choose Windows Native If:
 - ✅ You primarily use Windows

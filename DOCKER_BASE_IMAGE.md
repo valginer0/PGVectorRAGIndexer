@@ -1,5 +1,7 @@
 # Docker Base Image Strategy
 
+> **Audience:** Maintainers and contributors. End users do not need this document.
+
 ## Overview
 
 To speed up development iterations, we use a **two-layer Docker image strategy**:

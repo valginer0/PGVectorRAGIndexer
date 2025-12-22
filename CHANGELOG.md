@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.2] - 2025-12-22
+
+### Added
+- **macOS/Linux One-Line Install** - New `bootstrap_desktop_app.sh` script
+  - Mirrors the Windows `bootstrap_desktop_app.ps1` functionality
+  - Auto-detects macOS Catalina and uses compatible PySide6 version (6.4.3)
+  - Works without `ensurepip` (uses `--without-pip` + get-pip.py)
+  - Tested on macOS Catalina and Ubuntu (WSL)
+  - Usage: `curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.sh | bash`
+
+### Improved
+- **Documentation** updated to support all container runtimes
+  - Docker Desktop, Rancher Desktop, Podman Desktop, Docker in WSL
+  - `DESKTOP_APP_WINDOWS.md` and `INSTALL_DESKTOP_APP.md` updated
+- **Website** quickstart section reorganized with clearer cross-platform messaging
+  - New "macOS / Linux (Desktop App)" tab added
+  - "What this command does" and "Features" sections for clarity
+
 ## [2.2.1] - 2025-12-20
 
 ### Added

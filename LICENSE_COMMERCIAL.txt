@@ -30,15 +30,16 @@ Indicative pricing tiers:
 
 - **Startup** (< 10 employees): Contact for startup-friendly pricing
 - **SMB** (10-100 employees): Contact for standard commercial license
-- **Enterprise** (100+ employees): Contact for enterprise license with SLA
+- **Enterprise** (100+ employees): Contact for enterprise license
 - **OEM/Redistribution**: Custom licensing available for integration partners
 
-Benefits of commercial license:
-✓ Production deployment rights
-✓ Commercial use and monetization
-✓ Priority support options
-✓ Custom feature development (negotiable)
-✓ Service level agreements (enterprise tier)
+Commercial License Scope:
+
+A commercial license grants the right to deploy and use PGVectorRAGIndexer 
+in commercial environments or products.
+
+The software is provided on an "as-is" basis and does not include 
+installation services, ongoing support, or service level guarantees.
 
 For a detailed quote and to discuss your specific needs, please contact:
 valginer0@gmail.com

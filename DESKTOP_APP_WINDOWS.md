@@ -36,23 +36,36 @@ This will:
 
 ## How It Works
 
+The desktop app runs natively on Windows and connects to containers running via a Docker-compatible runtime.
+
+**Supported Container Runtimes:**
+- **Docker Desktop** (most common)
+- **Rancher Desktop** (free alternative)
+- **Podman Desktop** (another free option)
+- **Docker in WSL** (for WSL users)
+
 ```
 Windows Desktop App (PySide6)
 ├── Runs on Windows Python
 ├── Access to Windows file system (C:\, D:\, etc.)
 ├── Native Windows file picker
-└── Communicates with Docker via WSL
-    └── Docker containers run in WSL Ubuntu
-        ├── PostgreSQL + pgvector
-        ├── FastAPI REST API (localhost:8000)
-        └── Web UI
+└── Connects to containers via localhost:8000
+    └── Containers can run via:
+        ├── Docker Desktop (native Windows)
+        ├── Rancher Desktop
+        ├── Podman Desktop
+        └── Docker in WSL (wsl -d Ubuntu -e docker ...)
 ```
+
+The containers run:
+- PostgreSQL + pgvector (database)
+- FastAPI REST API (localhost:8000)
 
 ## Features
 
 - ✅ **Full Windows Path Support** - Select files from C:\, D:\, network drives, etc.
 - ✅ **Native File Picker** - Standard Windows file dialog
-- ✅ **Docker Management** - Start/stop WSL Docker containers from Windows
+- ✅ **Docker Management** - Start/stop containers from Windows
 - ✅ **Automatic Path Preservation** - Full paths like `C:\Projects\Documents\file.txt` are captured and stored
 
 ## Troubleshooting

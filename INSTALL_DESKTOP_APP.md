@@ -65,7 +65,7 @@ To run the app later, you can use:
 - **Python 3.10+**:
   - **Option 1 (Recommended)**: Download from [Python.org](https://www.python.org/downloads/macos/) (macOS installer package) - *Fastest method*
   - **Option 2 (Homebrew)**: `brew install python` (requires [Homebrew](https://brew.sh/))
-- **Docker**: [Docker Desktop](https://www.docker.com/products/docker-desktop/) (macOS/Windows) or Docker Engine (Linux)
+- **Docker-compatible runtime**: [Docker Desktop](https://www.docker.com/products/docker-desktop/), [Rancher Desktop](https://rancherdesktop.io/), [Podman Desktop](https://podman-desktop.io/), or Docker Engine (Linux)
 
 ### 1. Clone the Repository
 Open Terminal:
@@ -150,7 +150,7 @@ Then proceed to [Run the App](#3-run-the-app).
 - **Python 3.10+** - [Download](https://www.python.org/downloads/)
   - ⚠️ During install, check "Add Python to PATH"
 - **Git** (for one-line install) - [Download](https://git-scm.com/downloads)
-- **Docker Desktop or Rancher Desktop** - For the backend
+- **Docker-compatible runtime** - Docker Desktop, Rancher Desktop, Podman, or similar
 
 ---
 
@@ -200,7 +200,7 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
 ### "Docker is not available"
-- Start Docker Desktop or Rancher Desktop
+- Start your container runtime (Docker Desktop, Rancher Desktop, Podman, etc.)
 - Run `docker ps` to verify it's working
 - The desktop app can start containers for you
 

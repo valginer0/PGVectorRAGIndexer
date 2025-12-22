@@ -1022,7 +1022,7 @@ PGVectorRAGIndexer is dual-licensed:
 
 See `LICENSE_COMMUNITY.txt` and `LICENSE_COMMERCIAL.txt` for details. 
 
-### Support
+### Community & Feedback
 
 If you find this tool useful, consider supporting its development:
 

@@ -11,7 +11,7 @@ conditions:
    commercial use requires explicit written permission from the copyright holder.
 
 2. The Software may be used to create and run your own personal, educational, research,
-   or internal business evaluation projects, provided that such use does not involve
+   or internal, non-commercial evaluation projects, provided that such use does not involve
    charging a fee for access to the Software itself or offering paid services directly
    built upon it as a core component.
 

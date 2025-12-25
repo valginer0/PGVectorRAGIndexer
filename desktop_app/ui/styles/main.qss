@@ -240,21 +240,22 @@ QCheckBox {
 QCheckBox::indicator {
     width: 18px;
     height: 18px;
-    border: 2px solid #4b5563;
+    border: 2px solid #6b7280;
     border-radius: 4px;
-    background-color: #374151;
+    background-color: #1f2937;
 }
 
 QCheckBox::indicator:hover {
     border-color: #6366f1;
+    background-color: #374151;
 }
 
 QCheckBox::indicator:checked {
-    background-color: #6366f1;
-    border-color: #6366f1;
+    background-color: #10b981;
+    border-color: #10b981;
 }
 
 QCheckBox::indicator:checked:hover {
-    background-color: #4f46e5;
-    border-color: #4f46e5;
+    background-color: #059669;
+    border-color: #059669;
 }

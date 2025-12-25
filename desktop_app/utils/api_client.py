@@ -160,7 +160,8 @@ class APIClient:
             "query": query,
             "top_k": top_k,
             "min_score": min_score,
-            "metric": metric
+            "metric": metric,
+            "use_hybrid": True  # Use hybrid search for better exact-match ranking
         }
         
         # Add filters if specified

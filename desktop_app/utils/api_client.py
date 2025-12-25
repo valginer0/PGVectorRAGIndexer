@@ -161,7 +161,7 @@ class APIClient:
             "top_k": top_k,
             "min_score": min_score,
             "metric": metric,
-            "use_hybrid": True  # Use hybrid search for better exact-match ranking
+            "use_hybrid": False  # TODO: Enable once hybrid search is optimized for large DBs
         }
         
         # Add filters if specified

@@ -143,6 +143,14 @@ class UploadTab(QWidget):
         
         options_layout.addLayout(ocr_layout)
         
+        # Force Reindex checkbox
+        self.force_reindex_checkbox = QCheckBox("Force Reindex (reprocess existing documents)")
+        self.force_reindex_checkbox.setToolTip(
+            "When checked, documents will be reprocessed even if already indexed.\n"
+            "Useful after changing chunking settings or to refresh embeddings."
+        )
+        options_layout.addWidget(self.force_reindex_checkbox)
+        
         layout.addWidget(options_group)
         
         # Upload button
@@ -378,7 +386,7 @@ class UploadTab(QWidget):
         files_data = []
         document_type = self.document_type_combo.currentText().strip() or None
         ocr_mode = self.ocr_mode_combo.currentData()  # Get 'auto', 'skip', or 'only'
-        force_reindex = False
+        force_reindex = self.force_reindex_checkbox.isChecked()
         
         for file_path in self.selected_files:
             files_data.append({

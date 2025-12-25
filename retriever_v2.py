@@ -6,8 +6,9 @@ This is the v2 retriever that uses the new modular architecture.
 
 import argparse
 import logging
+import re
 import sys
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass
 
 from config import get_config
@@ -20,6 +21,39 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+def parse_search_query(query: str) -> Tuple[List[str], List[str]]:
+    """
+    Parse a search query to extract quoted phrases and regular terms.
+    
+    Supports multiple quote styles:
+    - Double quotes: "exact phrase"
+    - Single quotes: 'exact phrase'
+    - Smart/curly quotes: "phrase" or 'phrase'
+    
+    Args:
+        query: Search string, potentially with quoted phrases
+        
+    Returns:
+        Tuple of (phrases, terms) where:
+        - phrases: List of exact phrase strings (without quotes)
+        - terms: List of unquoted search terms
+    """
+    # Match all quote styles: "...", '...', "...", '...'
+    quote_pattern = r'["\u201c\u201d]([^"\u201c\u201d]+)["\u201c\u201d]|[\'\u2018\u2019]([^\'\u2018\u2019]+)[\'\u2018\u2019]'
+    
+    phrases = []
+    for match in re.finditer(quote_pattern, query):
+        # Either group 1 (double quotes) or group 2 (single quotes) will have content
+        phrase = match.group(1) or match.group(2)
+        if phrase and phrase.strip():
+            phrases.append(phrase.strip())
+    
+    # Remove all quoted phrases to get remaining terms
+    terms_text = re.sub(quote_pattern, '', query).strip()
+    terms = terms_text.split() if terms_text else []
+    return phrases, terms
 
 
 @dataclass
@@ -156,8 +190,12 @@ class DocumentRetriever:
         """
         Hybrid search combining vector and full-text search.
         
+        Supports exact phrase matching with quoted phrases:
+        - "exact phrase" or 'exact phrase' will match those words adjacent
+        - Unquoted words use standard full-text search
+        
         Args:
-            query: Search query text
+            query: Search query text (can include quoted phrases)
             top_k: Number of results to return
             alpha: Weight for vector search (0=full-text only, 1=vector only)
             
@@ -167,13 +205,43 @@ class DocumentRetriever:
         top_k = top_k or self.config.retrieval.top_k
         alpha = alpha if alpha is not None else self.config.retrieval.hybrid_alpha
         
-        logger.info(f"Hybrid search for: '{query}' (alpha={alpha})")
+        # Parse query for quoted phrases and regular terms
+        phrases, terms = parse_search_query(query)
+        
+        logger.info(f"Hybrid search for: '{query}' (alpha={alpha}, phrases={phrases}, terms={terms})")
         
         # Generate query embedding for vector search
         query_embedding = self.embedding_service.encode(query)
         
-        # Perform hybrid search using PostgreSQL
-        query_sql = """
+        # Build the full-text search query dynamically
+        # We need to combine:
+        # - phraseto_tsquery for each quoted phrase (words must be adjacent)
+        # - plainto_tsquery for remaining unquoted terms
+        tsquery_parts = []
+        tsquery_params = []
+        
+        # Add phrase queries (exact phrase matching)
+        for phrase in phrases:
+            tsquery_parts.append("phraseto_tsquery('english', %s)")
+            tsquery_params.append(phrase)
+        
+        # Add regular term query if there are unquoted terms
+        if terms:
+            remaining_text = ' '.join(terms)
+            tsquery_parts.append("plainto_tsquery('english', %s)")
+            tsquery_params.append(remaining_text)
+        
+        # If no search terms at all, fall back to empty query (matches nothing in full-text)
+        if not tsquery_parts:
+            # Use the original query as-is for plainto_tsquery
+            tsquery_expression = "plainto_tsquery('english', %s)"
+            tsquery_params = [query]
+        else:
+            # Combine all parts with AND operator (&&)
+            tsquery_expression = ' && '.join(tsquery_parts)
+        
+        # Build the full SQL query
+        query_sql = f"""
         WITH vector_search AS (
             SELECT 
                 chunk_id,
@@ -181,17 +249,17 @@ class DocumentRetriever:
                 chunk_index,
                 text_content,
                 source_uri,
-                embedding <=> %s AS vector_distance,
-                ROW_NUMBER() OVER (ORDER BY embedding <=> %s) AS vector_rank
+                embedding <=> %s::vector AS vector_distance,
+                ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) AS vector_rank
             FROM document_chunks
         ),
         fulltext_search AS (
             SELECT 
                 chunk_id,
-                ts_rank_cd(to_tsvector('english', text_content), plainto_tsquery('english', %s)) AS text_score,
-                ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('english', text_content), plainto_tsquery('english', %s)) DESC) AS text_rank
+                ts_rank_cd(to_tsvector('english', text_content), {tsquery_expression}) AS text_score,
+                ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('english', text_content), {tsquery_expression}) DESC) AS text_rank
             FROM document_chunks
-            WHERE to_tsvector('english', text_content) @@ plainto_tsquery('english', %s)
+            WHERE to_tsvector('english', text_content) @@ ({tsquery_expression})
         )
         SELECT 
             v.chunk_id,
@@ -201,18 +269,27 @@ class DocumentRetriever:
             v.source_uri,
             v.vector_distance,
             COALESCE(f.text_score, 0) AS text_score,
-            (%s * (1.0 / NULLIF(v.vector_rank, 0)) + %s * (1.0 / NULLIF(f.text_rank, 0))) AS combined_score
+            -- Boost exact text matches to the top: add 10.0 when text matches exist
+            CASE WHEN f.text_rank IS NOT NULL 
+                THEN 10.0 + (%s * (1.0 / NULLIF(v.vector_rank, 0)) + %s * (1.0 / NULLIF(f.text_rank, 0)))
+                ELSE %s * (1.0 / NULLIF(v.vector_rank, 0))
+            END AS combined_score
         FROM vector_search v
         LEFT JOIN fulltext_search f ON v.chunk_id = f.chunk_id
         ORDER BY combined_score DESC
         LIMIT %s
         """
         
+        # Build parameter list: embedding (x2), tsquery_params (x3 for ts_rank, ts_rank ORDER BY, WHERE), 
+        # alpha (x3: THEN alpha, THEN 1-alpha, ELSE alpha), top_k
+        params = [query_embedding, query_embedding]
+        params.extend(tsquery_params)  # For ts_rank_cd
+        params.extend(tsquery_params)  # For ORDER BY ts_rank_cd
+        params.extend(tsquery_params)  # For WHERE clause
+        params.extend([alpha, 1 - alpha, alpha, top_k])  # 3 alpha values for CASE expression
+        
         with self.db_manager.get_cursor(dict_cursor=True) as cursor:
-            cursor.execute(
-                query_sql,
-                (query_embedding, query_embedding, query, query, query, alpha, 1 - alpha, top_k)
-            )
+            cursor.execute(query_sql, params)
             raw_results = cursor.fetchall()
         
         # Convert to SearchResult objects

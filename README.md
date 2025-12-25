@@ -560,6 +560,14 @@ python retriever_v2.py "query" --hybrid --alpha 0.7
 }
 ```
 
+**v2.2.3+ Improvements:**
+- **Exact-Match Boost**: Full-text matches are automatically boosted to top of results
+- **Phrase Support**: Mix quoted and unquoted terms in your search:
+  ```
+  Master Card "Simplicity 9112"
+  ```
+  Quoted subphrases (`"Simplicity 9112"`) must match as adjacent words; other terms (`Master Card`) are matched individually.
+
 ### Metadata Filtering
 
 Add and filter by custom metadata:

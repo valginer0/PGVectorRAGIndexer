@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.3] - 2025-12-25
+
+### Added
+- **Improved Hybrid Search** - Better ranking for full-text matches
+  - **Exact-Match Boost**: Documents containing search terms rank higher (+10.0 boost)
+  - **Phrase Support**: Quoted phrases use `phraseto_tsquery` for adjacent word matching
+  - Fixes issue where low vector similarity would hide relevant exact matches
+- **Reindex Script** - `scripts/reindex_all.py` to re-process all documents
+  - Useful when changing chunk size or other processing settings
+  - Supports `--dry-run` mode to preview affected documents
+- **Query Parsing Tests** - 9 new tests for search query parsing
+- **Hybrid Search Tests** - 5 new tests for SQL generation and boost logic
+
+### Changed
+- **Default Chunk Size** - Reduced from 500 to 250 characters
+  - Improves semantic search quality for mixed-content documents
+  - Overlap reduced proportionally (50 → 25 characters)
+  - Existing documents retain old chunking until reindexed
+
 ## [2.2.2] - 2025-12-22
 
 ### Added

@@ -84,8 +84,8 @@ class TestChunkingConfig:
     def test_default_values(self):
         """Test default chunking configuration."""
         config = ChunkingConfig()
-        assert config.size == 500
-        assert config.overlap == 50
+        assert config.size == 250
+        assert config.overlap == 25
         assert len(config.separators) > 0
     
     def test_invalid_overlap(self):

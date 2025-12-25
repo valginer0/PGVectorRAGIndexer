@@ -87,8 +87,8 @@ class ChunkingConfig(BaseSettings):
     
     model_config = SettingsConfigDict(env_prefix='CHUNK_', case_sensitive=False)
     
-    size: int = Field(default=500, description='Chunk size in characters')
-    overlap: int = Field(default=50, description='Overlap between chunks')
+    size: int = Field(default=250, description='Chunk size in characters')
+    overlap: int = Field(default=25, description='Overlap between chunks')
     separators: list[str] = Field(
         default=["\n\n", "\n", ". ", " ", ""],
         description='Text separators for chunking'

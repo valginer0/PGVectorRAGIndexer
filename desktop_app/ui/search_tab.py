@@ -208,6 +208,8 @@ class SearchTab(QWidget):
     
     def display_results(self, results: List[Dict[str, Any]]):
         """Display search results in the table."""
+        # Filter out None results (shouldn't happen, but defensive)
+        results = [r for r in results if r is not None]
         self.results_table.setRowCount(len(results))
         
         for i, result in enumerate(results):

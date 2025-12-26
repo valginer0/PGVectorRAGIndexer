@@ -560,7 +560,8 @@ python retriever_v2.py "query" --hybrid --alpha 0.7
 }
 ```
 
-**v2.2.3+ Improvements:**
+**v2.2.4+ Improvements:**
+- **Optimized for Large Databases**: Scales to 150K+ chunks efficiently
 - **Exact-Match Boost**: Full-text matches are automatically boosted to top of results
 - **Phrase Support**: Mix quoted and unquoted terms in your search:
   ```

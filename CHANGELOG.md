@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Exact-Match Boost**: Documents containing search terms rank higher (+10.0 boost)
   - **Phrase Support**: Quoted phrases use `phraseto_tsquery` for adjacent word matching
   - Fixes issue where low vector similarity would hide relevant exact matches
+  - Note: Currently available via CLI; desktop app uses vector-only search pending optimization
+- **Force Reindex Checkbox** - Upload tab now has option to reprocess existing documents
 - **Reindex Script** - `scripts/reindex_all.py` to re-process all documents
   - Useful when changing chunk size or other processing settings
   - Supports `--dry-run` mode to preview affected documents

@@ -274,11 +274,23 @@ class DocumentRetriever:
                 END AS text_score,
                 CASE 
                     WHEN to_tsvector('english', d.text_content) @@ ({tsquery_expression})
-                    THEN 1  -- Has text match
+                    THEN 1
                     ELSE 0 
                 END AS has_text_match
             FROM candidates c
             JOIN document_chunks d ON c.chunk_id = d.chunk_id
+        ),
+        ranked AS (
+            SELECT *,
+                -- Compute text rank among those with text matches (DENSE_RANK to handle ties)
+                CASE WHEN has_text_match = 1
+                    THEN DENSE_RANK() OVER (
+                        PARTITION BY has_text_match 
+                        ORDER BY text_score DESC
+                    )
+                    ELSE NULL
+                END AS text_rank
+            FROM scored
         )
         SELECT 
             chunk_id,
@@ -288,12 +300,12 @@ class DocumentRetriever:
             source_uri,
             vector_distance,
             text_score,
-            -- Boost exact text matches to the top: add 10.0 when text matches exist
+            -- Reciprocal Rank Fusion: boost text matches with 10.0, use 1/rank for both
             CASE WHEN has_text_match = 1
-                THEN 10.0 + (%s * (1.0 / NULLIF(vector_rank, 0)) + %s * text_score)
+                THEN 10.0 + (%s * (1.0 / NULLIF(vector_rank, 0)) + %s * (1.0 / NULLIF(text_rank, 0)))
                 ELSE %s * (1.0 / NULLIF(vector_rank, 0))
             END AS combined_score
-        FROM scored
+        FROM ranked
         ORDER BY combined_score DESC
         LIMIT %s
         """

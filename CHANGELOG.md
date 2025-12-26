@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.4] - 2025-12-25
+
+### Added
+- **Optimized Hybrid Search for Large Databases**
+  - Uses UNION approach: top 1000 vector results + ALL fulltext matches
+  - Scales to 150K+ chunks without performance degradation
+  - Hybrid search now enabled by default in desktop app
+- **Improved Search Result Display**
+  - Comprehensive null-safety handling
+  - Better logging for debugging edge cases
+
+### Fixed
+- **Desktop App Search Crashes** - Fixed AttributeError when displaying search results
+- **Checkbox Visibility** - Fixed invisible checkbox on dark theme
+
+### Changed
+- **RRF Formula Restored** - Reverted to proper Reciprocal Rank Fusion (1/text_rank)
+
 ## [2.2.3] - 2025-12-25
 
 ### Added
@@ -12,7 +30,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Exact-Match Boost**: Documents containing search terms rank higher (+10.0 boost)
   - **Phrase Support**: Quoted phrases use `phraseto_tsquery` for adjacent word matching
   - Fixes issue where low vector similarity would hide relevant exact matches
-  - Note: Currently available via CLI; desktop app uses vector-only search pending optimization
 - **Force Reindex Checkbox** - Upload tab now has option to reprocess existing documents
 - **Reindex Script** - `scripts/reindex_all.py` to re-process all documents
   - Useful when changing chunk size or other processing settings

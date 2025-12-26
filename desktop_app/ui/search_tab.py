@@ -208,11 +208,25 @@ class SearchTab(QWidget):
     
     def display_results(self, results: List[Dict[str, Any]]):
         """Display search results in the table."""
-        # Filter out None results (shouldn't happen, but defensive)
-        results = [r for r in results if r is not None]
-        self.results_table.setRowCount(len(results))
+        # Comprehensive defensive handling
+        if results is None:
+            logger.warning("Search returned None results")
+            results = []
+        elif not isinstance(results, list):
+            logger.warning(f"Search returned non-list: {type(results)}")
+            results = []
         
-        for i, result in enumerate(results):
+        # Filter out None items
+        valid_results = []
+        for r in results:
+            if r is not None and isinstance(r, dict):
+                valid_results.append(r)
+            else:
+                logger.warning(f"Skipping invalid result: {r}")
+        
+        self.results_table.setRowCount(len(valid_results))
+        
+        for i, result in enumerate(valid_results):
             augmented = self._augment_result(result)
 
             # Score
@@ -220,8 +234,10 @@ class SearchTab(QWidget):
             score_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 0, score_item)
             
-            # Document Type (Col 1)
-            doc_type = result.get('document_type') or result.get('metadata', {}).get('type') or "-"
+            # Document Type (Col 1) - with null safety
+            doc_type = "-"
+            if result:
+                doc_type = result.get('document_type') or (result.get('metadata') or {}).get('type') or "-"
             type_item = QTableWidgetItem(str(doc_type))
             type_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 1, type_item)

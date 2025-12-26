@@ -241,52 +241,76 @@ class DocumentRetriever:
             tsquery_expression = ' && '.join(tsquery_parts)
         
         # Build the full SQL query
+        # Strategy: Get candidates from BOTH vector and fulltext search via UNION,
+        # then compute combined scores. This ensures exact text matches are never lost.
+        candidate_limit = max(top_k * 100, 1000)  # At least 1000, or 100x top_k
+        
         query_sql = f"""
-        WITH vector_search AS (
-            SELECT 
-                chunk_id,
-                document_id,
-                chunk_index,
-                text_content,
-                source_uri,
-                embedding <=> %s::vector AS vector_distance,
-                ROW_NUMBER() OVER (ORDER BY embedding <=> %s::vector) AS vector_rank
-            FROM document_chunks
-        ),
-        fulltext_search AS (
-            SELECT 
-                chunk_id,
-                ts_rank_cd(to_tsvector('english', text_content), {tsquery_expression}) AS text_score,
-                ROW_NUMBER() OVER (ORDER BY ts_rank_cd(to_tsvector('english', text_content), {tsquery_expression}) DESC) AS text_rank
-            FROM document_chunks
+        WITH candidates AS (
+            -- Top vector search results (wrapped in subquery for UNION compatibility)
+            SELECT chunk_id FROM (
+                SELECT chunk_id FROM document_chunks
+                ORDER BY embedding <=> %s::vector
+                LIMIT {candidate_limit}
+            ) AS vector_candidates
+            UNION
+            -- All fulltext matches (already filtered by WHERE)
+            SELECT chunk_id FROM document_chunks
             WHERE to_tsvector('english', text_content) @@ ({tsquery_expression})
+        ),
+        scored AS (
+            SELECT 
+                c.chunk_id,
+                d.document_id,
+                d.chunk_index,
+                d.text_content,
+                d.source_uri,
+                d.embedding <=> %s::vector AS vector_distance,
+                ROW_NUMBER() OVER (ORDER BY d.embedding <=> %s::vector) AS vector_rank,
+                CASE 
+                    WHEN to_tsvector('english', d.text_content) @@ ({tsquery_expression})
+                    THEN ts_rank_cd(to_tsvector('english', d.text_content), {tsquery_expression})
+                    ELSE 0 
+                END AS text_score,
+                CASE 
+                    WHEN to_tsvector('english', d.text_content) @@ ({tsquery_expression})
+                    THEN 1  -- Has text match
+                    ELSE 0 
+                END AS has_text_match
+            FROM candidates c
+            JOIN document_chunks d ON c.chunk_id = d.chunk_id
         )
         SELECT 
-            v.chunk_id,
-            v.document_id,
-            v.chunk_index,
-            v.text_content,
-            v.source_uri,
-            v.vector_distance,
-            COALESCE(f.text_score, 0) AS text_score,
+            chunk_id,
+            document_id,
+            chunk_index,
+            text_content,
+            source_uri,
+            vector_distance,
+            text_score,
             -- Boost exact text matches to the top: add 10.0 when text matches exist
-            CASE WHEN f.text_rank IS NOT NULL 
-                THEN 10.0 + (%s * (1.0 / NULLIF(v.vector_rank, 0)) + %s * (1.0 / NULLIF(f.text_rank, 0)))
-                ELSE %s * (1.0 / NULLIF(v.vector_rank, 0))
+            CASE WHEN has_text_match = 1
+                THEN 10.0 + (%s * (1.0 / NULLIF(vector_rank, 0)) + %s * text_score)
+                ELSE %s * (1.0 / NULLIF(vector_rank, 0))
             END AS combined_score
-        FROM vector_search v
-        LEFT JOIN fulltext_search f ON v.chunk_id = f.chunk_id
+        FROM scored
         ORDER BY combined_score DESC
         LIMIT %s
         """
         
-        # Build parameter list: embedding (x2), tsquery_params (x3 for ts_rank, ts_rank ORDER BY, WHERE), 
-        # alpha (x3: THEN alpha, THEN 1-alpha, ELSE alpha), top_k
-        params = [query_embedding, query_embedding]
-        params.extend(tsquery_params)  # For ts_rank_cd
-        params.extend(tsquery_params)  # For ORDER BY ts_rank_cd
-        params.extend(tsquery_params)  # For WHERE clause
-        params.extend([alpha, 1 - alpha, alpha, top_k])  # 3 alpha values for CASE expression
+        # Build parameter list:
+        # - embedding for candidates ORDER BY
+        # - tsquery_params for candidates WHERE
+        # - embedding x2 for scored (distance, ROW_NUMBER)
+        # - tsquery_params x4 for scored (2x CASE WHEN, 1x ts_rank_cd each)
+        # - alpha x3, top_k
+        params = [query_embedding]  # candidates ORDER BY
+        params.extend(tsquery_params)  # candidates WHERE
+        params.extend([query_embedding, query_embedding])  # scored: distance, ROW_NUMBER
+        params.extend(tsquery_params)  # scored: 1st CASE WHEN
+        params.extend(tsquery_params)  # scored: ts_rank_cd
+        params.extend(tsquery_params)  # scored: 2nd CASE WHEN
+        params.extend([alpha, 1 - alpha, alpha, top_k])
         
         with self.db_manager.get_cursor(dict_cursor=True) as cursor:
             cursor.execute(query_sql, params)

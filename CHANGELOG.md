@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.6] - 2025-12-27
+
+### Added
+- **Persistent Exclusions (.pgvector-ignore)** - Create a `.pgvector-ignore` file in your project
+  - Works like `.gitignore` — patterns auto-loaded when indexing folder
+  - Searches parent directories for ignore files
+  - 3 new tests for ignore file loading
+
 ## [2.2.5] - 2025-12-26
 
 ### Added
@@ -13,10 +21,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - "Load Common Patterns" button for quick setup
   - Live file count updates as you edit patterns
   - Documented in `desktop_app/README.md`
-- **Persistent Exclusions (.pgvector-ignore)** - Create a `.pgvector-ignore` file in your project
-  - Works like `.gitignore` — patterns auto-loaded when indexing folder
-  - Searches parent directories for ignore files
-  - 3 new tests for ignore file loading
 
 ## [2.2.4] - 2025-12-25
 

@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - "Load Common Patterns" button for quick setup
   - Live file count updates as you edit patterns
   - Documented in `desktop_app/README.md`
+- **Persistent Exclusions (.pgvector-ignore)** - Create a `.pgvector-ignore` file in your project
+  - Works like `.gitignore` — patterns auto-loaded when indexing folder
+  - Searches parent directories for ignore files
+  - 3 new tests for ignore file loading
 
 ## [2.2.4] - 2025-12-25
 

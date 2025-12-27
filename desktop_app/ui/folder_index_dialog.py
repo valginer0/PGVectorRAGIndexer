@@ -30,6 +30,10 @@ DEFAULT_EXCLUSION_PATTERNS = [
 ]
 
 
+# Name of the ignore file (similar to .gitignore)
+IGNORE_FILE_NAME = '.pgvector-ignore'
+
+
 class FolderIndexDialog(QDialog):
     """Dialog for confirming folder indexing with exclusion patterns."""
     
@@ -46,6 +50,7 @@ class FolderIndexDialog(QDialog):
         self.supported_extensions = supported_extensions
         self.filtered_files = files.copy()
         self.exclusion_expanded = False
+        self.ignore_file_path = None  # Path to .pgvector-ignore if found
         
         self.setWindowTitle("Folder Indexing")
         self.setMinimumWidth(600)
@@ -56,8 +61,53 @@ class FolderIndexDialog(QDialog):
         if parent:
             self.setStyleSheet(parent.styleSheet())
         
+        # Check for .pgvector-ignore file
+        self.ignore_patterns, self.ignore_file_path = self.load_ignore_patterns(folder)
+        
         self.setup_ui()
+        
+        # If ignore file found, auto-expand and load patterns
+        if self.ignore_patterns:
+            self.patterns_edit.setPlainText('\n'.join(self.ignore_patterns))
+            self.exclusion_expanded = True
+            self.exclusion_content.setVisible(True)
+            self.toggle_btn.setText("▼  Exclusion Patterns (loaded from .pgvector-ignore)")
+        
         self.update_file_count()
+    
+    @staticmethod
+    def load_ignore_patterns(folder: Path) -> tuple[list[str], Path | None]:
+        """
+        Load patterns from .pgvector-ignore file if it exists.
+        
+        Searches in the folder itself and parent directories.
+        Returns (patterns_list, ignore_file_path) or ([], None) if not found.
+        """
+        # Check in folder and parent directories
+        current = folder
+        for _ in range(10):  # Limit depth to prevent infinite loop
+            ignore_file = current / IGNORE_FILE_NAME
+            if ignore_file.exists() and ignore_file.is_file():
+                try:
+                    content = ignore_file.read_text(encoding='utf-8')
+                    patterns = []
+                    for line in content.splitlines():
+                        line = line.strip()
+                        # Skip empty lines and comments
+                        if line and not line.startswith('#'):
+                            patterns.append(line)
+                    return patterns, ignore_file
+                except Exception:
+                    # If we can't read the file, continue searching
+                    pass
+            
+            # Move to parent directory
+            parent = current.parent
+            if parent == current:  # Reached root
+                break
+            current = parent
+        
+        return [], None
     
     def setup_ui(self):
         """Setup the dialog UI."""
@@ -84,11 +134,18 @@ class FolderIndexDialog(QDialog):
         layout.addWidget(separator)
         
         # Toggle button for exclusion patterns
-        self.toggle_btn = QPushButton("▶  Exclusion Patterns (click to expand)")
+        toggle_text = "▶  Exclusion Patterns (click to expand)"
+        self.toggle_btn = QPushButton(toggle_text)
         self.toggle_btn.setMinimumHeight(50)
         self.toggle_btn.setCursor(Qt.PointingHandCursor)
         self.toggle_btn.clicked.connect(self.toggle_exclusion_section)
         layout.addWidget(self.toggle_btn)
+        
+        # Ignore file indicator (shown when .pgvector-ignore is loaded)
+        self.ignore_file_label = QLabel()
+        self.ignore_file_label.setMinimumHeight(30)
+        self.ignore_file_label.setVisible(False)
+        layout.addWidget(self.ignore_file_label)
         
         # Exclusion content container (hidden by default)
         self.exclusion_content = QWidget()
@@ -147,6 +204,14 @@ class FolderIndexDialog(QDialog):
         
         self.exclusion_content.setVisible(False)
         layout.addWidget(self.exclusion_content)
+        
+        # Show ignore file indicator if patterns were loaded
+        if self.ignore_file_path:
+            self.ignore_file_label.setText(
+                f"📄 Loaded from: {self.ignore_file_path.name} "
+                f"({len(self.ignore_patterns)} patterns)"
+            )
+            self.ignore_file_label.setVisible(True)
         
         # Spacer
         layout.addStretch()

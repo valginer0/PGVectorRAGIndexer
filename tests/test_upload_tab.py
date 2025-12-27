@@ -267,3 +267,62 @@ class TestFolderIndexDialogPatternMatching:
         
         path = Path("/project/src/main.py")
         assert FolderIndexDialog._matches_any_pattern(path, []) == False
+
+# Tests for .pgvector-ignore file loading
+class TestPgvectorIgnoreFile:
+    """Tests for loading patterns from .pgvector-ignore files."""
+    
+    def test_load_ignore_patterns_from_file(self, qapp, tmp_path):
+        """Test loading patterns from a .pgvector-ignore file."""
+        from desktop_app.ui.folder_index_dialog import FolderIndexDialog
+        
+        # Create a .pgvector-ignore file
+        ignore_file = tmp_path / ".pgvector-ignore"
+        ignore_file.write_text("""
+# Comment line (should be ignored)
+*.log
+**/node_modules/**
+secret_folder/
+
+# Another comment
+*.tmp
+""")
+        
+        patterns, path = FolderIndexDialog.load_ignore_patterns(tmp_path)
+        
+        assert path == ignore_file
+        assert len(patterns) == 4
+        assert "*.log" in patterns
+        assert "**/node_modules/**" in patterns
+        assert "secret_folder/" in patterns
+        assert "*.tmp" in patterns
+        # Comments should be excluded
+        assert "# Comment line (should be ignored)" not in patterns
+    
+    def test_load_ignore_patterns_file_not_found(self, qapp, tmp_path):
+        """Test that missing .pgvector-ignore returns empty list."""
+        from desktop_app.ui.folder_index_dialog import FolderIndexDialog
+        
+        patterns, path = FolderIndexDialog.load_ignore_patterns(tmp_path)
+        
+        assert patterns == []
+        assert path is None
+    
+    def test_load_ignore_patterns_searches_parent_dirs(self, qapp, tmp_path):
+        """Test that .pgvector-ignore is found in parent directories."""
+        from desktop_app.ui.folder_index_dialog import FolderIndexDialog
+        
+        # Create nested folder structure
+        nested_folder = tmp_path / "level1" / "level2" / "level3"
+        nested_folder.mkdir(parents=True)
+        
+        # Create .pgvector-ignore in parent
+        ignore_file = tmp_path / ".pgvector-ignore"
+        ignore_file.write_text("*.log\n*.tmp")
+        
+        # Search from deeply nested folder should find parent's ignore file
+        patterns, path = FolderIndexDialog.load_ignore_patterns(nested_folder)
+        
+        assert path == ignore_file
+        assert len(patterns) == 2
+        assert "*.log" in patterns

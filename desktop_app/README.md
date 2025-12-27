@@ -56,6 +56,30 @@ When indexing entire folders, you can exclude files using wildcard patterns:
 5. Edit patterns as needed (one per line) — file count updates live
 6. Click **"Index Files"** to proceed
 
+### Persistent Exclusions with .pgvector-ignore
+
+For persistent exclusions, create a `.pgvector-ignore` file in your project folder:
+
+```
+# .pgvector-ignore - files/folders to always exclude from indexing
+# Works like .gitignore
+
+# Dependencies
+**/node_modules/**
+**/venv/**
+
+# Build artifacts
+**/build/**
+**/dist/**
+
+# Specific files
+sensitive_data.pdf
+old_drafts/**
+```
+
+The app automatically loads patterns from `.pgvector-ignore` when you select a folder.
+Patterns are also found in parent directories (like `.gitignore`).
+
 ## Architecture
 
 ```

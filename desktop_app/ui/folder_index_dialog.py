@@ -50,7 +50,7 @@ class FolderIndexDialog(QDialog):
         self.supported_extensions = supported_extensions
         self.filtered_files = files.copy()
         self.exclusion_expanded = False
-        self.ignore_file_path = None  # Path to .pgvector-ignore if found
+        self.ignore_files = []  # Paths to .pgvector-ignore files if found
         
         self.setWindowTitle("Folder Indexing")
         self.setMinimumWidth(600)
@@ -61,8 +61,8 @@ class FolderIndexDialog(QDialog):
         if parent:
             self.setStyleSheet(parent.styleSheet())
         
-        # Check for .pgvector-ignore file
-        self.ignore_patterns, self.ignore_file_path = self.load_ignore_patterns(folder)
+        # Check for .pgvector-ignore files (local + global home directory)
+        self.ignore_patterns, self.ignore_files = self.load_ignore_patterns(folder)
         
         self.setup_ui()
         
@@ -76,30 +76,43 @@ class FolderIndexDialog(QDialog):
         self.update_file_count()
     
     @staticmethod
-    def load_ignore_patterns(folder: Path) -> tuple[list[str], Path | None]:
+    def load_ignore_patterns(folder: Path) -> tuple[list[str], list[Path]]:
         """
-        Load patterns from .pgvector-ignore file if it exists.
+        Load patterns from .pgvector-ignore files.
         
-        Searches in the folder itself and parent directories.
-        Returns (patterns_list, ignore_file_path) or ([], None) if not found.
+        Searches in:
+        1. The folder itself and parent directories (local)
+        2. User's home directory (global)
+        
+        Returns (combined_patterns_list, list_of_ignore_file_paths).
         """
-        # Check in folder and parent directories
+        all_patterns = []
+        found_files = []
+        
+        # Helper to read patterns from a file
+        def read_patterns(ignore_file: Path) -> list[str]:
+            try:
+                content = ignore_file.read_text(encoding='utf-8')
+                patterns = []
+                for line in content.splitlines():
+                    line = line.strip()
+                    # Skip empty lines and comments
+                    if line and not line.startswith('#'):
+                        patterns.append(line)
+                return patterns
+            except Exception:
+                return []
+        
+        # 1. Check in folder and parent directories (local)
         current = folder
         for _ in range(10):  # Limit depth to prevent infinite loop
             ignore_file = current / IGNORE_FILE_NAME
             if ignore_file.exists() and ignore_file.is_file():
-                try:
-                    content = ignore_file.read_text(encoding='utf-8')
-                    patterns = []
-                    for line in content.splitlines():
-                        line = line.strip()
-                        # Skip empty lines and comments
-                        if line and not line.startswith('#'):
-                            patterns.append(line)
-                    return patterns, ignore_file
-                except Exception:
-                    # If we can't read the file, continue searching
-                    pass
+                patterns = read_patterns(ignore_file)
+                if patterns:
+                    all_patterns.extend(patterns)
+                    found_files.append(ignore_file)
+                    break  # Stop at first local file found
             
             # Move to parent directory
             parent = current.parent
@@ -107,7 +120,25 @@ class FolderIndexDialog(QDialog):
                 break
             current = parent
         
-        return [], None
+        # 2. Check in user's home directory (global)
+        home_ignore = Path.home() / IGNORE_FILE_NAME
+        if home_ignore.exists() and home_ignore.is_file():
+            # Don't add if same as local file
+            if home_ignore not in found_files:
+                patterns = read_patterns(home_ignore)
+                if patterns:
+                    all_patterns.extend(patterns)
+                    found_files.append(home_ignore)
+        
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_patterns = []
+        for p in all_patterns:
+            if p not in seen:
+                seen.add(p)
+                unique_patterns.append(p)
+        
+        return unique_patterns, found_files if found_files else []
     
     def setup_ui(self):
         """Setup the dialog UI."""
@@ -206,9 +237,11 @@ class FolderIndexDialog(QDialog):
         layout.addWidget(self.exclusion_content)
         
         # Show ignore file indicator if patterns were loaded
-        if self.ignore_file_path:
+        if self.ignore_files:
+            # Format list of source files
+            sources = ', '.join(f.name for f in self.ignore_files)
             self.ignore_file_label.setText(
-                f"📄 Loaded from: {self.ignore_file_path.name} "
+                f"📄 Loaded from: {sources} "
                 f"({len(self.ignore_patterns)} patterns)"
             )
             self.ignore_file_label.setVisible(True)

@@ -288,9 +288,9 @@ secret_folder/
 *.tmp
 """)
         
-        patterns, path = FolderIndexDialog.load_ignore_patterns(tmp_path)
+        patterns, paths = FolderIndexDialog.load_ignore_patterns(tmp_path)
         
-        assert path == ignore_file
+        assert ignore_file in paths
         assert len(patterns) == 4
         assert "*.log" in patterns
         assert "**/node_modules/**" in patterns
@@ -303,10 +303,10 @@ secret_folder/
         """Test that missing .pgvector-ignore returns empty list."""
         from desktop_app.ui.folder_index_dialog import FolderIndexDialog
         
-        patterns, path = FolderIndexDialog.load_ignore_patterns(tmp_path)
+        patterns, paths = FolderIndexDialog.load_ignore_patterns(tmp_path)
         
         assert patterns == []
-        assert path is None
+        assert paths == []
     
     def test_load_ignore_patterns_searches_parent_dirs(self, qapp, tmp_path):
         """Test that .pgvector-ignore is found in parent directories."""
@@ -321,8 +321,8 @@ secret_folder/
         ignore_file.write_text("*.log\n*.tmp")
         
         # Search from deeply nested folder should find parent's ignore file
-        patterns, path = FolderIndexDialog.load_ignore_patterns(nested_folder)
+        patterns, paths = FolderIndexDialog.load_ignore_patterns(nested_folder)
         
-        assert path == ignore_file
+        assert ignore_file in paths
         assert len(patterns) == 2
         assert "*.log" in patterns

@@ -58,7 +58,14 @@ When indexing entire folders, you can exclude files using wildcard patterns:
 
 ### Persistent Exclusions with .pgvector-ignore
 
-For persistent exclusions, create a `.pgvector-ignore` file in your project folder:
+For persistent exclusions, create a `.pgvector-ignore` file:
+
+**Global (applies to all folders):**
+- Linux/Mac: `~/.pgvector-ignore`
+- Windows: `C:\Users\YourName\.pgvector-ignore`
+
+**Local (applies to specific folder):**
+- Place in the folder you're indexing or any parent directory
 
 ```
 # .pgvector-ignore - files/folders to always exclude from indexing
@@ -74,11 +81,10 @@ For persistent exclusions, create a `.pgvector-ignore` file in your project fold
 
 # Specific files
 sensitive_data.pdf
-old_drafts/**
+*english_words*.txt
 ```
 
-The app automatically loads patterns from `.pgvector-ignore` when you select a folder.
-Patterns are also found in parent directories (like `.gitignore`).
+Patterns from both global and local files are combined automatically.
 
 ## Architecture
 

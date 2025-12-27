@@ -126,10 +126,14 @@ def test_select_files(upload_tab):
 
 def test_select_folder(upload_tab):
     """Test folder selection dialog."""
+    mock_folder_dialog = MagicMock()
+    mock_folder_dialog.exec.return_value = True
+    mock_folder_dialog.get_filtered_files.return_value = [Path("/path/to/folder/file1.txt")]
+    
     with patch("PySide6.QtWidgets.QFileDialog.exec", return_value=True), \
          patch("PySide6.QtWidgets.QFileDialog.selectedFiles", return_value=["/path/to/folder"]), \
          patch.object(upload_tab, "_find_supported_files", return_value=[Path("/path/to/folder/file1.txt")]), \
-         patch("PySide6.QtWidgets.QMessageBox.question", return_value=QMessageBox.Yes):
+         patch("desktop_app.ui.upload_tab.FolderIndexDialog", return_value=mock_folder_dialog):
         
         upload_tab.select_folder()
         
@@ -175,9 +179,9 @@ def test_show_errors_dialog(upload_tab):
     """Test error dialog display."""
     upload_tab.failed_uploads = [{"file": "test.txt", "error": "failed"}]
     
-    with patch("PySide6.QtWidgets.QMessageBox.exec") as mock_exec:
+    with patch("desktop_app.ui.upload_tab.UploadResultsDialog") as mock_dialog:
         upload_tab.show_errors_dialog()
-        mock_exec.assert_called_once()
+        mock_dialog.assert_called_once()
 
 def test_on_file_finished_hints(upload_tab):
     """Test error hints generation."""
@@ -217,3 +221,49 @@ def test_build_documents_filter(upload_tab):
     assert "*.txt" in filter_str
     assert "*.pdf" in filter_str
 
+# Tests for FolderIndexDialog pattern matching
+class TestFolderIndexDialogPatternMatching:
+    """Tests for the exclusion pattern matching in FolderIndexDialog."""
+    
+    def test_matches_simple_extension_pattern(self, qapp):
+        """Test matching simple extension patterns like *.log."""
+        from desktop_app.ui.folder_index_dialog import FolderIndexDialog
+        
+        path = Path("/project/logs/debug.log")
+        assert FolderIndexDialog._matches_any_pattern(path, ["*.log"]) == True
+        assert FolderIndexDialog._matches_any_pattern(path, ["*.txt"]) == False
+    
+    def test_matches_folder_pattern(self, qapp):
+        """Test matching folder patterns like **/node_modules/**."""
+        from desktop_app.ui.folder_index_dialog import FolderIndexDialog
+        
+        path = Path("/project/node_modules/package/index.js")
+        assert FolderIndexDialog._matches_any_pattern(path, ["**/node_modules/**"]) == True
+        
+        path2 = Path("/project/src/index.js")
+        assert FolderIndexDialog._matches_any_pattern(path2, ["**/node_modules/**"]) == False
+    
+    def test_matches_git_folder(self, qapp):
+        """Test matching .git folder."""
+        from desktop_app.ui.folder_index_dialog import FolderIndexDialog
+        
+        path = Path("/project/.git/config")
+        assert FolderIndexDialog._matches_any_pattern(path, ["**/.git/**"]) == True
+        
+        path2 = Path("/project/src/main.py")
+        assert FolderIndexDialog._matches_any_pattern(path2, ["**/.git/**"]) == False
+    
+    def test_no_match_returns_false(self, qapp):
+        """Test that non-matching paths return False."""
+        from desktop_app.ui.folder_index_dialog import FolderIndexDialog
+        
+        path = Path("/project/src/main.py")
+        patterns = ["*.log", "**/node_modules/**", "**/.git/**"]
+        assert FolderIndexDialog._matches_any_pattern(path, patterns) == False
+    
+    def test_empty_patterns_returns_false(self, qapp):
+        """Test that empty pattern list returns False."""
+        from desktop_app.ui.folder_index_dialog import FolderIndexDialog
+        
+        path = Path("/project/src/main.py")
+        assert FolderIndexDialog._matches_any_pattern(path, []) == False

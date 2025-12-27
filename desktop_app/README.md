@@ -41,6 +41,21 @@ The desktop app solves the browser security limitation that prevents web applica
 3. **Upload** - Document is uploaded to the REST API with the full path preserved as `custom_source_uri`
 4. **Edit & Re-index** - Later, you can edit the source file and re-index it using the preserved path
 
+## Folder Indexing with Exclusion Patterns
+
+When indexing entire folders, you can exclude files using wildcard patterns:
+
+1. Click **"Select Folder"** in the Upload tab
+2. Navigate to and select a folder, then click **"Choose"**
+3. A confirmation dialog appears with **"Exclusion Patterns"** option
+4. Click **"Load Common Patterns"** to exclude common folders like:
+   - `**/node_modules/**` — Node.js dependencies
+   - `**/.git/**` — Git repository data
+   - `**/__pycache__/**` — Python bytecode
+   - `**/venv/**` — Python virtual environments
+5. Edit patterns as needed (one per line) — file count updates live
+6. Click **"Index Files"** to proceed
+
 ## Architecture
 
 ```

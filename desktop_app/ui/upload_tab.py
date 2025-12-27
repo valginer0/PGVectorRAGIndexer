@@ -20,6 +20,7 @@ from .workers import UploadWorker
 from .shared import populate_document_type_combo
 from .upload_results_dialog import UploadResultsDialog
 from .encrypted_pdfs_dialog import EncryptedPDFsDialog
+from .folder_index_dialog import FolderIndexDialog
 
 # ... imports ...
 
@@ -280,68 +281,23 @@ class UploadTab(QWidget):
             )
             return
         
-        # Show confirmation dialog with smart preview
-        count = len(found_files)
+        # Show folder indexing dialog with exclusion patterns support
+        dialog = FolderIndexDialog(folder, found_files, self.SUPPORTED_EXTENSIONS, self)
         
-        # Build confirmation message based on file count
-        if count <= 15:
-            # Small number - show all files
-            preview = "\n".join(str(f.relative_to(folder)) for f in found_files)
-            message = (
-                f"Found {count} file(s) in:\n{folder_path}\n\n"
-                f"Files to index:\n{preview}\n\n"
-                f"Do you want to index all {count} file(s)?"
-            )
-        else:
-            # Large number - show statistics and sample
-            # Count by extension
-            ext_counts = {}
-            for f in found_files:
-                ext = f.suffix.lower()
-                ext_counts[ext] = ext_counts.get(ext, 0) + 1
+        if dialog.exec():
+            # Get filtered files (with exclusions applied)
+            filtered_files = dialog.get_filtered_files()
+            count = len(filtered_files)
             
-            # Count by subdirectory depth
-            subdir_counts = {}
-            for f in found_files:
-                rel_path = f.relative_to(folder)
-                if len(rel_path.parts) > 1:
-                    subdir = rel_path.parts[0]
-                    subdir_counts[subdir] = subdir_counts.get(subdir, 0) + 1
-                else:
-                    subdir_counts["(root)"] = subdir_counts.get("(root)", 0) + 1
+            if count == 0:
+                QMessageBox.warning(
+                    self,
+                    "No Files",
+                    "All files were excluded by the exclusion patterns."
+                )
+                return
             
-            # Build statistics
-            stats = "File types:\n"
-            for ext, cnt in sorted(ext_counts.items()):
-                stats += f"  {ext}: {cnt} file(s)\n"
-            
-            if len(subdir_counts) > 1:
-                stats += "\nTop subdirectories:\n"
-                for subdir, cnt in sorted(subdir_counts.items(), key=lambda x: x[1], reverse=True)[:5]:
-                    stats += f"  {subdir}: {cnt} file(s)\n"
-            
-            # Show sample files
-            sample = "\n".join(str(f.relative_to(folder)) for f in found_files[:10])
-            
-            message = (
-                f"Found {count} file(s) in:\n{folder_path}\n\n"
-                f"{stats}\n"
-                f"Sample files (first 10):\n{sample}\n"
-                f"... and {count - 10} more files\n\n"
-                f"⚠️ Do you want to index all {count} file(s)?\n"
-                f"This may take several minutes."
-            )
-        
-        reply = QMessageBox.question(
-            self,
-            "Confirm Folder Indexing",
-            message,
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
-            self.selected_files = found_files
+            self.selected_files = filtered_files
             self.file_path_label.setText(f"✓ Selected {count} files from folder:\n{folder_path}")
             self.file_path_label.setStyleSheet("color: #10b981; padding: 10px; background: #1f2937; border-radius: 5px; border: 1px solid #10b981; font-weight: bold;")
             self.upload_btn.setEnabled(True)

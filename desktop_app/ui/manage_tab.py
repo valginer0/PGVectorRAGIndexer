@@ -172,9 +172,9 @@ class ManageTab(QWidget):
         """Build filter dictionary from UI inputs."""
         filters = {}
         
-        # Document type filter
+        # Document type filter (skip '*' which means match all)
         doc_type = self.type_combo.currentText().strip()
-        if doc_type:
+        if doc_type and doc_type != '*':
             filters["type"] = doc_type
         
         # Path/name filter with wildcards

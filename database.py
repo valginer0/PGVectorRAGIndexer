@@ -658,6 +658,9 @@ class DocumentRepository:
                 params.append(metadata_key)
                 params.append(value)
             elif key in ['type', 'namespace', 'category']:
+                # Skip wildcard value (match all)
+                if value == '*':
+                    continue
                 where_clauses.append(f"metadata->>'{key}' = %s")
                 params.append(value)
             elif key == 'source_uri_like':
@@ -727,6 +730,9 @@ class DocumentRepository:
                 params.append(metadata_key)
                 params.append(value)
             elif key in ['type', 'namespace', 'category']:
+                # Skip wildcard value (match all)
+                if value == '*':
+                    continue
                 where_clauses.append(f"metadata->>'{key}' = %s")
                 params.append(value)
             elif key == 'source_uri_like':
@@ -781,6 +787,9 @@ class DocumentRepository:
                 params.append(metadata_key)
                 params.append(value)
             elif key in ['type', 'namespace', 'category']:
+                # Skip wildcard value (match all)
+                if value == '*':
+                    continue
                 where_clauses.append(f"metadata->>'{key}' = %s")
                 params.append(value)
             elif key == 'source_uri_like':

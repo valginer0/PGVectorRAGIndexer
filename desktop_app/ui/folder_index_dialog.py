@@ -294,8 +294,21 @@ class FolderIndexDialog(QDialog):
             self.update_summary_label()
     
     def load_default_patterns(self):
-        """Load default exclusion patterns into the text edit."""
-        self.patterns_edit.setPlainText('\n'.join(DEFAULT_EXCLUSION_PATTERNS))
+        """Load default exclusion patterns, merging with existing ones."""
+        # Get existing patterns
+        existing_text = self.patterns_edit.toPlainText().strip()
+        existing_patterns = set(
+            line.strip() for line in existing_text.splitlines() 
+            if line.strip() and not line.strip().startswith('#')
+        )
+        
+        # Merge with defaults (existing patterns first, then new ones)
+        all_patterns = list(existing_patterns)
+        for pattern in DEFAULT_EXCLUSION_PATTERNS:
+            if pattern not in existing_patterns:
+                all_patterns.append(pattern)
+        
+        self.patterns_edit.setPlainText('\n'.join(all_patterns))
     
     def clear_patterns(self):
         """Clear all patterns."""

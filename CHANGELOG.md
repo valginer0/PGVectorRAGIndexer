@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.2.7] - 2025-12-27
+
+### Fixed
+- **Manage Tab Filter Bug** - Selecting `*` as Document Type now correctly matches all types
+  - Previously treated `*` as a literal value, returning no results
+  - Fixed in both client-side (manage_tab.py) and server-side (database.py)
+
 ## [2.2.6] - 2025-12-27
 
 ### Added

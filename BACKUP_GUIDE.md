@@ -1,5 +1,11 @@
 # Database Backup Guide
 
+> [!CAUTION]
+> **Optional / Advanced Feature**
+>
+> Most users **do not need this** unless they require database-level backups and external syncing (e.g., to Google Drive). Standard file backups of your documents folder are usually sufficient.
+
+
 Complete guide for backing up your PGVectorRAGIndexer database to Google Drive.
 
 ## 🎯 Quick Start

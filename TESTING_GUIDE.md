@@ -1,4 +1,4 @@
-# Testing Guide - PGVectorRAGIndexer v2.0
+# Testing Guide
 
 Complete guide for testing the system.
 

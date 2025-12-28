@@ -1,5 +1,10 @@
 # PGVectorRAGIndexer v2.2
 
+> **Start here:**
+> - 🟢 **Most Users**: [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md)
+> - 🟡 **Advanced / Server**: [DEPLOYMENT.md](DEPLOYMENT.md)
+> - 🔵 **API Reference**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
+
 ### 🤔 In Plain English (What does this actually do?)
 
 > **Imagine a magic bookshelf** that reads and understands every book, document, and note you put on it. When you have a question, you don't have to search for keywords yourself—you just ask the bookshelf in plain English (like "How do I fix the printer?" or "What was our revenue last year?"), and it instantly hands you the exact page with the answer.
@@ -29,17 +34,19 @@ It helps you *find and rediscover* documents by meaning — even when you don’
 
 ---
 
-### 🖥️ Two Ways to Deploy (Both 100% Local)
+### 🖥️ Two Ways to Deploy
 
-| Mode | Best For | Interface |
-|------|----------|-----------|
-| **Desktop App** | Personal use, everyday search | Native GUI (Windows/Mac/Linux) |
-| **Docker/Server** | Teams, servers, NAS, automation | Web UI + REST API |
+> **💡 Most users only need the Desktop App.** The rest of the docs are for advanced scenarios.
+
+| Feature | **Desktop App** (Recommended) | **Docker / Server** |
+|---------|-------------------------------|---------------------|
+| **Best For** | Personal use, everyday search | Teams, servers, NAS, automation |
+| **Interface** | Native GUI (Windows/Mac/Linux) | Web UI + REST API |
+| **Setup** | One-line installer / executable | Docker Compose |
+| **File Access** | Native file picker (C:\, etc) | Mounted volumes only |
+| **Privacy** | 100% Local | 100% Local |
 
 Both modes run **entirely on your hardware** — no cloud, no external services.
-
-- **Desktop App**: Recommended for most users. Just install and use.
-- **Docker/Server**: Run on a headless Linux server, NAS (Synology/QNAP), or shared office machine.
 
 > **💡 CLI is also available** in both modes for power users:
 > - **Batch processing** — index many files from terminal

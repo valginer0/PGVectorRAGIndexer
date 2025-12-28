@@ -1,11 +1,16 @@
 # Deployment Guide - PGVectorRAGIndexer v2.2
 
 > **📌 Note:** For quick Docker-only deployment (recommended for most users), see:
-> - **Windows**: [WINDOWS_SETUP.md](WINDOWS_SETUP.md)
-> - **Linux/macOS/WSL**: [QUICK_START.md](QUICK_START.md)
-> - **Comparison**: [DEPLOYMENT_OPTIONS.md](DEPLOYMENT_OPTIONS.md)
+> - **Linux/WSL Setup**: [QUICK_START.md](QUICK_START.md)
+> - **Usage Guide**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
+> - **GitHub Issues**: https://github.com/valginer0/PGVectorRAGIndexer/issues
 >
 > This guide covers **advanced production deployment** scenarios.
+
+> [!WARNING]
+> **Advanced / Production Deployment**
+>
+> Most users should use the **Desktop App** or **Docker Quick Start**. This guide is for advanced users, teams, or administrators deploying to a dedicated server/NAS.
 
 This guide covers deployment strategies for production environments.
 

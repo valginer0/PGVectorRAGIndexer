@@ -10,8 +10,8 @@ This document explains the purpose of each documentation file and when to use th
 |----------|---------|----------|
 | **[README.md](README.md)** | Main entry point, project overview, quick start | Everyone |
 | **[QUICK_START.md](QUICK_START.md)** | 5-minute setup for Linux/macOS/WSL | Linux/macOS/WSL users |
-| **[WINDOWS_SETUP.md](WINDOWS_SETUP.md)** | Detailed Windows native setup | Windows users (no WSL) |
-| **[DEPLOYMENT_OPTIONS.md](DEPLOYMENT_OPTIONS.md)** | Compare all deployment methods | Users choosing deployment method |
+
+
 | **[USAGE_GUIDE.md](USAGE_GUIDE.md)** | Detailed API usage and examples | All users after installation |
 
 ### For Advanced Users
@@ -37,15 +37,15 @@ This document explains the purpose of each documentation file and when to use th
 ```
 1. README.md (overview)
    ↓
-2. Choose platform:
-   - Windows → WINDOWS_SETUP.md
-   - Linux/macOS/WSL → QUICK_START.md
-   - Comparing options → DEPLOYMENT_OPTIONS.md
+2. INSTALL_DESKTOP_APP.md (setup)
    ↓
-3. USAGE_GUIDE.md (learn API)
+3. QUICK_START.md (optional first run)
    ↓
-4. Advanced: DEPLOYMENT.md (production)
+4. USAGE_GUIDE.md (reference)
+   ↓
+5. Advanced: DEPLOYMENT.md (production)
 ```
+
 
 ### Developer Journey
 
@@ -63,10 +63,9 @@ This document explains the purpose of each documentation file and when to use th
 
 ### "I want to..."
 
-- **"...get started quickly on Windows"** → [WINDOWS_SETUP.md](WINDOWS_SETUP.md)
-- **"...get started quickly on Linux/macOS"** → [QUICK_START.md](QUICK_START.md)
-- **"...compare deployment options"** → [DEPLOYMENT_OPTIONS.md](DEPLOYMENT_OPTIONS.md)
-- **"...learn the API"** → [USAGE_GUIDE.md](USAGE_GUIDE.md)
+- **"...get started properly"** → [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md)
+- **"...get started quickly (Docker)"** → [QUICK_START.md](QUICK_START.md)
+
 - **"...deploy to production"** → [DEPLOYMENT.md](DEPLOYMENT.md)
 - **"...backup my data"** → [BACKUP_GUIDE.md](BACKUP_GUIDE.md)
 - **"...run tests"** → [TESTING_GUIDE.md](TESTING_GUIDE.md)
@@ -110,14 +109,7 @@ All documentation now consistently covers:
 - Keep **CHANGELOG.md** up to date with every release
 - Cross-reference related documents
 
-## 🗑️ Removed Documentation
 
-The following files were removed as obsolete:
-
-- `README_v1_legacy.md` - Old v1 documentation (superseded by v2)
-- `IMPROVEMENTS_SUMMARY.md` - One-time migration document
-- `LICENSING_SUMMARY.md` - Redundant (info in LICENSE files)
-- `OWNERSHIP_NOTES.md` - Internal development notes
 
 ## 📊 Documentation Metrics
 

@@ -1,5 +1,7 @@
 # Testing the Desktop Application
 
+> **Audience:** Developers, testers, and maintainers.
+
 **Primary Use Case:** The desktop app is designed for **Windows** to access Windows files with full path preservation.
 
 ## Quick Start Testing (Windows - Recommended)

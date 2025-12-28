@@ -108,11 +108,11 @@ BASE_URL = "http://localhost:8000"
 response = requests.get(f"{BASE_URL}/health")
 print("Health:", response.json())
 
-# 2. Index a document
+# 2. Index a document (text directly)
 index_response = requests.post(
-    f"{BASE_URL}/index/text",
+    f"{BASE_URL}/index",
     json={
-        "text": "Python is a high-level programming language known for its simplicity and readability.",
+        "source_uri": "text://Python is a high-level programming language known for its simplicity and readability.",
         "metadata": {"language": "python", "topic": "programming"}
     }
 )
@@ -338,7 +338,6 @@ docker compose up -d
 
 - Explore the [Interactive API Docs](http://localhost:8000/docs)
 - Read about [Production Deployment](DEPLOYMENT.md)
-- Check out [Example Use Cases](examples/)
 - Join the community discussions
 
 Happy indexing! 🚀

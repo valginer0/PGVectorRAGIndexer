@@ -2,7 +2,7 @@
 # 
 # For production deployment, use the automated scripts:
 #   Linux/macOS/WSL: curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-run.sh | bash
-#   Windows: See WINDOWS_SETUP.md
+#   Windows: See INSTALL_DESKTOP_APP.md
 #
 # For development, create a .env file with:
 #   POSTGRES_USER=rag_user

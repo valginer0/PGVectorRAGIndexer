@@ -99,7 +99,7 @@ Upon termination, Licensee must cease all Commercial Use of the Software.
 
 ## 10. Governing Law
 
-This Agreement shall be governed by the laws of the State of <Your State>,
+This Agreement shall be governed by the laws of the State of Florida,
 United States, without regard to conflict of law principles.
 
 ---

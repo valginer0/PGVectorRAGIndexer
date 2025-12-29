@@ -49,6 +49,9 @@ Indicative categories include:
 - Enterprise organizations
 - OEM / redistribution use cases
 
+Typical annual pricing starts in the low hundreds of USD for small teams
+and scales with organization size and deployment scope.
+
 Pricing is intended to be fair, transparent, and proportionate to usage.
 
 ---

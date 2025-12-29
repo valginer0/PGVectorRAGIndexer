@@ -5,6 +5,13 @@
 > - 🟡 **Advanced / Server**: [DEPLOYMENT.md](DEPLOYMENT.md)
 > - 🔵 **API Reference**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
 
+> **Commercial use?**  
+> PGVectorRAGIndexer is free for personal use, education, research, and evaluation.  
+> Production, CI/CD, or ongoing internal company use requires a commercial license.  
+> See [COMMERCIAL.md](./COMMERCIAL.md).
+
+---
+
 ### 🤔 In Plain English (What does this actually do?)
 
 > **Imagine a magic bookshelf** that reads and understands every book, document, and note you put on it. When you have a question, you don't have to search for keywords yourself—you just ask the bookshelf in plain English (like "How do I fix the printer?" or "What was our revenue last year?"), and it instantly hands you the exact page with the answer.
@@ -29,8 +36,8 @@ This design is intentional. It means:
 - There are no accounts, subscriptions, or hidden data flows
 - You can use it safely with personal, private, or sensitive documents
 
-Unlike chat-based tools, this app focuses on **search and discovery**, not conversation.
-It helps you *find and rediscover* documents by meaning — even when you don’t remember the exact words
+Unlike chat-based tools, this app focuses on **search and discovery**, not conversation.  
+It helps you *find and rediscover* documents by meaning — even when you don’t remember the exact words.
 
 ---
 
@@ -39,31 +46,23 @@ It helps you *find and rediscover* documents by meaning — even when you don’
 > **💡 Most users only need the Desktop App.** The rest of the docs are for advanced scenarios.
 
 | Feature | **Desktop App** (Recommended) | **Docker / Server** |
-|---------|-------------------------------|---------------------|
+|-------|-------------------------------|---------------------|
 | **Best For** | Personal use, everyday search | Teams, servers, NAS, automation |
 | **Interface** | Native GUI (Windows/Mac/Linux) | Web UI + REST API |
 | **Setup** | One-line installer / executable | Docker Compose |
-| **File Access** | Native file picker (C:\, etc) | Mounted volumes only |
+| **File Access** | Native file picker | Mounted volumes only |
 | **Privacy** | 100% Local | 100% Local |
 
 Both modes run **entirely on your hardware** — no cloud, no external services.
 
 > **💡 CLI is also available** in both modes for power users:
-> - **Batch processing** — index many files from terminal
-> - **Quick commands** — faster than opening the GUI for simple tasks  
-> - **Scripting** — integrate into shell aliases, cron jobs, or pipelines
+> - Batch processing
+> - Scripting and automation
+> - Headless usage  
 >
 > CLI requires the backend running (via Docker or Desktop App).
 
 ---
-
-This project provides a **Smart Document Search** system using:
-- **Backend**: FastAPI, PostgreSQL (pgvector), and **Local Embeddings** (SentenceTransformers).
-- **Frontend**: A modern PySide6 desktop application (Windows, macOS, & Linux).
-- **Core Features**:
-    - **100% Free & Offline**: Uses local AI models, so no API keys or costs required for search.
-    - Semantic Search (find by meaning, not just keywords).
-    - **Privacy Focused**: Your data stays on your machine. No cloud uploads, no external servers.
 
 ## 🎯 What's New in v2.2
 
@@ -168,7 +167,7 @@ Password-protected PDFs cannot be indexed without decryption. Instead of crashin
 
 > **Most users only need this guide.** The additional documents are for advanced deployment, customization, or maintenance scenarios.
 
-### � [Read the Full Installation Guide](INSTALL_DESKTOP_APP.md)
+### 📘 [Read the Full Installation Guide](INSTALL_DESKTOP_APP.md)
 *(Includes detailed steps for Windows, macOS, and Linux)*
 
 **Windows Quick Install:**
@@ -969,27 +968,46 @@ For issues and questions:
 - Check API docs at `/docs`
 - Review logs for error details
 
----
+
 
 **Version**: 2.0.0  
 **Last Updated**: 2024  
 **Status**: Production Ready ✅
 
+
+---
+
 ## License
 
-PGVectorRAGIndexer is dual-licensed:
+PGVectorRAGIndexer is **dual-licensed**.
 
-- **Community License** — free for personal, educational, research, and other non-commercial use
-- **Commercial License** — required for use in commercial products or services
+### Community License
+Free for personal use, education, research, and non-commercial evaluation.  
+Evaluation within a company is permitted for testing and assessment purposes.
 
-See `LICENSE_COMMUNITY.txt` and `LICENSE_COMMERCIAL.txt` for details. 
+### Commercial License
+A commercial license is required for:
+- production use
+- CI/CD or automated workflows
+- ongoing internal company use
+- use as part of a paid, hosted, or client-facing service
 
-### Community & Feedback
+See [COMMERCIAL.md](./COMMERCIAL.md) for details on when a commercial license is required
+and how to obtain one.
 
-If you find this tool useful, consider supporting its development:
+If you are unsure whether your use case requires a commercial license, feel free to reach out.
 
-- **[Star this repo](https://github.com/valginer0/PGVectorRAGIndexer)** - Help others discover it!
-- **[Sponsor on GitHub](https://github.com/sponsors/valginer0)** - Support ongoing development
-- **Share it** - Tell others who might find it useful
+---
 
-Your support helps maintain and improve this project. Thank you! 
+## Supporting the project
+
+If you use PGVectorRAGIndexer personally or for learning and would like to support
+ongoing development, you can sponsor the project via GitHub Sponsors.
+
+Sponsorships are optional and **do not grant commercial usage rights**.
+
+- ⭐ Star the repository
+- ❤️ Sponsor on GitHub
+- 📢 Share it with others who may find it useful
+
+Thank you for supporting independent open-source development.

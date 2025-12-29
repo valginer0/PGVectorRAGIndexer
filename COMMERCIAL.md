@@ -45,11 +45,13 @@ Commercial license pricing is based on:
 
 - organization size
 - deployment scope
-- usage context (internal, production, hosted, redistribution)
+- usage context (internal, production, CI/CD, hosted, redistribution)
+
+Typical annual pricing starts in the low hundreds of USD for small teams
+and scales with organizational size and usage scope.
 
 Pricing is intended to be fair, transparent, and proportionate to value.
-
-For most teams, licensing is straightforward and lightweight.
+One-time, annual, and custom terms are available depending on use case.
 
 ---
 

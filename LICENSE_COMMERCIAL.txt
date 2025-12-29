@@ -1,47 +1,85 @@
-PGVectorRAGIndexer Commercial License v1.0
+PGVectorRAGIndexer Commercial Licensing Overview
+Document Revision: 1.1
 Copyright (c) 2025 Valery Giner
 
-This license grants the licensee (“Licensee”) the right to use PGVectorRAGIndexer and its
-associated documentation (the “Software”) in commercial environments, products, or
-services, subject to the following terms:
+This document describes the commercial licensing model for PGVectorRAGIndexer and
+applies to organizations or individuals engaging in Commercial Use of the Software,
+as defined in the Community License.
 
-1. A valid commercial license agreement between the Licensee and the copyright holder
-   (Valery Giner) must be obtained prior to any commercial use, redistribution,
-   integration, or hosting of the Software.
+Commercial Use of PGVectorRAGIndexer requires a valid Commercial License obtained
+from the copyright holder.
 
-2. The Licensee may modify, extend, or integrate the Software within their systems or
-   products under the terms agreed upon in the commercial license agreement.
+---
 
-3. This file serves as a placeholder reference to the commercial licensing terms and
-   does not itself grant any rights or warranties.
+## Scope of Commercial License
+
+A Commercial License grants the licensee (“Licensee”) the right to:
+
+- use PGVectorRAGIndexer in production environments
+- use the Software as part of CI/CD or automated workflows
+- deploy the Software for ongoing internal business operations
+- modify, extend, and integrate the Software within internal systems
+- use the Software in connection with commercial products or services,
+  subject to the agreed license terms
+
+Redistribution, OEM usage, or offering the Software as a hosted or managed service
+may require additional terms and must be explicitly agreed upon.
+
+---
+
+## License Agreement
+
+Commercial licenses are issued on a per-organization basis and are governed by
+a separate, legally binding commercial license agreement.
+
+This file does not itself grant any usage rights and serves as a reference and
+summary of the commercial licensing model. The full commercial license terms are
+provided to the Licensee at the time of purchase or agreement.
+
+---
+
+## Pricing Guidance (Non-Binding)
+
+Commercial license pricing is determined based on organization size and
+deployment scope.
+
+Indicative categories include:
+- Startup / small teams
+- Small and medium businesses (SMB)
+- Enterprise organizations
+- OEM / redistribution use cases
+
+Pricing is intended to be fair, transparent, and proportionate to usage.
+
+---
+
+## Support
+
+PGVectorRAGIndexer is provided as a self-service product.
+
+Commercial licenses do not automatically include installation assistance,
+ongoing support, or service level guarantees unless explicitly agreed upon.
+
+---
+
+## Requesting a Commercial License
+
+To request a commercial license or discuss terms, contact:
+
+valginer0@gmail.com
+
+Please include:
+- organization name
+- approximate team size
+- intended use (internal, production, CI/CD, hosted, etc.)
+- deployment scope
+
+---
 
 DISCLAIMER:
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
-INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
-PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
-LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
-OR OTHER DEALINGS IN THE SOFTWARE.
-
-Commercial Licensing Guidance (Non-Binding)
-
-Commercial licenses are categorized by organization size and deployment scope.
-
-Typical commercial categories include:
-- Startup / Small teams
-- SMB
-- Enterprise
-- OEM / Redistribution
-
-A commercial license grants the right to deploy and use PGVectorRAGIndexer 
-in commercial environments or products.
-
-The software is provided on an "as-is" basis and does not include 
-installation services, ongoing support, or service level guarantees.
-
-To request a commercial license, contact:
-valginer0@gmail.com
-with a brief description of your organization and intended use.
-
-PGVectorRAGIndexer is offered as a self-service product and is best suited 
-for teams comfortable operating and maintaining local software independently.
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, AND NON-INFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT
+HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE
+OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

@@ -1,4 +1,4 @@
-PGVectorRAGIndexer Community License v1.0
+PGVectorRAGIndexer Community License v1.1
 Copyright (c) 2025 Valery Giner
 
 Permission is hereby granted, free of charge, to any individual or organization to use
@@ -6,20 +6,48 @@ this software and its associated documentation (the "Software") for personal,
 educational, research, or non-commercial evaluation purposes, subject to the following
 conditions:
 
-1. You may fork and modify the Software for your own personal, educational, or research
-   use only. Redistribution of the Software or modified versions, sublicensing, or
-   commercial use requires explicit written permission from the copyright holder.
+1. Permitted Uses
 
-2. The Software may be used to create and run your own personal, educational, research,
-   or internal, non-commercial evaluation projects, provided that such use does not involve
-   charging a fee for access to the Software itself or offering paid services directly
-   built upon it as a core component.
+You may use, fork, and modify the Software for your own personal, educational, or
+research use.
 
-3. You may share feedback, bug reports, and feature suggestions. However, this project
-   does not accept code contributions or pull requests. All development is maintained
-   exclusively by the copyright holder. Voluntary sponsorships are welcome.
+You may also use the Software for non-commercial evaluation and testing purposes,
+including evaluation within a company, provided that such use is strictly limited
+to assessing suitability and is not part of ongoing internal operations, production
+systems, or continuous integration workflows.
 
-4. All copies of the Software must retain this notice and the following disclaimer.
+2. Restrictions
+
+Redistribution of the Software or modified versions, sublicensing, or Commercial Use
+(as defined below) is not permitted under this license and requires an explicit
+Commercial License from the copyright holder.
+
+3. Commercial Use Definition
+
+For purposes of this license, "Commercial Use" includes, but is not limited to:
+
+- ongoing internal use by a for-profit organization
+- use in production environments
+- use in CI/CD pipelines or automated workflows
+- use to support internal business operations (e.g., indexing company documents
+  for employees or internal knowledge bases)
+- bundling or integrating the Software with a paid product or service
+- offering the Software as part of a hosted, managed, or client-facing service
+
+Commercial Use is not permitted under this Community License and requires a valid
+Commercial License.
+
+4. Contributions and Feedback
+
+You may share feedback, bug reports, and feature suggestions. However, this project
+does not accept code contributions or pull requests. All development is maintained
+exclusively by the copyright holder.
+
+Voluntary sponsorships are welcome but do not grant any additional usage rights.
+
+5. Notice Retention
+
+All copies of the Software must retain this notice and the following disclaimer.
 
 DISCLAIMER:
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
@@ -29,8 +57,12 @@ LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTR
 TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE SOFTWARE OR THE USE
 OR OTHER DEALINGS IN THE SOFTWARE.
 
-PGVectorRAGIndexer is provided as a self-service project and does not include 
+6. Support
+
+PGVectorRAGIndexer is provided as a self-service project and does not include
 installation assistance, support services, or service level guarantees.
+
+7. Commercial Licensing
 
 For commercial licensing, redistribution, or integration inquiries, please contact:
 valginer0@gmail.com

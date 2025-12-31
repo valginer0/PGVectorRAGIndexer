@@ -58,6 +58,24 @@ Contact: valginer0@gmail.com
 
 ---
 
+## 6a) I’m a software agency or consultant delivering a solution to a client. What license do I need?
+
+If PGVectorRAGIndexer is used as part of a deliverable provided to a client
+(even for a single project or internal deployment), this use case is **not**
+covered by standard internal-use commercial licenses.
+
+An **OEM / Agency License** is required.
+
+OEM / Agency licenses are typically scoped to:
+- a **single end client**
+- a defined project or engagement
+- non-transferable usage rights
+
+Please contact valginer0@gmail.com with a brief description of the project
+and deployment scope to discuss appropriate terms.
+
+---
+
 ## 7) Can we run a hosted or managed service based on PGVectorRAGIndexer?
 
 Hosted/managed service use cases typically require additional terms and must be

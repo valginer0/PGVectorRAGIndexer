@@ -39,6 +39,28 @@ Support, custom development, and consulting are optional and handled separately.
 
 ---
 
+## OEM / Agency use
+
+Some organizations (such as software agencies or integrators) may wish to use
+PGVectorRAGIndexer as part of a deliverable provided to a client.
+
+Examples include:
+- building a custom internal RAG system for a client
+- embedding PGVectorRAGIndexer into a client-specific deployment
+- delivering a solution that includes PGVectorRAGIndexer as a component
+
+These use cases are **not covered** by standard internal-use commercial licenses.
+
+An **OEM / Agency License** is required and is typically scoped to:
+- deployment for a **single end client**
+- a defined project or engagement
+- non-transferable usage rights
+
+OEM / Agency licensing is handled on a case-by-case basis.
+Please contact **valginer0@gmail.com** with a description of the project and scope.
+
+---
+
 ## Pricing approach
 
 Commercial license pricing is based on:

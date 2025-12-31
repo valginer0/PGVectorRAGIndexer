@@ -165,6 +165,10 @@ Password-protected PDFs cannot be indexed without decryption. Instead of crashin
 ## 🚀 Getting Started (Desktop App)
 **This is the recommended way to use the app.** It gives you the full experience with the native interface.
 
+> 🛡️ **Security note (public Wi-Fi)**
+> If you use the app on public or shared Wi-Fi (cafés, airports, hotels), we recommend using a trusted network or a VPN.
+> On a private home network, no special setup is needed.
+
 > **Most users only need this guide.** The additional documents are for advanced deployment, customization, or maintenance scenarios.
 
 ### 📘 [Read the Full Installation Guide](INSTALL_DESKTOP_APP.md)
@@ -178,7 +182,31 @@ irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstra
 
 ---
 
-## 🛠️ Technical Capability: Web Server Mode (Advanced)
+### 🤖 AI Agent Integration (MCP)
+**New in v2.2**: You can connect desktop AI agents (Claude Desktop, Cursor, etc.) directly to your local database using the Model Context Protocol (MCP).
+
+**Why use this?**
+- 🔒 **Zero network exposure**: Uses `stdio` pipes, so no ports are opened.
+- 🧠 **Context-aware AI**: Your AI assistant can fuzzy-search your private documents to answer questions.
+
+**Setup for Claude Desktop:**
+1.  Add this to your `claude_desktop_config.json`:
+    ```json
+    {
+      "mcpServers": {
+        "local-rag": {
+          "command": "/path/to/your/venv/bin/python",
+          "args": ["/path/to/PGVectorRAGIndexer/mcp_server.py"]
+        }
+      }
+    }
+    ```
+2.  Restart Claude. You will see a 🔌 icon indicating the connection.
+3.  Ask: *"Search my documents for 'financial report' and summarize the key points."*
+
+---
+
+### 🛠️ Technical Capability: Web Server Mode (Advanced)
 **NOTE**: Use this ONLY if you want to run the application as a headless server or strictly use the Web UI. For the normal desktop experience, see the section above.
 
 ### Prerequisites

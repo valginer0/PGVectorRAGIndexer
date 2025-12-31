@@ -1,6 +1,10 @@
 # Quick Start Guide - PGVectorRAGIndexer v2.2
 
 Get up and running in 5 minutes!
+> 🔒 **Network safety tip**
+> When running the app on public Wi-Fi, use a secure network or a VPN.
+> This helps prevent other users on the same network from accessing local services.
+> For home or private networks, this is not a concern.
 
 ## 🆕 What's New in v2.2
 

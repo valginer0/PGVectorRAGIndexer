@@ -4,6 +4,10 @@
 
 > **Quick Start:** If you just want to get started quickly, see [QUICK_START.md](QUICK_START.md). This document provides detailed installation steps and platform-specific notes.
 
+### 🛡️ Network Note
+The app runs local services on your machine. On public or shared Wi-Fi networks (coffee shops, hotels, airports), we recommend using a VPN or a trusted network. No additional configuration is required on private home networks.
+For technical details, see [SECURITY.md](SECURITY.md).
+
 ## Windows Installation
 
 ### One-Line Install (Recommended)

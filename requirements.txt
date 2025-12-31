@@ -1,6 +1,9 @@
 # Runtime dependencies for PGVectorRAGIndexer
 # For development tools (pytest, black, ruff, mypy), also install requirements-dev.txt
 
+# MCP Server
+mcp>=1.0.0
+
 # Core dependencies
 psycopg2-binary>=2.9.9
 pgvector>=0.2.4

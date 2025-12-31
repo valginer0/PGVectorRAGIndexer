@@ -172,7 +172,7 @@ config = get_config()
 app = FastAPI(
     title="PGVectorRAGIndexer API",
     description="REST API for semantic document search using PostgreSQL and pgvector",
-    version="2.2.0",
+    version="2.3.0",
     lifespan=lifespan
 )
 

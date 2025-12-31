@@ -1,4 +1,4 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.2
+# Quick Start Guide - PGVectorRAGIndexer v2.3
 
 Get up and running in 5 minutes!
 > 🔒 **Network safety tip**
@@ -6,7 +6,7 @@ Get up and running in 5 minutes!
 > This helps prevent other users on the same network from accessing local services.
 > For home or private networks, this is not a concern.
 
-## 🆕 What's New in v2.2
+## 🆕 What's New in v2.3
 
 - **macOS/Linux One-Line Install**: New `bootstrap_desktop_app.sh` for easy setup
 - **Encrypted PDF Detection**: Password-protected PDFs are detected and listed for review

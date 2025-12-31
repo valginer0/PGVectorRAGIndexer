@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.2
+# PGVectorRAGIndexer v2.3
 
 > **Start here:**
 > - 🟢 **Most Users**: [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md)
@@ -64,10 +64,15 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ---
 
-## 🎯 What's New in v2.2
+## 🋹 What's New in v2.3
 
-### 🆕 Latest Features (v2.2)
+### 🆕 Latest Features (v2.3)
 
+- **✅ MCP Server**: AI agents (Claude CLI, Claude Desktop, Cursor) can connect directly to your local database
+  - Uses `stdio` transport — zero network exposure, no open ports
+  - Exposes `search_documents`, `index_document`, `list_documents` tools
+  - See [AI Agent Integration (MCP)](#-ai-agent-integration-mcp) for setup
+- **✅ Security Documentation**: New `SECURITY.md` with network config guidance + friendly notes in docs
 - **✅ Encrypted PDF Detection**: Password-protected PDFs are gracefully detected and skipped
   - Returns 403 with `error_type: encrypted_pdf` for clear error handling
   - `GET /documents/encrypted` endpoint to list all skipped encrypted PDFs
@@ -183,7 +188,7 @@ irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstra
 ---
 
 ### 🤖 AI Agent Integration (MCP)
-**New in v2.2**: You can connect desktop AI agents (Claude Desktop, Cursor, etc.) directly to your local database using the Model Context Protocol (MCP).
+**New in v2.3**: You can connect desktop AI agents (Claude Desktop, Cursor, etc.) directly to your local database using the Model Context Protocol (MCP).
 
 **Why use this?**
 - 🔒 **Zero network exposure**: Uses `stdio` pipes, so no ports are opened.

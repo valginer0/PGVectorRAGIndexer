@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2025-12-30
+
+### Added
+- **MCP Server** - Model Context Protocol integration for AI agents
+  - New `mcp_server.py` exposing `search_documents`, `index_document`, `list_documents`
+  - Works with Claude CLI, Claude Desktop, Cursor, and other MCP clients
+  - Zero network exposure — uses stdio transport
+  - 10 new tests in `tests/test_mcp_server.py`
+- **Security Documentation**
+  - New `SECURITY.md` with network configuration guidance
+  - Friendly security notes added to README, QUICK_START, INSTALL_DESKTOP_APP
+- **AI Agent Section in README** - Configuration examples for Claude CLI/Desktop
+
+### Dependencies
+- Added `mcp>=1.0.0` to requirements.txt
+
 ## [2.2.9] - 2025-12-27
 
 ### Fixed

@@ -2,9 +2,10 @@
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
-> - 🟢 **Most Users**: [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md)
-> - 🟡 **Advanced / Server**: [DEPLOYMENT.md](DEPLOYMENT.md)
-> - 🔵 **API Reference**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
+> - 🟢 **Most Users (Desktop App)**: [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md)
+> - ⚡ **Quick 5-Minute Setup (Docker)**: [QUICK_START.md](QUICK_START.md)
+> - 🟡 **Advanced / Server Deployment**: [DEPLOYMENT.md](DEPLOYMENT.md)
+> - 🔵 **Usage & API Reference**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
 
 > **Commercial use?**  
 > PGVectorRAGIndexer is free for personal use, education, research, and evaluation.  

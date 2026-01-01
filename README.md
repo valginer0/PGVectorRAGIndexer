@@ -1,4 +1,5 @@
 # PGVectorRAGIndexer v2.3
+![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
 > - 🟢 **Most Users**: [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md)
@@ -190,9 +191,22 @@ irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstra
 ### 🤖 AI Agent Integration (MCP)
 **New in v2.3**: You can connect desktop AI agents (Claude Desktop, Cursor, etc.) directly to your local database using the Model Context Protocol (MCP).
 
+PGVectorRAGIndexer acts as a **local MCP tool provider** — it does not run an LLM,
+but exposes your indexed documents as searchable tools to compatible AI agents.
+
 **Why use this?**
 - 🔒 **Zero network exposure**: Uses `stdio` pipes, so no ports are opened.
 - 🧠 **Context-aware AI**: Your AI assistant can fuzzy-search your private documents to answer questions.
+
+**Other compatible clients**
+- Cursor (agent mode)
+- Claude CLI
+- Custom MCP-compatible agents
+
+**Exposed MCP tools**
+- `search_documents` — semantic / hybrid search over indexed files
+- `index_document` — add or re-index documents
+- `list_documents` — enumerate indexed sources
 
 **Setup for Claude Desktop:**
 1.  Add this to your `claude_desktop_config.json`:

@@ -26,6 +26,17 @@ from .source_open_manager import SourceOpenManager
 from ..utils.docker_manager import DockerManager
 from ..utils.api_client import APIClient
 
+# Conditional import for Email tab (only when enabled)
+try:
+    from config import get_config
+    _config = get_config()
+    EMAIL_ENABLED = _config.email.enabled
+except Exception:
+    EMAIL_ENABLED = False
+
+if EMAIL_ENABLED:
+    from .email_tab import EmailTab
+
 logger = logging.getLogger(__name__)
 
 
@@ -103,6 +114,11 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.recent_tab, qta.icon('fa5s.clock', color='#9ca3af'), "Recent")
         self.tabs.addTab(self.manage_tab, qta.icon('fa5s.trash-alt', color='#9ca3af'), "Manage")
         self.tabs.addTab(self.settings_tab, qta.icon('fa5s.cog', color='#9ca3af'), "Settings")
+        
+        # Email tab (only visible when EMAIL_ENABLED=true)
+        if EMAIL_ENABLED:
+            self.email_tab = EmailTab(self)
+            self.tabs.addTab(self.email_tab, qta.icon('fa5s.envelope', color='#9ca3af'), "Email")
         
         # Status bar at bottom
         self.status_bar = QStatusBar()

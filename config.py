@@ -46,7 +46,13 @@ class EmailConfig(BaseSettings):
     Uses MSAL device-code flow (public client).
     No client_secret required.
     """
-    model_config = SettingsConfigDict(env_prefix='EMAIL_', case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_prefix='EMAIL_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore'
+    )
     
     enabled: bool = Field(default=False, description='Enable email connector')
     client_id: Optional[str] = Field(default=None, description='Azure App Client ID')

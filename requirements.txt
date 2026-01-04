@@ -25,10 +25,9 @@ openpyxl>=3.1.2
 pandas>=2.1.0
 unstructured>=0.11.0
 
-# Email Processing (Cloud Connector - Official Microsoft Stack)
-# Uses device-code flow (public client, no secret required)
-msal>=1.24.0
-requests>=2.31.0
+# Email Processing (Provider-agnostic base)
+# For HTML to text conversion in email body processing
+beautifulsoup4>=4.12.0
 
 # OCR support (scanned documents and images)
 pytesseract>=0.3.10

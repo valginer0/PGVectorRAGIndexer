@@ -39,6 +39,26 @@ class DatabaseConfig(BaseSettings):
         return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
 
 
+class EmailConfig(BaseSettings):
+    """
+    Email Connector configuration (Opt-in).
+    
+    Uses MSAL device-code flow (public client).
+    No client_secret required.
+    """
+    model_config = SettingsConfigDict(
+        env_prefix='EMAIL_',
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore'
+    )
+    
+    enabled: bool = Field(default=False, description='Enable email connector')
+    client_id: Optional[str] = Field(default=None, description='Azure App Client ID')
+    tenant_id: Optional[str] = Field(default='common', description='Azure Tenant ID (or common)')
+
+
 class EmbeddingConfig(BaseSettings):
     """Embedding model configuration."""
     
@@ -223,6 +243,7 @@ class AppConfig(BaseSettings):
     
     # Sub-configurations
     database: DatabaseConfig = Field(default_factory=DatabaseConfig)
+    email: EmailConfig = Field(default_factory=EmailConfig)
     embedding: EmbeddingConfig = Field(default_factory=EmbeddingConfig)
     chunking: ChunkingConfig = Field(default_factory=ChunkingConfig)
     retrieval: RetrievalConfig = Field(default_factory=RetrievalConfig)

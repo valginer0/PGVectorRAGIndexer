@@ -106,7 +106,7 @@ class CloudIngestor:
         if self._cache.has_state_changed:
             self.cache_file.write_text(self._cache.serialize())
     
-    def authenticate(self, scopes: Optional[List[str]] = None) -> bool:
+    def authenticate(self, scopes: Optional[List[str]] = None, force_refresh: bool = False) -> bool:
         """
         Authenticate with Microsoft Graph API using device-code flow.
         
@@ -115,6 +115,7 @@ class CloudIngestor:
         
         Args:
             scopes: Optional list of scopes. Defaults to ['Mail.Read']
+            force_refresh: If True, force token refresh even if cached
         
         Returns:
             True if authentication succeeds
@@ -125,11 +126,16 @@ class CloudIngestor:
         accounts = self._app.get_accounts()
         if accounts:
             logger.info("Found cached account, attempting silent authentication...")
-            result = self._app.acquire_token_silent(scopes, account=accounts[0])
+            # Use force_refresh to get a new token when 401 occurs
+            result = self._app.acquire_token_silent(
+                scopes, 
+                account=accounts[0],
+                force_refresh=force_refresh
+            )
             if result and "access_token" in result:
                 self._access_token = result["access_token"]
                 self._save_cache()
-                logger.info("Silent authentication successful")
+                logger.info(f"Silent authentication successful (force_refresh={force_refresh})")
                 return True
         
         # No cached token, use device-code flow
@@ -187,6 +193,10 @@ class CloudIngestor:
         headers = {"Authorization": f"Bearer {self._access_token}"}
         
         for attempt in range(max_retries):
+            # Debug: log token info (first/last 10 chars only for security)
+            token_preview = f"{self._access_token[:10]}...{self._access_token[-10:]}" if self._access_token else "None"
+            logger.debug(f"Request to {endpoint} with token: {token_preview}")
+            
             try:
                 response = requests.get(url, headers=headers, params=params, timeout=30)
             except requests.exceptions.Timeout:
@@ -207,9 +217,11 @@ class CloudIngestor:
                 continue
             
             elif response.status_code == 401:
-                # Token expired, try to refresh
-                logger.info("Token expired, attempting refresh...")
-                if self.authenticate():
+                # Log the actual error for debugging
+                logger.warning(f"401 response: {response.text[:500]}")
+                # Token expired, force refresh to get new token
+                logger.info("Token expired, forcing token refresh...")
+                if self.authenticate(force_refresh=True):
                     headers = {"Authorization": f"Bearer {self._access_token}"}
                     continue
                 else:

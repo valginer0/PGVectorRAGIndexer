@@ -20,7 +20,13 @@ from PySide6.QtGui import QColor
 from .shared import populate_document_type_combo
 from .workers import SearchWorker
 
-# ... imports ...
+# Check if email is enabled
+try:
+    from config import get_config
+    _config = get_config()
+    EMAIL_ENABLED = _config.email.enabled
+except Exception:
+    EMAIL_ENABLED = False
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +75,18 @@ class SearchTab(QWidget):
         # Search options
         options_group = QGroupBox("Search Options")
         options_layout = QHBoxLayout(options_group)
+        
+        # Scope selector (Documents / Email)
+        options_layout.addWidget(QLabel("Scope:"))
+        self.scope_combo = QComboBox()
+        self.scope_combo.addItem("Documents", "documents")
+        if EMAIL_ENABLED:
+            self.scope_combo.addItem("Email", "email")
+        self.scope_combo.setMinimumWidth(120)
+        self.scope_combo.currentIndexChanged.connect(self._on_scope_changed)
+        options_layout.addWidget(self.scope_combo)
+        
+        options_layout.addSpacing(20)
         
         # Top K
         options_layout.addWidget(QLabel("Results:"))
@@ -166,17 +184,28 @@ class SearchTab(QWidget):
         # Disable UI during search
         self.search_btn.setEnabled(False)
         self.query_input.setEnabled(False)
-        self.status_label.setText(f"Searching for: {query}...")
+        
+        # Get current scope
+        scope = self.scope_combo.currentData() or "documents"
+        self.status_label.setText(f"Searching {scope} for: {query}...")
         self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
         
-        # Start search worker
+        if scope == "email":
+            # Email search - use retriever directly
+            self._perform_email_search(query)
+        else:
+            # Document search - use API
+            self._perform_document_search(query)
+    
+    def _perform_document_search(self, query: str):
+        """Perform document search via API."""
         selected_type = self.type_filter.currentText().strip() if hasattr(self, "type_filter") else ""
         
         # Handle wildcard and empty type
         if selected_type == "*":
-            document_type = None  # No filter (all types)
+            document_type = None
         else:
-            document_type = selected_type  # Specific type or empty string (for "No Type")
+            document_type = selected_type
 
         self.search_worker = SearchWorker(
             self.api_client,
@@ -188,6 +217,41 @@ class SearchTab(QWidget):
         )
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
+    
+    def _perform_email_search(self, query: str):
+        """Perform email search via retriever."""
+        try:
+            from retriever_v2 import DocumentRetriever
+            retriever = DocumentRetriever()
+            results = retriever.search_emails(
+                query,
+                top_k=self.top_k_spin.value(),
+                min_score=self.min_score_spin.value()
+            )
+            
+            # Convert to display format
+            formatted_results = []
+            for r in results:
+                # Build email locator: Outlook/Inbox/Subject (Sender, Date)
+                sender_short = (r.sender or "Unknown").split("<")[0].strip()
+                date_short = r.received_at[:10] if r.received_at else "Unknown"
+                locator = f"Outlook/{r.subject or '(No Subject)'} ({sender_short}, {date_short})"
+                
+                formatted_results.append({
+                    'source_uri': locator,
+                    'text_content': r.text_content,
+                    'score': r.relevance_score,
+                    'chunk_index': r.chunk_index,
+                    'document_type': 'EMAIL',
+                    'metadata': r.metadata,
+                    # Store original data for click handling
+                    '_email_message_id': r.message_id,
+                })
+            
+            self.search_finished(True, formatted_results)
+        except Exception as e:
+            logger.error(f"Email search failed: {e}")
+            self.search_finished(False, str(e))
     
     def search_finished(self, success: bool, data):
         """Handle search completion."""
@@ -396,3 +460,13 @@ class SearchTab(QWidget):
         augmented['display_chunk'] = chunk_value
 
         return augmented
+    
+    def _on_scope_changed(self, index: int):
+        """Handle scope selection change."""
+        scope = self.scope_combo.currentData()
+        
+        # Hide document type filter when searching emails
+        if hasattr(self, 'type_filter'):
+            type_group = self.type_filter.parent()
+            if type_group:
+                type_group.setVisible(scope == "documents")

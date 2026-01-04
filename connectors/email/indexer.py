@@ -49,6 +49,43 @@ class EmailIndexer:
         self._indexed_count = 0
         self._skipped_count = 0
         self._error_count = 0
+        
+        # Auto-create table if needed
+        self._ensure_email_table()
+    
+    def _ensure_email_table(self):
+        """Create email_chunks table if it doesn't exist (auto-migration)."""
+        if not self.database_manager:
+            return
+        
+        try:
+            with self.database_manager.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        CREATE TABLE IF NOT EXISTS email_chunks (
+                            id SERIAL PRIMARY KEY,
+                            message_id VARCHAR(255) NOT NULL,
+                            thread_id VARCHAR(255),
+                            sender VARCHAR(500),
+                            recipient TEXT,
+                            subject VARCHAR(1000),
+                            received_at TIMESTAMP WITH TIME ZONE,
+                            folder VARCHAR(255),
+                            chunk_index INTEGER NOT NULL DEFAULT 0,
+                            text_content TEXT NOT NULL,
+                            embedding vector(384),
+                            metadata JSONB DEFAULT '{}',
+                            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                            UNIQUE(message_id, chunk_index)
+                        );
+                        CREATE INDEX IF NOT EXISTS idx_email_chunks_message_id ON email_chunks(message_id);
+                        CREATE INDEX IF NOT EXISTS idx_email_chunks_received_at ON email_chunks(received_at DESC);
+                    """)
+                conn.commit()
+            logger.info("Ensured email_chunks table exists")
+        except Exception as e:
+            logger.error(f"Error creating email_chunks table: {e}")
     
     def _get_existing_message_ids(self) -> set:
         """Get set of already indexed message IDs."""

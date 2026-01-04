@@ -167,7 +167,7 @@ class CloudIngestor:
         self,
         endpoint: str,
         params: Optional[Dict[str, Any]] = None,
-        max_retries: int = 3
+        max_retries: int = 5
     ) -> Dict[str, Any]:
         """
         Make a request to Graph API with throttle handling.
@@ -187,16 +187,23 @@ class CloudIngestor:
         headers = {"Authorization": f"Bearer {self._access_token}"}
         
         for attempt in range(max_retries):
-            response = requests.get(url, headers=headers, params=params)
+            try:
+                response = requests.get(url, headers=headers, params=params, timeout=30)
+            except requests.exceptions.Timeout:
+                logger.warning(f"Request timeout, attempt {attempt + 1}/{max_retries}")
+                time.sleep(5 * (attempt + 1))
+                continue
             
             if response.status_code == 200:
                 return response.json()
             
             elif response.status_code == 429:
-                # Throttled - respect Retry-After header
-                retry_after = int(response.headers.get("Retry-After", 60))
-                logger.warning(f"Throttled by Graph API, waiting {retry_after}s...")
-                time.sleep(retry_after)
+                # Throttled - respect Retry-After header with exponential backoff
+                retry_after = int(response.headers.get("Retry-After", 30))
+                # Add exponential backoff on top
+                backoff = retry_after + (attempt * 10)
+                logger.warning(f"Throttled by Graph API, waiting {backoff}s (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(backoff)
                 continue
             
             elif response.status_code == 401:
@@ -213,7 +220,7 @@ class CloudIngestor:
                     f"Graph API error {response.status_code}: {response.text}"
                 )
         
-        raise ThrottlingError("Max retries exceeded due to throttling")
+        raise ThrottlingError(f"Max retries ({max_retries}) exceeded due to throttling. Try fetching fewer emails.")
     
     def get_messages(
         self,

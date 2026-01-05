@@ -43,8 +43,8 @@ class EmailConfig(BaseSettings):
     """
     Email Connector configuration (Opt-in).
     
-    Uses MSAL device-code flow (public client).
-    No client_secret required.
+    Provider-specific settings (client_id, tenant_id, etc.) are added
+    by the individual connector implementations.
     """
     model_config = SettingsConfigDict(
         env_prefix='EMAIL_',
@@ -55,8 +55,7 @@ class EmailConfig(BaseSettings):
     )
     
     enabled: bool = Field(default=False, description='Enable email connector')
-    client_id: Optional[str] = Field(default=None, description='Azure App Client ID')
-    tenant_id: Optional[str] = Field(default='common', description='Azure Tenant ID (or common)')
+    # Provider-specific fields are added by connector implementations
 
 
 class EmbeddingConfig(BaseSettings):

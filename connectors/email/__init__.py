@@ -1,8 +1,7 @@
-# Email Connector Package
-# This module is loaded only when EMAIL_ENABLED=true
+# Email Connector Package (Provider-Agnostic Base)
+# This module provides reusable infrastructure for email indexing.
+# Provider-specific implementations (Gmail, Outlook, IMAP) extend this base.
 
-from .ingestor import CloudIngestor
 from .processor import EmailProcessor
-from .indexer import EmailIndexer
 
-__all__ = ['CloudIngestor', 'EmailProcessor', 'EmailIndexer']
+__all__ = ['EmailProcessor']

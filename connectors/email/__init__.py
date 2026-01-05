@@ -3,5 +3,6 @@
 # Provider-specific implementations (Gmail, Outlook, IMAP) extend this base.
 
 from .processor import EmailProcessor
+from .retriever import EmailSearchResult, search_emails
 
-__all__ = ['EmailProcessor']
+__all__ = ['EmailProcessor', 'EmailSearchResult', 'search_emails']

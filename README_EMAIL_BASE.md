@@ -5,12 +5,17 @@ This branch contains reusable, provider-agnostic infrastructure for email indexi
 > This branch is infrastructure-only and is not exposed to users.
 
 **Design principle:** Email is treated as a content source, not a mail client.
+
 ## What This Branch Contains
 
-- `EmailProcessor` — Thread cleaning, HTML-to-text, chunking
-- `EmailSearchResult` — Dataclass for search results
-- `search_emails()` — Retriever method for email search
-- `email_chunks` table schema — Database schema for email storage
+```
+connectors/email/
+├── __init__.py          # Exports: EmailProcessor, EmailSearchResult, search_emails
+├── processor.py         # Thread cleaning, HTML-to-text, chunking
+├── retriever.py         # EmailSearchResult dataclass + search_emails function
+└── schema_email.sql     # Database schema (self-contained)
+```
+
 - `beautifulsoup4` dependency — For HTML parsing
 
 ## What This Branch Does NOT Contain

@@ -32,6 +32,7 @@ connectors/email/
 - No authentication logic
 - No provider-specific configuration requirements
 - Safe to merge into other feature branches
+- **Similarity metric:** Cosine distance only. Embeddings are normalized at encode time.
 
 ## Email Locator Format (source_uri)
 

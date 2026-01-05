@@ -1,6 +1,10 @@
 # ⚠️ Outlook Email Connector - EXPERIMENTAL
 
 > **Status**: Not supported / Not shipped / For dev use only
+>
+> **Frozen**: This branch is not being maintained and may break at any time.
+>
+> This connector is intentionally excluded from the main product and documentation.
 
 This branch contains an experimental Microsoft Outlook/Exchange email connector using the Graph API.
 
@@ -10,7 +14,7 @@ The Microsoft Azure App Registration system proved too complex for a simple desk
 
 1. **Permission Maze**: Delegated permissions for `Mail.Read` require specific consent flows that differ between personal accounts (MSA) and work/school accounts (Azure AD)
 
-2. **$6/month Requirement**: Personal Microsoft accounts require a Microsoft 365 subscription (~$6/month) to access mailbox APIs
+2. **MSA Limitations / Licensing Variability**: In our testing, personal Microsoft accounts (MSA) had access limitations and may require a Microsoft 365 subscription for mailbox API access
 
 3. **Empty 401 Responses**: Graph API returns 401 with empty body even with valid tokens when permissions aren't properly configured
 

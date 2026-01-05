@@ -33,10 +33,14 @@ connectors/email/
 - No provider-specific configuration requirements
 - Safe to merge into other feature branches
 
-## Email Locator Format
+## Email Locator Format (source_uri)
 
-Email search results use a single locator string:
+Emails follow the same pattern as documents: `source_uri` is the locator string.
 
+**The locator is built at index time by the ingestor**, not at search time.
+This means search returns `source_uri` directly, just like document search.
+
+**Format:**
 ```
 <Provider>/<Folder-or-Label>/<Subject> (<From>, <YYYY-MM-DD>)
 ```
@@ -46,7 +50,11 @@ Email search results use a single locator string:
 - `Outlook/Inbox/Contract update (Legal Dept, 2025-11-18)`
 - `IMAP/INBOX/Weekly report (System, 2026-01-01)`
 
-The locator is the clickable identifier shown in search results.
+**Why this design:**
+- Consistent with documents (source_uri pattern)
+- No provider-specific logic at search time
+- Ingestor controls formatting
+- UI can render emails and documents identically
 
 ## Building On This Branch
 

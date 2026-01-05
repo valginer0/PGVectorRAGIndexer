@@ -3,6 +3,9 @@ Email Search Retriever (Provider-Agnostic)
 
 Provides semantic search over the email_chunks table.
 This module is independent of any email provider (Gmail, Outlook, IMAP).
+
+Design: Emails are treated like documents - source_uri contains the locator string
+that was built at index time. No provider-specific logic needed at search time.
 """
 
 import logging
@@ -14,50 +17,30 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class EmailSearchResult:
-    """Container for email search result data."""
+    """
+    Container for email search result data.
+    
+    Follows the same pattern as SearchResult for documents.
+    source_uri is the locator (built at index time).
+    """
     
     chunk_id: int
     message_id: str
-    thread_id: Optional[str]
-    sender: Optional[str]
-    subject: Optional[str]
-    received_at: Optional[str]
+    source_uri: str  # Locator: Provider/Folder/Subject (Sender, Date)
     chunk_index: int
     text_content: str
     distance: float
     relevance_score: float
-    provider: Optional[str] = None
-    folder: Optional[str] = None
+    thread_id: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     
     def __str__(self) -> str:
-        """Format result as string."""
-        date_str = self.received_at[:10] if self.received_at else "Unknown"
+        """Format result as string (same format as document results)."""
         return (
             f"Score: {self.relevance_score:.4f} | "
-            f"From: {self.sender or 'Unknown'} | Date: {date_str}\n"
-            f"Subject: {self.subject or '(No Subject)'}\n"
+            f"Source: {self.source_uri} (Chunk #{self.chunk_index})\n"
             f"Text: {self.text_content[:200]}..."
         )
-    
-    def to_locator(self) -> str:
-        """
-        Format as locator string for search results.
-        
-        Format: <Provider>/<Folder>/<Subject> (<From>, <YYYY-MM-DD>)
-        Example: Gmail/Inbox/Re: licensing question (Vitaly, 2026-01-02)
-        """
-        provider = self.provider or "Email"
-        folder = self.folder or "Inbox"
-        subject = self.subject or "(No Subject)"
-        sender_short = self.sender.split()[0] if self.sender else "Unknown"
-        date_str = self.received_at[:10] if self.received_at else "Unknown"
-        
-        # Truncate subject if too long
-        if len(subject) > 40:
-            subject = subject[:40] + "..."
-        
-        return f"{provider}/{folder}/{subject} ({sender_short}, {date_str})"
 
 
 def search_emails(
@@ -99,18 +82,15 @@ def search_emails(
     query_embedding = embedding_service.encode(query)
     
     # Vector search on email_chunks table
+    # Note: source_uri is the locator, built at index time
     query_sql = """
         SELECT 
             id as chunk_id,
             message_id,
             thread_id,
-            sender,
-            subject,
-            received_at,
+            source_uri,
             chunk_index,
             text_content,
-            provider,
-            folder,
             embedding <=> %s::vector AS distance,
             metadata
         FROM email_chunks
@@ -134,15 +114,11 @@ def search_emails(
                 chunk_id=result['chunk_id'],
                 message_id=result['message_id'],
                 thread_id=result['thread_id'],
-                sender=result['sender'],
-                subject=result['subject'],
-                received_at=str(result['received_at']) if result['received_at'] else None,
+                source_uri=result['source_uri'],
                 chunk_index=result['chunk_index'],
                 text_content=result['text_content'],
                 distance=distance,
                 relevance_score=relevance_score,
-                provider=result.get('provider'),
-                folder=result.get('folder'),
                 metadata=result.get('metadata')
             ))
     

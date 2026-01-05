@@ -2,6 +2,9 @@
 -- This table stores indexed email content for semantic search.
 -- Follows the same pattern as document_chunks: source_uri is the locator.
 
+-- Ensure pgvector extension is available
+CREATE EXTENSION IF NOT EXISTS vector;
+
 CREATE TABLE IF NOT EXISTS email_chunks (
     id SERIAL PRIMARY KEY,
     
@@ -20,7 +23,7 @@ CREATE TABLE IF NOT EXISTS email_chunks (
     embedding vector(384),
     
     -- Timestamps and metadata
-    metadata JSONB DEFAULT '{}',
+    metadata JSONB DEFAULT '{}'::jsonb,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
     

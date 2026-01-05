@@ -15,6 +15,33 @@ from typing import List, Optional, Dict, Any
 logger = logging.getLogger(__name__)
 
 
+def _calculate_relevance_score(distance: float, metric: str = 'cosine') -> float:
+    """
+    Convert distance to relevance score (0-1, higher is better).
+    
+    This is the same logic used by DocumentRetriever to ensure
+    consistent threshold behavior across documents and emails.
+    
+    Args:
+        distance: Distance value from database
+        metric: Distance metric used ('cosine', 'l2', etc.)
+        
+    Returns:
+        Relevance score between 0 and 1
+    """
+    if metric == 'cosine':
+        # Cosine distance is 1 - cosine_similarity
+        # So similarity = 1 - distance
+        return max(0.0, min(1.0, 1.0 - distance))
+    elif metric == 'l2':
+        # Convert L2 distance to similarity (inverse relationship)
+        # Use exponential decay
+        return max(0.0, min(1.0, 1.0 / (1.0 + distance)))
+    else:
+        # Default: assume lower distance is better
+        return max(0.0, min(1.0, 1.0 / (1.0 + distance)))
+
+
 @dataclass
 class EmailSearchResult:
     """
@@ -75,6 +102,7 @@ def search_emails(
     
     top_k = top_k if top_k is not None else config.retrieval.top_k
     min_score = min_score if min_score is not None else config.retrieval.similarity_threshold
+    distance_metric = config.retrieval.distance_metric
     
     logger.info(f"Searching emails for: '{query}' (top_k={top_k})")
     
@@ -106,8 +134,8 @@ def search_emails(
     results = []
     for result in raw_results:
         distance = result['distance']
-        # Convert distance to relevance score (cosine: 1 - distance)
-        relevance_score = max(0.0, 1.0 - distance)
+        # Use same conversion as DocumentRetriever for consistent thresholds
+        relevance_score = _calculate_relevance_score(distance, distance_metric)
         
         if relevance_score >= min_score:
             results.append(EmailSearchResult(

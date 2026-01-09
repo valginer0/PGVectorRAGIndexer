@@ -49,6 +49,8 @@ def test_initialization(manage_tab):
 def test_get_filters(manage_tab):
     """Test filter construction."""
     # Test empty filters (should show warning and return None)
+    # Need to clear path_filter since it defaults to '*' which would create a filter
+    manage_tab.path_filter.clear()
     with patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn:
         assert manage_tab.get_filters() is None
         mock_warn.assert_called_once()

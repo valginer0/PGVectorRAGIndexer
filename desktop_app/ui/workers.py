@@ -110,6 +110,7 @@ class UploadWorker(QThread):
             
             try:
                 # Check if exists and compare hash
+                needs_force_reindex = force_reindex  # Start with user's setting
                 if not force_reindex:
                     # Get remote document metadata
                     t0 = time.perf_counter()
@@ -139,16 +140,19 @@ class UploadWorker(QThread):
                             self.file_finished.emit(i, True, "Document unchanged (skipped)")
                             skipped_count += 1
                             continue
-                    # If document doesn't exist (doc is None) or hashes differ, we proceed to upload.
+                        
+                        # Hash or type mismatch detected - force reindex for this file
+                        needs_force_reindex = True
+                    # If document doesn't exist (doc is None), no need to force reindex
 
                 self.progress.emit(f"Uploading {file_path.name}...")
                 
-                # Upload
+                # Upload (use needs_force_reindex which is True if hash/type mismatch detected)
                 file_start_time = time.perf_counter()
                 self.api_client.upload_document(
                     file_path=file_path,
                     custom_source_uri=full_path,
-                    force_reindex=force_reindex,
+                    force_reindex=needs_force_reindex,
                     document_type=document_type,
                     ocr_mode=ocr_mode
                 )

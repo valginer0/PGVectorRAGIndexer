@@ -106,6 +106,7 @@ class DocumentsTab(QWidget):
             if index != -1:
                 self.page_size_combo.setCurrentIndex(index)
         self.page_size_combo.currentIndexChanged.connect(self.on_page_size_changed)
+        self.page_size_combo.setMinimumHeight(35)  # Prevent crushing at min window height
         pagination_layout.addWidget(self.page_size_combo)
         pagination_layout.addStretch()
         

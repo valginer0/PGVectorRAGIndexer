@@ -19,6 +19,7 @@ from PySide6.QtCore import Qt, QThread, Signal, QPoint, QSize
 from PySide6.QtGui import QColor
 from .shared import populate_document_type_combo
 from .workers import SearchWorker
+from ..utils.snippet_utils import extract_snippet
 
 # ... imports ...
 
@@ -32,6 +33,7 @@ class SearchTab(QWidget):
         self.api_client = api_client
         self.search_worker = None
         self.source_manager = source_manager
+        self.current_query = ""  # Store for snippet extraction
         self.setup_ui()
     
     def setup_ui(self):
@@ -92,6 +94,7 @@ class SearchTab(QWidget):
         self.metric_combo = QComboBox()
         self.metric_combo.addItems(["cosine", "euclidean", "dot_product"])
         self.metric_combo.setMinimumWidth(120)
+        self.metric_combo.setMinimumHeight(35)  # Prevent crushing at min window height
         options_layout.addWidget(self.metric_combo)
         
         options_layout.addStretch()
@@ -108,6 +111,7 @@ class SearchTab(QWidget):
         self.type_filter.setPlaceholderText("(optional)")
         self.type_filter.setToolTip("Filter by document type. Use * for all, or leave empty for no type.")
         self.type_filter.setMinimumWidth(200)
+        self.type_filter.setMinimumHeight(35)  # Prevent crushing at min window height
         type_layout.addWidget(self.type_filter)
 
         refresh_types_btn = QPushButton()
@@ -154,6 +158,9 @@ class SearchTab(QWidget):
         if not query:
             QMessageBox.warning(self, "Empty Query", "Please enter a search query.")
             return
+        
+        # Store query for snippet extraction
+        self.current_query = query
         
         if not self.api_client.is_api_available():
             QMessageBox.critical(
@@ -251,9 +258,9 @@ class SearchTab(QWidget):
             chunk_item.setTextAlignment(Qt.AlignCenter)
             self.results_table.setItem(i, 3, chunk_item)
             
-            # Content preview (Col 4)
+            # Content preview (Col 4) - extract relevant snippet around query terms
             content = result.get('text_content', '')
-            preview = f"{content[:100]}..." if len(content) > 100 else f"{content}"
+            preview = extract_snippet(content, self.current_query, window=120)
             content_item = QTableWidgetItem(preview)
             self.results_table.setItem(i, 4, content_item)
             

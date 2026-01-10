@@ -96,8 +96,8 @@ def test_search_finished_success(search_tab):
     
     assert search_tab.search_btn.isEnabled()
     assert search_tab.results_table.rowCount() == 2
-    assert search_tab.results_table.item(0, 0).text() == "0.9000"
-    assert search_tab.results_table.item(0, 1).text() == "/path/1"
+    assert search_tab.results_table.item(0, 0).text() == "0.9000"  # Score
+    assert search_tab.results_table.item(0, 2).text() == "/path/1"  # Source (column 2 now)
 
 def test_search_finished_failure(search_tab):
     """Test handling of search failure."""
@@ -126,14 +126,14 @@ def test_show_full_content(search_tab):
 
 def test_handle_results_cell_clicked(search_tab, mock_source_manager):
     """Test clicking on results table cell."""
-    # Setup table
+    # Setup table - Source is in column 2 now (0=Score, 1=Type, 2=Source)
     search_tab.results_table.setRowCount(1)
     item = QTableWidgetItem("test")
     item.setData(Qt.UserRole, "/path/to/file")
-    search_tab.results_table.setItem(0, 1, item)
+    search_tab.results_table.setItem(0, 2, item)  # Column 2 for Source
     
-    # Click on source column (1)
-    search_tab.handle_results_cell_clicked(0, 1)
+    # Click on source column (2)
+    search_tab.handle_results_cell_clicked(0, 2)
     mock_source_manager.open_path.assert_called_with("/path/to/file")
     
     # Click on other column (0)
@@ -143,11 +143,11 @@ def test_handle_results_cell_clicked(search_tab, mock_source_manager):
 
 def test_context_menu(search_tab, mock_source_manager):
     """Test context menu actions."""
-    # Setup table
+    # Setup table - Source is in column 2 now
     search_tab.results_table.setRowCount(1)
     item = QTableWidgetItem("test")
     item.setData(Qt.UserRole, "/path/to/file")
-    search_tab.results_table.setItem(0, 1, item)
+    search_tab.results_table.setItem(0, 2, item)  # Column 2 for Source
     
     # Mock finding entry
     mock_entry = MagicMock()
@@ -162,11 +162,11 @@ def test_context_menu(search_tab, mock_source_manager):
         # Setup MockMenu instance
         mock_menu_instance = MockMenu.return_value
         
-        # Mock indexAt to return a valid index at column 1
+        # Mock indexAt to return a valid index at column 2 (Source)
         mock_index = MagicMock()
         mock_index.isValid.return_value = True
         mock_index.row.return_value = 0
-        mock_index.column.return_value = 1
+        mock_index.column.return_value = 2
         mock_index_at.return_value = mock_index
         
         # Mock item return
@@ -180,13 +180,4 @@ def test_context_menu(search_tab, mock_source_manager):
         mock_source_manager.find_entry.assert_called_with("/path/to/file")
         mock_menu_instance.exec.assert_called_once()
 
-def test_open_source_path_fallback(search_tab):
-    """Test open_source_path fallback logic (when source_manager is None)."""
-    search_tab.source_manager = None
-    
-    with patch("pathlib.Path.exists", return_value=True), \
-         patch("sys.platform", "linux"), \
-         patch("subprocess.Popen") as mock_popen:
-        
-        search_tab.open_source_path("/path/to/file")
-        mock_popen.assert_called_once_with(["xdg-open", "/path/to/file"])
+# NOTE: open_source_path method was moved to source_manager, these tests are obsolete

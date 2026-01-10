@@ -65,6 +65,7 @@ class ManageTab(QWidget):
         self.type_combo.addItem("")  # Empty = all types
         self.type_combo.setPlaceholderText("Select or enter type...")
         self.type_combo.setToolTip("Filter by document type. Leave empty for all types.")
+        self.type_combo.setMinimumHeight(35)  # Prevent crushing at min window height
         type_layout.addWidget(self.type_combo, 1)
         
         refresh_types_btn = QPushButton()

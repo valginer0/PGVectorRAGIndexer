@@ -94,6 +94,7 @@ class SearchTab(QWidget):
         self.metric_combo = QComboBox()
         self.metric_combo.addItems(["cosine", "euclidean", "dot_product"])
         self.metric_combo.setMinimumWidth(120)
+        self.metric_combo.setMinimumHeight(35)  # Prevent crushing at min window height
         options_layout.addWidget(self.metric_combo)
         
         options_layout.addStretch()
@@ -110,6 +111,7 @@ class SearchTab(QWidget):
         self.type_filter.setPlaceholderText("(optional)")
         self.type_filter.setToolTip("Filter by document type. Use * for all, or leave empty for no type.")
         self.type_filter.setMinimumWidth(200)
+        self.type_filter.setMinimumHeight(35)  # Prevent crushing at min window height
         type_layout.addWidget(self.type_filter)
 
         refresh_types_btn = QPushButton()

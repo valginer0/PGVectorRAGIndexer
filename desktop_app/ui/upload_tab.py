@@ -139,6 +139,7 @@ class UploadTab(QWidget):
             "Skip: Never use OCR (fastest, skips scanned docs)\n"
             "Only: Only process files that require OCR"
         )
+        self.ocr_mode_combo.setMinimumHeight(35)  # Prevent crushing at min window height
         ocr_layout.addWidget(self.ocr_mode_combo, 1)  # Stretch factor 1 to expand
         ocr_layout.addSpacing(30)  # Match the refresh button width
         

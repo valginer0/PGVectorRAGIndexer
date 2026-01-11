@@ -295,16 +295,31 @@ function Install-RancherDesktop {
 # ============================================================================
 
 function Start-RancherDesktop {
-    # First check if Docker is already running - if so, we're good!
-    try {
-        $result = docker ps 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Show-Success "Docker is already running"
-            return $true
-        }
-    } catch {}
+    $spinnerChars = @('|','/','-','\')
+    $spinIndex = 0
     
-    # Try to find rdctl in common locations
+    # Check if Docker is already running with spinner
+    Write-Host "`r  | Checking Docker status..." -NoNewline -ForegroundColor Gray
+    
+    for ($i = 0; $i -lt 3; $i++) {
+        try {
+            $result = docker ps 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "`r                                                              `r" -NoNewline
+                Show-Success "Docker is already running"
+                return $true
+            }
+        } catch {}
+        
+        $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+        Write-Host "`r  $char Checking Docker status..." -NoNewline -ForegroundColor Gray
+        Start-Sleep -Milliseconds 500
+        $spinIndex++
+    }
+    
+    Write-Host "`r                                                              `r" -NoNewline
+    
+    # Docker not running, try to find and use rdctl
     $rdctlPaths = @(
         "$env:LOCALAPPDATA\Programs\Rancher Desktop\resources\resources\win32\bin\rdctl.exe",
         "$env:ProgramFiles\Rancher Desktop\resources\resources\win32\bin\rdctl.exe",
@@ -320,19 +335,26 @@ function Start-RancherDesktop {
     }
     
     if (-not $rdctl) {
-        # No rdctl found, but maybe Docker just needs to be started manually
-        Show-Warning "Could not find rdctl. Checking if Docker becomes available..."
-        return $true  # Let Wait-ForDocker handle it
+        Show-Warning "Could not find rdctl. Will check if Docker becomes available..."
+        return $true
     }
     
-    Write-Host "  Starting Rancher Desktop (this may take a few minutes)..." -ForegroundColor Gray
+    # Start Rancher Desktop with spinner
+    $job = Start-Job -ScriptBlock { 
+        param($rd) 
+        & $rd start --container-engine moby 2>&1 
+    } -ArgumentList $rdctl
     
-    try {
-        & $rdctl start --container-engine moby 2>&1 | Out-Null
-    } catch {
-        Show-Warning "Rancher Desktop may need a system restart for WSL setup"
-        return $false
+    while ($job.State -eq 'Running') {
+        $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+        Write-Host "`r  $char Starting Rancher Desktop..." -NoNewline -ForegroundColor Gray
+        Start-Sleep -Milliseconds 150
+        $spinIndex++
     }
+    
+    Write-Host "`r                                                              `r" -NoNewline
+    $rdctlResult = Receive-Job -Job $job
+    Remove-Job -Job $job -Force
     
     return $true
 }

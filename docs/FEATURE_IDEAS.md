@@ -336,6 +336,179 @@ Simplify the Upload tab by consolidating actions and adding "last indexed" visib
 
 ---
 
+### 6. Scheduled Automatic Indexing
+**Status**: Idea  
+**Priority**: TBD  
+**Branch**: (not yet created)  
+**Depends on**: None (standalone), synergizes with #2, #4, #6
+
+**Description**:  
+Enable automatic periodic indexing of "watched folders." Users register root folders they want to keep indexed, and the system periodically scans for changes and re-indexes.
+
+**Core Concept**:
+- **Watched Folders List**: Stored in DB, managed via UI (add/remove folders)
+- **Scheduled Scans**: Hourly, daily, or custom intervals
+- **Incremental Updates**: Only process changed files (existing hash-based detection)
+
+**Where Does Scanning Run?**:
+
+| Deployment | Scheduler Location | Why |
+|------------|-------------------|-----|
+| Desktop-only | Desktop app | Server can't see local files |
+| Split (#2) | Desktop client | Files are on client machine |
+| Server-hosted files | Server (cron/APScheduler) | Files accessible to server |
+
+> **Key insight**: The scheduler must run where the files are. Even with a remote backend, local files require the desktop client to perform scans.
+
+**Data Model**:
+```sql
+CREATE TABLE watched_folders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    root_path TEXT NOT NULL,
+    client_id TEXT,                    -- identifies which desktop registered this
+    schedule TEXT DEFAULT 'daily',     -- 'hourly', 'daily', 'weekly', 'manual'
+    enabled BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_scanned_at TIMESTAMPTZ,
+    last_scan_status TEXT,             -- 'success', 'partial', 'failed'
+    exclusion_patterns TEXT[]          -- inherited from folder dialog
+);
+```
+
+**UI Requirements**:
+
+1. **Watched Folders Manager** (new panel or tab section)
+   - List of registered folders with status
+   - Add folder (reuse existing folder picker)
+   - Remove folder (with confirmation)
+   - Enable/disable per folder
+   - Edit schedule per folder
+
+2. **Per-folder controls**:
+   | Action | Description |
+   |--------|-------------|
+   | ➕ Add | Register new folder to watch |
+   | 🗑️ Remove | Delete from watch list (keeps indexed data) |
+   | ⏸️ Disable | Pause automatic scans |
+   | 🔄 Scan Now | Trigger immediate scan |
+   | ⚙️ Settings | Edit schedule, exclusions |
+
+3. **Status indicators**:
+   - Last scanned: timestamp
+   - Next scan: scheduled time
+   - Status: ✅ Up to date / ⚠️ Pending / ❌ Failed
+
+**Desktop Scheduler Options**:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Background thread** | Simple, works while app runs | App must be open |
+| **System tray mode** | App can minimize to tray | Still requires app running |
+| **OS scheduled task** | Runs even when app closed | Complex setup, platform-specific |
+
+**Recommended**: Start with background thread + tray mode. Add OS-level scheduling later.
+
+**Implementation Effort**:
+| Step | Effort |
+|------|--------|
+| DB schema + API endpoints | ~2-3 hours |
+| UI: watched folders list | ~3-4 hours |
+| Background scheduler (desktop) | ~3-4 hours |
+| Integration with existing indexer | ~2 hours |
+| Tray mode (minimize to tray) | ~2 hours |
+| **Total** | **~12-15 hours** |
+
+**Technical Notes**:
+- Reuse `FolderIndexDialog` logic for scanning
+- Store exclusion patterns per watched folder
+- Synergizes with #4 (run history/status dashboard)
+- Synergizes with #6 (tree view shows watched roots)
+- Consider: what happens if folder is deleted/moved?
+
+---
+
+### 7. Hierarchical Document Browser
+**Status**: Idea  
+**Priority**: TBD  
+**Branch**: (not yet created)  
+**Depends on**: None (independent, but synergizes with #4)
+
+**Description**:  
+Replace the flat document list in the Documents tab with a hierarchical folder tree. With 2,500+ indexed files, the current flat list is difficult to navigate even with sorting. A tree view allows users to drill down by folder structure.
+
+**Current State**:
+- Documents tab shows flat list of all indexed files
+- Each row has: Source URI, Type, Chunks, Created, Updated, Delete
+- Pagination helps but doesn't solve navigation problem
+- Users can't easily find a specific file without knowing its exact path
+
+**Proposed UX**:
+```
+📁 C:\Users\v_ale\My Drive\home_connections (1,234 files)
+   ├── 📁 Fla (456 files, Last updated: Jan 7)
+   │   ├── 📁 home (234 files)
+   │   │   ├── 📁 cars (12 files)
+   │   │   │   ├── 📄 KiaEV6_2.txt     Jan 2    Jan 9
+   │   │   │   └── 📄 TeslaModel3.pdf  Dec 15   Dec 15
+   │   │   └── 📁 taxes (89 files)
+   │   └── 📁 insurance (122 files)
+   └── 📁 CA (778 files, Last updated: Jan 5)
+📁 C:\Projects (322 files, Last updated: Dec 28)
+```
+
+**Proposed Implementation**:
+
+1. **Backend: Group documents by path prefix**
+   - New API endpoint: `GET /documents/tree?root=<path>`
+   - Returns folder structure with aggregated counts and timestamps
+   - Lazy-loading: only fetch children when folder is expanded
+
+2. **Frontend: Tree widget**
+   - Use `QTreeWidget` or `QTreeView` instead of `QTableWidget`
+   - Expand/collapse folders
+   - Show file count and last-updated per folder (aggregated from children)
+   - Click file row to see full details / open context menu
+
+3. **Aggregated metadata per folder**
+   - `file_count`: count of indexed files in folder (recursive)
+   - `last_updated`: MAX(last_updated) of all files in folder
+   - `created`: MIN(indexed_at) of all files in folder
+
+**Data Model**:
+No schema change required—derive folder structure from existing `source_uri` paths:
+```sql
+-- Example: count files per root folder
+SELECT 
+    split_part(source_uri, '/', 4) as root_folder,
+    COUNT(DISTINCT document_id) as file_count,
+    MAX(last_updated) as last_updated
+FROM document_chunks
+GROUP BY root_folder;
+```
+
+**UI Modes** (optional):
+| Mode | Description |
+|------|-------------|
+| Tree View | Hierarchical folder browser (proposed) |
+| List View | Current flat list (keep as option) |
+
+**Implementation Effort**:
+| Step | Effort |
+|------|--------|
+| Backend: tree structure API | ~3-4 hours |
+| Frontend: tree widget | ~4-6 hours |
+| Folder aggregation (counts, timestamps) | ~2 hours |
+| Toggle between tree/list view | ~1 hour |
+| **Total** | **~10-13 hours** |
+
+**Technical Notes**:
+- Path parsing must handle both Windows (`\`) and Unix (`/`) paths
+- Consider caching folder aggregates for large indexes
+- Synergizes with #4 (Health Dashboard) for timestamp data
+- Could add search/filter within tree view
+
+---
+
 ## ✅ Implemented Features
 (Move features here after they ship)
 

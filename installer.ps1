@@ -3,7 +3,7 @@
 # Usage: Double-click install.bat or run: powershell -ExecutionPolicy Bypass -File installer.ps1
 
 param(
-    [switch]$Resume,  # Resume after reboot
+    [switch]$Resume,
     [string]$InstallDir = "$env:USERPROFILE\PGVectorRAGIndexer",
     [string]$StateFile = "$env:USERPROFILE\.pgvector-install-state.json"
 )
@@ -31,11 +31,11 @@ $Script:TotalSteps = $Steps.Count
 function Show-Banner {
     Clear-Host
     Write-Host ""
-    Write-Host "  ╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Cyan
-    Write-Host "  ║                                                               ║" -ForegroundColor Cyan
-    Write-Host "  ║           PGVectorRAGIndexer - One-Click Installer            ║" -ForegroundColor Cyan
-    Write-Host "  ║                                                               ║" -ForegroundColor Cyan
-    Write-Host "  ╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Cyan
+    Write-Host "  =============================================================" -ForegroundColor Cyan
+    Write-Host "  |                                                           |" -ForegroundColor Cyan
+    Write-Host "  |         PGVectorRAGIndexer - One-Click Installer          |" -ForegroundColor Cyan
+    Write-Host "  |                                                           |" -ForegroundColor Cyan
+    Write-Host "  =============================================================" -ForegroundColor Cyan
     Write-Host ""
 }
 
@@ -51,10 +51,10 @@ function Show-Step {
     $barLength = 40
     $filled = [math]::Round($barLength * $StepNumber / $TotalSteps)
     $empty = $barLength - $filled
-    $bar = ("█" * $filled) + ("░" * $empty)
+    $bar = ("#" * $filled) + ("-" * $empty)
     
     Write-Host ""
-    Write-Host "  Step $StepNumber of $TotalSteps: $Message" -ForegroundColor Yellow
+    Write-Host "  Step $StepNumber of $TotalSteps : $Message" -ForegroundColor Yellow
     if ($TimeEstimate) {
         Write-Host "  Estimated time: $TimeEstimate" -ForegroundColor DarkGray
     }
@@ -69,7 +69,7 @@ function Show-Spinner {
         [int]$TimeoutSeconds = 300
     )
     
-    $spinnerChars = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏')
+    $spinnerChars = @('|','/','-','\')
     $job = Start-Job -ScriptBlock $Action
     $elapsed = 0
     $spinIndex = 0
@@ -92,22 +92,22 @@ function Show-Spinner {
 
 function Show-Success {
     param([string]$Message)
-    Write-Host "  ✓ $Message" -ForegroundColor Green
+    Write-Host "  [OK] $Message" -ForegroundColor Green
 }
 
 function Show-Warning {
     param([string]$Message)
-    Write-Host "  ⚠ $Message" -ForegroundColor Yellow
+    Write-Host "  [!] $Message" -ForegroundColor Yellow
 }
 
 function Show-Error {
     param([string]$Message)
-    Write-Host "  ✗ $Message" -ForegroundColor Red
+    Write-Host "  [X] $Message" -ForegroundColor Red
 }
 
 function Show-Info {
     param([string]$Message)
-    Write-Host "  ℹ $Message" -ForegroundColor Cyan
+    Write-Host "  [i] $Message" -ForegroundColor Cyan
 }
 
 # ============================================================================
@@ -135,12 +135,10 @@ function Clear-State {
     if (Test-Path $StateFile) {
         Remove-Item $StateFile -Force
     }
-    # Remove scheduled task if exists
     Unregister-ScheduledTask -TaskName "PGVectorRAGIndexer_Resume" -Confirm:$false -ErrorAction SilentlyContinue
 }
 
 function Schedule-Resume {
-    # Create a scheduled task to resume installation after reboot
     $scriptPath = $MyInvocation.ScriptName
     if (-not $scriptPath) {
         $scriptPath = "$InstallDir\installer.ps1"
@@ -226,7 +224,6 @@ function Install-Git {
         return $true
     }
     
-    # Use --scope user to install to user space (no admin required)
     return Install-WithWinget "Git.Git" "Git" "--scope user"
 }
 
@@ -236,7 +233,6 @@ function Install-RancherDesktop {
         return $true
     }
     
-    # Check if Rancher is installed but not running
     $rdctl = "$env:LOCALAPPDATA\Programs\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"
     if (Test-Path $rdctl) {
         Show-Success "Rancher Desktop already installed"
@@ -258,13 +254,11 @@ function Start-RancherDesktop {
         return $false
     }
     
-    # Start Rancher Desktop with Docker (moby) engine
     Write-Host "  Starting Rancher Desktop (this may take a few minutes)..." -ForegroundColor Gray
     
     try {
         & $rdctl start --container-engine moby 2>&1 | Out-Null
     } catch {
-        # Rancher might prompt for reboot if WSL needs setup
         Show-Warning "Rancher Desktop may need a system restart for WSL setup"
         return $false
     }
@@ -276,7 +270,7 @@ function Wait-ForDocker {
     param([int]$TimeoutSeconds = 300)
     
     $elapsed = 0
-    $spinnerChars = @('⠋','⠙','⠹','⠸','⠼','⠴','⠦','⠧','⠇','⠏')
+    $spinnerChars = @('|','/','-','\')
     $spinIndex = 0
     
     while ($elapsed -lt $TimeoutSeconds) {
@@ -316,9 +310,9 @@ function Request-Reboot {
     $countdown = 60
     
     Write-Host ""
-    Write-Host "  ╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Yellow
-    Write-Host "  ║                    SYSTEM RESTART REQUIRED                    ║" -ForegroundColor Yellow
-    Write-Host "  ╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Yellow
+    Write-Host "  =============================================================" -ForegroundColor Yellow
+    Write-Host "  |                 SYSTEM RESTART REQUIRED                   |" -ForegroundColor Yellow
+    Write-Host "  =============================================================" -ForegroundColor Yellow
     Write-Host ""
     Write-Host "  $Reason" -ForegroundColor White
     Write-Host ""
@@ -326,7 +320,7 @@ function Request-Reboot {
     Write-Host ""
     Write-Host "  Your computer will restart in $countdown seconds." -ForegroundColor White
     Write-Host ""
-    Write-Host "  Press [C] to CANCEL restart (you'll need to restart manually)" -ForegroundColor Green
+    Write-Host "  Press [C] to CANCEL restart (you will need to restart manually)" -ForegroundColor Green
     Write-Host "  Press [R] to restart NOW" -ForegroundColor Green
     Write-Host ""
     
@@ -358,7 +352,6 @@ function Request-Reboot {
 # ============================================================================
 
 function Setup-Application {
-    # Clone or update repository
     if (Test-Path "$InstallDir\.git") {
         Write-Host "  Updating existing installation..." -ForegroundColor Gray
         Push-Location $InstallDir
@@ -380,7 +373,6 @@ function Setup-Application {
     
     Show-Success "Repository ready"
     
-    # Create virtual environment
     Push-Location $InstallDir
     
     if (-not (Test-Path "venv-windows")) {
@@ -389,17 +381,14 @@ function Setup-Application {
     }
     Show-Success "Virtual environment ready"
     
-    # Install dependencies
     Write-Host "  Installing Python dependencies..." -ForegroundColor Gray
     & ".\venv-windows\Scripts\pip.exe" install -q -r requirements-desktop.txt
     Show-Success "Dependencies installed"
     
-    # Pull Docker images
     Write-Host "  Pulling Docker images (this may take a few minutes)..." -ForegroundColor Gray
     & ".\manage.ps1" -Action update -Channel prod 2>&1 | Out-Null
     Show-Success "Docker containers ready"
     
-    # Create desktop shortcut
     if (Test-Path "create_desktop_shortcut.ps1") {
         Write-Host "  Creating desktop shortcut..." -ForegroundColor Gray
         & ".\create_desktop_shortcut.ps1"
@@ -414,9 +403,9 @@ function Start-Application {
     Push-Location $InstallDir
     
     Write-Host ""
-    Write-Host "  ╔═══════════════════════════════════════════════════════════════╗" -ForegroundColor Green
-    Write-Host "  ║                   INSTALLATION COMPLETE!                      ║" -ForegroundColor Green
-    Write-Host "  ╚═══════════════════════════════════════════════════════════════╝" -ForegroundColor Green
+    Write-Host "  =============================================================" -ForegroundColor Green
+    Write-Host "  |                  INSTALLATION COMPLETE!                   |" -ForegroundColor Green
+    Write-Host "  =============================================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "  Starting PGVectorRAGIndexer..." -ForegroundColor Cyan
     Write-Host ""
@@ -437,13 +426,11 @@ function Start-Application {
 function Main {
     Show-Banner
     
-    # Check if resuming after reboot
     if ($Resume) {
         $state = Get-SavedState
         if ($state -and $state.Stage -eq "PostReboot") {
             Show-Info "Resuming installation after restart..."
             Clear-State
-            # Skip to Docker wait and app setup
             Show-Step 5 "Starting Docker" "~2-4 minutes"
             if (-not (Wait-ForDocker -TimeoutSeconds 300)) {
                 Show-Error "Docker failed to start. Please check Rancher Desktop."
@@ -458,7 +445,6 @@ function Main {
         }
     }
     
-    # Check for winget
     if (-not (Test-WingetAvailable)) {
         Show-Error "Windows Package Manager (winget) is required but not found."
         Show-Info "Please update Windows or install App Installer from the Microsoft Store."
@@ -466,7 +452,6 @@ function Main {
         return
     }
     
-    # Phase 1: Check prerequisites
     Show-Step 1 "Checking prerequisites" "~30 seconds"
     $missing = Test-Prerequisites
     if ($missing.Count -gt 0) {
@@ -476,7 +461,6 @@ function Main {
         Show-Success "All prerequisites found!"
     }
     
-    # Phase 2: Install Python
     Show-Step 2 "Installing Python" "~2 minutes"
     if (-not (Install-Python)) {
         Show-Error "Python installation failed"
@@ -484,7 +468,6 @@ function Main {
         return
     }
     
-    # Phase 3: Install Git
     Show-Step 3 "Installing Git" "~1 minute"
     if (-not (Install-Git)) {
         Show-Error "Git installation failed"
@@ -492,7 +475,6 @@ function Main {
         return
     }
     
-    # Phase 4: Install Rancher Desktop
     Show-Step 4 "Installing Rancher Desktop" "~3 minutes"
     if (-not (Install-RancherDesktop)) {
         Show-Error "Rancher Desktop installation failed"
@@ -500,13 +482,11 @@ function Main {
         return
     }
     
-    # Phase 5: Start Docker
     Show-Step 5 "Starting Docker" "~2-4 minutes"
     
     $dockerStarted = Start-RancherDesktop
     
     if (-not $dockerStarted) {
-        # May need reboot for WSL
         Request-Reboot -Reason "Rancher Desktop needs to set up WSL2 (Windows Subsystem for Linux)."
         return
     }
@@ -518,7 +498,6 @@ function Main {
         return
     }
     
-    # Phase 6: Setup application
     Show-Step 6 "Setting up application" "~2 minutes"
     if (-not (Setup-Application)) {
         Show-Error "Application setup failed"
@@ -526,12 +505,9 @@ function Main {
         return
     }
     
-    # Clear any saved state
     Clear-State
     
-    # Launch the application
     Start-Application
 }
 
-# Run main
 Main

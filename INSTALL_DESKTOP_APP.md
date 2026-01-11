@@ -10,59 +10,57 @@ For technical details, see [SECURITY.md](SECURITY.md).
 
 ## Windows Installation
 
-### One-Line Install (Recommended)
+### 🚀 One-Click Install (Recommended for Beginners)
 
-**From Windows PowerShell (as Administrator or with execution policy set):**
+**No technical knowledge required!** This installer automatically handles everything:
+
+1. **Download** [`install.bat`](https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/install.bat) (Right-click → Save Link As)
+2. **Double-click** the downloaded file
+3. **Wait** for the installer to complete (~10-15 minutes)
+
+The installer will automatically:
+- ✅ Install Python, Git, and Docker if missing
+- ✅ Set up the application
+- ✅ Create a Desktop Shortcut
+- ✅ Launch the app when ready
+
+> **Note:** If Windows asks "Windows protected your PC", click **More info** → **Run anyway**. This is normal for downloaded scripts.
+
+---
+
+### Alternative: PowerShell Install (For Technical Users)
+
+If you prefer the command line or already have prerequisites installed:
+
+**From Windows PowerShell:**
 
 ```powershell
 irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.ps1 | iex
 ```
 
 This will:
-1. ✅ Check for Python and Git
+1. ✅ Check for Python and Git (must be pre-installed)
 2. ✅ Clone the repository to `%USERPROFILE%\PGVectorRAGIndexer`
-3. ✅ Create virtual environment
-4. ✅ Install dependencies
-5. ✅ Create a Desktop Shortcut for easy access
-6. ✅ Auto-start the desktop app after setup (no interactive prompt)
-
-After bootstrap completes, use the unified wrapper:
-
-```powershell
-cd %USERPROFILE%\PGVectorRAGIndexer
-./manage.ps1 -Action update      # refresh containers (prod by default)
-./manage.ps1 -Action run         # launch desktop app anytime
-```
-
-Need a development build? `./manage.ps1 -Action update -Channel dev`
+3. ✅ Create virtual environment and install dependencies
+4. ✅ Create a Desktop Shortcut
+5. ✅ Auto-start the desktop app
 
 **If you get "execution policy" error:**
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
-Then run the install command again.
-
-### Create a Desktop Shortcut
-You can automatically create a "One-Click" desktop shortcut at any time:
-
-```powershell
-./manage.ps1 -Action shortcut
-```
-
-This will create a `PGVectorRAGIndexer` shortcut on your desktop. Double-click it to start the app!
-
-
 
 ---
 
 ### Daily Usage (Windows)
-To run the app later, you can use:
-1.  **The Desktop Shortcut** (Recommended)
-2.  Or Run via PowerShell:
-    ```powershell
-    cd %USERPROFILE%\PGVectorRAGIndexer
-    ./manage.ps1 -Action run
-    ```
+
+After installation, run the app using:
+1. **Desktop Shortcut** (Recommended) - Just double-click!
+2. **PowerShell:**
+   ```powershell
+   cd %USERPROFILE%\PGVectorRAGIndexer
+   ./manage.ps1 -Action run
+   ```
 
 ---
 

@@ -180,12 +180,14 @@ function Test-WingetAvailable {
 function Install-WithWinget {
     param(
         [string]$PackageId,
-        [string]$Name
+        [string]$Name,
+        [string]$ExtraArgs = ""
     )
     
     Write-Host "  Installing $Name..." -ForegroundColor Gray
     
-    $result = winget install $PackageId --silent --accept-package-agreements --accept-source-agreements 2>&1
+    $cmd = "winget install $PackageId --silent --accept-package-agreements --accept-source-agreements $ExtraArgs"
+    $result = Invoke-Expression $cmd 2>&1
     
     if ($LASTEXITCODE -eq 0 -or $result -match "already installed") {
         Refresh-Path
@@ -224,7 +226,8 @@ function Install-Git {
         return $true
     }
     
-    return Install-WithWinget "Git.Git" "Git"
+    # Use --scope user to install to user space (no admin required)
+    return Install-WithWinget "Git.Git" "Git" "--scope user"
 }
 
 function Install-RancherDesktop {

@@ -1,15 +1,29 @@
 @echo off
-:: PGVectorRAGIndexer One-Click Installer
-:: Double-click this file to install!
+title PGVectorRAGIndexer Installer
+echo.
+echo ============================================
+echo   PGVectorRAGIndexer One-Click Installer
+echo ============================================
+echo.
+echo Downloading installer script...
+echo.
 
-:: Run PowerShell installer with execution policy bypass
-powershell -ExecutionPolicy Bypass -NoProfile -File "%~dp0installer.ps1" %*
+:: Download and run the PowerShell installer
+powershell -ExecutionPolicy Bypass -NoProfile -Command ^
+    "try { " ^
+    "  $ProgressPreference = 'SilentlyContinue'; " ^
+    "  Invoke-WebRequest -Uri 'https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/installer.ps1' -OutFile '%TEMP%\installer.ps1' -UseBasicParsing; " ^
+    "  Write-Host 'Starting installation...' -ForegroundColor Green; " ^
+    "  & '%TEMP%\installer.ps1' " ^
+    "} catch { " ^
+    "  Write-Host 'Error downloading installer: ' $_.Exception.Message -ForegroundColor Red; " ^
+    "  Read-Host 'Press Enter to exit' " ^
+    "}"
 
-:: If PowerShell script not found, try downloading it
+:: If we get here, something went wrong
 if errorlevel 1 (
     echo.
-    echo Downloading installer...
-    powershell -ExecutionPolicy Bypass -NoProfile -Command "irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/installer.ps1 -OutFile '%TEMP%\installer.ps1'; & '%TEMP%\installer.ps1'"
+    echo Installation encountered an error.
+    pause
 )
 
-pause

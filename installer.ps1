@@ -23,6 +23,21 @@ $Script:Steps = @(
 
 $Script:CurrentStep = 0
 $Script:TotalSteps = $Steps.Count
+$Script:ActiveJobs = @()
+
+# Handle Ctrl+C gracefully
+$null = Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
+    Get-Job | Stop-Job -PassThru | Remove-Job -Force
+}
+
+trap {
+    Write-Host ""
+    Write-Host "  [!] Installation interrupted by user." -ForegroundColor Yellow
+    Write-Host "  Cleaning up..." -ForegroundColor Gray
+    Get-Job | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
+    Write-Host "  You can restart the installer to try again." -ForegroundColor Cyan
+    exit 1
+}
 
 # ============================================================================
 # UI HELPER FUNCTIONS
@@ -523,7 +538,7 @@ function Setup-Application {
     $job = Start-Job -ScriptBlock { 
         param($dir)
         Set-Location $dir
-        & ".\venv-windows\Scripts\pip.exe" install -q -r requirements-desktop.txt
+        & ".\venv-windows\Scripts\pip.exe" install -q -r requirements-desktop.txt 2>&1 | Out-Null
     } -ArgumentList $InstallDir
     
     while ($job.State -eq 'Running') {
@@ -542,7 +557,7 @@ function Setup-Application {
     $job = Start-Job -ScriptBlock { 
         param($dir)
         Set-Location $dir
-        & ".\manage.ps1" -Action update -Channel prod 2>&1 | Out-Null
+        & ".\manage.ps1" -Action update -Channel prod 2>&1 | Out-String | Out-Null
     } -ArgumentList $InstallDir
     
     while ($job.State -eq 'Running') {

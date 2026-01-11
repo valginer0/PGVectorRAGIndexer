@@ -247,11 +247,34 @@ function Install-RancherDesktop {
 # ============================================================================
 
 function Start-RancherDesktop {
-    $rdctl = "$env:LOCALAPPDATA\Programs\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"
+    # First check if Docker is already running - if so, we're good!
+    try {
+        $result = docker ps 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Show-Success "Docker is already running"
+            return $true
+        }
+    } catch {}
     
-    if (-not (Test-Path $rdctl)) {
-        Show-Error "Rancher Desktop not found at expected location"
-        return $false
+    # Try to find rdctl in common locations
+    $rdctlPaths = @(
+        "$env:LOCALAPPDATA\Programs\Rancher Desktop\resources\resources\win32\bin\rdctl.exe",
+        "$env:ProgramFiles\Rancher Desktop\resources\resources\win32\bin\rdctl.exe",
+        (Get-Command rdctl -ErrorAction SilentlyContinue).Source
+    )
+    
+    $rdctl = $null
+    foreach ($path in $rdctlPaths) {
+        if ($path -and (Test-Path $path)) {
+            $rdctl = $path
+            break
+        }
+    }
+    
+    if (-not $rdctl) {
+        # No rdctl found, but maybe Docker just needs to be started manually
+        Show-Warning "Could not find rdctl. Checking if Docker becomes available..."
+        return $true  # Let Wait-ForDocker handle it
     }
     
     Write-Host "  Starting Rancher Desktop (this may take a few minutes)..." -ForegroundColor Gray

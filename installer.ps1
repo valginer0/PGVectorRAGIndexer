@@ -110,6 +110,37 @@ function Show-Info {
     Write-Host "  [i] $Message" -ForegroundColor Cyan
 }
 
+function Run-WithSpinner {
+    param(
+        [string]$Message,
+        [scriptblock]$ScriptBlock
+    )
+    
+    $spinnerChars = @('|','/','-','\')
+    $spinIndex = 0
+    
+    # Start the job
+    $job = Start-Job -ScriptBlock $ScriptBlock
+    
+    # Show spinner while running
+    while ($job.State -eq 'Running') {
+        $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+        Write-Host "`r  $char $Message..." -NoNewline -ForegroundColor Gray
+        Start-Sleep -Milliseconds 150
+        $spinIndex++
+    }
+    
+    # Clear the spinner line
+    Write-Host "`r                                                              `r" -NoNewline
+    
+    # Get results
+    $output = Receive-Job -Job $job
+    $exitCode = $job.ChildJobs[0].JobStateInfo.Reason
+    Remove-Job -Job $job -Force
+    
+    return $output
+}
+
 # ============================================================================
 # STATE MANAGEMENT (for resume after reboot)
 # ============================================================================
@@ -182,12 +213,29 @@ function Install-WithWinget {
         [string]$ExtraArgs = ""
     )
     
-    Write-Host "  Installing $Name..." -ForegroundColor Gray
+    $spinnerChars = @('|','/','-','\')
+    $spinIndex = 0
     
+    # Start installation in background
     $cmd = "winget install $PackageId --silent --accept-package-agreements --accept-source-agreements $ExtraArgs"
-    $result = Invoke-Expression $cmd 2>&1
+    $job = Start-Job -ScriptBlock { param($c) Invoke-Expression $c 2>&1 } -ArgumentList $cmd
     
-    if ($LASTEXITCODE -eq 0 -or $result -match "already installed") {
+    # Show spinner while installing
+    while ($job.State -eq 'Running') {
+        $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+        Write-Host "`r  $char Installing $Name..." -NoNewline -ForegroundColor Gray
+        Start-Sleep -Milliseconds 150
+        $spinIndex++
+    }
+    
+    # Clear spinner line
+    Write-Host "`r                                                              `r" -NoNewline
+    
+    $result = Receive-Job -Job $job
+    $success = ($job.ChildJobs[0].State -eq 'Completed')
+    Remove-Job -Job $job -Force
+    
+    if ($success -or $result -match "already installed") {
         Refresh-Path
         Show-Success "$Name installed"
         return $true
@@ -375,18 +423,47 @@ function Request-Reboot {
 # ============================================================================
 
 function Setup-Application {
+    $spinnerChars = @('|','/','-','\')
+    
+    # Clone or update repository
     if (Test-Path "$InstallDir\.git") {
-        Write-Host "  Updating existing installation..." -ForegroundColor Gray
-        Push-Location $InstallDir
-        git reset --hard HEAD 2>&1 | Out-Null
-        git pull origin main 2>&1
-        Pop-Location
+        $spinIndex = 0
+        $job = Start-Job -ScriptBlock { 
+            param($dir)
+            Set-Location $dir
+            git reset --hard HEAD 2>&1 | Out-Null
+            git pull origin main 2>&1
+        } -ArgumentList $InstallDir
+        
+        while ($job.State -eq 'Running') {
+            $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+            Write-Host "`r  $char Updating existing installation..." -NoNewline -ForegroundColor Gray
+            Start-Sleep -Milliseconds 150
+            $spinIndex++
+        }
+        Write-Host "`r                                                              `r" -NoNewline
+        Receive-Job -Job $job | Out-Null
+        Remove-Job -Job $job -Force
     } else {
-        Write-Host "  Cloning repository..." -ForegroundColor Gray
         if (Test-Path $InstallDir) {
             Remove-Item -Recurse -Force $InstallDir
         }
-        git clone "https://github.com/valginer0/PGVectorRAGIndexer.git" $InstallDir 2>&1
+        
+        $spinIndex = 0
+        $job = Start-Job -ScriptBlock { 
+            param($dir)
+            git clone "https://github.com/valginer0/PGVectorRAGIndexer.git" $dir 2>&1
+        } -ArgumentList $InstallDir
+        
+        while ($job.State -eq 'Running') {
+            $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+            Write-Host "`r  $char Cloning repository..." -NoNewline -ForegroundColor Gray
+            Start-Sleep -Milliseconds 150
+            $spinIndex++
+        }
+        Write-Host "`r                                                              `r" -NoNewline
+        Receive-Job -Job $job | Out-Null
+        Remove-Job -Job $job -Force
     }
     
     if (-not (Test-Path $InstallDir)) {
@@ -398,23 +475,83 @@ function Setup-Application {
     
     Push-Location $InstallDir
     
+    # Create virtual environment
     if (-not (Test-Path "venv-windows")) {
-        Write-Host "  Creating virtual environment..." -ForegroundColor Gray
-        python -m venv venv-windows
+        $spinIndex = 0
+        $job = Start-Job -ScriptBlock { 
+            param($dir)
+            Set-Location $dir
+            python -m venv venv-windows
+        } -ArgumentList $InstallDir
+        
+        while ($job.State -eq 'Running') {
+            $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+            Write-Host "`r  $char Creating virtual environment..." -NoNewline -ForegroundColor Gray
+            Start-Sleep -Milliseconds 150
+            $spinIndex++
+        }
+        Write-Host "`r                                                              `r" -NoNewline
+        Receive-Job -Job $job | Out-Null
+        Remove-Job -Job $job -Force
     }
     Show-Success "Virtual environment ready"
     
-    Write-Host "  Installing Python dependencies..." -ForegroundColor Gray
-    & ".\venv-windows\Scripts\pip.exe" install -q -r requirements-desktop.txt
+    # Install pip dependencies
+    $spinIndex = 0
+    $job = Start-Job -ScriptBlock { 
+        param($dir)
+        Set-Location $dir
+        & ".\venv-windows\Scripts\pip.exe" install -q -r requirements-desktop.txt
+    } -ArgumentList $InstallDir
+    
+    while ($job.State -eq 'Running') {
+        $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+        Write-Host "`r  $char Installing Python dependencies..." -NoNewline -ForegroundColor Gray
+        Start-Sleep -Milliseconds 150
+        $spinIndex++
+    }
+    Write-Host "`r                                                              `r" -NoNewline
+    Receive-Job -Job $job | Out-Null
+    Remove-Job -Job $job -Force
     Show-Success "Dependencies installed"
     
-    Write-Host "  Pulling Docker images (this may take a few minutes)..." -ForegroundColor Gray
-    & ".\manage.ps1" -Action update -Channel prod 2>&1 | Out-Null
+    # Pull Docker images
+    $spinIndex = 0
+    $job = Start-Job -ScriptBlock { 
+        param($dir)
+        Set-Location $dir
+        & ".\manage.ps1" -Action update -Channel prod 2>&1 | Out-Null
+    } -ArgumentList $InstallDir
+    
+    while ($job.State -eq 'Running') {
+        $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+        Write-Host "`r  $char Pulling Docker images (this may take a few minutes)..." -NoNewline -ForegroundColor Gray
+        Start-Sleep -Milliseconds 150
+        $spinIndex++
+    }
+    Write-Host "`r                                                              `r" -NoNewline
+    Receive-Job -Job $job | Out-Null
+    Remove-Job -Job $job -Force
     Show-Success "Docker containers ready"
     
+    # Create desktop shortcut
     if (Test-Path "create_desktop_shortcut.ps1") {
-        Write-Host "  Creating desktop shortcut..." -ForegroundColor Gray
-        & ".\create_desktop_shortcut.ps1"
+        $spinIndex = 0
+        $job = Start-Job -ScriptBlock { 
+            param($dir)
+            Set-Location $dir
+            & ".\create_desktop_shortcut.ps1"
+        } -ArgumentList $InstallDir
+        
+        while ($job.State -eq 'Running') {
+            $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
+            Write-Host "`r  $char Creating desktop shortcut..." -NoNewline -ForegroundColor Gray
+            Start-Sleep -Milliseconds 150
+            $spinIndex++
+        }
+        Write-Host "`r                                                              `r" -NoNewline
+        Receive-Job -Job $job | Out-Null
+        Remove-Job -Job $job -Force
         Show-Success "Desktop shortcut created"
     }
     

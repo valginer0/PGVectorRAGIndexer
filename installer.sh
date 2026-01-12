@@ -357,9 +357,9 @@ setup_application() {
     spinner $pid "Installing Python dependencies with uv"
     wait $pid
     if [ $? -ne 0 ]; then
-        show_error "Failed to install dependencies"
-        show_info "Trying with standard pip..."
-        pip install -r requirements-desktop.txt >/dev/null 2>&1 &
+        show_error "Failed to install dependencies with uv"
+        show_info "Trying with standard pip (slower but reliable)..."
+        $PYTHON_CMD -m pip install -r requirements-desktop.txt >/dev/null 2>&1 &
         pid=$!
         spinner $pid "Installing dependencies (fallback)"
         wait $pid

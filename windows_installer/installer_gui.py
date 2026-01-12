@@ -38,15 +38,15 @@ class InstallerGUI:
     def __init__(self):
         self.root = tk.Tk()
         self.root.title("PGVectorRAGIndexer Setup")
-        self.root.geometry("520x480")
+        self.root.geometry("520x520")
         self.root.resizable(False, False)
         self.root.configure(bg=COLORS['bg_dark'])
         
         # Center window on screen
         self.root.update_idletasks()
         x = (self.root.winfo_screenwidth() - 520) // 2
-        y = (self.root.winfo_screenheight() - 480) // 2
-        self.root.geometry(f"520x480+{x}+{y}")
+        y = (self.root.winfo_screenheight() - 520) // 2
+        self.root.geometry(f"520x520+{x}+{y}")
         
         # Set icon if available
         try:
@@ -64,11 +64,11 @@ class InstallerGUI:
         """Create all GUI widgets with modern styling."""
         # Main container with dark background
         main_frame = tk.Frame(self.root, bg=COLORS['bg_dark'])
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=25, pady=20)
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=25, pady=15)
         
         # ===== Header with gradient-like effect =====
         header_frame = tk.Frame(main_frame, bg=COLORS['bg_dark'])
-        header_frame.pack(fill=tk.X, pady=(0, 25))
+        header_frame.pack(fill=tk.X, pady=(0, 15))
         
         # Logo emoji
         logo = tk.Label(

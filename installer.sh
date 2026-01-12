@@ -327,52 +327,31 @@ setup_application() {
     
     cd "$INSTALL_DIR"
     
-    # Create virtual environment (with virtualenv fallback for systems without venv)
-    if [ ! -d "venv" ] || [ ! -f "venv/bin/activate" ]; then
-        rm -rf venv 2>/dev/null || true
-        
-        # Try python -m venv first
-        if $PYTHON_CMD -m venv venv >/dev/null 2>&1; then
-            show_success "Virtual environment created"
-        else
-            # Fallback: bootstrap pip if needed, then install virtualenv
-            show_info "Setting up Python environment..."
-            
-            # Install pip if not available
-            if ! $PYTHON_CMD -m pip --version >/dev/null 2>&1; then
-                curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py >/dev/null 2>&1
-                $PYTHON_CMD /tmp/get-pip.py --user >/dev/null 2>&1 || true
-                rm -f /tmp/get-pip.py
-            fi
-            
-            # Install virtualenv and create venv
-            $PYTHON_CMD -m pip install --user virtualenv >/dev/null 2>&1 || true
-            if $PYTHON_CMD -m virtualenv venv >/dev/null 2>&1; then
-                show_success "Virtual environment created (via virtualenv)"
-            else
-                show_error "Failed to create virtual environment"
-                show_info "Please run: sudo apt install python3-venv python3-pip"
-                return 1
-            fi
-        fi
+    # Download uv for dependency management (no sudo required)
+    if ! command -v uv &>/dev/null; then
+        export UV_INSTALL_DIR="$INSTALL_DIR/bin"
+        mkdir -p "$UV_INSTALL_DIR"
+        curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null 2>&1
+        export PATH="$UV_INSTALL_DIR:$HOME/.local/bin:$PATH"
+    fi
+
+    # Create virtual environment using uv
+    if [ ! -d "venv" ]; then
+        # uv venv creates a venv compliant with standard python
+        # Try finding a python version that uv can use
+        uv venv venv >/dev/null 2>&1 &
+        local pid=$!
+        spinner $pid "Creating virtual environment via uv"
+        wait $pid
     fi
     
-    if [ ! -f "venv/bin/activate" ]; then
-        show_error "Virtual environment not found"
-        return 1
-    fi
     source venv/bin/activate
     show_success "Virtual environment ready"
     
-    # Install dependencies
-    pip install -q --upgrade pip >/dev/null 2>&1 &
-    local pid=$!
-    spinner $pid "Upgrading pip"
-    wait $pid
-    
-    pip install -q -r requirements-desktop.txt >/dev/null 2>&1 &
+    # Install dependencies using uv (much faster)
+    uv pip install -q -r requirements-desktop.txt >/dev/null 2>&1 &
     pid=$!
-    spinner $pid "Installing Python dependencies"
+    spinner $pid "Installing Python dependencies with uv"
     wait $pid
     show_success "Dependencies installed"
     
@@ -388,6 +367,7 @@ setup_application() {
     
     return 0
 }
+
 
 # ============================================================================
 # MAIN INSTALLATION FLOW

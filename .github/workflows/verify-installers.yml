@@ -10,6 +10,8 @@ on:
 jobs:
   verify-macos:
     runs-on: macos-latest
+    env:
+      TERM: xterm
     steps:
       - uses: actions/checkout@v4
       
@@ -56,6 +58,8 @@ jobs:
 
   verify-linux-ubuntu:
     runs-on: ubuntu-24.04
+    env:
+      TERM: xterm
     steps:
       - uses: actions/checkout@v4
       

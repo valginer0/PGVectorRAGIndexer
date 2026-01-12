@@ -48,7 +48,7 @@ CURRENT_STEP=0
 TOTAL_STEPS=6
 
 show_banner() {
-    clear
+    clear 2>/dev/null || true
     echo ""
     echo -e "${CYAN}  =============================================================${NC}"
     echo -e "${CYAN}  |                                                           |${NC}"

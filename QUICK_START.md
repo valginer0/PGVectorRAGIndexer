@@ -17,22 +17,19 @@ Get up and running in 5 minutes!
 ## ⚡ Desktop App Installation (Recommended)
 
 ### For Windows (Easiest):
-
 **One-Click Install:**
-1. Download [`install.bat`](https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/install.bat) (Right-click → Save Link As)
+1. Download [`PGVectorRAGIndexer-Setup.exe`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/PGVectorRAGIndexer-Setup.exe)
 2. Double-click the downloaded file
-3. Wait ~10-15 minutes for automatic setup
+3. Wait for the installer to complete
 
-**Or via PowerShell** (for technical users):
-```powershell
-irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.ps1 | iex
-```
+### For macOS:
+1. Download [`install.command`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/install.command)
+2. Double-click the file to run it
+3. Follow the terminal prompts
 
-### For macOS / Linux / WSL:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.sh | bash
-```
+### For Linux (Ubuntu/Fedora):
+1. Download [`install-linux.sh`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/install-linux.sh)
+2. Run: `chmod +x install-linux.sh && ./install-linux.sh`
 
 📖 **See [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) for detailed instructions**
 

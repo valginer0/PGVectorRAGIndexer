@@ -351,10 +351,23 @@ setup_application() {
     show_success "Virtual environment ready"
     
     # Install dependencies using uv (much faster)
-    uv pip install -q -r requirements-desktop.txt >/dev/null 2>&1 &
+    # Target venv explicitly to ensure correct environment
+    uv pip install -p venv/bin/python -q -r requirements-desktop.txt >/dev/null 2>&1 &
     pid=$!
     spinner $pid "Installing Python dependencies with uv"
     wait $pid
+    if [ $? -ne 0 ]; then
+        show_error "Failed to install dependencies"
+        show_info "Trying with standard pip..."
+        pip install -r requirements-desktop.txt >/dev/null 2>&1 &
+        pid=$!
+        spinner $pid "Installing dependencies (fallback)"
+        wait $pid
+        if [ $? -ne 0 ]; then
+            show_error "Dependency installation failed"
+            return 1
+        fi
+    fi
     show_success "Dependencies installed"
     
     # Pull Docker images if Docker is available

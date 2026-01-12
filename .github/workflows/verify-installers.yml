@@ -86,10 +86,10 @@ jobs:
           # Check if packages installed correctly
           # We check using python import because uv-created venvs might not have 'pip' installed
           source "$INSTALL_DIR/venv/bin/activate"
-          if python -c "import flask; print('Flask import successful')" >/dev/null 2>&1; then
+          if python -c "import requests; print('Requests import successful')" >/dev/null 2>&1; then
              echo "✅ Dependencies installed"
           else
-             echo "❌ Dependencies missing (Flask import failed)"
+             echo "❌ Dependencies missing (Requests import failed)"
              # Debug info
              echo "Python path: $(which python)"
              echo "Site packages:"

@@ -335,14 +335,23 @@ setup_application() {
         if $PYTHON_CMD -m venv venv >/dev/null 2>&1; then
             show_success "Virtual environment created"
         else
-            # Fallback: install virtualenv via pip and use it
-            show_info "Installing virtualenv..."
+            # Fallback: bootstrap pip if needed, then install virtualenv
+            show_info "Setting up Python environment..."
+            
+            # Install pip if not available
+            if ! $PYTHON_CMD -m pip --version >/dev/null 2>&1; then
+                curl -fsSL https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py >/dev/null 2>&1
+                $PYTHON_CMD /tmp/get-pip.py --user >/dev/null 2>&1 || true
+                rm -f /tmp/get-pip.py
+            fi
+            
+            # Install virtualenv and create venv
             $PYTHON_CMD -m pip install --user virtualenv >/dev/null 2>&1 || true
             if $PYTHON_CMD -m virtualenv venv >/dev/null 2>&1; then
                 show_success "Virtual environment created (via virtualenv)"
             else
                 show_error "Failed to create virtual environment"
-                show_info "Please install python3-venv: sudo apt install python3-venv"
+                show_info "Please run: sudo apt install python3-venv python3-pip"
                 return 1
             fi
         fi

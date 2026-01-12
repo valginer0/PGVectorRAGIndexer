@@ -328,11 +328,16 @@ setup_application() {
     cd "$INSTALL_DIR"
     
     # Create virtual environment
-    if [ ! -d "venv" ]; then
+    if [ ! -d "venv" ] || [ ! -f "venv/bin/activate" ]; then
+        rm -rf venv 2>/dev/null || true
         $PYTHON_CMD -m venv venv >/dev/null 2>&1 &
         local pid=$!
         spinner $pid "Creating virtual environment"
         wait $pid
+        if [ ! -f "venv/bin/activate" ]; then
+            show_error "Failed to create virtual environment"
+            return 1
+        fi
     fi
     source venv/bin/activate
     show_success "Virtual environment ready"

@@ -67,29 +67,51 @@ After installation, run the app using:
 
 ## macOS & Linux Installation
 
+### 🚀 One-Click Installers (Recommended)
+
+#### 🍎 macOS
+1. **Download** [`install.command`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/install.command)
+2. **Double-click** the file to run it.
+   *(You may need to right-click > Open if Gatekeeper blocks it)*
+3. **Follow the terminal prompts.**
+
+#### 🐧 Linux (Ubuntu, Fedora, etc.)
+1. **Download** [`install-linux.sh`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/install-linux.sh)
+2. **Make executable & Run**:
+   ```bash
+   chmod +x install-linux.sh
+   ./install-linux.sh
+   ```
+   *(Or run via curl: `curl -fsSL https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/installer.sh | bash`)*
+
+**The installer handles:** check/install Python (via Homebrew/System), create venv (handling Linux permission issues via `uv`), install dependencies, and launch app.
+
+---
+
+### Manual Installation (Advanced)
+
+If you prefer to set up the environment yourself:
+
 **Prerequisites:**
-- **Python 3.10+**:
-  - **Option 1 (Recommended)**: Download from [Python.org](https://www.python.org/downloads/macos/) (macOS installer package) - *Fastest method*
-  - **Option 2 (Homebrew)**: `brew install python` (requires [Homebrew](https://brew.sh/))
-- **Docker-compatible runtime**: [Docker Desktop](https://www.docker.com/products/docker-desktop/), [Rancher Desktop](https://rancherdesktop.io/), [Podman Desktop](https://podman-desktop.io/), or Docker Engine (Linux)
+- **Python 3.10+**: `brew install python` (macOS) or `sudo apt install python3` (Linux)
+- **Docker**: Docker Desktop or Engine running
 
-### 1. Clone the Repository
-Open Terminal:
-```bash
-cd ~/Projects  # or wherever you keep code
-git clone https://github.com/valginer0/PGVectorRAGIndexer.git
-cd PGVectorRAGIndexer
-```
+**Steps:**
+1. **Clone the Repository**
+   ```bash
+   git clone https://github.com/valginer0/PGVectorRAGIndexer.git
+   cd PGVectorRAGIndexer
+   ```
 
-### 2. Setup & Install
-```bash
-# Create virtual environment
-python3 -m venv venv
-
-# Activate and install dependencies
-source venv/bin/activate
-pip install -r requirements-desktop.txt
-```
+2. **Setup Environment**
+   ```bash
+   # Create virtual environment
+   python3 -m venv venv
+   
+   # Activate and install dependencies
+   source venv/bin/activate
+   pip install -r requirements-desktop.txt
+   ```
 
 ### 3. Run the App
 ```bash

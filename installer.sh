@@ -18,6 +18,7 @@ GITHUB_REPO="valginer0/PGVectorRAGIndexer"
 BRANCH="main"
 INSTALL_DIR="$HOME/PGVectorRAGIndexer"
 CHANNEL="prod"
+DRY_RUN=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -25,6 +26,8 @@ while [[ $# -gt 0 ]]; do
         --channel) CHANNEL="$2"; shift 2 ;;
         --install-dir) INSTALL_DIR="$2"; shift 2 ;;
         --branch) BRANCH="$2"; shift 2 ;;
+        --dry-run) DRY_RUN=true; shift ;;
+        --help) echo "Usage: installer.sh [--dry-run] [--channel prod|dev] [--install-dir DIR]"; exit 0 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -366,6 +369,29 @@ setup_application() {
 main() {
     show_banner
     
+    # Handle dry-run mode
+    if [[ "$DRY_RUN" == "true" ]]; then
+        echo -e "  ${YELLOW}=== DRY RUN MODE ===${NC}"
+        echo -e "  ${GRAY}Showing what would happen without actually installing.${NC}"
+        echo ""
+        detect_os
+        echo ""
+        echo -e "  ${CYAN}Would check/install:${NC}"
+        echo -e "    - Python 3.9+"
+        echo -e "    - Git"
+        echo -e "    - Docker"
+        echo ""
+        echo -e "  ${CYAN}Would install to:${NC} $INSTALL_DIR"
+        echo ""
+        echo -e "  ${CYAN}Prerequisites status:${NC}"
+        echo -e "    Python: $(command -v python3 >/dev/null && python3 --version 2>&1 || echo 'NOT FOUND - will install')"
+        echo -e "    Git:    $(command -v git >/dev/null && git --version 2>&1 | head -1 || echo 'NOT FOUND - will install')"
+        echo -e "    Docker: $(docker ps >/dev/null 2>&1 && docker --version 2>&1 | head -1 || echo 'NOT RUNNING - will prompt')"
+        echo ""
+        echo -e "  ${GREEN}Run without --dry-run to proceed with installation.${NC}"
+        exit 0
+    fi
+    
     # Step 1: Detect OS
     show_step 1 "Detecting system" "~10 seconds"
     detect_os
@@ -420,8 +446,10 @@ main() {
     echo -e "  ${CYAN}Starting PGVectorRAGIndexer...${NC}"
     echo ""
     echo -e "  ${GRAY}To run again later:${NC}"
-    echo -e "  ${NC}cd $INSTALL_DIR${NC}"
-    echo -e "  ${NC}./run_desktop_app.sh${NC}"
+    echo -e "    cd $INSTALL_DIR && ./run_desktop_app.sh"
+    echo ""
+    echo -e "  ${GRAY}To uninstall:${NC}"
+    echo -e "    rm -rf $INSTALL_DIR"
     echo ""
     
     # Launch the app

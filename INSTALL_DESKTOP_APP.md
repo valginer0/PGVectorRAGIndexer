@@ -14,9 +14,9 @@ For technical details, see [SECURITY.md](SECURITY.md).
 
 **No technical knowledge required!** This installer automatically handles everything:
 
-1. **Download** [`install.bat`](https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/install.bat) (Right-click → Save Link As)
+1. **Download** [`PGVectorRAGIndexer-Setup.exe`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/PGVectorRAGIndexer-Setup.exe)
 2. **Double-click** the downloaded file
-3. **Wait** for the installer to complete (~10-15 minutes)
+3. **Wait** for the installer to complete
 
 The installer will automatically:
 - ✅ Install Python, Git, and Docker if missing

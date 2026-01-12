@@ -191,6 +191,18 @@ install_python() {
     if check_python; then
         local version=$($PYTHON_CMD --version 2>&1)
         show_success "Python already installed: $version"
+        
+        # On Linux, ensure python3-venv is installed (required on Ubuntu/Debian)
+        if [[ "$OS_TYPE" == "linux" ]]; then
+            if ! $PYTHON_CMD -c "import ensurepip" 2>/dev/null; then
+                show_info "Installing python3-venv package..."
+                if command -v apt-get &>/dev/null; then
+                    sudo apt-get install -y python3-venv >/dev/null 2>&1 || true
+                elif command -v dnf &>/dev/null; then
+                    sudo dnf install -y python3-pip >/dev/null 2>&1 || true
+                fi
+            fi
+        fi
         return 0
     fi
     

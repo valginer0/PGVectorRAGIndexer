@@ -1,0 +1,43 @@
+name: Build Windows Installer
+
+on:
+  push:
+    paths:
+      - 'windows_installer/**'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install PyInstaller
+      run: pip install pyinstaller
+    
+    - name: Build installer
+      working-directory: windows_installer
+      run: |
+        python -m PyInstaller --onefile --windowed --name "PGVectorRAGIndexer-Setup" --clean --noconfirm installer_gui.py
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PGVectorRAGIndexer-Setup
+        path: windows_installer/dist/PGVectorRAGIndexer-Setup.exe
+        if-no-files-found: error
+    
+    - name: Create Release (on tag)
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: windows_installer/dist/PGVectorRAGIndexer-Setup.exe
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -182,10 +182,9 @@ Password-protected PDFs cannot be indexed without decryption. Instead of crashin
 *(Includes detailed steps for Windows, macOS, and Linux)*
 
 **Windows Quick Install:**
-Run this in PowerShell (Admin):
-```powershell
-irm https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/bootstrap_desktop_app.ps1 | iex
-```
+1. Download [`PGVectorRAGIndexer-Setup.exe`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/PGVectorRAGIndexer-Setup.exe)
+2. Double-click to install
+3. Done!
 
 ---
 

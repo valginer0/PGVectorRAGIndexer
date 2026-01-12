@@ -39,7 +39,7 @@ jobs:
           # Now run actual install
           # We pipe 'yes' to handle any prompts, though we improved automation
           # We add a timeout to prevent hanging
-          ./installer.sh --install-dir "$INSTALL_DIR"
+          ./installer.sh --install-dir "$INSTALL_DIR" --no-run
           
           # Verify installation
           if [ -d "$INSTALL_DIR/venv" ]; then
@@ -71,7 +71,7 @@ jobs:
           
           # Run installer
           # This tests the 'uv' path since this runner is Ubuntu 24.04
-          ./installer.sh --install-dir "$INSTALL_DIR"
+          ./installer.sh --install-dir "$INSTALL_DIR" --no-run
           
           # Verify
           if [ -d "$INSTALL_DIR/venv" ]; then

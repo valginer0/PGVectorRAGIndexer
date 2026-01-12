@@ -19,6 +19,7 @@ BRANCH="main"
 INSTALL_DIR="$HOME/PGVectorRAGIndexer"
 CHANNEL="prod"
 DRY_RUN=false
+NO_RUN=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -27,7 +28,8 @@ while [[ $# -gt 0 ]]; do
         --install-dir) INSTALL_DIR="$2"; shift 2 ;;
         --branch) BRANCH="$2"; shift 2 ;;
         --dry-run) DRY_RUN=true; shift ;;
-        --help) echo "Usage: installer.sh [--dry-run] [--channel prod|dev] [--install-dir DIR]"; exit 0 ;;
+        --no-run) NO_RUN=true; shift ;;
+        --help) echo "Usage: installer.sh [--dry-run] [--no-run] [--channel prod|dev] [--install-dir DIR]"; exit 0 ;;
         *) echo "Unknown option: $1"; exit 1 ;;
     esac
 done
@@ -460,9 +462,11 @@ main() {
     echo ""
     
     # Launch the app
-    cd "$INSTALL_DIR"
-    source venv/bin/activate
-    $PYTHON_CMD -m desktop_app.main
+    if [[ "$NO_RUN" != "true" ]]; then
+        cd "$INSTALL_DIR"
+        source venv/bin/activate
+        $PYTHON_CMD -m desktop_app.main
+    fi
 }
 
 # Handle Ctrl+C

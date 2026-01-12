@@ -83,11 +83,16 @@ jobs:
              exit 1
           fi
           
-          # Check if uv installed packages
+          # Check if packages installed correctly
+          # We check using python import because uv-created venvs might not have 'pip' installed
           source "$INSTALL_DIR/venv/bin/activate"
-          if pip show flask >/dev/null; then
+          if python -c "import flask; print('Flask import successful')" >/dev/null 2>&1; then
              echo "✅ Dependencies installed"
           else
-             echo "❌ Dependencies missing"
+             echo "❌ Dependencies missing (Flask import failed)"
+             # Debug info
+             echo "Python path: $(which python)"
+             echo "Site packages:"
+             ls -R "$INSTALL_DIR/venv/lib" || true
              exit 1
           fi

@@ -403,6 +403,16 @@ class Installer:
             self._log("Please start Docker Desktop or Rancher Desktop", "info")
             return True  # Continue anyway, user can start it later
         
+        # Check for Rancher Desktop binary directly (parity with legacy)
+        rdctl_paths = [
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
+        ]
+        for path in rdctl_paths:
+            if os.path.exists(path):
+                self._log(f"Rancher Desktop found at {path}", "success")
+                return True
+        
         # Install Rancher Desktop via winget
         if self._check_winget():
             self._update_progress(step, "Installing Rancher Desktop (Docker)...")

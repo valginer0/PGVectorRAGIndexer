@@ -58,6 +58,9 @@ class MainWindow(QMainWindow):
         self.api_client = APIClient()
         self.source_manager = SourceOpenManager(self.api_client, parent=self, project_root=self.project_path)
         
+        # Track if initial data load has occurred
+        self.initial_load_done = False
+        
         # Setup UI
         self.setup_ui()
         
@@ -212,11 +215,17 @@ class MainWindow(QMainWindow):
             self.api_status_label.setText("API: Ready")
             self.api_status_icon.setPixmap(qta.icon('fa5s.check-circle', color='#10b981').pixmap(16, 16))
             self.status_bar.showMessage("Ready - All systems operational")
+            
+            # Trigger initial load if not done
+            if not self.initial_load_done:
+                self.on_api_ready()
         else:
             self.api_status_label.setText("API: Not Available")
             self.api_status_icon.setPixmap(qta.icon('fa5s.times-circle', color='#ef4444').pixmap(16, 16))
             if db_running and app_running:
                 self.status_bar.showMessage("Containers running but API not ready. Please wait...")
+                # Poll again until ready
+                QTimer.singleShot(2000, self.check_docker_status)
             else:
                 self.status_bar.showMessage("API not available. Please start containers.")
     
@@ -292,3 +301,26 @@ class MainWindow(QMainWindow):
             
             self.docker_control_btn.setEnabled(True)
             self.check_docker_status()
+
+    def on_api_ready(self):
+        """Called when API becomes available for the first time."""
+        logger.info("API is ready, performing initial data load...")
+        self.initial_load_done = True
+        
+        # Load data for tabs
+        try:
+            # Documents Tab
+            if hasattr(self, 'documents_tab'):
+                self.documents_tab.load_documents()
+            
+            # Upload Tab (Document Types)
+            if hasattr(self, 'upload_tab'):
+                self.upload_tab.load_document_types()
+                
+            # Search Tab (Document Types)
+            if hasattr(self, 'search_tab'):
+                self.search_tab.load_document_types()
+                
+            logger.info("Initial data load complete")
+        except Exception as e:
+            logger.error(f"Error during initial data load: {e}")

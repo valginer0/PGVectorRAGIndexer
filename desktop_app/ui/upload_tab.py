@@ -119,8 +119,8 @@ class UploadTab(QWidget):
         refresh_types_btn.setFixedSize(30, 30)
         type_layout.addWidget(refresh_types_btn)
         
-        # Load initial types
-        self.load_document_types()
+        # Load initial types - DEFERRED to MainWindow
+        # self.load_document_types()
         
         options_layout.addLayout(type_layout)
         

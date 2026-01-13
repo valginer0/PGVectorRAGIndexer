@@ -131,8 +131,8 @@ class DocumentsTab(QWidget):
         self.status_label.setProperty("class", "subtitle")
         layout.addWidget(self.status_label)
         
-        # Auto-load on first show
-        self.load_documents()
+        # Auto-load on first show - DEFERRED to MainWindow
+        # self.load_documents()
     
     def load_documents(self, *, reset_offset: bool = False):
         """Load the list of documents."""

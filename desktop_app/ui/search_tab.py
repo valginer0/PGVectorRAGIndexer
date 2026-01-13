@@ -124,8 +124,8 @@ class SearchTab(QWidget):
         type_layout.addStretch()
         layout.addWidget(type_group)
 
-        # Load document types on init
-        self.load_document_types()
+        # Load document types on init - DEFERRED to MainWindow
+        # self.load_document_types()
 
         # Results table
         results_group = QGroupBox("Search Results")

@@ -1,4 +1,4 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.3
+# Quick Start Guide - PGVectorRAGIndexer v2.4
 
 Get up and running in 5 minutes!
 > 🔒 **Network safety tip**
@@ -6,13 +6,16 @@ Get up and running in 5 minutes!
 > This helps prevent other users on the same network from accessing local services.
 > For home or private networks, this is not a concern.
 
-## 🆕 What's New in v2.3
+## 🆕 What's New in v2.4
 
+- **Windows Installer Parity**: Full feature parity with legacy PowerShell scripts
+  - Auto-installs Rancher Desktop if Docker is missing
+  - Auto-starts Docker runtime after installation
+  - Reboot & resume logic for seamless installation
 - **macOS/Linux One-Line Install**: New `bootstrap_desktop_app.sh` for easy setup
 - **Encrypted PDF Detection**: Password-protected PDFs are detected and listed for review
 - **OCR Mode Selection**: Choose Auto, Skip, or Only for scanned document handling
 - **Incremental Indexing**: Files with unchanged content are automatically skipped
-- **Desktop App for All Platforms**: Windows, macOS, and Linux desktop app support
 
 ## ⚡ Desktop App Installation (Recommended)
 

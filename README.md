@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.3
+# PGVectorRAGIndexer v2.4
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -66,9 +66,18 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ---
 
-## 🋹 What's New in v2.3
+## 🋹 What's New in v2.4
 
-### 🆕 Latest Features (v2.3)
+### 🆕 Latest Features (v2.4)
+
+- **✅ Windows Installer Parity**: Full feature parity with legacy PowerShell scripts
+  - Rancher Desktop auto-installation via winget if Docker is missing
+  - Automatic runtime start with `rdctl start --container-engine moby`
+  - Reboot & resume logic via Scheduled Tasks for seamless installation
+  - Docker image pre-pulling during setup
+- **✅ Self-Healing Installer**: Detects timeouts and offers system reboot to fix stuck Docker daemons
+
+### Previous Releases (v2.3)
 
 - **✅ MCP Server**: AI agents (Claude CLI, Claude Desktop, Cursor) can connect directly to your local database
   - Uses `stdio` transport — zero network exposure, no open ports
@@ -189,7 +198,7 @@ Password-protected PDFs cannot be indexed without decryption. Instead of crashin
 ---
 
 ### 🤖 AI Agent Integration (MCP)
-**New in v2.3**: You can connect desktop AI agents (Claude Desktop, Cursor, etc.) directly to your local database using the Model Context Protocol (MCP).
+**New in v2.3+**: You can connect desktop AI agents (Claude Desktop, Cursor, etc.) directly to your local database using the Model Context Protocol (MCP).
 
 PGVectorRAGIndexer acts as a **local MCP tool provider** — it does not run an LLM,
 but exposes your indexed documents as searchable tools to compatible AI agents.

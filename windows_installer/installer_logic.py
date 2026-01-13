@@ -399,9 +399,9 @@ class Installer:
         
         # Check if docker command exists but not running
         if self._check_command("docker"):
-            self._log("Docker installed but not running", "warning")
-            self._log("Please start Docker Desktop or Rancher Desktop", "info")
-            return True  # Continue anyway, user can start it later
+            self._log("Docker installed (service not active)", "warning")
+            self._log("Runtime will be started automatically in the next step.", "info")
+            return True  # Continue, Step 5 will start it
         
         # Check for Rancher Desktop binary directly (parity with legacy)
         rdctl_paths = [

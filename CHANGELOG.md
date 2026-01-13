@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Windows Installer Parity**: Full feature parity with legacy PowerShell scripts.
 - **Rancher Auto-Start**: Installer automatically starts Rancher Desktop/Docker if not running.
+- **Rancher Installation**: Automatically installs Rancher Desktop if Docker is not found.
+- **Improved Detection**: Added direct binary check for Rancher Desktop `rdctl.exe` to support non-standard PATHs.
 - **Reboot & Resume**: Installer triggers system reboot if needed and resumes automatically via Scheduled Task.
 - **Image Pre-Pulling**: Installer pulls Docker images during setup to reduce first-run wait time.
 - **Self-Healing Installer**: Detects timeouts (300s) and offers reboot to fix stuck Docker daemons.

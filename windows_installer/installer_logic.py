@@ -34,15 +34,30 @@ class Installer:
         InstallStep(2, "Installing Python", "~2 minutes"),
         InstallStep(3, "Installing Git", "~1 minute"),
         InstallStep(4, "Installing Docker", "~3 minutes"),
-        InstallStep(5, "Setting Up Application", "~3 minutes"),
-        InstallStep(6, "Finalizing", "~30 seconds"),
+        InstallStep(5, "Starting Container Runtime", "~2 minutes"),
+        InstallStep(6, "Setting Up Application", "~3 minutes"),
+        InstallStep(7, "Pulling Docker Images", "~3 minutes"),
+        InstallStep(8, "Finalizing", "~30 seconds"),
     ]
     
-    def __init__(self):
+    def __init__(self, install_dir: Optional[str] = None):
+        if install_dir:
+            self.INSTALL_DIR = install_dir
+        
+        # Ensure install dir exists or parent exists
+        try:
+            os.makedirs(self.INSTALL_DIR, exist_ok=True)
+        except:
+            pass
+            
         self.is_running = False
         self.cancelled = False
         self._progress_callback: Optional[Callable] = None
         self._log_callback: Optional[Callable] = None
+        
+        # State persistence file
+        self.state_file = os.path.join(self.INSTALL_DIR, "install_state.json")
+        self.reboot_required = False
     
     def cancel(self):
         """Cancel the installation."""
@@ -125,6 +140,157 @@ class Installer:
             os.environ['PATH'] = f"{user_path};{system_path}"
         except Exception as e:
             self._log(f"Could not refresh PATH: {e}", "warning")
+
+    # =========================================================================
+    # State Management & Reboot Handling
+    # =========================================================================
+
+    def _save_state(self, stage: str):
+        """Save installation state to JSON."""
+        state = {
+            "Stage": stage,
+            "InstallDir": self.INSTALL_DIR,
+            "Timestamp": time.time()
+        }
+        try:
+            with open(self.state_file, 'w') as f:
+                json.dump(state, f)
+        except Exception as e:
+            self._log(f"Failed to save state: {e}", "warning")
+
+    def _load_state(self) -> dict:
+        """Load installation state."""
+        if os.path.exists(self.state_file):
+            try:
+                with open(self.state_file, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+        return {}
+
+    def _clear_state(self):
+        """Clear state and remove scheduled task."""
+        if os.path.exists(self.state_file):
+            try:
+                os.remove(self.state_file)
+            except:
+                pass
+        
+        # Remove scheduled task
+        subprocess.run(
+            'schtasks /delete /tn "PGVectorRAGIndexer_Resume" /f',
+            shell=True,
+            capture_output=True
+        )
+
+    def request_reboot(self):
+        """Register resume task and signal reboot requirement."""
+        self._log("Scheduling resume after reboot...", "info")
+        
+        # 1. Save state
+        self._save_state("PostReboot")
+        
+        # 2. Register Scheduled Task (Legacy Parity)
+        # We need to find where the current python/installer is running from
+        # If running from compiled .exe, sys.executable is the exe.
+        # If running from script, it's python.exe
+        
+        executable = sys.executable
+        script_args = ""
+        
+        if not getattr(sys, 'frozen', False):
+            # We are running as script
+            script_path = os.path.abspath(sys.argv[0])
+            executable = sys.executable
+            # We assume we are in venv or global python
+            script_args = f'"{script_path}"'
+        
+        # Construct command: Run the installer with --resume flag (handled by GUI wrapper logic mostly, 
+        # but logic class just prepares the environment)
+        # Actually, the legacy script used arguments.
+        # Here, we just want to run the installer executable again.
+        
+        cmd = f'"{executable}" {script_args}'
+        
+        # Create scheduled task "PGVectorRAGIndexer_Resume"
+        # /sc onlogon /rl highest (if admin) - but installer might be user mode.
+        # Legacy used Register-ScheduledTask. schtasks is the cli equivalent.
+        
+        schtasks_cmd = (
+            f'schtasks /create /tn "PGVectorRAGIndexer_Resume" '
+            f'/tr "\'{executable}\' {script_args}" '
+            f'/sc onlogon /f'
+        )
+        
+        res = subprocess.run(schtasks_cmd, shell=True, capture_output=True, text=True)
+        if res.returncode != 0:
+            self._log(f"Warning: Could not schedule resume task: {res.stderr}", "warning")
+            # Fallback: Registry Run key (User scope)
+            try:
+                import winreg
+                key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
+                winreg.SetValueEx(key, "PGVectorRAGIndexer_Resume", 0, winreg.REG_SZ, cmd)
+                winreg.CloseKey(key)
+                self._log("Added to Registry Run key instad.", "info")
+            except Exception as e:
+                self._log(f"Failed to set registry run key: {e}", "error")
+
+        self.reboot_required = True
+
+    def _start_runtime_helper(self) -> bool:
+        """
+        Helper to start Rancher Desktop or Docker Desktop.
+        Ported from parity with legacy installer.ps1
+        """
+        # 1. Try rdctl (Rancher Desktop CLI)
+        rdctl_path = "rdctl" # Default to PATH
+        
+        # Check standard Windows paths (installer.ps1 logic)
+        potential_rdctl = [
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
+        ]
+        for path in potential_rdctl:
+            if os.path.exists(path):
+                rdctl_path = path
+                break
+        
+        try:
+            # Match legacy script behavior: explicitly set engine to moby
+            self._log(f"Attempting to start Rancher Desktop via {rdctl_path}...")
+            # Use Popen to launch DETACHED so we don't block main thread forever
+            # But we need to use 'start' command
+            cmd = f'"{rdctl_path}" start --container-engine moby'
+            subprocess.Popen(
+                cmd, 
+                shell=True,
+                creationflags=subprocess.DETACHED_PROCESS if hasattr(subprocess, 'DETACHED_PROCESS') else 0x00000008
+            )
+            return True
+        except Exception as e:
+            self._log(f"Failed to run rdctl: {e}", "warning")
+
+        # 2. Try locating executables directly (Windows Legacy Fallback)
+        search_paths = [
+            os.path.expandvars(r"%LOCALAPPDATA%\Programs\Rancher Desktop\Rancher Desktop.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\Rancher Desktop\Rancher Desktop.exe"),
+            os.path.expandvars(r"%PROGRAMFILES%\Docker\Docker\Docker Desktop.exe"),
+        ]
+        
+        for exe_path in search_paths:
+            if os.path.exists(exe_path):
+                try:
+                    self._log(f"Found runtime at {exe_path}, launching...")
+                    subprocess.Popen(
+                        f'"{exe_path}"',
+                        shell=True,
+                        creationflags=subprocess.DETACHED_PROCESS if hasattr(subprocess, 'DETACHED_PROCESS') else 0x00000008
+                    )
+                    return True
+                except Exception as e:
+                    self._log(f"Failed to launch {exe_path}: {e}", "error")
+        
+        return False
     
     # =========================================================================
     # Step 1: Check System
@@ -249,12 +415,51 @@ class Installer:
         return True  # Continue anyway
     
     # =========================================================================
-    # Step 5: Setup Application
+    # Step 5: Start Container Runtime
+    # =========================================================================
+    
+    def _step_start_runtime(self) -> bool:
+        """Start Docker/Rancher Desktop."""
+        step = self.steps[4]
+        self._update_progress(step, "Starting container runtime...")
+        
+        # Check if already running
+        success, _ = self._run_command("docker ps")
+        if success:
+            self._log("Container runtime already active", "success")
+            return True
+            
+        # Attempt to start
+        if self._start_runtime_helper():
+            self._update_progress(step, "Waiting for Docker to initialize...")
+            
+            # Wait up to 300 seconds (parity with legacy)
+            start_time = time.time()
+            while time.time() - start_time < 300:
+                success, _ = self._run_command("docker ps")
+                if success:
+                    self._log("Docker is ready!", "success")
+                    return True
+                time.sleep(5)
+            
+            self._log("Docker failed to become ready in time", "error")
+            self._log("Taking too long? A system restart might fix this.", "warning")
+            self.request_reboot()
+            return False
+        else:
+            # Runtime start failed -> Likely needs reboot (fresh install of Rancher)
+            self._log("Could not start container runtime automatically.", "warning")
+            self._log("A system restart is required to complete Docker setup.", "warning")
+            self.request_reboot()
+            return False
+
+    # =========================================================================
+    # Step 6: Setup Application
     # =========================================================================
     
     def _step_setup_application(self) -> bool:
         """Clone repo and setup application."""
-        step = self.steps[4]
+        step = self.steps[5]
         self._update_progress(step, "Setting up application...")
         
         # Clone or update repository
@@ -302,14 +507,46 @@ class Installer:
             self._log("Dependencies installed", "success")
         
         return True
-    
+
     # =========================================================================
-    # Step 6: Finalize
+    # Step 7: Pull Docker Images
+    # =========================================================================
+
+    def _step_pull_images(self) -> bool:
+        """Pull Docker images (Parity with manage.ps1 update)."""
+        step = self.steps[6]
+        self._update_progress(step, "Pulling Docker images...")
+        
+        os.chdir(self.INSTALL_DIR)
+        
+        # Run docker compose pull
+        # Use simple environment variable setup if needed, but default .env should handle it
+        # or we just rely on default
+        
+        # Create temporary .env for image if needed, similar to manage.ps1
+        # For simplicity/parity, we assume default image unless channel specified
+        # Since we clone main, we use prod image mostly.
+        
+        env = os.environ.copy()
+        env["APP_IMAGE"] = "ghcr.io/valginer0/pgvectorragindexer:latest"
+        
+        self._log("Pulling images (this may take a few minutes)...")
+        success, output = self._run_command("docker compose pull", shell=True)
+        
+        if success:
+            self._log("Images pulled successfully", "success")
+            return True
+        else:
+            self._log(f"Failed to pull images: {output}", "warning")
+            return True # Non-fatal, app will try to pull on run
+
+    # =========================================================================
+    # Step 8: Finalize
     # =========================================================================
     
     def _step_finalize(self) -> bool:
         """Create shortcuts and finalize installation."""
-        step = self.steps[5]
+        step = self.steps[7]
         self._update_progress(step, "Creating desktop shortcut...")
         
         # Create desktop shortcut
@@ -358,6 +595,10 @@ class Installer:
     # Main Run
     # =========================================================================
     
+    # =========================================================================
+    # Main Run
+    # =========================================================================
+    
     def run(self, progress_callback: Callable = None, log_callback: Callable = None) -> bool:
         """Run the full installation."""
         self.is_running = True
@@ -365,25 +606,54 @@ class Installer:
         self._progress_callback = progress_callback
         self._log_callback = log_callback
         
+        # Define full sequence of steps
         steps_functions = [
-            self._step_check_system,
-            self._step_install_python,
-            self._step_install_git,
-            self._step_install_docker,
-            self._step_setup_application,
-            self._step_finalize,
+            self._step_check_system,       # Step 1
+            self._step_install_python,     # Step 2
+            self._step_install_git,        # Step 3
+            self._step_install_docker,     # Step 4 (Install binaries)
+            self._step_start_runtime,      # Step 5 (Start & Wait)
+            self._step_setup_application,  # Step 6
+            self._step_pull_images,        # Step 7
+            self._step_finalize,           # Step 8
         ]
+        
+        # Check for resume state
+        state = self._load_state()
+        start_index = 0
+        
+        if state and state.get("Stage") == "PostReboot":
+            self._log("Resuming installation after restart...", "success")
+            # Resume from Step 5 (Start Runtime) because that's what we rebooted for
+            # Prereqs (1-4) are assumed done.
+            start_index = 4 
+            # Clear state now that we've resumed (or clear after success? Legacy cleared at end)
+            # We'll clear at end to be safe.
         
         try:
             for i, step_func in enumerate(steps_functions):
+                if i < start_index:
+                    continue
+                    
                 if self.cancelled:
                     self._log("Installation cancelled by user", "warning")
                     return False
                 
+                # Check if reboot was requested by previous step
+                if self.reboot_required:
+                    # GUI will handle the actual dialog/exit
+                    # We just stop processing steps here
+                    return True 
+                
                 success = step_func()
                 if not success:
+                    # If step failed because it requested reboot, that's handled above next loop
+                    if self.reboot_required:
+                        return True
                     return False
             
+            # If we got here, all steps finished
+            self._clear_state()
             return True
             
         except Exception as e:

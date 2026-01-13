@@ -269,13 +269,77 @@ class InstallerGUI:
                 log_callback=self._log
             )
             
+            # Use after() to schedule UI updates on main thread
             if success:
-                self.root.after(0, self._installation_complete)
+                if self.installer.reboot_required:
+                    self.root.after(0, self._show_reboot_dialog)
+                else:
+                    self.root.after(0, self._installation_complete)
             else:
-                self.root.after(0, self._installation_failed)
+                if self.installer.reboot_required:
+                    self.root.after(0, self._show_reboot_dialog)
+                else:
+                    self.root.after(0, self._installation_failed)
                 
         except Exception as e:
             self.root.after(0, lambda: self._installation_error(str(e)))
+
+    def _show_reboot_dialog(self):
+        """Show interactive reboot dialog with countdown."""
+        # Hide standard progress buttons
+        self.install_btn.pack_forget()
+        self.cancel_btn.pack_forget()
+        
+        self.step_label.config(text="⚠ System Restart Required", fg=COLORS['warning'])
+        self._log("A restart is required to continue.", "warning")
+        
+        # Countdown Frame
+        frame = tk.Frame(self.root, bg=COLORS['bg_dark'])
+        frame.place(relx=0.5, rely=0.85, anchor='center')
+        
+        self.countdown_val = 60
+        
+        lbl = tk.Label(frame, text="Restarting in:", font=("Segoe UI", 10), bg=COLORS['bg_dark'], fg=COLORS['text_primary'])
+        lbl.pack(side=tk.LEFT, padx=5)
+        
+        self.timer_lbl = tk.Label(frame, text="60s", font=("Segoe UI", 14, "bold"), bg=COLORS['bg_dark'], fg=COLORS['accent'])
+        self.timer_lbl.pack(side=tk.LEFT, padx=5)
+        
+        # New Buttons
+        btn_frame = tk.Frame(self.root, bg=COLORS['bg_dark'])
+        btn_frame.place(relx=0.5, rely=0.92, anchor='center')
+        
+        restart_btn = tk.Button(
+            btn_frame, text="Restart Now", bg=COLORS['accent'], fg='white',
+            font=("Segoe UI", 10, "bold"), padx=20, pady=5, relief=tk.FLAT,
+            command=self._do_reboot
+        )
+        restart_btn.pack(side=tk.LEFT, padx=10)
+        
+        cancel_btn = tk.Button(
+            btn_frame, text="Cancel", bg=COLORS['bg_light'], fg='white',
+            font=("Segoe UI", 10), padx=20, pady=5, relief=tk.FLAT,
+            command=self.root.destroy
+        )
+        cancel_btn.pack(side=tk.LEFT, padx=10)
+        
+        # Start countdown
+        self._update_countdown()
+
+    def _update_countdown(self):
+        """Update reboot timer."""
+        if self.countdown_val > 0:
+            self.timer_lbl.config(text=f"{self.countdown_val}s")
+            self.countdown_val -= 1
+            self.root.after(1000, self._update_countdown)
+        else:
+            self._do_reboot()
+
+    def _do_reboot(self):
+        """Trigger Windows reboot."""
+        self._log("Rebooting system...", "warning")
+        import subprocess
+        subprocess.run("shutdown /r /t 0", shell=True)
     
     def _installation_complete(self):
         """Handle successful installation."""

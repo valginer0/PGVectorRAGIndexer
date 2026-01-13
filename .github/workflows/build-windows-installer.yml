@@ -8,6 +8,7 @@ on:
       - 'v*'
   workflow_dispatch:  # Allow manual trigger
 
+jobs:
   build:
     runs-on: windows-latest
     permissions:

@@ -8,6 +8,7 @@ import time
 import platform
 from typing import Optional, Tuple
 from pathlib import Path
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -120,6 +121,119 @@ class DockerManager:
             logger.error(f"Error checking container status: {e}")
             return False, False
     
+    def check_daemon_connection(self) -> Tuple[bool, str]:
+        """
+        Check if we can actually talk to the Docker daemon.
+        
+        Returns:
+            Tuple of (connected, error_message)
+        """
+        try:
+            # Check for Docker info (requires active daemon)
+            result = self._run_docker_command(
+                ["docker", "info"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            
+            if result.returncode == 0:
+                return True, ""
+            
+            # Diagnose specific Windows pipe error
+            error_output = result.stderr or ""
+            
+            # "The system cannot find the file specified" = Daemon not listening on pipe
+            if "system cannot find the file" in error_output:
+                return False, "Container runtime is not running.\n\nPlease start Rancher Desktop (or Docker Desktop) and wait for it to initialize."
+            
+            # Only report privilege error if it's actually "Access is denied"
+            if "Access is denied" in error_output:
+                return False, "Permission denied connecting to Docker daemon.\n\nPlease ensure your user is in the 'docker-users' group."
+            
+            return False, f"Docker daemon is not responsive: {error_output}"
+            
+        except FileNotFoundError:
+            return False, "Docker executable not found. Please install Docker Desktop or Rancher Desktop."
+        except Exception as e:
+            return False, f"Error checking Docker daemon: {str(e)}"
+
+        except Exception as e:
+            return False, f"Error checking Docker daemon: {str(e)}"
+
+    def start_runtime(self) -> Tuple[bool, str]:
+        """
+        Attempt to start the container runtime (Rancher Desktop or Docker Desktop).
+        Uses logic from legacy installer.ps1.
+        """
+        logger.info("Attempting to start container runtime...")
+        
+        # 1. Try rdctl (Rancher Desktop CLI)
+        # Check standard Windows paths for rdctl first (as per installer.ps1)
+        rdctl_path = "rdctl" # Default to PATH
+        if self.is_windows:
+            potential_rdctl = [
+                os.path.expandvars(r"%LOCALAPPDATA%\Programs\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
+                os.path.expandvars(r"%PROGRAMFILES%\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
+            ]
+            for path in potential_rdctl:
+                if os.path.exists(path):
+                    rdctl_path = path
+                    break
+        
+        try:
+            # 'rdctl start' starts the app in the background
+            # Match legacy script behavior: explicitly set engine to moby (docker)
+            cmd = [rdctl_path, "start", "--container-engine", "moby"]
+            
+            # Use DETACHED process if on Windows to avoid blocking
+            if self.is_windows:
+                 subprocess.Popen(
+                    cmd,
+                    close_fds=True,
+                    creationflags=subprocess.DETACHED_PROCESS if hasattr(subprocess, 'DETACHED_PROCESS') else 0x00000008, 
+                    shell=False
+                )
+                 logger.info(f"Triggered Rancher Desktop start via {rdctl_path}")
+                 return True, "Starting Rancher Desktop..."
+            else:
+                # Non-Windows fallback (e.g. Linux)
+                result = self._run_docker_command(cmd, capture_output=True, text=True, timeout=10)
+                if result.returncode == 0:
+                     return True, "Starting Rancher Desktop..."
+
+        except FileNotFoundError:
+             logger.debug(f"rdctl not found at {rdctl_path}")
+        except Exception as e:
+            logger.warning(f"Failed to run rdctl: {e}")
+
+        # 2. Try locating executables directly (Windows Legacy Fallback)
+        if self.is_windows:
+            search_paths = [
+                # Rancher Desktop Main Executable
+                os.path.expandvars(r"%LOCALAPPDATA%\Programs\Rancher Desktop\Rancher Desktop.exe"),
+                os.path.expandvars(r"%PROGRAMFILES%\Rancher Desktop\Rancher Desktop.exe"),
+                # Docker Desktop
+                os.path.expandvars(r"%PROGRAMFILES%\Docker\Docker\Docker Desktop.exe"),
+            ]
+            
+            for exe_path in search_paths:
+                if os.path.exists(exe_path):
+                    try:
+                        logger.info(f"Found runtime at {exe_path}, launching...")
+                        # Use Popen to launch DETACHED so we don't block
+                        subprocess.Popen(
+                            [exe_path],
+                            close_fds=True,
+                            creationflags=subprocess.DETACHED_PROCESS if hasattr(subprocess, 'DETACHED_PROCESS') else 0x00000008, 
+                            shell=False
+                        )
+                        return True, f"Launching {Path(exe_path).stem}..."
+                    except Exception as e:
+                        logger.error(f"Failed to launch {exe_path}: {e}")
+        
+        return False, "Could not find Rancher Desktop or Docker Desktop executable."
+
     def start_containers(self) -> Tuple[bool, str]:
         """
         Start Docker containers using docker-compose.
@@ -128,6 +242,36 @@ class DockerManager:
             Tuple of (success, message)
         """
         try:
+            # First, verify daemon connection
+            connected, daemon_error = self.check_daemon_connection()
+            
+            if not connected:
+                # If daemon is missing, try to start it automatically
+                if "Container runtime is not running" in daemon_error:
+                    logger.info("Daemon not running, attempting to start runtime...")
+                    runtime_started, runtime_msg = self.start_runtime()
+                    
+                    if runtime_started:
+                        # Wait for daemon to become ready
+                        logger.info("Runtime launched, waiting for socket/pipe...")
+                        daemon_ready = False
+                        for i in range(20): # Wait up to 100s for backend to start
+                            connected, _ = self.check_daemon_connection()
+                            if connected:
+                                daemon_ready = True
+                                logger.info("Daemon connection established!")
+                                break
+                            time.sleep(5)
+                            logger.info(f"Waiting for runtime... {(i+1)*5}s")
+                        
+                        if not daemon_ready:
+                            return False, "Launched container runtime, but it is not responding yet.\n\nPlease wait for it to finish starting and try again."
+                    else:
+                        # Failed to auto-start
+                        return False, "Container runtime is not running and could not be started automatically.\n\nPlease start Rancher Desktop manually."
+                else:
+                    return False, daemon_error
+
             # Check if containers are already running
             db_running, app_running = self.get_container_status()
             if db_running and app_running:
@@ -173,6 +317,11 @@ class DockerManager:
             else:
                 error_msg = result.stderr or "Unknown error"
                 logger.error(f"Failed to start containers: {error_msg}")
+                # Re-check daemon just in case it crashed during start
+                connected, daemon_err_retry = self.check_daemon_connection()
+                if not connected:
+                     return False, daemon_err_retry
+                
                 return False, f"Failed to start containers: {error_msg}"
                 
         except subprocess.TimeoutExpired:

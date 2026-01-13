@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - 'windows_installer/**'
+    tags:
+      - 'v*'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:

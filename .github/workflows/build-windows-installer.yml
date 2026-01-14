@@ -26,22 +26,28 @@ jobs:
     - name: Install PyInstaller
       run: pip install pyinstaller
     
-    - name: Build installer
+    - name: Build installer (onedir, no UPX)
       working-directory: windows_installer
       run: |
-        python -m PyInstaller --onefile --windowed --name "PGVectorRAGIndexer-Setup" --clean --noconfirm installer_gui.py
+        python -m PyInstaller --onedir --windowed --name "PGVectorRAGIndexer-Setup" --version-file version_info.txt --noupx --clean --noconfirm installer_gui.py
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
         name: PGVectorRAGIndexer-Setup
-        path: windows_installer/dist/PGVectorRAGIndexer-Setup.exe
+        path: windows_installer/dist/PGVectorRAGIndexer-Setup/
         if-no-files-found: error
+    
+    # For now, zip the onedir folder for release download
+    - name: Create release archive
+      if: startsWith(github.ref, 'refs/tags/')
+      working-directory: windows_installer/dist
+      run: Compress-Archive -Path PGVectorRAGIndexer-Setup -DestinationPath PGVectorRAGIndexer-Setup.zip
     
     - name: Create Release (on tag)
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: windows_installer/dist/PGVectorRAGIndexer-Setup.exe
+        files: windows_installer/dist/PGVectorRAGIndexer-Setup.zip
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

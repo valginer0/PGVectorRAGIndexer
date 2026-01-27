@@ -131,9 +131,9 @@ class Installer:
         os.makedirs(temp_dir, exist_ok=True)
         
         try:
-            # Step 1: Windows App SDK Runtime (newer requirement)
-            self._log("Installing Windows App SDK Runtime...", "info")
-            runtime_url = "https://aka.ms/windowsappsdk/1.6/1.6.241105002/windowsappruntimeinstall-x64.exe"
+            # Step 1: Windows App SDK Runtime 1.8 (required by newer WinGet)
+            self._log("Installing Windows App SDK Runtime 1.8...", "info")
+            runtime_url = "https://aka.ms/windowsappsdk/1.8/1.8.260101001/windowsappruntimeinstall-x64.exe"
             runtime_path = os.path.join(temp_dir, "WindowsAppRuntimeInstall.exe")
             if self._download_file(runtime_url, runtime_path):
                 subprocess.run(f'"{runtime_path}" --quiet', shell=True, capture_output=True, timeout=120)

@@ -143,14 +143,42 @@ class Installer:
             vclibs_url = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
             vclibs_path = os.path.join(temp_dir, "VCLibs.appx")
             if self._download_file(vclibs_url, vclibs_path):
-                subprocess.run(f'powershell Add-AppxPackage "{vclibs_path}"', shell=True, capture_output=True, timeout=60)
+                subprocess.run(f'powershell -Command "Add-AppxPackage -Path \'{vclibs_path}\'"', shell=True, capture_output=True, timeout=60)
             
-            # Step 3: WinGet itself
+            # Step 3: UI.Xaml dependency (required by newer WinGet)
+            self._log("Installing UI.Xaml...", "info")
+            # Microsoft.UI.Xaml 2.8.x is required
+            xaml_url = "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.8.6"
+            xaml_nupkg = os.path.join(temp_dir, "microsoft.ui.xaml.2.8.6.nupkg")
+            xaml_zip = os.path.join(temp_dir, "xaml.zip")
+            if self._download_file(xaml_url, xaml_nupkg):
+                # Rename to .zip and extract
+                shutil.copy(xaml_nupkg, xaml_zip)
+                import zipfile
+                with zipfile.ZipFile(xaml_zip, 'r') as z:
+                    z.extractall(os.path.join(temp_dir, "xaml"))
+                xaml_appx = os.path.join(temp_dir, "xaml", "tools", "AppX", "x64", "Release", "Microsoft.UI.Xaml.2.8.appx")
+                if os.path.exists(xaml_appx):
+                    subprocess.run(f'powershell -Command "Add-AppxPackage -Path \'{xaml_appx}\'"', shell=True, capture_output=True, timeout=60)
+            
+            # Step 4: WinGet itself
             self._log("Installing WinGet...", "info")
             winget_url = "https://aka.ms/getwinget"
             winget_path = os.path.join(temp_dir, "Microsoft.DesktopAppInstaller.msixbundle")
             if self._download_file(winget_url, winget_path):
-                subprocess.run(f'powershell Add-AppxPackage "{winget_path}"', shell=True, capture_output=True, timeout=60)
+                # Use -ForceUpdateFromAnyVersion to ensure installation works
+                result = subprocess.run(
+                    f'powershell -Command "Add-AppxPackage -Path \'{winget_path}\' -ForceUpdateFromAnyVersion"',
+                    shell=True, capture_output=True, text=True, timeout=120
+                )
+                if result.returncode != 0:
+                    self._log(f"WinGet install output: {result.stderr}", "warning")
+            
+            # Refresh PATH - winget is typically in WindowsApps
+            self._refresh_path()
+            
+            # Give Windows a moment to register the app
+            time.sleep(2)
             
             # Verify installation
             if self._check_winget():

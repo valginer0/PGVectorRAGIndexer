@@ -138,12 +138,21 @@ class Installer:
             if self._download_file(runtime_url, runtime_path):
                 subprocess.run(f'"{runtime_path}" --quiet', shell=True, capture_output=True, timeout=120)
             
-            # Step 2: VCLibs dependency
+            # Step 2: VCLibs dependency (must complete before WinGet)
             self._log("Installing VCLibs...", "info")
             vclibs_url = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
             vclibs_path = os.path.join(temp_dir, "VCLibs.appx")
             if self._download_file(vclibs_url, vclibs_path):
-                subprocess.run(f'powershell -Command "Add-AppxPackage -Path \'{vclibs_path}\'"', shell=True, capture_output=True, timeout=60)
+                result = subprocess.run(
+                    f'powershell -Command "Add-AppxPackage -Path \'{vclibs_path}\'"',
+                    shell=True, capture_output=True, text=True, timeout=60
+                )
+                if result.returncode != 0:
+                    self._log(f"VCLibs install error: {result.stderr}", "warning")
+                else:
+                    self._log("VCLibs installed", "success")
+                # Wait for Windows to register the package
+                time.sleep(3)
             
             # Step 3: UI.Xaml dependency (required by newer WinGet)
             self._log("Installing UI.Xaml...", "info")
@@ -159,7 +168,16 @@ class Installer:
                     z.extractall(os.path.join(temp_dir, "xaml"))
                 xaml_appx = os.path.join(temp_dir, "xaml", "tools", "AppX", "x64", "Release", "Microsoft.UI.Xaml.2.8.appx")
                 if os.path.exists(xaml_appx):
-                    subprocess.run(f'powershell -Command "Add-AppxPackage -Path \'{xaml_appx}\'"', shell=True, capture_output=True, timeout=60)
+                    result = subprocess.run(
+                        f'powershell -Command "Add-AppxPackage -Path \'{xaml_appx}\'"',
+                        shell=True, capture_output=True, text=True, timeout=60
+                    )
+                    if result.returncode != 0:
+                        self._log(f"UI.Xaml install error: {result.stderr}", "warning")
+                    else:
+                        self._log("UI.Xaml installed", "success")
+                    # Wait for Windows to register the package
+                    time.sleep(3)
             
             # Step 4: WinGet itself
             self._log("Installing WinGet...", "info")

@@ -447,15 +447,56 @@ class Installer:
                 self._log(f"Python already installed: {output.strip()}", "success")
                 return True
         
-        # Install Python via winget
+        # Try winget first
         if self._check_winget():
-            self._update_progress(step, "Installing Python 3.11...")
+            self._update_progress(step, "Installing Python 3.11 via WinGet...")
             if self._install_with_winget("Python.Python.3.11", "Python 3.11"):
                 self._refresh_path()
                 return True
         
-        self._log("Please install Python manually from python.org", "error")
+        # Fallback: Direct download
+        self._log("WinGet unavailable, trying direct download...", "info")
+        self._update_progress(step, "Installing Python 3.11 via direct download...")
+        if self._install_python_direct():
+            self._refresh_path()
+            return True
+        
+        self._log("Python installation failed", "error")
         return False
+    
+    def _install_python_direct(self) -> bool:
+        """Install Python via direct download (fallback when WinGet unavailable)."""
+        try:
+            python_url = "https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe"
+            temp_dir = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'python_install')
+            os.makedirs(temp_dir, exist_ok=True)
+            installer_path = os.path.join(temp_dir, "python-3.11.9-amd64.exe")
+            
+            if not self._download_file(python_url, installer_path):
+                return False
+            
+            # Silent install: user scope, add to PATH, include pip
+            self._log("Running Python installer (this may take a few minutes)...", "info")
+            cmd = f'"{installer_path}" /quiet InstallAllUsers=0 PrependPath=1 Include_pip=1'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=600)
+            
+            # Cleanup
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except:
+                pass
+            
+            # Refresh PATH and verify
+            self._refresh_path()
+            if self._check_command("python"):
+                self._log("Python installed successfully via direct download", "success")
+                return True
+            else:
+                self._log("Python installed but not found in PATH yet", "warning")
+                return True  # May still work after PATH refresh
+        except Exception as e:
+            self._log(f"Python direct install failed: {e}", "error")
+            return False
     
     # =========================================================================
     # Step 3: Install Git
@@ -473,15 +514,57 @@ class Installer:
                 self._log(f"Git already installed: {output.strip()}", "success")
                 return True
         
-        # Install Git via winget (user scope to avoid admin)
+        # Try winget first
         if self._check_winget():
-            self._update_progress(step, "Installing Git...")
+            self._update_progress(step, "Installing Git via WinGet...")
             if self._install_with_winget("Git.Git --scope user", "Git"):
                 self._refresh_path()
                 return True
         
-        self._log("Please install Git manually from git-scm.com", "error")
+        # Fallback: Direct download
+        self._log("WinGet unavailable, trying direct download...", "info")
+        self._update_progress(step, "Installing Git via direct download...")
+        if self._install_git_direct():
+            self._refresh_path()
+            return True
+        
+        self._log("Git installation failed", "error")
         return False
+    
+    def _install_git_direct(self) -> bool:
+        """Install Git via direct download (fallback when WinGet unavailable)."""
+        try:
+            # Git for Windows - silent installer
+            git_url = "https://github.com/git-for-windows/git/releases/download/v2.47.1.windows.2/Git-2.47.1.2-64-bit.exe"
+            temp_dir = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'git_install')
+            os.makedirs(temp_dir, exist_ok=True)
+            installer_path = os.path.join(temp_dir, "Git-installer.exe")
+            
+            if not self._download_file(git_url, installer_path):
+                return False
+            
+            # Silent install with PATH option
+            self._log("Running Git installer (this may take a few minutes)...", "info")
+            cmd = f'"{installer_path}" /VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /COMPONENTS="icons,ext\\reg\\shellhere,assoc,assoc_sh"'
+            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300)
+            
+            # Cleanup
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except:
+                pass
+            
+            # Refresh PATH and verify
+            self._refresh_path()
+            if self._check_command("git"):
+                self._log("Git installed successfully via direct download", "success")
+                return True
+            else:
+                self._log("Git installed but not found in PATH yet", "warning")
+                return True  # May still work after PATH refresh
+        except Exception as e:
+            self._log(f"Git direct install failed: {e}", "error")
+            return False
     
     # =========================================================================
     # Step 4: Install Docker

@@ -120,6 +120,7 @@ class Installer:
         """
         Install WinGet if not available.
         For Windows Sandbox or clean Windows installs where WinGet is missing.
+        Uses official dependencies bundle from WinGet GitHub releases.
         """
         # Check first - if already installed, skip
         if self._check_winget():
@@ -131,88 +132,63 @@ class Installer:
         os.makedirs(temp_dir, exist_ok=True)
         
         try:
-            # Step 1: Windows App SDK Runtime 1.8 (required by newer WinGet)
-            self._log("Installing Windows App SDK Runtime 1.8...", "info")
-            runtime_url = "https://aka.ms/windowsappsdk/1.8/1.8.260101001/windowsappruntimeinstall-x64.exe"
-            runtime_path = os.path.join(temp_dir, "WindowsAppRuntimeInstall.exe")
-            if self._download_file(runtime_url, runtime_path):
-                subprocess.run(f'"{runtime_path}" --quiet', shell=True, capture_output=True, timeout=120)
+            import zipfile
             
-            # Step 2: VCLibs Desktop (for desktop apps)
-            self._log("Installing VCLibs Desktop...", "info")
-            vclibs_desktop_url = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
-            vclibs_desktop_path = os.path.join(temp_dir, "VCLibs.Desktop.appx")
-            if self._download_file(vclibs_desktop_url, vclibs_desktop_path):
-                result = subprocess.run(
-                    f'powershell -Command "Add-AppxPackage -Path \'{vclibs_desktop_path}\'"',
-                    shell=True, capture_output=True, text=True, timeout=60
-                )
-                if result.returncode != 0:
-                    self._log(f"VCLibs Desktop error: {result.stderr}", "warning")
-                else:
-                    self._log("VCLibs Desktop installed", "success")
+            # Step 1: Download official WinGet dependencies bundle
+            # This contains VCLibs, VCLibs.UWPDesktop, and WindowsAppRuntime
+            self._log("Downloading WinGet dependencies bundle...", "info")
+            deps_url = "https://github.com/microsoft/winget-cli/releases/download/v1.12.460/DesktopAppInstaller_Dependencies.zip"
+            deps_zip_path = os.path.join(temp_dir, "Dependencies.zip")
             
-            # Step 2b: VCLibs UWP (required by WinGet MSIX packages)
-            # This is the store version without "Desktop" - from GitHub winget repo
-            self._log("Installing VCLibs UWP...", "info")
-            vclibs_uwp_url = "https://github.com/microsoft/winget-cli/releases/download/v1.7.10661/b0a0692da1034339b76dce1c298a1e42_14.0.33519.0_x64__8wekyb3d8bbwe.appx"
-            vclibs_uwp_path = os.path.join(temp_dir, "VCLibs.UWP.appx")
-            if self._download_file(vclibs_uwp_url, vclibs_uwp_path):
-                result = subprocess.run(
-                    f'powershell -Command "Add-AppxPackage -Path \'{vclibs_uwp_path}\'"',
-                    shell=True, capture_output=True, text=True, timeout=60
-                )
-                if result.returncode != 0:
-                    self._log(f"VCLibs UWP error: {result.stderr}", "warning")
-                else:
-                    self._log("VCLibs UWP installed", "success")
+            if not self._download_file(deps_url, deps_zip_path):
+                self._log("Failed to download dependencies bundle", "error")
+                return False
             
-            # Wait for Windows to register the packages
+            # Step 2: Extract and install all x64 appx files from the bundle
+            deps_extract_dir = os.path.join(temp_dir, "deps")
+            with zipfile.ZipFile(deps_zip_path, 'r') as z:
+                z.extractall(deps_extract_dir)
+            
+            # Find and install all x64 appx files
+            x64_dir = os.path.join(deps_extract_dir, "x64")
+            if os.path.exists(x64_dir):
+                for appx_file in os.listdir(x64_dir):
+                    if appx_file.endswith('.appx'):
+                        appx_path = os.path.join(x64_dir, appx_file)
+                        self._log(f"Installing {appx_file}...", "info")
+                        result = subprocess.run(
+                            f'powershell -Command "Add-AppxPackage -Path \'{appx_path}\'"',
+                            shell=True, capture_output=True, text=True, timeout=120
+                        )
+                        if result.returncode == 0:
+                            self._log(f"Installed {appx_file}", "success")
+                        else:
+                            # Log but continue - some may already exist
+                            self._log(f"Warning for {appx_file}: {result.stderr[:100]}", "warning")
+            
+            # Wait for Windows to register packages
             time.sleep(3)
             
-            # Step 3: UI.Xaml dependency (required by newer WinGet)
-            self._log("Installing UI.Xaml...", "info")
-            # Microsoft.UI.Xaml 2.8.x is required
-            xaml_url = "https://www.nuget.org/api/v2/package/Microsoft.UI.Xaml/2.8.6"
-            xaml_nupkg = os.path.join(temp_dir, "microsoft.ui.xaml.2.8.6.nupkg")
-            xaml_zip = os.path.join(temp_dir, "xaml.zip")
-            if self._download_file(xaml_url, xaml_nupkg):
-                # Rename to .zip and extract
-                shutil.copy(xaml_nupkg, xaml_zip)
-                import zipfile
-                with zipfile.ZipFile(xaml_zip, 'r') as z:
-                    z.extractall(os.path.join(temp_dir, "xaml"))
-                xaml_appx = os.path.join(temp_dir, "xaml", "tools", "AppX", "x64", "Release", "Microsoft.UI.Xaml.2.8.appx")
-                if os.path.exists(xaml_appx):
-                    result = subprocess.run(
-                        f'powershell -Command "Add-AppxPackage -Path \'{xaml_appx}\'"',
-                        shell=True, capture_output=True, text=True, timeout=60
-                    )
-                    if result.returncode != 0:
-                        self._log(f"UI.Xaml install error: {result.stderr}", "warning")
-                    else:
-                        self._log("UI.Xaml installed", "success")
-                    # Wait for Windows to register the package
-                    time.sleep(3)
-            
-            # Step 4: WinGet itself
+            # Step 3: Download and install WinGet itself
             self._log("Installing WinGet...", "info")
-            winget_url = "https://aka.ms/getwinget"
+            winget_url = "https://github.com/microsoft/winget-cli/releases/download/v1.12.460/Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
             winget_path = os.path.join(temp_dir, "Microsoft.DesktopAppInstaller.msixbundle")
+            
             if self._download_file(winget_url, winget_path):
-                # Use -ForceUpdateFromAnyVersion to ensure installation works
                 result = subprocess.run(
-                    f'powershell -Command "Add-AppxPackage -Path \'{winget_path}\' -ForceUpdateFromAnyVersion"',
-                    shell=True, capture_output=True, text=True, timeout=120
+                    f'powershell -Command "Add-AppxPackage -Path \'{winget_path}\'"',
+                    shell=True, capture_output=True, text=True, timeout=180
                 )
                 if result.returncode != 0:
-                    self._log(f"WinGet install output: {result.stderr}", "warning")
+                    self._log(f"WinGet install error: {result.stderr}", "warning")
+                else:
+                    self._log("WinGet package installed", "success")
             
-            # Refresh PATH - winget is typically in WindowsApps
+            # Refresh PATH
             self._refresh_path()
             
-            # Give Windows a moment to register the app
-            time.sleep(2)
+            # Give Windows time to register
+            time.sleep(3)
             
             # Verify installation
             if self._check_winget():

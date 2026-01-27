@@ -138,21 +138,37 @@ class Installer:
             if self._download_file(runtime_url, runtime_path):
                 subprocess.run(f'"{runtime_path}" --quiet', shell=True, capture_output=True, timeout=120)
             
-            # Step 2: VCLibs dependency (must complete before WinGet)
-            self._log("Installing VCLibs...", "info")
-            vclibs_url = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
-            vclibs_path = os.path.join(temp_dir, "VCLibs.appx")
-            if self._download_file(vclibs_url, vclibs_path):
+            # Step 2: VCLibs Desktop (for desktop apps)
+            self._log("Installing VCLibs Desktop...", "info")
+            vclibs_desktop_url = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
+            vclibs_desktop_path = os.path.join(temp_dir, "VCLibs.Desktop.appx")
+            if self._download_file(vclibs_desktop_url, vclibs_desktop_path):
                 result = subprocess.run(
-                    f'powershell -Command "Add-AppxPackage -Path \'{vclibs_path}\'"',
+                    f'powershell -Command "Add-AppxPackage -Path \'{vclibs_desktop_path}\'"',
                     shell=True, capture_output=True, text=True, timeout=60
                 )
                 if result.returncode != 0:
-                    self._log(f"VCLibs install error: {result.stderr}", "warning")
+                    self._log(f"VCLibs Desktop error: {result.stderr}", "warning")
                 else:
-                    self._log("VCLibs installed", "success")
-                # Wait for Windows to register the package
-                time.sleep(3)
+                    self._log("VCLibs Desktop installed", "success")
+            
+            # Step 2b: VCLibs UWP (required by WinGet MSIX packages)
+            # This is the store version without "Desktop" - from GitHub winget repo
+            self._log("Installing VCLibs UWP...", "info")
+            vclibs_uwp_url = "https://github.com/microsoft/winget-cli/releases/download/v1.7.10661/b0a0692da1034339b76dce1c298a1e42_14.0.33519.0_x64__8wekyb3d8bbwe.appx"
+            vclibs_uwp_path = os.path.join(temp_dir, "VCLibs.UWP.appx")
+            if self._download_file(vclibs_uwp_url, vclibs_uwp_path):
+                result = subprocess.run(
+                    f'powershell -Command "Add-AppxPackage -Path \'{vclibs_uwp_path}\'"',
+                    shell=True, capture_output=True, text=True, timeout=60
+                )
+                if result.returncode != 0:
+                    self._log(f"VCLibs UWP error: {result.stderr}", "warning")
+                else:
+                    self._log("VCLibs UWP installed", "success")
+            
+            # Wait for Windows to register the packages
+            time.sleep(3)
             
             # Step 3: UI.Xaml dependency (required by newer WinGet)
             self._log("Installing UI.Xaml...", "info")

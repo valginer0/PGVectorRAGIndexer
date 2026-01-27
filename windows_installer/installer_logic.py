@@ -106,6 +106,70 @@ class Installer:
         """Check if winget is available."""
         return self._check_command("winget")
     
+    def _download_file(self, url: str, dest: str) -> bool:
+        """Download a file from URL."""
+        try:
+            self._log(f"Downloading {url}...")
+            urllib.request.urlretrieve(url, dest)
+            return True
+        except Exception as e:
+            self._log(f"Download failed: {e}", "error")
+            return False
+    
+    def _bootstrap_winget(self) -> bool:
+        """
+        Install WinGet if not available.
+        For Windows Sandbox or clean Windows installs where WinGet is missing.
+        """
+        # Check first - if already installed, skip
+        if self._check_winget():
+            self._log("WinGet already available", "success")
+            return True
+        
+        self._log("WinGet not found, bootstrapping...", "info")
+        temp_dir = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'winget_bootstrap')
+        os.makedirs(temp_dir, exist_ok=True)
+        
+        try:
+            # Step 1: Windows App SDK Runtime (newer requirement)
+            self._log("Installing Windows App SDK Runtime...", "info")
+            runtime_url = "https://aka.ms/windowsappsdk/1.6/1.6.241105002/windowsappruntimeinstall-x64.exe"
+            runtime_path = os.path.join(temp_dir, "WindowsAppRuntimeInstall.exe")
+            if self._download_file(runtime_url, runtime_path):
+                subprocess.run(f'"{runtime_path}" --quiet', shell=True, capture_output=True, timeout=120)
+            
+            # Step 2: VCLibs dependency
+            self._log("Installing VCLibs...", "info")
+            vclibs_url = "https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx"
+            vclibs_path = os.path.join(temp_dir, "VCLibs.appx")
+            if self._download_file(vclibs_url, vclibs_path):
+                subprocess.run(f'powershell Add-AppxPackage "{vclibs_path}"', shell=True, capture_output=True, timeout=60)
+            
+            # Step 3: WinGet itself
+            self._log("Installing WinGet...", "info")
+            winget_url = "https://aka.ms/getwinget"
+            winget_path = os.path.join(temp_dir, "Microsoft.DesktopAppInstaller.msixbundle")
+            if self._download_file(winget_url, winget_path):
+                subprocess.run(f'powershell Add-AppxPackage "{winget_path}"', shell=True, capture_output=True, timeout=60)
+            
+            # Verify installation
+            if self._check_winget():
+                self._log("WinGet bootstrapped successfully!", "success")
+                return True
+            else:
+                self._log("WinGet bootstrap completed but verification failed", "warning")
+                return False
+                
+        except Exception as e:
+            self._log(f"WinGet bootstrap failed: {e}", "error")
+            return False
+        finally:
+            # Cleanup temp files
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except:
+                pass
+    
     def _install_with_winget(self, package_id: str, name: str) -> bool:
         """Install a package with winget."""
         self._log(f"Installing {name}...")
@@ -306,11 +370,10 @@ class Installer:
         version = platform.version()
         self._log(f"Windows version: {version}")
         
-        # Check if winget is available
-        if not self._check_winget():
-            self._log("winget not found - some installations may require manual setup", "warning")
-        else:
-            self._log("winget available", "success")
+        # Ensure WinGet is available (bootstrap if needed)
+        self._update_progress(step, "Checking WinGet availability...")
+        if not self._bootstrap_winget():
+            self._log("WinGet unavailable - installation may fail", "warning")
         
         # Check available disk space
         try:

@@ -716,16 +716,19 @@ class Installer:
         if self._check_winget():
             self._update_progress(step, "Installing Rancher Desktop (Docker)...")
             if self._install_with_winget("suse.RancherDesktop", "Rancher Desktop"):
-                self._log("Rancher Desktop installed - may need restart", "success")
-                self._log("Please start Rancher Desktop after installation", "info")
-                return True
+                self._log("Rancher Desktop installed - restart required", "success")
+                self._log("A system restart is required before Docker can start.", "warning")
+                self.request_reboot()
+                return True  # Will trigger reboot dialog
         
         # WinGet failed or unavailable - try direct download
         self._log("WinGet unavailable or failed, trying direct download...", "warning")
         self._update_progress(step, "Installing Rancher Desktop via direct download...")
         if self._install_rancher_direct():
             self._log("Rancher Desktop installed via direct download", "success")
-            return True
+            self._log("A system restart is required before Docker can start.", "warning")
+            self.request_reboot()
+            return True  # Will trigger reboot dialog
         
         self._log("Failed to install Rancher Desktop", "error")
         self._log("Please install Docker Desktop or Rancher Desktop manually", "warning")

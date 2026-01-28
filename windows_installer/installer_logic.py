@@ -382,7 +382,7 @@ class Installer:
                 key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_SET_VALUE)
                 winreg.SetValueEx(key, "PGVectorRAGIndexer_Resume", 0, winreg.REG_SZ, cmd)
                 winreg.CloseKey(key)
-                self._log("Added to Registry Run key instad.", "info")
+                self._log("Added to Registry Run key instead.", "info")
             except Exception as e:
                 self._log(f"Failed to set registry run key: {e}", "error")
 

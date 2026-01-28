@@ -215,42 +215,50 @@ class InstallerGUI:
         btn.bind('<Leave>', lambda e: btn.configure(bg=normal_color))
     
     def _update_progress_bar(self, percent):
-        """Update custom progress bar."""
+        """Update custom progress bar (called from main thread)."""
         self.progress_value = percent
         # Calculate width based on percentage
         total_width = 450  # Approximate width
         fill_width = int((percent / 100) * total_width)
         self.progress_fill.configure(width=fill_width)
-        self.root.update_idletasks()
+        # update_idletasks not needed if using after()
     
     def _log(self, message: str, level: str = "info"):
-        """Add message to log area with color."""
-        self.log_text.config(state=tk.NORMAL)
-        
-        # Add prefix based on level
-        prefix_map = {
-            "info": ("  ", "info"),
-            "success": ("✓ ", "success"),
-            "warning": ("⚠ ", "warning"),
-            "error": ("✗ ", "error")
-        }
-        prefix, tag = prefix_map.get(level, ("  ", "info"))
-        
-        self.log_text.insert(tk.END, f"{prefix}{message}\n", tag)
-        self.log_text.see(tk.END)
-        self.log_text.config(state=tk.DISABLED)
-        self.root.update_idletasks()
+        """Add message to log area with color (thread-safe)."""
+        def _update():
+            self.log_text.config(state=tk.NORMAL)
+            
+            # Add prefix based on level
+            prefix_map = {
+                "info": ("  ", "info"),
+                "success": ("✓ ", "success"),
+                "warning": ("⚠ ", "warning"),
+                "error": ("✗ ", "error")
+            }
+            prefix, tag = prefix_map.get(level, ("  ", "info"))
+            
+            self.log_text.insert(tk.END, f"{prefix}{message}\n", tag)
+            self.log_text.see(tk.END)
+            self.log_text.config(state=tk.DISABLED)
+            
+        self.root.after(0, _update)
     
     def _update_progress(self, step: InstallStep, status: str):
-        """Update progress display."""
-        self.current_step = step.number
-        percent = int((step.number / self.total_steps) * 100)
-        
-        self.step_label.config(text=step.name)
-        self._update_progress_bar(percent)
-        self.counter_label.config(text=f"Step {step.number} of {self.total_steps} • {step.time_estimate}")
-        
-        self._log(status)
+        """Update progress display (thread-safe)."""
+        def _update():
+            self.current_step = step.number
+            percent = int((step.number / self.total_steps) * 100)
+            
+            self.step_label.config(text=step.name)
+            # Show status message (like "Still installing...") in the counter label
+            self.counter_label.config(text=status)
+            self._update_progress_bar(percent)
+            
+            # Also log significant status changes if they aren't just "Still installing..."
+            if "Still installing" not in status:
+                self._log(status)
+            
+        self.root.after(0, _update)
     
     def _start_installation(self):
         """Start the installation in a background thread."""

@@ -720,8 +720,79 @@ class Installer:
                 self._log("Please start Rancher Desktop after installation", "info")
                 return True
         
-        self._log("Please install Docker Desktop manually", "warning")
-        return True  # Continue anyway
+        # WinGet failed or unavailable - try direct download
+        self._log("WinGet unavailable or failed, trying direct download...", "warning")
+        self._update_progress(step, "Installing Rancher Desktop via direct download...")
+        if self._install_rancher_direct():
+            self._log("Rancher Desktop installed via direct download", "success")
+            return True
+        
+        self._log("Failed to install Rancher Desktop", "error")
+        self._log("Please install Docker Desktop or Rancher Desktop manually", "warning")
+        return False  # Signal failure instead of continuing
+    
+    def _install_rancher_direct(self) -> bool:
+        """Install Rancher Desktop via direct download from GitHub."""
+        try:
+            # Download MSI from GitHub releases
+            # Using a stable version URL (update version as needed)
+            rancher_url = "https://github.com/rancher-sandbox/rancher-desktop/releases/download/v1.22.0/Rancher.Desktop.Setup.1.22.0.msi"
+            
+            temp_dir = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'rancher_install')
+            os.makedirs(temp_dir, exist_ok=True)
+            installer_path = os.path.join(temp_dir, "Rancher.Desktop.Setup.msi")
+            
+            self._log("Downloading Rancher Desktop (~700MB, please wait)...", "info")
+            if not self._download_file(rancher_url, installer_path):
+                return False
+            
+            # Silent install MSI
+            self._log("Running Rancher Desktop installer...", "info")
+            cmd = f'msiexec /i "{installer_path}" /quiet /norestart'
+            
+            # Run with progress feedback (may take several minutes)
+            process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Wait with periodic progress updates (max 15 minutes for large install)
+            max_wait_seconds = 900
+            elapsed = 0
+            while elapsed < max_wait_seconds:
+                try:
+                    process.wait(timeout=15)
+                    break  # Process completed
+                except subprocess.TimeoutExpired:
+                    elapsed += 15
+                    if elapsed < max_wait_seconds:
+                        self._log(f"Still installing Rancher Desktop... ({elapsed}s elapsed)", "info")
+            
+            if process.poll() is None:
+                # Still running after timeout
+                process.kill()
+                self._log("Rancher Desktop installer timed out after 15 minutes", "error")
+                return False
+            
+            # Cleanup
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except:
+                pass
+            
+            # Verify installation by checking for rdctl
+            rdctl_paths = [
+                os.path.expandvars(r"%LOCALAPPDATA%\Programs\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
+                os.path.expandvars(r"%PROGRAMFILES%\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
+            ]
+            for path in rdctl_paths:
+                if os.path.exists(path):
+                    self._log("Rancher Desktop installed successfully via direct download", "success")
+                    return True
+            
+            self._log("Rancher Desktop installed but not found at expected path", "warning")
+            return True  # May still work, installation location might differ
+            
+        except Exception as e:
+            self._log(f"Direct Rancher Desktop installation failed: {e}", "error")
+            return False
     
     # =========================================================================
     # Step 5: Start Container Runtime
@@ -744,11 +815,20 @@ class Installer:
             
             # Wait up to 300 seconds (parity with legacy)
             start_time = time.time()
+            last_log_time = start_time
             while time.time() - start_time < 300:
                 success, _ = self._run_command("docker ps")
                 if success:
                     self._log("Docker is ready!", "success")
                     return True
+                
+                # Log progress every 15 seconds
+                current_time = time.time()
+                if current_time - last_log_time >= 15:
+                    elapsed = int(current_time - start_time)
+                    self._log(f"Still waiting for Docker... ({elapsed}s elapsed)", "info")
+                    last_log_time = current_time
+                    
                 time.sleep(5)
             
             self._log("Docker failed to become ready in time", "error")

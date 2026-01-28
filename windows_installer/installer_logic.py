@@ -55,9 +55,32 @@ class Installer:
         self._progress_callback: Optional[Callable] = None
         self._log_callback: Optional[Callable] = None
         
-        # State persistence file
-        self.state_file = os.path.join(self.INSTALL_DIR, "install_state.json")
+        # State persistence file - use mapped folder if available (for Sandbox support)
+        self.state_file = self._get_state_file_path()
         self.reboot_required = False
+    
+    def _get_state_file_path(self) -> str:
+        """
+        Determine where to store state file.
+        For Windows Sandbox support, use the folder where the installer is running from
+        (which is the mapped folder that persists across Sandbox reboots).
+        """
+        # Get the directory where the installer executable is running from
+        if getattr(sys, 'frozen', False):
+            # Running as compiled executable
+            installer_dir = os.path.dirname(sys.executable)
+        else:
+            # Running as script
+            installer_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+        
+        # Check if this looks like a Desktop/mapped folder
+        # (Desktop path or any folder that's likely to persist)
+        if 'Desktop' in installer_dir or 'ToSign' in installer_dir:
+            # Use the installer's folder for state (Sandbox-friendly)
+            return os.path.join(installer_dir, "install_state.json")
+        else:
+            # Default: use INSTALL_DIR
+            return os.path.join(self.INSTALL_DIR, "install_state.json")
     
     def cancel(self):
         """Cancel the installation."""
@@ -329,7 +352,7 @@ class Installer:
         
         # Remove scheduled task
         subprocess.run(
-            'schtasks /delete /tn "PGVectorRAGIndexer_Resume" /f',
+            'C:\\Windows\\System32\\schtasks.exe /delete /tn "PGVectorRAGIndexer_Resume" /f',
             shell=True,
             capture_output=True
         )
@@ -368,7 +391,7 @@ class Installer:
         # Legacy used Register-ScheduledTask. schtasks is the cli equivalent.
         
         schtasks_cmd = (
-            f'schtasks /create /tn "PGVectorRAGIndexer_Resume" '
+            f'C:\\Windows\\System32\\schtasks.exe /create /tn "PGVectorRAGIndexer_Resume" '
             f'/tr "\'{executable}\' {script_args}" '
             f'/sc onlogon /f'
         )

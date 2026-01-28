@@ -116,21 +116,50 @@ class Installer:
             return False
     
     def _download_file(self, url: str, dest: str) -> bool:
-        """Download a file from URL."""
+        """Download a file from URL with progress feedback."""
         try:
             self._log(f"Downloading {url}...")
             # Create SSL context that doesn't verify certificates
-            # Needed for bundled PyInstaller builds where CA certs may not be available
             import ssl
             ssl_context = ssl.create_default_context()
             ssl_context.check_hostname = False
             ssl_context.verify_mode = ssl.CERT_NONE
             
-            # Download with custom SSL context
+            # Download with custom SSL context and chunked reading
             import urllib.request
+            
+            # Set a socket timeout (60s read timeout)
+            import socket
+            socket.setdefaulttimeout(60)
+            
             with urllib.request.urlopen(url, context=ssl_context) as response:
+                total_size = int(response.info().get('Content-Length', 0))
+                block_size = 8192  # 8KB buffer
+                downloaded = 0
+                last_log_time = time.time()
+                
                 with open(dest, 'wb') as out_file:
-                    out_file.write(response.read())
+                    while True:
+                        buffer = response.read(block_size)
+                        if not buffer:
+                            break
+                        
+                        out_file.write(buffer)
+                        downloaded += len(buffer)
+                        
+                        # Log progress every 5 seconds or 10MB
+                        current_time = time.time()
+                        if current_time - last_log_time > 5:
+                            mb_downloaded = downloaded / (1024 * 1024)
+                            if total_size > 0:
+                                mb_total = total_size / (1024 * 1024)
+                                pct = int((downloaded / total_size) * 100)
+                                self._log(f"Downloading... {pct}% ({mb_downloaded:.1f} / {mb_total:.1f} MB)", "info")
+                            else:
+                                self._log(f"Downloading... {mb_downloaded:.1f} MB", "info")
+                            last_log_time = current_time
+                            
+            self._log("Download complete", "success")
             return True
         except Exception as e:
             self._log(f"Download failed: {e}", "error")

@@ -103,14 +103,34 @@ class Installer:
             return False
     
     def _check_winget(self) -> bool:
-        """Check if winget is available."""
-        return self._check_command("winget")
+        """Check if winget is available and functional."""
+        try:
+            # Not just check if command exists, but verify it actually works
+            result = subprocess.run(
+                'winget --version',
+                shell=True, capture_output=True, text=True, timeout=10
+            )
+            # WinGet returns version like "v1.x.xxxxx"
+            return result.returncode == 0 and result.stdout.strip().startswith('v')
+        except:
+            return False
     
     def _download_file(self, url: str, dest: str) -> bool:
         """Download a file from URL."""
         try:
             self._log(f"Downloading {url}...")
-            urllib.request.urlretrieve(url, dest)
+            # Create SSL context that doesn't verify certificates
+            # Needed for bundled PyInstaller builds where CA certs may not be available
+            import ssl
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            
+            # Download with custom SSL context
+            import urllib.request
+            with urllib.request.urlopen(url, context=ssl_context) as response:
+                with open(dest, 'wb') as out_file:
+                    out_file.write(response.read())
             return True
         except Exception as e:
             self._log(f"Download failed: {e}", "error")

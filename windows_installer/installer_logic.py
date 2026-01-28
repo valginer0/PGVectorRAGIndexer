@@ -569,10 +569,22 @@ class Installer:
                         self._log(f"Still installing Python... ({elapsed}s elapsed)", "info")
             
             if process.poll() is None:
-                # Still running after timeout
+                # Still running after timeout - kill it but check if Python installed anyway
                 process.kill()
-                self._log("Python installer timed out after 10 minutes", "error")
-                return False
+                self._log("Python installer timed out after 10 minutes", "warning")
+                
+                # Check if Python was actually installed despite timeout
+                self._refresh_path()
+                if self._check_command("python"):
+                    self._log("Python appears to be installed despite timeout - continuing", "success")
+                    try:
+                        shutil.rmtree(temp_dir, ignore_errors=True)
+                    except:
+                        pass
+                    return True
+                else:
+                    self._log("Python installation failed", "error")
+                    return False
             
             # Cleanup
             try:

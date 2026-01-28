@@ -496,8 +496,9 @@ class Installer:
                 return False
             
             # Silent install: user scope, add to PATH, include pip
+            # IMPORTANT: Must include InstallLauncherAllUsers=0 to prevent hanging in quiet mode
             self._log("Running Python installer...", "info")
-            cmd = f'"{installer_path}" /quiet InstallAllUsers=0 PrependPath=1 Include_pip=1'
+            cmd = f'"{installer_path}" /quiet InstallAllUsers=0 InstallLauncherAllUsers=0 PrependPath=1 Include_pip=1'
             
             # Run with progress feedback
             process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

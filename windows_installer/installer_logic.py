@@ -496,9 +496,30 @@ class Installer:
                 return False
             
             # Silent install: user scope, add to PATH, include pip
-            self._log("Running Python installer (this may take a few minutes)...", "info")
+            self._log("Running Python installer...", "info")
             cmd = f'"{installer_path}" /quiet InstallAllUsers=0 PrependPath=1 Include_pip=1'
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=600)
+            
+            # Run with progress feedback
+            process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Wait with periodic progress updates (max 10 minutes)
+            max_wait_seconds = 600
+            elapsed = 0
+            while elapsed < max_wait_seconds:
+                try:
+                    process.wait(timeout=15)
+                    break  # Process completed
+                except subprocess.TimeoutExpired:
+                    elapsed += 15
+                    remaining = max_wait_seconds - elapsed
+                    if remaining > 0:
+                        self._log(f"Still installing Python... ({elapsed}s elapsed)", "info")
+            
+            if process.poll() is None:
+                # Still running after timeout
+                process.kill()
+                self._log("Python installer timed out after 10 minutes", "error")
+                return False
             
             # Cleanup
             try:
@@ -564,9 +585,30 @@ class Installer:
                 return False
             
             # Silent install with PATH option
-            self._log("Running Git installer (this may take a few minutes)...", "info")
+            self._log("Running Git installer...", "info")
             cmd = f'"{installer_path}" /VERYSILENT /NORESTART /NOCANCEL /SP- /CLOSEAPPLICATIONS /RESTARTAPPLICATIONS /COMPONENTS="icons,ext\\reg\\shellhere,assoc,assoc_sh"'
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=300)
+            
+            # Run with progress feedback
+            process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            
+            # Wait with periodic progress updates (max 10 minutes)
+            max_wait_seconds = 600
+            elapsed = 0
+            while elapsed < max_wait_seconds:
+                try:
+                    process.wait(timeout=15)
+                    break  # Process completed
+                except subprocess.TimeoutExpired:
+                    elapsed += 15
+                    remaining = max_wait_seconds - elapsed
+                    if remaining > 0:
+                        self._log(f"Still installing Git... ({elapsed}s elapsed)", "info")
+            
+            if process.poll() is None:
+                # Still running after timeout
+                process.kill()
+                self._log("Git installer timed out after 10 minutes", "error")
+                return False
             
             # Cleanup
             try:

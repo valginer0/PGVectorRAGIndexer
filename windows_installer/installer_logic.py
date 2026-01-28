@@ -556,7 +556,7 @@ class Installer:
             process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             
             # Wait with periodic progress updates (max 10 minutes)
-            max_wait_seconds = 600
+            max_wait_seconds = 1800  # 30 min for Sandbox compatibility
             elapsed = 0
             while elapsed < max_wait_seconds:
                 try:
@@ -571,7 +571,7 @@ class Installer:
             if process.poll() is None:
                 # Still running after timeout - kill it but check if Python installed anyway
                 process.kill()
-                self._log("Python installer timed out after 10 minutes", "warning")
+                self._log("Python installer timed out after 30 minutes", "warning")
                 
                 # Check if Python was actually installed despite timeout
                 self._refresh_path()
@@ -657,7 +657,7 @@ class Installer:
             process = subprocess.Popen(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             
             # Wait with periodic progress updates (max 10 minutes)
-            max_wait_seconds = 600
+            max_wait_seconds = 1800  # 30 min for Sandbox compatibility
             elapsed = 0
             while elapsed < max_wait_seconds:
                 try:
@@ -672,7 +672,7 @@ class Installer:
             if process.poll() is None:
                 # Still running after timeout
                 process.kill()
-                self._log("Git installer timed out after 10 minutes", "error")
+                self._log("Git installer timed out after 30 minutes", "error")
                 return False
             
             # Cleanup

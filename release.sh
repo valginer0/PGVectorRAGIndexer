@@ -46,6 +46,13 @@ fi
 # Parse current version
 IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
 
+# Parse arguments
+CONFIRM=true
+if [ "$1" == "-y" ]; then
+    CONFIRM=false
+    shift
+fi
+
 # Determine new version based on argument
 BUMP_TYPE="${1:-patch}"  # Default to patch if no argument
 
@@ -65,7 +72,9 @@ elif [ "$BUMP_TYPE" = "patch" ]; then
 else
     echo -e "${RED}✗ Invalid argument. Use: major, minor, patch, or explicit version (e.g., 2.0.3)${NC}"
     echo -e "${YELLOW}Usage:${NC}"
+    echo -e "  ./release.sh [-y] [version|type]"
     echo -e "  ./release.sh          # Auto-bump patch"
+    echo -e "  ./release.sh -y       # Auto-bump patch, no confirmation"
     echo -e "  ./release.sh patch    # Bump patch: 2.0.2 → 2.0.3"
     echo -e "  ./release.sh minor    # Bump minor: 2.0.2 → 2.1.0"
     echo -e "  ./release.sh major    # Bump major: 2.0.2 → 3.0.0"
@@ -75,23 +84,41 @@ fi
 
 echo ""
 echo -e "${YELLOW}This will:${NC}"
-echo -e "  1. Update VERSION file to ${GREEN}$NEW_VERSION${NC}"
+
+if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
+    echo -e "  1. Update VERSION file to ${GREEN}$NEW_VERSION${NC}"
+else
+    echo -e "  1. Skip VERSION update (already $NEW_VERSION)"
+fi
 echo -e "  2. Run tests"
 echo -e "  3. Create git tag ${GREEN}v$NEW_VERSION${NC}"
 echo -e "  4. Push tag to GitHub"
 echo -e "  5. Trigger Docker build and publish to GitHub Container Registry"
 echo ""
 
-# Update VERSION file
-echo "$NEW_VERSION" > VERSION
-echo -e "${GREEN}✓ Updated VERSION file${NC}"
+if [ "$CONFIRM" = true ]; then
+    read -p "Continue? (y/n) " -n 1 -r
+    echo ""
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${YELLOW}Aborted.${NC}"
+        exit 0
+    fi
+fi
 
-# Update documentation headers
-echo -e "${GREEN}Updating documentation version references...${NC}"
-if python3 scripts/update_version_docs.py 2>/dev/null; then
-    echo -e "${GREEN}✓ Documentation updated${NC}"
+if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
+    # Update VERSION file
+    echo "$NEW_VERSION" > VERSION
+    echo -e "${GREEN}✓ Updated VERSION file${NC}"
+
+    # Update documentation headers
+    echo -e "${GREEN}Updating documentation version references...${NC}"
+    if python3 scripts/update_version_docs.py 2>/dev/null; then
+        echo -e "${GREEN}✓ Documentation updated${NC}"
+    else
+        echo -e "${YELLOW}⚠ Could not update documentation (script missing or failed)${NC}"
+    fi
 else
-    echo -e "${YELLOW}⚠ Could not update documentation (script missing or failed)${NC}"
+     echo -e "${BLUE}Version matches current. Skipping file updates and commit.${NC}"
 fi
 
 # Ensure database is running for tests
@@ -165,11 +192,15 @@ fi
 docker push ghcr.io/valginer0/pgvectorragindexer:latest
 echo -e "${GREEN}✓ Image pushed to GHCR${NC}"
 
-# Commit VERSION file and documentation
-echo ""
-git add VERSION README.md QUICK_START.md DEPLOYMENT.md
-git commit -m "chore: Bump version to v$NEW_VERSION [skip ci]"
-echo -e "${GREEN}✓ Committed version bump${NC}"
+if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
+    # Commit VERSION file and documentation
+    echo ""
+    git add VERSION README.md QUICK_START.md DEPLOYMENT.md
+    git commit -m "chore: Bump version to v$NEW_VERSION [skip ci]"
+    echo -e "${GREEN}✓ Committed version bump${NC}"
+else
+    echo -e "${BLUE}Skipping commit (version unchanged)${NC}"
+fi
 
 # Create and push tag
 git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION

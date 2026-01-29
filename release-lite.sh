@@ -96,8 +96,16 @@ fi
 echo "$NEW_VERSION" > VERSION
 echo -e "${GREEN}✓ Updated VERSION file${NC}"
 
-# Commit VERSION file
-git add VERSION
+# Update documentation headers
+echo -e "${GREEN}Updating documentation version references...${NC}"
+if python3 scripts/update_version_docs.py 2>/dev/null; then
+    echo -e "${GREEN}✓ Documentation updated${NC}"
+else
+    echo -e "${YELLOW}⚠ Could not update documentation (script missing or failed)${NC}"
+fi
+
+# Commit VERSION file and documentation
+git add VERSION README.md QUICK_START.md DEPLOYMENT.md
 git commit -m "chore: Bump version to v$NEW_VERSION [skip ci]"
 echo -e "${GREEN}✓ Committed version bump${NC}"
 

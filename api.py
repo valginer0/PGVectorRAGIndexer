@@ -167,12 +167,16 @@ async def lifespan(app: FastAPI):
     logger.info("Cleanup complete")
 
 
+# Import version from central module
+from version import __version__
+
+
 # Create FastAPI app
 config = get_config()
 app = FastAPI(
     title="PGVectorRAGIndexer API",
     description="REST API for semantic document search using PostgreSQL and pgvector",
-    version="2.4.0",
+    version=__version__,
     lifespan=lifespan
 )
 

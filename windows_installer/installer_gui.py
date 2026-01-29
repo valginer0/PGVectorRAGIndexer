@@ -59,6 +59,9 @@ class InstallerGUI:
         self.total_steps = len(self.installer.steps)
         
         self._create_widgets()
+        
+        # Check for resume state and display message if found
+        self._check_resume_on_startup()
     
     def _create_widgets(self):
         """Create all GUI widgets with modern styling."""
@@ -213,6 +216,71 @@ class InstallerGUI:
         """Bind hover effect to button."""
         btn.bind('<Enter>', lambda e: btn.configure(bg=hover_color))
         btn.bind('<Leave>', lambda e: btn.configure(bg=normal_color))
+    
+    def _check_resume_on_startup(self):
+        """Check for resume state on startup and display message to user."""
+        import datetime
+        
+        resume_state = self.installer.check_resume_state()
+        if resume_state:
+            # Show resume message in the GUI
+            timestamp = resume_state.get("Timestamp", 0)
+            if timestamp:
+                age_hours = (datetime.datetime.now().timestamp() - timestamp) / 3600
+                age_str = f"{age_hours:.1f} hours ago"
+            else:
+                age_str = "previously"
+            
+            self.step_label.config(
+                text="🔄 Previous Installation Found",
+                fg=COLORS['warning']
+            )
+            self.counter_label.config(
+                text=f"Will resume from Step 5 (started {age_str})"
+            )
+            self.install_btn.config(text="Resume")
+            
+            # Add "Start Fresh" button
+            self.fresh_btn = tk.Button(
+                self.install_btn.master,
+                text="Start Fresh",
+                command=self._start_fresh,
+                font=("Segoe UI", 9),
+                bg=COLORS['bg_light'],
+                fg=COLORS['text_secondary'],
+                activebackground=COLORS['bg_medium'],
+                activeforeground=COLORS['text_primary'],
+                relief=tk.FLAT,
+                padx=15,
+                pady=8,
+                cursor="hand2"
+            )
+            self.fresh_btn.pack(side=tk.RIGHT, padx=(0, 10))
+            self._bind_hover(self.fresh_btn, COLORS['bg_light'], COLORS['bg_medium'])
+            
+            # Pre-populate log with resume info
+            self._log("=" * 40, "info")
+            self._log("Found previous installation in progress", "warning")
+            self._log(f"Started: {age_str}", "info")
+            self._log(f"Install dir: {resume_state.get('InstallDir', 'unknown')}", "info")
+            self._log("Click 'Resume' to continue from Step 5", "info")
+            self._log("Or 'Start Fresh' to reinstall from scratch", "info")
+            self._log("=" * 40, "info")
+    
+    def _start_fresh(self):
+        """Clear previous state and start fresh installation."""
+        self.installer._clear_state()
+        self._log("Previous state cleared!", "success")
+        self._log("Starting fresh installation...", "info")
+        
+        # Reset GUI to initial state
+        self.step_label.config(text="Click 'Install' to begin", fg=COLORS['text_primary'])
+        self.counter_label.config(text="Ready to install")
+        self.install_btn.config(text="Install")
+        
+        # Remove the "Start Fresh" button
+        if hasattr(self, 'fresh_btn'):
+            self.fresh_btn.pack_forget()
     
     def _update_progress_bar(self, percent):
         """Update custom progress bar (called from main thread)."""

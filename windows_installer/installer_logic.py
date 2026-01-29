@@ -14,6 +14,13 @@ from dataclasses import dataclass
 from typing import Callable, Optional, List
 from pathlib import Path
 
+# Import version from central source
+try:
+    from version import INSTALLER_VERSION
+except ImportError:
+    # Fallback if module not found (e.g., during testing)
+    INSTALLER_VERSION = "2.4.1"
+
 
 @dataclass
 class InstallStep:
@@ -28,6 +35,8 @@ class Installer:
     
     INSTALL_DIR = os.path.join(os.environ.get('USERPROFILE', ''), 'PGVectorRAGIndexer')
     GITHUB_REPO = "valginer0/PGVectorRAGIndexer"
+    INSTALLER_VERSION = INSTALLER_VERSION  # From version module
+    STATE_MAX_AGE_HOURS = 24  # Ignore state files older than this
     
     steps = [
         InstallStep(1, "Checking System", "~10 seconds"),
@@ -69,18 +78,24 @@ class Installer:
         if getattr(sys, 'frozen', False):
             # Running as compiled executable
             installer_dir = os.path.dirname(sys.executable)
+            self._log(f"[State] Running as frozen exe from: {installer_dir}", "info")
         else:
             # Running as script
             installer_dir = os.path.dirname(os.path.abspath(sys.argv[0]))
+            self._log(f"[State] Running as script from: {installer_dir}", "info")
         
         # Check if this looks like a Desktop/mapped folder
         # (Desktop path or any folder that's likely to persist)
         if 'Desktop' in installer_dir or 'ToSign' in installer_dir:
             # Use the installer's folder for state (Sandbox-friendly)
-            return os.path.join(installer_dir, "install_state.json")
+            state_path = os.path.join(installer_dir, "install_state.json")
+            self._log(f"[State] Using Sandbox-friendly state path: {state_path}", "info")
+            return state_path
         else:
             # Default: use INSTALL_DIR
-            return os.path.join(self.INSTALL_DIR, "install_state.json")
+            state_path = os.path.join(self.INSTALL_DIR, "install_state.json")
+            self._log(f"[State] Using default state path: {state_path}", "info")
+            return state_path
     
     def cancel(self):
         """Cancel the installation."""
@@ -320,27 +335,72 @@ class Installer:
     # =========================================================================
 
     def _save_state(self, stage: str):
-        """Save installation state to JSON."""
+        """Save installation state to JSON with version and timestamp."""
         state = {
             "Stage": stage,
             "InstallDir": self.INSTALL_DIR,
-            "Timestamp": time.time()
+            "Timestamp": time.time(),
+            "InstallerVersion": self.INSTALLER_VERSION
         }
         try:
             with open(self.state_file, 'w') as f:
-                json.dump(state, f)
+                json.dump(state, f, indent=2)
+            self._log(f"[State] Saved state: Stage={stage}, Version={self.INSTALLER_VERSION}", "info")
+            self._log(f"[State] State file: {self.state_file}", "info")
         except Exception as e:
-            self._log(f"Failed to save state: {e}", "warning")
+            self._log(f"[State] Failed to save state: {e}", "warning")
 
     def _load_state(self) -> dict:
-        """Load installation state."""
-        if os.path.exists(self.state_file):
-            try:
-                with open(self.state_file, 'r') as f:
-                    return json.load(f)
-            except:
-                pass
-        return {}
+        """
+        Load installation state with validation.
+        Returns empty dict if:
+        - No state file exists
+        - State file is too old (> STATE_MAX_AGE_HOURS)
+        - State file was created by different installer version
+        """
+        self._log(f"[State] Looking for state file at: {self.state_file}", "info")
+        
+        if not os.path.exists(self.state_file):
+            self._log("[State] No state file found - fresh install", "info")
+            return {}
+        
+        try:
+            with open(self.state_file, 'r') as f:
+                state = json.load(f)
+            
+            self._log(f"[State] Found state file: {state}", "info")
+            
+            # Check timestamp - ignore stale state files
+            timestamp = state.get("Timestamp", 0)
+            age_hours = (time.time() - timestamp) / 3600
+            if age_hours > self.STATE_MAX_AGE_HOURS:
+                self._log(f"[State] State file is {age_hours:.1f} hours old (max {self.STATE_MAX_AGE_HOURS}h) - ignoring", "warning")
+                self._clear_state()
+                return {}
+            
+            # Check version - only resume if versions match
+            state_version = state.get("InstallerVersion", "unknown")
+            if state_version != self.INSTALLER_VERSION:
+                self._log(f"[State] State file from different installer version ({state_version} != {self.INSTALLER_VERSION}) - ignoring", "warning")
+                self._clear_state()
+                return {}
+            
+            self._log(f"[State] Valid state file found: Stage={state.get('Stage')}, Age={age_hours:.1f}h", "success")
+            return state
+            
+        except Exception as e:
+            self._log(f"[State] Failed to load state file: {e}", "warning")
+            return {}
+    
+    def check_resume_state(self) -> Optional[dict]:
+        """
+        Check if a valid resume state exists. For GUI to call on startup.
+        Returns state dict if valid resume is available, None otherwise.
+        """
+        state = self._load_state()
+        if state and state.get("Stage") == "PostReboot":
+            return state
+        return None
 
     def _clear_state(self):
         """Clear state and remove scheduled task."""
@@ -1027,12 +1087,16 @@ class Installer:
         start_index = 0
         
         if state and state.get("Stage") == "PostReboot":
-            self._log("Resuming installation after restart...", "success")
+            self._log("=" * 50, "info")
+            self._log("RESUMING INSTALLATION AFTER RESTART", "success")
+            self._log("=" * 50, "info")
+            self._log(f"Previous install dir: {state.get('InstallDir')}", "info")
+            self._log("Skipping Steps 1-4 (prerequisites already installed)", "info")
+            self._log("Starting from Step 5: Starting Container Runtime", "info")
             # Resume from Step 5 (Start Runtime) because that's what we rebooted for
             # Prereqs (1-4) are assumed done.
             start_index = 4 
-            # Clear state now that we've resumed (or clear after success? Legacy cleared at end)
-            # We'll clear at end to be safe.
+            # We'll clear state at end after success
         
         try:
             for i, step_func in enumerate(steps_functions):

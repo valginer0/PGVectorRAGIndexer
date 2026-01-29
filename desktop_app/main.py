@@ -21,6 +21,12 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Import version from central module
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from version import __version__
+
 
 def main():
     """Main entry point for the desktop application."""
@@ -32,7 +38,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("PGVectorRAGIndexer")
     app.setOrganizationName("ValginerSoft")
-    app.setApplicationVersion("2.4.0")
+    app.setApplicationVersion(__version__)
     
     # Create and show main window
     # Create and show main window

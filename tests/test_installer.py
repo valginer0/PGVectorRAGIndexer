@@ -11,6 +11,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 
 from installer_logic import Installer, InstallStep
 
+@unittest.skipUnless(sys.platform == 'win32', "Windows-specific installer tests")
 class TestInstallerLogic(unittest.TestCase):
 
     def setUp(self):

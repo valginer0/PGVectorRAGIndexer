@@ -86,6 +86,14 @@ echo ""
 echo "$NEW_VERSION" > VERSION
 echo -e "${GREEN}✓ Updated VERSION file${NC}"
 
+# Update documentation headers
+echo -e "${GREEN}Updating documentation version references...${NC}"
+if python3 scripts/update_version_docs.py 2>/dev/null; then
+    echo -e "${GREEN}✓ Documentation updated${NC}"
+else
+    echo -e "${YELLOW}⚠ Could not update documentation (script missing or failed)${NC}"
+fi
+
 # Ensure database is running for tests
 echo -e "${GREEN}Checking database...${NC}"
 DB_RUNNING=false
@@ -157,9 +165,9 @@ fi
 docker push ghcr.io/valginer0/pgvectorragindexer:latest
 echo -e "${GREEN}✓ Image pushed to GHCR${NC}"
 
-# Commit VERSION file
+# Commit VERSION file and documentation
 echo ""
-git add VERSION
+git add VERSION README.md QUICK_START.md DEPLOYMENT.md
 git commit -m "chore: Bump version to v$NEW_VERSION [skip ci]"
 echo -e "${GREEN}✓ Committed version bump${NC}"
 

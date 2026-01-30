@@ -16,8 +16,6 @@
         </Feature>
     </Product>
 
-    </Product>
-
     <Fragment>
         <!-- UI Configuration -->
         <UI Id="WixUI_Minimal">

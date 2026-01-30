@@ -53,18 +53,14 @@ jobs:
 
     - name: Compile WiX Configuration
       run: |
-         # Set WIX environment variable for explicit paths, assuming default install location
-         echo "WIX=C:\Program Files (x86)\WiX Toolset v3.11" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-         # Pass the version from VERSION file (read by Python or shell)
+         # Pass the version from VERSION file
          $VER = Get-Content VERSION
-         "%WIX%\bin\candle.exe" -dProductVersion="$VER" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/project.wixobj windows_installer/project.wxs
-         "%WIX%\bin\candle.exe" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/harvested.wixobj windows_installer/harvested.wxs
+         candle -dProductVersion="$VER" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/project.wixobj windows_installer/project.wxs
+         candle -ext WixUIExtension -ext WixUtilExtension -out windows_installer/harvested.wixobj windows_installer/harvested.wxs
 
     - name: Link MSI
       run: |
-         # Set WIX environment variable for explicit paths, assuming default install location
-         echo "WIX=C:\Program Files (x86)\WiX Toolset v3.11" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-         "%WIX%\bin\light.exe" -out dist/PGVectorRAGIndexer.msi -ext WixUIExtension -ext WixUtilExtension -b dist/PGVectorRAGIndexer windows_installer/project.wixobj windows_installer/harvested.wixobj
+         light -out dist/PGVectorRAGIndexer.msi -ext WixUIExtension -ext WixUtilExtension -b dist/PGVectorRAGIndexer windows_installer/project.wixobj windows_installer/harvested.wixobj
 
     - name: Upload MSI Artifact
       uses: actions/upload-artifact@v4

@@ -3,13 +3,13 @@
     <!-- Define Product Version from file or environment variable (passed via candle arguments) -->
     <!-- We will rely on CI passing -dProductVersion=x.y.z -->
     
-    <Product Id="*" Name="PGVector RAG Indexer" Language="1033" Version="$(var.ProductVersion)" Manufacturer="Valginer0" UpgradeCode="55D500EB-296B-4412-A3D9-87383921B2F6">
+    <Product Id="*" Name="PGVector RAG Indexer Setup Wizard" Language="1033" Version="$(var.ProductVersion)" Manufacturer="Valginer0" UpgradeCode="55D500EB-296B-4412-A3D9-87383921B2F6">
         <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 
         <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." AllowSameVersionUpgrades="yes" />
         <MediaTemplate EmbedCab="yes" />
 
-        <Feature Id="ProductFeature" Title="PGVector RAG Indexer" Level="1">
+        <Feature Id="ProductFeature" Title="PGVector RAG Indexer Setup Wizard" Level="1">
             <ComponentGroupRef Id="ProductComponents" />
             <ComponentGroupRef Id="HarvestedComponents" />
             <ComponentRef Id="ApplicationShortcut" />
@@ -30,7 +30,7 @@
                 <Directory Id="INSTALLFOLDER" Name="PGVectorRAGIndexer" />
             </Directory>
             <Directory Id="ProgramMenuFolder">
-                <Directory Id="ApplicationProgramsFolder" Name="PGVector RAG Indexer" />
+                <Directory Id="ApplicationProgramsFolder" Name="PGVector RAG Indexer Setup Wizard" />
             </Directory>
             <Directory Id="DesktopFolder" Name="Desktop" />
         </Directory>
@@ -41,8 +41,8 @@
             <!-- The main executable -->
             <Component Id="MainExecutable" Guid="*">
                 <File Id="MainExe" Source="dist\PGVectorRAGIndexer-Setup\PGVectorRAGIndexer-Setup.exe" KeyPath="yes">
-                    <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
-                    <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
+                    <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Name="PGVector RAG Indexer Setup Wizard" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
+                    <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="PGVector RAG Indexer Setup Wizard" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
                 </File>
             </Component>
         </ComponentGroup>

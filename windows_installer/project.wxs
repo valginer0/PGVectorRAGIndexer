@@ -16,12 +16,19 @@
         </Feature>
     </Product>
 
-    <Fragment>
-        <CustomAction Id="LaunchApp" FileKey="MainExe" ExeCommand="" Return="asyncNoWait" Impersonate="yes" />
+    </Product>
 
-        <InstallExecuteSequence>
-             <Custom Action="LaunchApp" After="InstallFinalize">NOT Installed AND NOT REMOVE</Custom>
-        </InstallExecuteSequence>
+    <Fragment>
+        <!-- UI Configuration -->
+        <UI Id="WixUI_Minimal">
+            <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
+        </UI>
+        <UIRef Id="WixUI_ErrorProgressText" />
+
+        <!-- Launch App Checkbox Configuration -->
+        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch PGVector RAG Indexer" />
+        <Property Id="WixShellExecTarget" Value="[#MainExe]" />
+        <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Impersonate="yes" />
     </Fragment>
 
     <Fragment>

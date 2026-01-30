@@ -53,24 +53,26 @@ jobs:
 
     - name: Compile WiX (Candle)
       working-directory: windows_installer
+    - name: Compile WiX Configuration
       run: |
-        # Pass the version from VERSION file (read by Python or shell)
-        $VER = Get-Content ../VERSION
-        candle -dSourceDir="dist/PGVectorRAGIndexer-Setup" -dProductVersion="$VER" -arch x64 project.wxs harvested.wxs
+         # Set WIX environment variable for explicit paths, assuming default install location
+         echo "WIX=C:\Program Files (x86)\WiX Toolset v3.11" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+         # Pass the version from VERSION file (read by Python or shell)
+         $VER = Get-Content VERSION
+         "%WIX%\bin\candle.exe" -dProductVersion="$VER" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/project.wixobj windows_installer/project.wxs
+         "%WIX%\bin\candle.exe" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/harvested.wixobj windows_installer/harvested.wxs
 
-    - name: Link WiX (Light)
-      working-directory: windows_installer
+    - name: Link MSI
       run: |
-        # Link the objects into an MSI
-        # -spdb: Suppress PDB generation
-        # -sice:ICE91: Suppress a common warning about user profile folders
-        light -spdb -sice:ICE91 -out dist/PGVectorRAGIndexer.msi project.wixobj harvested.wixobj
+         # Set WIX environment variable for explicit paths, assuming default install location
+         echo "WIX=C:\Program Files (x86)\WiX Toolset v3.11" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+         "%WIX%\bin\light.exe" -out dist/PGVectorRAGIndexer.msi -ext WixUIExtension -ext WixUtilExtension -b dist/PGVectorRAGIndexer windows_installer/project.wixobj windows_installer/harvested.wixobj
 
     - name: Upload MSI Artifact
       uses: actions/upload-artifact@v4
       with:
         name: PGVectorRAGIndexer.msi
-        path: windows_installer/dist/PGVectorRAGIndexer.msi
+        path: dist/PGVectorRAGIndexer.msi
         if-no-files-found: error
     
     # Release step (only on tags)

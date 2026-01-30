@@ -44,18 +44,18 @@ jobs:
     - name: Harvest Files (Heat)
       working-directory: windows_installer
       run: |
-        # Harvest the dist/PGVectorRAGIndexer folder into a WiX fragment
+        # Harvest the dist/PGVectorRAGIndexer-Setup folder into a WiX fragment
         # -dr INSTALLFOLDER: References the Directory ID in project.wxs
         # -cg HarvestedComponents: The ComponentGroup ID to create
         # -var var.SourceDir: Variable to usage for source paths
-        heat dir dist/PGVectorRAGIndexer -dr INSTALLFOLDER -cg HarvestedComponents -gg -g1 -sf -srd -var "var.SourceDir" -out harvested.wxs
+        heat dir dist/PGVectorRAGIndexer-Setup -dr INSTALLFOLDER -cg HarvestedComponents -gg -g1 -sf -srd -var "var.SourceDir" -out harvested.wxs
 
     - name: Compile WiX (Candle)
       working-directory: windows_installer
       run: |
         # Pass the version from VERSION file (read by Python or shell)
         $VER = Get-Content ../VERSION
-        candle -dSourceDir="dist/PGVectorRAGIndexer" -dProductVersion="$VER" -arch x64 project.wxs harvested.wxs
+        candle -dSourceDir="dist/PGVectorRAGIndexer-Setup" -dProductVersion="$VER" -arch x64 project.wxs harvested.wxs
 
     - name: Link WiX (Light)
       working-directory: windows_installer

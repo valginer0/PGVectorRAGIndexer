@@ -32,7 +32,7 @@
         <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
             <!-- The main executable -->
             <Component Id="MainExecutable" Guid="*">
-                <File Id="MainExe" Source="dist\PGVectorRAGIndexer\PGVectorRAGIndexer-Setup.exe" KeyPath="yes">
+                <File Id="MainExe" Source="dist\PGVectorRAGIndexer-Setup\PGVectorRAGIndexer-Setup.exe" KeyPath="yes">
                     <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Icon="icon.ico" IconIndex="0" Advertise="yes" />
                     <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Icon="icon.ico" IconIndex="0" Advertise="yes" />
                 </File>

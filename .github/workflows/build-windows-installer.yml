@@ -48,8 +48,8 @@ jobs:
         # Harvest the dist/PGVectorRAGIndexer-Setup folder into a WiX fragment
         # -dr INSTALLFOLDER: References the Directory ID in project.wxs
         # -cg HarvestedComponents: The ComponentGroup ID to create
-        # -var var.SourceDir: Variable to usage for source paths
-        heat dir dist/PGVectorRAGIndexer-Setup -dr INSTALLFOLDER -cg HarvestedComponents -gg -g1 -sf -srd -var "var.SourceDir" -out harvested.wxs
+        # -t filter.xslt: Apply the filter to remove the main exe (avoid duplicates)
+        heat dir dist/PGVectorRAGIndexer-Setup -dr INSTALLFOLDER -cg HarvestedComponents -gg -g1 -sf -srd -var "var.SourceDir" -t filter.xslt -out harvested.wxs
 
     - name: Compile WiX (Candle)
       working-directory: windows_installer

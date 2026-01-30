@@ -6,7 +6,7 @@
     <Product Id="*" Name="PGVector RAG Indexer" Language="1033" Version="$(var.ProductVersion)" Manufacturer="Valginer0" UpgradeCode="55D500EB-296B-4412-A3D9-87383921B2F6">
         <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 
-        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." AllowSameVersionUpgrades="yes" />
         <MediaTemplate EmbedCab="yes" />
 
         <Feature Id="ProductFeature" Title="PGVector RAG Indexer" Level="1">
@@ -22,7 +22,8 @@
         </UI>
         
         <WixVariable Id="WixUILicenseRtf" Value="windows_installer/license.rtf" />
-        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch PGVector RAG Indexer" />
+        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Setup Wizard" />
+        <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
         <Property Id="WixShellExecTarget" Value="[#MainExe]" />
         <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Impersonate="yes" />
     </Product>

@@ -16,9 +16,7 @@
         </Feature>
 
         <UI>
-            <UIRef Id="WixUI_Minimal" />
-            <UIRef Id="WixUI_ErrorProgressText" />
-            <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">NOT Installed</Publish>
+            <UIRef Id="MyWixUI" />
         </UI>
         
         <WixVariable Id="WixUILicenseRtf" Value="windows_installer/license.rtf" />

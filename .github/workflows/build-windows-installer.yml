@@ -57,10 +57,11 @@ jobs:
          $VER = Get-Content VERSION
          candle -arch x64 -dProductVersion="$VER" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/project.wixobj windows_installer/project.wxs
          candle -arch x64 -dSourceDir="dist/PGVectorRAGIndexer-Setup" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/harvested.wixobj windows_installer/harvested.wxs
+         candle -arch x64 -ext WixUIExtension -ext WixUtilExtension -out windows_installer/ui.wixobj windows_installer/ui.wxs
 
     - name: Link MSI
       run: |
-         light -out dist/PGVectorRAGIndexer.msi -ext WixUIExtension -ext WixUtilExtension -cultures:en-us -loc windows_installer/en-us.wxl -b dist/PGVectorRAGIndexer windows_installer/project.wixobj windows_installer/harvested.wixobj
+         light -out dist/PGVectorRAGIndexer.msi -ext WixUIExtension -ext WixUtilExtension -cultures:en-us -loc windows_installer/en-us.wxl -b dist/PGVectorRAGIndexer windows_installer/project.wixobj windows_installer/harvested.wixobj windows_installer/ui.wixobj
 
     - name: Upload MSI Artifact
       uses: actions/upload-artifact@v4

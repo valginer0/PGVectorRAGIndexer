@@ -51,8 +51,6 @@ jobs:
         # -t filter.xslt: Apply the filter to remove the main exe (avoid duplicates)
         heat dir dist/PGVectorRAGIndexer-Setup -dr INSTALLFOLDER -cg HarvestedComponents -gg -g1 -sf -srd -var "var.SourceDir" -t filter.xslt -out harvested.wxs
 
-    - name: Compile WiX (Candle)
-      working-directory: windows_installer
     - name: Compile WiX Configuration
       run: |
          # Set WIX environment variable for explicit paths, assuming default install location

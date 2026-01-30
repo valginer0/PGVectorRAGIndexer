@@ -14,20 +14,18 @@
             <ComponentGroupRef Id="HarvestedComponents" />
             <ComponentRef Id="ApplicationShortcut" />
         </Feature>
-    </Product>
 
-    <Fragment>
-        <!-- UI Configuration -->
-        <UI Id="WixUI_Minimal">
+        <UI>
+            <UIRef Id="WixUI_Minimal" />
+            <UIRef Id="WixUI_ErrorProgressText" />
             <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication">WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed</Publish>
         </UI>
-        <UIRef Id="WixUI_ErrorProgressText" />
-
-        <!-- Launch App Checkbox Configuration -->
+        
+        <WixVariable Id="WixUILicenseRtf" Value="windows_installer/license.rtf" />
         <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch PGVector RAG Indexer" />
         <Property Id="WixShellExecTarget" Value="[#MainExe]" />
         <CustomAction Id="LaunchApplication" BinaryKey="WixCA" DllEntry="WixShellExec" Impersonate="yes" />
-    </Fragment>
+    </Product>
 
     <Fragment>
         <Directory Id="TARGETDIR" Name="SourceDir">

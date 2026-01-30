@@ -3,7 +3,7 @@
     <!-- Define Product Version from file or environment variable (passed via candle arguments) -->
     <!-- We will rely on CI passing -dProductVersion=x.y.z -->
     
-    <Product Id="*" Name="PGVector RAG Indexer" Language="1033" Version="$(var.ProductVersion)" Manufacturer="Valginer0" UpgradeCode="PUT-GUID-HERE-LATER">
+    <Product Id="*" Name="PGVector RAG Indexer" Language="1033" Version="$(var.ProductVersion)" Manufacturer="Valginer0" UpgradeCode="55D500EB-296B-4412-A3D9-87383921B2F6">
         <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 
         <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />

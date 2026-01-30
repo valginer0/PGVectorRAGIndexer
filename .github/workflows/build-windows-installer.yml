@@ -55,8 +55,8 @@ jobs:
       run: |
          # Pass the version from VERSION file
          $VER = Get-Content VERSION
-         candle -dProductVersion="$VER" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/project.wixobj windows_installer/project.wxs
-         candle -dSourceDir="dist/PGVectorRAGIndexer-Setup" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/harvested.wixobj windows_installer/harvested.wxs
+         candle -arch x64 -dProductVersion="$VER" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/project.wixobj windows_installer/project.wxs
+         candle -arch x64 -dSourceDir="dist/PGVectorRAGIndexer-Setup" -ext WixUIExtension -ext WixUtilExtension -out windows_installer/harvested.wixobj windows_installer/harvested.wxs
 
     - name: Link MSI
       run: |

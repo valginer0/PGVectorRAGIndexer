@@ -33,8 +33,8 @@
             <!-- The main executable -->
             <Component Id="MainExecutable" Guid="*">
                 <File Id="MainExe" Source="dist\PGVectorRAGIndexer-Setup\PGVectorRAGIndexer-Setup.exe" KeyPath="yes">
-                    <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Icon="icon.ico" IconIndex="0" Advertise="yes" />
-                    <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Icon="icon.ico" IconIndex="0" Advertise="yes" />
+                    <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
+                    <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Advertise="yes" />
                 </File>
             </Component>
         </ComponentGroup>
@@ -51,6 +51,7 @@
     </Fragment>
     
     <!-- Icon for Add/Remove Programs -->
-    <!-- <Icon Id="icon.ico" SourceFile="windows_installer\icon.ico"/> -->
+    <!-- Note: icon.ico is missing, so we skip this for now -->
+    <!-- <Icon Id="icon.ico" SourceFile="icon.ico"/> -->
     <!-- <Property Id="ARPPRODUCTICON" Value="icon.ico" /> -->
 </Wix>

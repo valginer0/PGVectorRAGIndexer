@@ -17,6 +17,14 @@
     </Product>
 
     <Fragment>
+        <CustomAction Id="LaunchApp" FileKey="MainExe" ExeCommand="" Return="asyncNoWait" Impersonate="yes" />
+
+        <InstallExecuteSequence>
+             <Custom Action="LaunchApp" After="InstallFinalize">NOT Installed AND NOT REMOVE</Custom>
+        </InstallExecuteSequence>
+    </Fragment>
+
+    <Fragment>
         <Directory Id="TARGETDIR" Name="SourceDir">
             <Directory Id="ProgramFiles64Folder">
                 <Directory Id="INSTALLFOLDER" Name="PGVectorRAGIndexer" />

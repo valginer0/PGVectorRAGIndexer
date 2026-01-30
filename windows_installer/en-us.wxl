@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <WixLocalization Culture="en-us" xmlns="http://schemas.microsoft.com/wix/2006/localization">
-  <String Id="WixUIExitDialogTitle">Prepared Setup Wizard</String>
-  <String Id="WixUIExitDialogDescription">Click the Finish button to launch the Setup Wizard.</String>
+  <String Id="WixUIExitDialogTitle">Setup Wizard Ready</String>
+  <String Id="WixUIExitDialogDescription">The Setup Wizard is ready to launch. Click 'Finish' to start the installation.</String>
 </WixLocalization>

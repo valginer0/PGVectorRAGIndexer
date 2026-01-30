@@ -36,24 +36,47 @@ jobs:
       working-directory: windows_installer
       run: |
         python -m PyInstaller --onedir --windowed --name "PGVectorRAGIndexer-Setup" --version-file version_info.txt --noupx --clean --noconfirm installer_gui.py
-    
-    - name: Upload artifact
+
+    # WiX Toolset Steps
+    - name: Add WiX to PATH
+      run: echo "C:\Program Files (x86)\WiX Toolset v3.11\bin" >> $env:GITHUB_PATH
+
+    - name: Harvest Files (Heat)
+      working-directory: windows_installer
+      run: |
+        # Harvest the dist/PGVectorRAGIndexer folder into a WiX fragment
+        # -dr INSTALLFOLDER: References the Directory ID in project.wxs
+        # -cg HarvestedComponents: The ComponentGroup ID to create
+        # -var var.SourceDir: Variable to usage for source paths
+        heat dir dist/PGVectorRAGIndexer -dr INSTALLFOLDER -cg HarvestedComponents -gg -g1 -sf -srd -var "var.SourceDir" -out harvested.wxs
+
+    - name: Compile WiX (Candle)
+      working-directory: windows_installer
+      run: |
+        # Pass the version from VERSION file (read by Python or shell)
+        $VER = Get-Content ../VERSION
+        candle -dSourceDir="dist/PGVectorRAGIndexer" -dProductVersion="$VER" -arch x64 project.wxs harvested.wxs
+
+    - name: Link WiX (Light)
+      working-directory: windows_installer
+      run: |
+        # Link the objects into an MSI
+        # -spdb: Suppress PDB generation
+        # -sice:ICE91: Suppress a common warning about user profile folders
+        light -spdb -sice:ICE91 -out dist/PGVectorRAGIndexer.msi project.wixobj harvested.wixobj
+
+    - name: Upload MSI Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: PGVectorRAGIndexer-Setup
-        path: windows_installer/dist/PGVectorRAGIndexer-Setup/
+        name: PGVectorRAGIndexer.msi
+        path: windows_installer/dist/PGVectorRAGIndexer.msi
         if-no-files-found: error
     
-    # For now, zip the onedir folder for release download
-    - name: Create release archive
-      if: startsWith(github.ref, 'refs/tags/')
-      working-directory: windows_installer/dist
-      run: Compress-Archive -Path PGVectorRAGIndexer-Setup -DestinationPath PGVectorRAGIndexer-Setup.zip
-    
-    - name: Create Release (on tag)
+    # Release step (only on tags)
+    - name: Upload MSI to Release
       if: startsWith(github.ref, 'refs/tags/')
       uses: softprops/action-gh-release@v1
       with:
-        files: windows_installer/dist/PGVectorRAGIndexer-Setup.zip
+        files: windows_installer/dist/PGVectorRAGIndexer.msi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

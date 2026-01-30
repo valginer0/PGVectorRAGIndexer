@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <!-- Define Product Version from file or environment variable (passed via candle arguments) -->
+    <!-- We will rely on CI passing -dProductVersion=x.y.z -->
+    
+    <Product Id="*" Name="PGVector RAG Indexer" Language="1033" Version="$(var.ProductVersion)" Manufacturer="Valginer0" UpgradeCode="PUT-GUID-HERE-LATER">
+        <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
+
+        <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+        <MediaTemplate EmbedCab="yes" />
+
+        <Feature Id="ProductFeature" Title="PGVector RAG Indexer" Level="1">
+            <ComponentGroupRef Id="ProductComponents" />
+            <ComponentGroupRef Id="HarvestedComponents" />
+            <ComponentRef Id="ApplicationShortcut" />
+        </Feature>
+    </Product>
+
+    <Fragment>
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="ProgramFilesFolder">
+                <Directory Id="INSTALLFOLDER" Name="PGVectorRAGIndexer" />
+            </Directory>
+            <Directory Id="ProgramMenuFolder">
+                <Directory Id="ApplicationProgramsFolder" Name="PGVector RAG Indexer" />
+            </Directory>
+            <Directory Id="DesktopFolder" Name="Desktop" />
+        </Directory>
+    </Fragment>
+
+    <Fragment>
+        <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+            <!-- The main executable -->
+            <Component Id="MainExecutable" Guid="*">
+                <File Id="MainExe" Source="dist\PGVectorRAGIndexer\PGVectorRAGIndexer-Setup.exe" KeyPath="yes">
+                    <Shortcut Id="StartMenuShortcut" Directory="ApplicationProgramsFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Icon="icon.ico" IconIndex="0" Advertise="yes" />
+                    <Shortcut Id="DesktopShortcut" Directory="DesktopFolder" Name="PGVector RAG Indexer" WorkingDirectory="INSTALLFOLDER" Icon="icon.ico" IconIndex="0" Advertise="yes" />
+                </File>
+            </Component>
+        </ComponentGroup>
+    </Fragment>
+
+    <!-- Define the Shortcut Directory -->
+    <Fragment>
+        <DirectoryRef Id="ApplicationProgramsFolder">
+            <Component Id="ApplicationShortcut" Guid="*">
+                <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
+                <RegistryValue Root="HKCU" Key="Software\Valginer0\PGVectorRAGIndexer" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+            </Component>
+        </DirectoryRef>
+    </Fragment>
+    
+    <!-- Icon for Add/Remove Programs -->
+    <!-- <Icon Id="icon.ico" SourceFile="windows_installer\icon.ico"/> -->
+    <!-- <Property Id="ARPPRODUCTICON" Value="icon.ico" /> -->
+</Wix>

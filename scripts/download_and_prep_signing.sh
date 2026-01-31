@@ -18,7 +18,7 @@ echo -e "${GREEN}Looking for latest successful build of '$WORKFLOW_NAME'...${NC}
 
 # Find latest successful run
 # formatting: databaseId \t status \t conclusion
-LATEST_RUN_JSON=$(gh run list --workflow="$WORKFLOW_NAME" --limit 1 --status completed --conclusion success --json databaseId,headBranch,headSha,createdAt)
+LATEST_RUN_JSON=$(gh run list --workflow="$WORKFLOW_NAME" --limit 1 --status success --json databaseId,headBranch,headSha,createdAt)
 
 if [ -z "$LATEST_RUN_JSON" ]; then
     echo -e "${RED}No successful runs found.${NC}"
@@ -39,8 +39,7 @@ mkdir -p "$TEMP_DIR"
 
 echo -e "${GREEN}Downloading artifact...${NC}"
 
-# List artifacts to determine name (it might change between zip and msi)
-ARTIFACT_LIST=$(gh run view "$RUN_ID" --json artifacts)
+# We will download everything to temp dir and inspect contents
 
 # We assume the artifact name is "PGVectorRAGIndexer-Setup" (standard) or "PGVectorRAGIndexer.msi" (future)
 # We download everything to temp dir

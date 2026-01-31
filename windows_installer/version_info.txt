@@ -32,12 +32,12 @@ VSVersionInfo(
           [
             StringStruct(u'CompanyName', u'Valery Giner'),
             StringStruct(u'FileDescription', u'PGVectorRAGIndexer Desktop App Installer'),
-            StringStruct(u'FileVersion', u'2.4.3.0'),
+            StringStruct(u'FileVersion', u'2.4.3'),
             StringStruct(u'InternalName', u'PGVectorRAGIndexer-Setup'),
             StringStruct(u'LegalCopyright', u'© 2024-2025 Valery Giner. All rights reserved.'),
             StringStruct(u'OriginalFilename', u'PGVectorRAGIndexer-Setup.exe'),
             StringStruct(u'ProductName', u'PGVectorRAGIndexer'),
-            StringStruct(u'ProductVersion', u'2.4.3.0'),
+            StringStruct(u'ProductVersion', u'2.4.3'),
           ]
         )
       ]

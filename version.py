@@ -24,7 +24,8 @@ def get_version() -> str:
         except (FileNotFoundError, IOError):
             continue
     
-    return "2.4.3"  # Fallback
+    return "0.0.0-dev"  # Fallback for dev/missing
+
 
 
 __version__ = get_version()

@@ -33,10 +33,15 @@ jobs:
     - name: Install PyInstaller
       run: pip install pyinstaller
     
+    - name: Generate version_info.txt
+      run: python scripts/generate_version_info.py
+
     - name: Build installer (onedir, no UPX)
       working-directory: windows_installer
       run: |
-        python -m PyInstaller --onedir --windowed --name "PGVectorRAGIndexer-Setup" --version-file version_info.txt --noupx --clean --noconfirm installer_gui.py
+        # Note: --add-data "SOURCE;DEST" (Windows separator is ;)
+        # We add ../VERSION to the root of the bundled app (.)
+        python -m PyInstaller --onedir --windowed --name "PGVectorRAGIndexer-Setup" --version-file version_info.txt --add-data "../VERSION;." --noupx --clean --noconfirm installer_gui.py
 
     # WiX Toolset Steps
     - name: Add WiX to PATH

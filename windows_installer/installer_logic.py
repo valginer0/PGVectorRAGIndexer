@@ -976,33 +976,66 @@ class Installer:
     # Step 7: Pull Docker Images
     # =========================================================================
 
+    def _run_command_stream(self, cmd: str, shell: bool = True) -> bool:
+        """Run command and stream output to log (real-time feedback)."""
+        try:
+            process = subprocess.Popen(
+                cmd,
+                shell=shell,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True,
+                encoding='utf-8', 
+                errors='replace'
+            )
+            
+            # Read line by line
+            for line in process.stdout:
+                cleaned_line = line.strip()
+                if cleaned_line:
+                    # Filter out purely progress bars if they look messy, 
+                    # but typically docker output is fine.
+                    self._log(cleaned_line, "info")
+            
+            process.wait()
+            return process.returncode == 0
+        except Exception as e:
+            self._log(f"Stream error: {e}", "error")
+            return False
+
+    # =========================================================================
+    # Step 7: Pull Docker Images
+    # =========================================================================
+
     def _step_pull_images(self) -> bool:
         """Pull Docker images (Parity with manage.ps1 update)."""
         step = self.steps[6]
-        self._update_progress(step, "Pulling Docker images...")
+        self._update_progress(step, "Checking Docker images...")
         
         os.chdir(self.INSTALL_DIR)
         
-        # Run docker compose pull
-        # Use simple environment variable setup if needed, but default .env should handle it
-        # or we just rely on default
+        # optimized: check if image exists locally first to give better feedback
+        success, _ = self._run_command("docker images -q ghcr.io/valginer0/pgvectorragindexer:latest")
+        if success and _:
+            self._log("Core image found locally. Checking for updates...", "info")
+        else:
+            self._log("Core image not found. Downloading (this may take time)...", "info")
+
+        self.env = os.environ.copy()
         
-        # Create temporary .env for image if needed, similar to manage.ps1
-        # For simplicity/parity, we assume default image unless channel specified
-        # Since we clone main, we use prod image mostly.
-        
-        env = os.environ.copy()
-        env["APP_IMAGE"] = "ghcr.io/valginer0/pgvectorragindexer:latest"
-        
-        self._log("Pulling images (this may take a few minutes)...")
-        success, output = self._run_command("docker compose pull", shell=True)
+        # Use streaming command so user sees progress!
+        self._log("Running 'docker compose pull'...", "info")
+        success = self._run_command_stream("docker compose pull")
         
         if success:
-            self._log("Images pulled successfully", "success")
+            self._log("Images verified/pulled successfully", "success")
             return True
         else:
-            self._log(f"Failed to pull images: {output}", "warning")
-            return True # Non-fatal, app will try to pull on run
+            self._log("Warning: Pull command reported issues (offline?)", "warning")
+            self._log("Attempting to proceed with existing images...", "info")
+            return True # Non-fatal, app will try to run anyway
 
     # =========================================================================
     # Step 8: Finalize

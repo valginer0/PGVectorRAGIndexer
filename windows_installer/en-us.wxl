@@ -4,4 +4,7 @@
   <String Id="WixUIVerifyReadyDlgInstallTitle">Ready to Prepare Setup Wizard</String>
   <String Id="WixUIProgressDlgTitleInstalling">Preparing Setup Wizard</String>
   <String Id="WixUIProgressDlgTextInstalling">Please wait while the Setup Wizard files are prepared.</String>
+  
+  <!-- Fix License Agreement Title (Remove 'Setup Wizard' from this specific screen) -->
+  <String Id="WelcomeEulaDlgTitle">{\WixUI_Font_Title}Please read the PGVector RAG Indexer License Agreement</String>
 </WixLocalization>

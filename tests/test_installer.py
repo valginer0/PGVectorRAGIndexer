@@ -132,12 +132,145 @@ class TestInstallerLogic(unittest.TestCase):
     def test_step_pull_images(self, mock_run):
         """Test image pulling step."""
         mock_run.return_value = (True, "Pulled")
-        
+
         self.installer._step_pull_images()
-        
+
         args = mock_run.call_args[0][0]
         self.assertIn("docker compose pull", args)
         self.assertIn("env", str(os.environ)) # Just ensuring environment is passed usually
+
+    # =======================================================================
+    # Docker Detection Improvement Tests
+    # =======================================================================
+
+    @patch('installer_logic.Installer._run_command')
+    def test_check_virtualization_enabled_powershell_true(self, mock_run):
+        """Test virtualization check returns True when PowerShell reports enabled."""
+        mock_run.return_value = (True, "True\n")
+        result = self.installer._check_virtualization_enabled()
+        self.assertTrue(result)
+        # Verify PowerShell was used (not systeminfo)
+        cmd = mock_run.call_args[0][0]
+        self.assertIn("Get-CimInstance", cmd)
+
+    @patch('installer_logic.Installer._run_command')
+    def test_check_virtualization_enabled_powershell_false(self, mock_run):
+        """Test virtualization check returns False when PowerShell reports disabled."""
+        mock_run.return_value = (True, "False\n")
+        result = self.installer._check_virtualization_enabled()
+        self.assertFalse(result)
+
+    @patch('installer_logic.Installer._run_command')
+    def test_check_virtualization_enabled_fallback_systeminfo(self, mock_run):
+        """Test fallback to systeminfo when PowerShell fails."""
+        def side_effect(cmd, **kwargs):
+            if 'Get-CimInstance' in cmd:
+                return (False, "error")  # PowerShell fails
+            if cmd == 'systeminfo':
+                return (True, "Virtualization Enabled In Firmware: Yes\n")
+            return (False, "")
+        mock_run.side_effect = side_effect
+        result = self.installer._check_virtualization_enabled()
+        self.assertTrue(result)
+
+    @patch('installer_logic.Installer._run_command')
+    def test_check_architecture_x64(self, mock_run):
+        """Test x64 architecture detection."""
+        mock_run.return_value = (True, "AMD64\n")
+        result = self.installer._check_architecture()
+        self.assertEqual(result, 'x64')
+
+    @patch('installer_logic.Installer._run_command')
+    def test_check_architecture_arm64(self, mock_run):
+        """Test ARM64 architecture detection."""
+        mock_run.return_value = (True, "ARM64\n")
+        result = self.installer._check_architecture()
+        self.assertEqual(result, 'ARM64')
+
+    @patch('installer_logic.Installer._run_command')
+    def test_get_computer_manufacturer_dell(self, mock_run):
+        """Test Dell manufacturer detection."""
+        mock_run.return_value = (True, "Dell Inc.\n")
+        result = self.installer._get_computer_manufacturer()
+        self.assertEqual(result, 'Dell')
+
+    @patch('installer_logic.Installer._run_command')
+    def test_get_computer_manufacturer_hp(self, mock_run):
+        """Test HP manufacturer detection."""
+        mock_run.return_value = (True, "Hewlett-Packard\n")
+        result = self.installer._get_computer_manufacturer()
+        self.assertEqual(result, 'HP')
+
+    @patch('installer_logic.Installer._run_command')
+    def test_get_computer_manufacturer_unknown(self, mock_run):
+        """Test unknown manufacturer fallback."""
+        mock_run.return_value = (False, "")
+        result = self.installer._get_computer_manufacturer()
+        self.assertEqual(result, 'Unknown')
+
+    @patch('os.path.exists')
+    def test_check_docker_desktop_installed_by_path(self, mock_exists):
+        """Test Docker Desktop detection via file path."""
+        original_exists = os.path.exists
+        def side_effect(path):
+            if 'Docker Desktop.exe' in str(path):
+                return True
+            return original_exists(path)
+        mock_exists.side_effect = side_effect
+        result = self.installer._check_docker_desktop_installed()
+        self.assertTrue(result)
+
+    @patch('os.path.exists', return_value=False)
+    @patch('installer_logic.Installer._run_command')
+    def test_check_docker_desktop_installed_by_registry(self, mock_run, mock_exists):
+        """Test Docker Desktop detection via registry when file paths don't exist."""
+        def side_effect(cmd, **kwargs):
+            if 'HKLM' in cmd and 'Docker' in cmd:
+                return (True, "Version    REG_SZ    4.30.0\n")
+            return (False, "")
+        mock_run.side_effect = side_effect
+        result = self.installer._check_docker_desktop_installed()
+        self.assertTrue(result)
+
+    @patch('installer_logic.Installer._run_command')
+    def test_check_podman_installed_running(self, mock_run):
+        """Test Podman detection when podman ps succeeds."""
+        mock_run.return_value = (True, "CONTAINER ID...")
+        result = self.installer._check_podman_installed()
+        self.assertTrue(result)
+
+    @patch('installer_logic.Installer._check_command')
+    @patch('installer_logic.Installer._run_command')
+    def test_check_podman_installed_not_running(self, mock_run, mock_check):
+        """Test Podman detection when podman ps fails but binary exists."""
+        mock_run.return_value = (False, "error")
+        mock_check.return_value = True
+        result = self.installer._check_podman_installed()
+        self.assertTrue(result)
+
+    @patch('installer_logic.Installer._check_command')
+    @patch('installer_logic.Installer._run_command')
+    def test_setup_podman_docker_compat_with_podman_docker(self, mock_run, mock_check):
+        """Test Podman-Docker compat when podman-docker package provides compose."""
+        def side_effect(cmd, **kwargs):
+            if cmd == "docker --version":
+                return (True, "podman version 4.9.0")
+            if cmd == "docker compose version":
+                return (True, "Docker Compose version v2.24.0")
+            return (False, "")
+        mock_run.side_effect = side_effect
+        mock_check.return_value = False
+        result = self.installer._setup_podman_docker_compat()
+        self.assertTrue(result)
+
+    @patch('installer_logic.Installer._check_command')
+    @patch('installer_logic.Installer._run_command')
+    def test_setup_podman_docker_compat_no_compose(self, mock_run, mock_check):
+        """Test Podman-Docker compat fails when compose is not available."""
+        mock_run.return_value = (False, "error")
+        mock_check.return_value = False  # No podman-compose either
+        result = self.installer._setup_podman_docker_compat()
+        self.assertFalse(result)
 
 if __name__ == '__main__':
     unittest.main()

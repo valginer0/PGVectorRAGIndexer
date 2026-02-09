@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.4] - 2026-02-08
+
+### Added
+- **Docker Detection Improvements**: Installer now detects Docker Desktop, Rancher Desktop, and Podman before attempting installation.
+  - Docker Desktop detection via file paths and Windows Registry
+  - Podman detection with full `docker compose` compatibility validation
+  - Virtualization check using PowerShell (`Get-CimInstance`) with `systeminfo` fallback
+  - ARM64 architecture detection with Rancher Desktop compatibility warning
+  - Manufacturer-specific inline BIOS instructions (Dell, HP, Lenovo, ASUS, Acer, Microsoft Surface, Samsung, LG, Huawei, MSI)
+  - WSL2 auto-detection and installation before Rancher Desktop download
+  - Skips WSL2 check when Docker Desktop is found (supports Hyper-V backend)
+
+### Changed
+- **Installer detection order**: Now checks existing runtimes before attempting downloads, preventing unnecessary 700MB Rancher Desktop downloads.
+- **Replaced deprecated `wmic`** with PowerShell `Get-CimInstance` for manufacturer detection (wmic removed since Windows 10 21H1).
+- **Replaced slow `systeminfo`** with PowerShell `Get-CimInstance` for virtualization check (<1s vs 10-30s).
+
+### Fixed
+- Podman compatibility no longer relies on a fragile `.bat` alias — validates actual `docker compose` support.
+
 ## [2.4.0] - 2026-01-12
 
 ### Added

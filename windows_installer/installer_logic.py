@@ -37,6 +37,20 @@ class Installer:
     GITHUB_REPO = "valginer0/PGVectorRAGIndexer"
     INSTALLER_VERSION = INSTALLER_VERSION  # From version module
     STATE_MAX_AGE_HOURS = 24  # Ignore state files older than this
+
+    # Manufacturer -> (BIOS key, menu path) for inline virtualization help
+    BIOS_HELP = {
+        'Dell':      ('F2', 'Virtualization Support > Virtualization'),
+        'HP':        ('F10', 'Configuration > Virtualization Technology'),
+        'Lenovo':    ('F1 or F2', 'Security > Virtualization (ThinkPad=F1, IdeaPad=F2)'),
+        'ASUS':      ('DEL or F2', 'Advanced > CPU Configuration'),
+        'Acer':      ('F2 or DEL', 'Advanced > Virtualization'),
+        'Microsoft': ('Volume Up + Power', 'UEFI > Virtualization'),
+        'Samsung':   ('F2', 'Advanced > Virtualization'),
+        'LG':        ('F2', 'Advanced > Virtualization'),
+        'Huawei':    ('F2', 'Advanced > Virtualization'),
+        'MSI':       ('DEL', 'OC > CPU Features > SVM/VT'),
+    }
     
     steps = [
         InstallStep(1, "Checking System", "~10 seconds"),
@@ -152,7 +166,148 @@ class Installer:
             return result.returncode == 0 and result.stdout.strip().startswith('v')
         except:
             return False
-    
+
+    # =========================================================================
+    # Docker / Virtualization Detection Helpers
+    # =========================================================================
+
+    def _check_virtualization_enabled(self) -> bool:
+        """Check if hardware virtualization is enabled.
+
+        Uses PowerShell Get-CimInstance (<1s) instead of 'systeminfo' (10-30s).
+        Falls back to systeminfo if PowerShell fails.
+        """
+        success, output = self._run_command(
+            'powershell -Command "(Get-CimInstance Win32_Processor).VirtualizationFirmwareEnabled"'
+        )
+        if success:
+            return output.strip().lower() == 'true'
+
+        # Fallback: try systeminfo if PowerShell fails (e.g., restricted policy)
+        success, output = self._run_command("systeminfo")
+        if success:
+            for line in output.split('\n'):
+                if 'virtualization' in line.lower() and 'firmware' in line.lower():
+                    return 'yes' in line.lower()
+
+        return False  # Assume disabled if can't determine
+
+    def _check_architecture(self) -> str:
+        """Detect CPU architecture. Returns 'x64', 'ARM64', or 'Unknown'.
+
+        Rancher Desktop may not work well on ARM64 (Surface Pro X, Snapdragon).
+        """
+        success, output = self._run_command(
+            'powershell -Command "$env:PROCESSOR_ARCHITECTURE"'
+        )
+        if success:
+            arch = output.strip().upper()
+            if 'ARM' in arch:
+                return 'ARM64'
+            if 'AMD64' in arch or 'X86' in arch:
+                return 'x64'
+        return 'Unknown'
+
+    def _get_computer_manufacturer(self) -> str:
+        """Detect computer manufacturer for personalized BIOS help.
+
+        Uses PowerShell Get-CimInstance instead of deprecated 'wmic' command
+        (wmic removed since Windows 10 21H1).
+        """
+        success, output = self._run_command(
+            'powershell -Command "(Get-CimInstance Win32_ComputerSystem).Manufacturer"'
+        )
+        if success:
+            manufacturer = output.strip().lower()
+            if 'dell' in manufacturer: return 'Dell'
+            if 'hp' in manufacturer or 'hewlett' in manufacturer: return 'HP'
+            if 'lenovo' in manufacturer: return 'Lenovo'
+            if 'asus' in manufacturer: return 'ASUS'
+            if 'acer' in manufacturer: return 'Acer'
+            if 'microsoft' in manufacturer: return 'Microsoft'
+            if 'samsung' in manufacturer: return 'Samsung'
+            if 'lg' in manufacturer: return 'LG'
+            if 'huawei' in manufacturer: return 'Huawei'
+            if 'msi' in manufacturer: return 'MSI'
+        return 'Unknown'
+
+    def _check_wsl2_enabled(self) -> bool:
+        """Check if WSL2 is installed and enabled."""
+        if not self._check_command("wsl"):
+            return False
+        success, output = self._run_command("wsl --status")
+        return success and "Default Version: 2" in output
+
+    def _check_docker_desktop_installed(self) -> bool:
+        """Check if Docker Desktop is installed via file paths and registry.
+
+        File paths alone miss non-standard installs, so we also check the registry.
+        """
+        paths = [
+            os.path.expandvars(r"%PROGRAMFILES%\Docker\Docker\Docker Desktop.exe"),
+            os.path.expandvars(r"%LOCALAPPDATA%\Docker\Docker Desktop.exe"),
+        ]
+        if any(os.path.exists(p) for p in paths):
+            return True
+
+        # Check Windows Registry for non-standard install locations
+        try:
+            success, output = self._run_command(
+                r'reg query "HKLM\SOFTWARE\Docker Inc.\Docker" /v Version 2>nul'
+            )
+            if success and 'Version' in output:
+                return True
+            success, output = self._run_command(
+                r'reg query "HKCU\SOFTWARE\Docker Inc.\Docker Desktop" 2>nul'
+            )
+            if success:
+                return True
+        except Exception:
+            pass
+
+        return False
+
+    def _check_podman_installed(self) -> bool:
+        """Check if Podman is installed and working."""
+        success, _ = self._run_command("podman ps")
+        if success:
+            return True
+        return self._check_command("podman")
+
+    def _setup_podman_docker_compat(self) -> bool:
+        """Ensure Podman works with 'docker compose' commands.
+
+        A simple batch alias is NOT enough — Podman does not natively support
+        the 'docker compose' CLI plugin syntax. We validate actual compose support.
+        """
+        # Check if 'docker' command points to podman (podman-docker package)
+        success, output = self._run_command("docker --version")
+        if success and 'podman' in output.lower():
+            compose_ok, _ = self._run_command("docker compose version")
+            if compose_ok:
+                self._log("Podman-docker compatibility configured (with compose)", "success")
+                return True
+            else:
+                self._log("Podman-docker alias found but 'docker compose' not working", "warning")
+
+        # Check if docker command exists independently (user has both)
+        if self._check_command("docker"):
+            compose_ok, _ = self._run_command("docker compose version")
+            if compose_ok:
+                self._log("Docker command available with compose support", "success")
+                return True
+
+        # Check if podman-compose is installed (insufficient for our needs)
+        if self._check_command("podman-compose"):
+            self._log("podman-compose found, but app requires 'docker compose' syntax", "warning")
+            self._log("Install podman-docker package for full compatibility", "info")
+            return False
+
+        self._log("Podman found but docker-compose compatibility not available", "warning")
+        self._log("Install 'podman-docker' package for full Docker API compatibility", "info")
+        self._log("Or install Docker Desktop / Rancher Desktop instead", "info")
+        return False
+
     def _download_file(self, url: str, dest: str) -> bool:
         """Download a file from URL with progress feedback."""
         try:
@@ -758,23 +913,37 @@ class Installer:
     # =========================================================================
     
     def _step_install_docker(self) -> bool:
-        """Check/install Docker (Rancher Desktop)."""
+        """Check/install Docker runtime (Docker Desktop, Rancher Desktop, or Podman).
+
+        Detection order:
+        1. docker ps works        -> already running, done
+        2. Docker Desktop installed -> skip WSL2 check (supports Hyper-V backend)
+        3. docker command exists   -> installed but not running, Step 5 will start it
+        4. Rancher Desktop rdctl   -> installed, Step 5 will start it
+        5. Podman + compose works  -> use Podman
+        6. Nothing found -> pre-install checks (arch, virtualization, WSL2) -> install Rancher
+        """
         step = self.steps[3]
         self._update_progress(step, "Checking Docker installation...")
-        
-        # Check if Docker is already running
+
+        # 1. Docker already running?
         success, _ = self._run_command("docker ps")
         if success:
             self._log("Docker is already running", "success")
             return True
-        
-        # Check if docker command exists but not running
+
+        # 2. Docker Desktop installed? (doesn't require WSL2 — can use Hyper-V)
+        if self._check_docker_desktop_installed():
+            self._log("Docker Desktop found (will be started in next step)", "success")
+            return True  # Step 5 will start it
+
+        # 3. Docker command exists but service not running
         if self._check_command("docker"):
             self._log("Docker installed (service not active)", "warning")
             self._log("Runtime will be started automatically in the next step.", "info")
             return True  # Continue, Step 5 will start it
-        
-        # Check for Rancher Desktop binary directly (parity with legacy)
+
+        # 4. Rancher Desktop binary present (parity with legacy)
         rdctl_paths = [
             os.path.expandvars(r"%LOCALAPPDATA%\Programs\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
             os.path.expandvars(r"%PROGRAMFILES%\Rancher Desktop\resources\resources\win32\bin\rdctl.exe"),
@@ -783,8 +952,47 @@ class Installer:
             if os.path.exists(path):
                 self._log(f"Rancher Desktop found at {path}", "success")
                 return True
-        
-        # Install Rancher Desktop via winget
+
+        # 5. Podman installed with working compose?
+        if self._check_podman_installed():
+            self._log("Podman found! Checking compose compatibility...", "info")
+            if self._setup_podman_docker_compat():
+                self._log("Podman is ready to use with docker commands", "success")
+                return True
+            else:
+                self._log("Falling back to Rancher Desktop install...", "info")
+
+        # 6. Nothing usable found — pre-install checks before downloading
+
+        # 6a. Check CPU architecture (warn on ARM64)
+        arch = self._check_architecture()
+        if arch == 'ARM64':
+            self._log("ARM64 (Windows on ARM) detected", "warning")
+            self._log("Rancher Desktop has limited ARM64 support.", "warning")
+            self._log("Consider installing Docker Desktop (ARM64 build) instead.", "info")
+
+        # 6b. Check virtualization before attempting 700MB download
+        if not self._check_virtualization_enabled():
+            manufacturer = self._get_computer_manufacturer()
+            bios_key, menu_path = self.BIOS_HELP.get(
+                manufacturer, ('DEL or F2', 'look for Virtualization')
+            )
+            self._log("Hardware virtualization is disabled in BIOS", "warning")
+            self._log(f"Your computer ({manufacturer}) needs a one-time BIOS change.", "warning")
+            self._log(f"  1. Restart and press {bios_key} to enter BIOS", "info")
+            self._log(f"  2. Navigate to: {menu_path}", "info")
+            self._log(f"  3. Set to 'Enabled', then Save & Exit", "info")
+            self._log(f"Full guide: ragvault.net/enable-virtualization#{manufacturer.lower()}", "info")
+            return False
+
+        # 6c. Check/install WSL2 (needed for Rancher Desktop)
+        if not self._check_wsl2_enabled():
+            self._log("Installing WSL2 (required for Docker)...", "info")
+            self._run_command("wsl --install --no-launch")
+            self.request_reboot()
+            return True  # State machine resumes after reboot
+
+        # 7. Install Rancher Desktop via winget
         if self._check_winget():
             self._update_progress(step, "Installing Rancher Desktop (Docker)...")
             if self._install_with_winget("suse.RancherDesktop", "Rancher Desktop"):
@@ -792,8 +1000,8 @@ class Installer:
                 self._log("A system restart is required before Docker can start.", "warning")
                 self.request_reboot()
                 return True  # Will trigger reboot dialog
-        
-        # WinGet failed or unavailable - try direct download
+
+        # 8. WinGet failed or unavailable - try direct download
         self._log("WinGet unavailable or failed, trying direct download...", "warning")
         self._update_progress(step, "Installing Rancher Desktop via direct download...")
         if self._install_rancher_direct():
@@ -801,10 +1009,10 @@ class Installer:
             self._log("A system restart is required before Docker can start.", "warning")
             self.request_reboot()
             return True  # Will trigger reboot dialog
-        
+
         self._log("Failed to install Rancher Desktop", "error")
         self._log("Please install Docker Desktop or Rancher Desktop manually", "warning")
-        return False  # Signal failure instead of continuing
+        return False
     
     def _install_rancher_direct(self) -> bool:
         """Install Rancher Desktop via direct download from GitHub."""

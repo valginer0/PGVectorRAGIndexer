@@ -1225,32 +1225,40 @@ class Installer:
     # =========================================================================
 
     def _step_pull_images(self) -> bool:
-        """Pull Docker images (Parity with manage.ps1 update)."""
+        """Pull Docker images only if not already present locally."""
         step = self.steps[6]
         self._update_progress(step, "Checking Docker images...")
-        
-        os.chdir(self.INSTALL_DIR)
-        
-        # optimized: check if image exists locally first to give better feedback
-        success, _ = self._run_command("docker images -q ghcr.io/valginer0/pgvectorragindexer:latest")
-        if success and _:
-            self._log("Core image found locally. Checking for updates...", "info")
-        else:
-            self._log("Core image not found. Downloading (this may take time)...", "info")
 
-        self.env = os.environ.copy()
-        
-        # Use streaming command so user sees progress!
-        self._log("Running 'docker compose pull'...", "info")
+        os.chdir(self.INSTALL_DIR)
+
+        # Check if both required images already exist locally
+        app_ok, app_out = self._run_command("docker images -q ghcr.io/valginer0/pgvectorragindexer:latest")
+        db_ok, db_out = self._run_command("docker images -q pgvector/pgvector:pg16")
+
+        app_exists = app_ok and app_out.strip()
+        db_exists = db_ok and db_out.strip()
+
+        if app_exists and db_exists:
+            self._log("All Docker images already present locally", "success")
+            self._log("Skipping download (re-run with 'docker compose pull' to update)", "info")
+            return True
+
+        # At least one image is missing — pull everything
+        if not app_exists:
+            self._log("App image not found locally. Downloading...", "info")
+        if not db_exists:
+            self._log("Database image not found locally. Downloading...", "info")
+
+        self._log("Running 'docker compose pull' (this may take a few minutes)...", "info")
         success = self._run_command_stream("docker compose pull")
-        
+
         if success:
-            self._log("Images verified/pulled successfully", "success")
+            self._log("Images pulled successfully", "success")
             return True
         else:
             self._log("Warning: Pull command reported issues (offline?)", "warning")
             self._log("Attempting to proceed with existing images...", "info")
-            return True # Non-fatal, app will try to run anyway
+            return True  # Non-fatal, app will try to run anyway
 
     # =========================================================================
     # Step 8: Finalize

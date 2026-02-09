@@ -128,16 +128,35 @@ class TestInstallerLogic(unittest.TestCase):
             # State should be cleared
             self.assertFalse(os.path.exists(self.installer.state_file))
 
+    @patch('installer_logic.Installer._run_command_stream')
     @patch('installer_logic.Installer._run_command')
-    def test_step_pull_images(self, mock_run):
-        """Test image pulling step."""
-        mock_run.return_value = (True, "Pulled")
+    def test_step_pull_images_needs_download(self, mock_run, mock_stream):
+        """Test image pulling when images are NOT cached locally."""
+        # First call: app image not found, second call: db image not found
+        mock_run.side_effect = [
+            (True, ""),   # docker images -q app → empty = not found
+            (True, ""),   # docker images -q db  → empty = not found
+        ]
+        mock_stream.return_value = True
 
-        self.installer._step_pull_images()
+        result = self.installer._step_pull_images()
 
-        args = mock_run.call_args[0][0]
-        self.assertIn("docker compose pull", args)
-        self.assertIn("env", str(os.environ)) # Just ensuring environment is passed usually
+        self.assertTrue(result)
+        mock_stream.assert_called_once_with("docker compose pull")
+
+    @patch('installer_logic.Installer._run_command_stream')
+    @patch('installer_logic.Installer._run_command')
+    def test_step_pull_images_skips_when_cached(self, mock_run, mock_stream):
+        """Test image pulling is skipped when both images exist locally."""
+        mock_run.side_effect = [
+            (True, "sha256:abc123\n"),  # app image exists
+            (True, "sha256:def456\n"),  # db image exists
+        ]
+
+        result = self.installer._step_pull_images()
+
+        self.assertTrue(result)
+        mock_stream.assert_not_called()  # Should NOT pull
 
     # =======================================================================
     # Docker Detection Improvement Tests

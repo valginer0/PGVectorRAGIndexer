@@ -81,6 +81,7 @@ class Installer:
         # State persistence file - use mapped folder if available (for Sandbox support)
         self.state_file = self._get_state_file_path()
         self.reboot_required = False
+        self.virtualization_failed = None  # Set to dict with manufacturer/bios info if VT check fails
     
     def _get_state_file_path(self) -> str:
         """
@@ -983,6 +984,12 @@ class Installer:
             self._log(f"  2. Navigate to: {menu_path}", "info")
             self._log(f"  3. Set to 'Enabled', then Save & Exit", "info")
             self._log(f"Full guide: ragvault.net/enable-virtualization#{manufacturer.lower()}", "info")
+            # Store info for GUI dialog
+            self.virtualization_failed = {
+                'manufacturer': manufacturer,
+                'bios_key': bios_key,
+                'menu_path': menu_path,
+            }
             return False
 
         # 6c. Check/install WSL2 (needed for Rancher Desktop)

@@ -6,6 +6,7 @@ A modern, polished Tkinter-based installer with progress display.
 import tkinter as tk
 from tkinter import ttk, messagebox
 import threading
+import webbrowser
 import sys
 import os
 
@@ -354,6 +355,8 @@ class InstallerGUI:
             else:
                 if self.installer.reboot_required:
                     self.root.after(0, self._show_reboot_dialog)
+                elif self.installer.virtualization_failed:
+                    self.root.after(0, self._show_virtualization_dialog)
                 else:
                     self.root.after(0, self._installation_failed)
                 
@@ -417,6 +420,71 @@ class InstallerGUI:
         import subprocess
         subprocess.run("shutdown /r /t 0", shell=True)
     
+    def _show_virtualization_dialog(self):
+        """Show a friendly dialog when hardware virtualization is disabled."""
+        info = self.installer.virtualization_failed
+        manufacturer = info['manufacturer']
+        bios_key = info['bios_key']
+        menu_path = info['menu_path']
+        help_url = f"https://ragvault.net/enable-virtualization.html#{manufacturer.lower()}"
+
+        # Hide standard buttons
+        self.install_btn.pack_forget()
+        self.cancel_btn.pack_forget()
+
+        self.step_label.config(
+            text="Hardware Virtualization Required",
+            fg=COLORS['warning']
+        )
+
+        # Build a clear, friendly dialog in the log area
+        self._log("", "info")
+        self._log("=" * 45, "warning")
+        self._log("  YOUR COMPUTER NEEDS A ONE-TIME CHANGE", "warning")
+        self._log("=" * 45, "warning")
+        self._log("", "info")
+        self._log(f"  Computer: {manufacturer}", "info")
+        self._log("", "info")
+        self._log("  Follow these 3 steps:", "info")
+        self._log(f"  1. Restart and press  {bios_key}  to enter BIOS", "success")
+        self._log(f"  2. Go to: {menu_path}", "success")
+        self._log(f"  3. Set to 'Enabled', then Save & Exit", "success")
+        self._log("", "info")
+        self._log("  Then run this installer again.", "info")
+        self._log("=" * 45, "warning")
+
+        # Action buttons frame
+        btn_frame = tk.Frame(self.root, bg=COLORS['bg_dark'])
+        btn_frame.pack(pady=15)
+
+        # "Open Guide" button — big, obvious, clickable
+        guide_btn = tk.Button(
+            btn_frame,
+            text=f"Open Step-by-Step Guide ({manufacturer})",
+            bg=COLORS['accent_blue'],
+            fg='white',
+            font=("Segoe UI", 11, "bold"),
+            padx=20, pady=8,
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=lambda: webbrowser.open(help_url)
+        )
+        guide_btn.pack(pady=(0, 10))
+        self._bind_hover(guide_btn, COLORS['accent_blue'], '#7b93f0')
+
+        # Close button
+        close_btn = tk.Button(
+            btn_frame,
+            text="Close",
+            bg=COLORS['bg_light'],
+            fg='white',
+            font=("Segoe UI", 10),
+            padx=20, pady=5,
+            relief=tk.FLAT,
+            command=self.root.destroy
+        )
+        close_btn.pack()
+
     def _installation_complete(self):
         """Handle successful installation."""
         self._update_progress_bar(100)

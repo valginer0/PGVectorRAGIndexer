@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.5] - 2026-02-09
+
+### Added
+- **Virtualization Help Dialog**: When virtualization is disabled, the installer now shows a prominent GUI dialog with manufacturer-specific BIOS instructions and a clickable "Open Step-by-Step Guide" button (instead of log-only messages).
+
+### Fixed
+- **Skip Docker image download when cached**: Installer now checks both app and database images locally before running `docker compose pull`, avoiding unnecessary multi-minute downloads on re-runs.
+
 ## [2.4.4] - 2026-02-08
 
 ### Added

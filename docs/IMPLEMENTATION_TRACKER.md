@@ -107,13 +107,16 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Create compatibility matrix (`docs/COMPATIBILITY_MATRIX.md`)
 - [x] Release checklist with compat matrix update reminder (in versioning policy doc)
 
-### ⬜ #4 Indexing Health Dashboard
+### ✅ #4 Indexing Health Dashboard
 - **Effort**: ~7-9h | **Edition**: Both | **Dependencies**: #11
-- **Branch**: `feature/health-dashboard`
-- [ ] Alembic migration: `indexing_runs` table (id, started_at, completed_at, status, files_scanned/added/updated, errors)
-- [ ] API endpoints for run history and status
-- [ ] UI: dashboard showing recent runs, success/failure rates
-- [ ] Integration with existing indexing flow (record runs)
+- **Branch**: `feature/roadmap-v4`
+- [x] Alembic migration 004: `indexing_runs` table (id, started_at, completed_at, status, trigger, files_scanned/added/updated/skipped/failed, errors JSONB)
+- [x] `indexing_runs.py` module: `start_run()`, `complete_run()`, `get_recent_runs()`, `get_run_summary()`, `get_run_by_id()`
+- [x] API endpoints: `GET /indexing/runs`, `GET /indexing/runs/summary`, `GET /indexing/runs/{run_id}`
+- [x] Integration: `/index` and `/upload-and-index` endpoints record runs with file counts and errors
+- [x] Desktop client: `get_indexing_runs()`, `get_indexing_summary()`, `get_indexing_run_detail()`
+- [x] UI: `HealthTab` with summary cards, runs table, error detail panel
+- [x] Test: 18 tests (migration, helpers, DB resilience, endpoint registration)
 
 ---
 

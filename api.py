@@ -359,6 +359,8 @@ async def get_statistics():
 @v1_router.post("/index", response_model=IndexResponse, tags=["Indexing"], dependencies=[Depends(require_api_key)])
 async def index_document(request: IndexRequest):
     """Index a document from URI."""
+    from indexing_runs import start_run, complete_run
+    run_id = start_run(trigger="api", source_uri=request.source_uri)
     try:
         idx = get_indexer()
         result = idx.index_document(
@@ -368,15 +370,23 @@ async def index_document(request: IndexRequest):
         )
         
         if result['status'] == 'error':
+            complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
+                         errors=[{"source_uri": request.source_uri, "error": result.get('message', '')}])
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=result['message']
             )
         
+        added = 1 if result.get('status') == 'success' else 0
+        skipped = 1 if result.get('status') == 'skipped' else 0
+        complete_run(run_id, status="success", files_scanned=1,
+                     files_added=added, files_skipped=skipped)
         return IndexResponse(**result)
     except HTTPException:
         raise
     except Exception as e:
+        complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
+                     errors=[{"source_uri": request.source_uri, "error": str(e)}])
         logger.error(f"Indexing failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -415,7 +425,10 @@ async def upload_and_index(
     """
     import tempfile
     import os
+    from indexing_runs import start_run, complete_run
     
+    source = custom_source_uri or file.filename or "upload"
+    run_id = start_run(trigger="upload", source_uri=source)
     temp_path = None
     try:
         # Create temporary file with original extension
@@ -462,6 +475,7 @@ async def upload_and_index(
         
         # Check if document already exists
         if not force_reindex and idx.repository.document_exists(processed_doc.document_id):
+            complete_run(run_id, status="success", files_scanned=1, files_skipped=1)
             return IndexResponse(
                 status='skipped',
                 document_id=processed_doc.document_id,
@@ -498,6 +512,9 @@ async def upload_and_index(
         
         logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
         
+        complete_run(run_id, status="success", files_scanned=1,
+                     files_added=1 if not force_reindex else 0,
+                     files_updated=1 if force_reindex else 0)
         return IndexResponse(
             status='success',
             document_id=processed_doc.document_id,
@@ -519,6 +536,8 @@ async def upload_and_index(
             "detected_at": datetime.utcnow().isoformat()
         })
         
+        complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
+                     errors=[{"source_uri": source, "error": "encrypted_pdf"}])
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
@@ -534,6 +553,7 @@ async def upload_and_index(
         if error_message.startswith("Skipped:"):
             logger.info(f"File skipped due to OCR mode: {file.filename}")
             # Return success with 0 chunks to indicate skip
+            complete_run(run_id, status="success", files_scanned=1, files_skipped=1)
             return IndexResponse(
                 status='skipped',
                 document_id='',
@@ -542,6 +562,8 @@ async def upload_and_index(
                 message=error_message
             )
         
+        complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
+                     errors=[{"source_uri": source, "error": error_message}])
         logger.error(f"Upload and index failed: {e}")
         detail_message = error_message
         if (
@@ -558,6 +580,8 @@ async def upload_and_index(
             detail=detail_message
         )
     except Exception as e:
+        complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
+                     errors=[{"source_uri": source, "error": str(e)}])
         logger.error(f"Upload and index failed: {e}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -1086,6 +1110,64 @@ async def rotate_key(key_id: int):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to rotate API key: {str(e)}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Indexing Health Dashboard Endpoints (#4)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.get("/indexing/runs", tags=["Health"], dependencies=[Depends(require_api_key)])
+async def list_indexing_runs(
+    limit: int = Query(default=20, ge=1, le=100, description="Maximum runs to return"),
+):
+    """Get recent indexing runs, newest first."""
+    from indexing_runs import get_recent_runs
+    try:
+        runs = get_recent_runs(limit=limit)
+        return {"runs": runs, "count": len(runs)}
+    except Exception as e:
+        logger.error(f"Failed to list indexing runs: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list indexing runs: {str(e)}",
+        )
+
+
+@v1_router.get("/indexing/runs/summary", tags=["Health"], dependencies=[Depends(require_api_key)])
+async def indexing_run_summary():
+    """Get aggregate statistics about indexing runs."""
+    from indexing_runs import get_run_summary
+    try:
+        return get_run_summary()
+    except Exception as e:
+        logger.error(f"Failed to get run summary: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get run summary: {str(e)}",
+        )
+
+
+@v1_router.get("/indexing/runs/{run_id}", tags=["Health"], dependencies=[Depends(require_api_key)])
+async def get_indexing_run(run_id: str):
+    """Get a single indexing run by ID."""
+    from indexing_runs import get_run_by_id
+    try:
+        run = get_run_by_id(run_id)
+        if not run:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Indexing run not found: {run_id}",
+            )
+        return run
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get indexing run: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get indexing run: {str(e)}",
         )
 
 

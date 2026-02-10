@@ -515,3 +515,57 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # Health Dashboard (#4)
+    # ------------------------------------------------------------------
+
+    def get_indexing_runs(self, limit: int = 20) -> Dict[str, Any]:
+        """Get recent indexing runs.
+
+        Args:
+            limit: Maximum number of runs to return (1-100).
+
+        Returns:
+            Dict with 'runs' list and 'count'.
+        """
+        response = requests.get(
+            f"{self.api_base}/indexing/runs",
+            params={"limit": limit},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_indexing_summary(self) -> Dict[str, Any]:
+        """Get aggregate indexing run statistics.
+
+        Returns:
+            Dict with total_runs, successful, failed, partial,
+            total_files_added, total_files_updated, last_run_at.
+        """
+        response = requests.get(
+            f"{self.api_base}/indexing/runs/summary",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_indexing_run_detail(self, run_id: str) -> Dict[str, Any]:
+        """Get details of a single indexing run.
+
+        Args:
+            run_id: UUID of the run.
+
+        Returns:
+            Dict with full run details including errors.
+        """
+        response = requests.get(
+            f"{self.api_base}/indexing/runs/{run_id}",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

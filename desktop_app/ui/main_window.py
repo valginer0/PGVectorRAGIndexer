@@ -22,6 +22,7 @@ from .documents_tab import DocumentsTab
 from .manage_tab import ManageTab
 from .settings_tab import SettingsTab
 from .recent_activity_tab import RecentActivityTab
+from .health_tab import HealthTab
 from .source_open_manager import SourceOpenManager
 from ..utils.docker_manager import DockerManager
 from ..utils.api_client import APIClient
@@ -101,12 +102,14 @@ class MainWindow(QMainWindow):
         self.manage_tab = ManageTab(self.api_client, source_manager=self.source_manager)
         self.settings_tab = SettingsTab(self.docker_manager, self)
         self.recent_tab = RecentActivityTab(self.source_manager, self)
+        self.health_tab = HealthTab(self.api_client, self)
 
         # Add tabs with icons (ordered by typical workflow)
         self.tabs.addTab(self.upload_tab, qta.icon('fa5s.cloud-upload-alt', color='#9ca3af'), "Upload")
         self.tabs.addTab(self.search_tab, qta.icon('fa5s.search', color='#9ca3af'), "Search")
         self.tabs.addTab(self.documents_tab, qta.icon('fa5s.book', color='#9ca3af'), "Documents")
         self.tabs.addTab(self.recent_tab, qta.icon('fa5s.clock', color='#9ca3af'), "Recent")
+        self.tabs.addTab(self.health_tab, qta.icon('fa5s.heartbeat', color='#9ca3af'), "Health")
         self.tabs.addTab(self.manage_tab, qta.icon('fa5s.trash-alt', color='#9ca3af'), "Manage")
         self.tabs.addTab(self.settings_tab, qta.icon('fa5s.cog', color='#9ca3af'), "Settings")
         
@@ -407,6 +410,10 @@ class MainWindow(QMainWindow):
             # Search Tab (Document Types)
             if hasattr(self, 'search_tab'):
                 self.search_tab.load_document_types()
+
+            # Health Dashboard
+            if hasattr(self, 'health_tab'):
+                self.health_tab.refresh()
                 
             logger.info("Initial data load complete")
         except Exception as e:

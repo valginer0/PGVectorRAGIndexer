@@ -56,7 +56,16 @@ class MainWindow(QMainWindow):
         
         # Initialize managers
         self.docker_manager = DockerManager(self.project_path)
-        self.api_client = APIClient()
+
+        # Load saved backend config
+        from desktop_app.utils.app_config import (
+            get_backend_url, get_api_key, is_remote_mode,
+        )
+        self._remote_mode = is_remote_mode()
+        self.api_client = APIClient(
+            base_url=get_backend_url(),
+            api_key=get_api_key() if self._remote_mode else None,
+        )
         self.source_manager = SourceOpenManager(self.api_client, parent=self, project_root=self.project_path)
         
         # Track if initial data load has occurred

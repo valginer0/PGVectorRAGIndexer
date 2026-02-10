@@ -122,13 +122,16 @@ These have zero dependencies on each other and should start simultaneously.
 
 ## Phase 2: Team Enablement
 
-### ⬜ #1 Remote Backend Support
+### ✅ #1 Remote Backend Support
 - **Effort**: ~4-6h | **Edition**: Team | **Dependencies**: #0
-- **Branch**: `feature/remote-backend`
-- [ ] Settings tab: "Backend URL" setting
-- [ ] Toggle: "Local Docker" vs "Remote Server"
-- [ ] Hide Docker controls in Remote mode
-- [ ] Require API key for remote URLs (enforced by #0)
+- **Branch**: `feature/roadmap-v4`
+- [x] `app_config.py` module: persistent JSON config (backend mode, URL, API key)
+- [x] Settings tab: "Backend URL" input + "Local Docker" / "Remote Server" radio toggle
+- [x] Hide Docker controls (container mgmt, logs, status bar) in Remote mode
+- [x] Require API key for remote URLs (validated on save, tested via `/api/version`)
+- [x] Test connection button with server version display
+- [x] Main window loads saved config on startup, initializes API client accordingly
+- [x] Tests: 21 tests (config persistence, backend mode helpers, API client init)
 
 ### ⬜ #8 Client Identity and Sync
 - **Effort**: ~8-12h | **Edition**: Team | **Dependencies**: #4, #11

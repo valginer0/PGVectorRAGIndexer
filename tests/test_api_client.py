@@ -14,7 +14,7 @@ def test_is_api_available_success(api_client):
     with patch("requests.get") as mock_get:
         mock_get.return_value.status_code = 200
         assert api_client.is_api_available() is True
-        mock_get.assert_called_with("http://test-api/health", timeout=5)
+        mock_get.assert_called_with("http://test-api/health", timeout=5, headers={})
 
 def test_is_api_available_failure(api_client):
     """Test API availability check returns False on error."""
@@ -43,7 +43,7 @@ def test_upload_document_success(api_client):
         
         # Verify args
         call_args = mock_post.call_args
-        assert call_args[0][0] == "http://test-api/upload-and-index"
+        assert call_args[0][0] == "http://test-api/api/v1/upload-and-index"
         assert call_args[1]["data"]["force_reindex"] == "true"
         assert call_args[1]["data"]["custom_source_uri"] == "/full/path/test.txt"
         assert call_args[1]["data"]["document_type"] == "resume"
@@ -85,8 +85,9 @@ def test_list_documents_pagination(api_client):
         assert len(response["items"]) == 1
         
         mock_get.assert_called_with(
-            "http://test-api/documents",
+            "http://test-api/api/v1/documents",
             params={"limit": 10, "offset": 0, "sort_by": "indexed_at", "sort_dir": "desc"},
+            headers={},
             timeout=7200
         )
 
@@ -142,7 +143,7 @@ def test_get_document_success(api_client):
         
         doc = api_client.get_document("1")
         assert doc["id"] == "1"
-        mock_get.assert_called_with("http://test-api/documents/1", timeout=7200)
+        mock_get.assert_called_with("http://test-api/api/v1/documents/1", headers={}, timeout=7200)
 
 def test_delete_document_success(api_client):
     """Test delete_document success."""
@@ -152,7 +153,7 @@ def test_delete_document_success(api_client):
         
         response = api_client.delete_document("1")
         assert response["status"] == "deleted"
-        mock_delete.assert_called_with("http://test-api/documents/1", timeout=7200)
+        mock_delete.assert_called_with("http://test-api/api/v1/documents/1", headers={}, timeout=7200)
 
 def test_get_statistics_success(api_client):
     """Test get_statistics success."""
@@ -162,7 +163,7 @@ def test_get_statistics_success(api_client):
         
         stats = api_client.get_statistics()
         assert stats["total_documents"] == 100
-        mock_get.assert_called_with("http://test-api/statistics", timeout=7200)
+        mock_get.assert_called_with("http://test-api/api/v1/statistics", headers={}, timeout=7200)
 
 def test_bulk_delete_preview(api_client):
     """Test bulk_delete_preview."""
@@ -175,8 +176,9 @@ def test_bulk_delete_preview(api_client):
         assert response["count"] == 5
         
         mock_post.assert_called_with(
-            "http://test-api/documents/bulk-delete",
+            "http://test-api/api/v1/documents/bulk-delete",
             json={"filters": filters, "preview": True},
+            headers={},
             timeout=7200
         )
 
@@ -191,8 +193,9 @@ def test_bulk_delete_execute(api_client):
         assert response["chunks_deleted"] == 10
         
         mock_post.assert_called_with(
-            "http://test-api/documents/bulk-delete",
+            "http://test-api/api/v1/documents/bulk-delete",
             json={"filters": filters, "preview": False},
+            headers={},
             timeout=7200
         )
 
@@ -207,8 +210,9 @@ def test_export_documents(api_client):
         assert "backup_data" in response
         
         mock_post.assert_called_with(
-            "http://test-api/documents/export",
+            "http://test-api/api/v1/documents/export",
             json={"filters": filters},
+            headers={},
             timeout=7200
         )
 
@@ -223,8 +227,9 @@ def test_restore_documents(api_client):
         assert response["chunks_restored"] == 1
         
         mock_post.assert_called_with(
-            "http://test-api/documents/restore",
+            "http://test-api/api/v1/documents/restore",
             json={"backup_data": backup_data},
+            headers={},
             timeout=7200
         )
 
@@ -238,8 +243,9 @@ def test_get_metadata_keys(api_client):
         assert keys == ["author", "date"]
         
         mock_get.assert_called_with(
-            "http://test-api/metadata/keys",
+            "http://test-api/api/v1/metadata/keys",
             params={"pattern": "auth%"},
+            headers={},
             timeout=7200
         )
 
@@ -253,8 +259,9 @@ def test_get_metadata_values(api_client):
         assert values == ["John", "Jane"]
         
         mock_get.assert_called_with(
-            "http://test-api/metadata/values",
+            "http://test-api/api/v1/metadata/values",
             params={"key": "author"},
+            headers={},
             timeout=7200
         )
 

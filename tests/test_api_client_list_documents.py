@@ -31,7 +31,7 @@ def test_list_documents_accepts_plain_list(monkeypatch, api_client):
         }
     ]
 
-    def fake_get(url, params, timeout):
+    def fake_get(url, params, timeout, **kwargs):
         assert url.endswith("/documents")
         return DummyResponse(items)
 
@@ -62,7 +62,7 @@ def test_list_documents_accepts_legacy_documents_key(monkeypatch, api_client):
         "offset": 0,
     }
 
-    def fake_get(url, params, timeout):
+    def fake_get(url, params, timeout, **kwargs):
         return DummyResponse(legacy_payload)
 
     monkeypatch.setattr("desktop_app.utils.api_client.requests.get", fake_get)
@@ -94,7 +94,7 @@ def test_list_documents_passthrough_for_paginated_payload(monkeypatch, api_clien
         "sort": {"by": "indexed_at", "direction": "desc"},
     }
 
-    def fake_get(url, params, timeout):
+    def fake_get(url, params, timeout, **kwargs):
         return DummyResponse(paginated_payload)
 
     monkeypatch.setattr("desktop_app.utils.api_client.requests.get", fake_get)

@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, UploadFile, File, Form, Query, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, UploadFile, File, Form, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -1168,6 +1168,96 @@ async def get_indexing_run(run_id: str):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get indexing run: {str(e)}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# Client Identity Endpoints (#8)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.post("/clients/register", tags=["Clients"], dependencies=[Depends(require_api_key)])
+async def register_client_endpoint(request: Request):
+    """Register or update a client identity.
+
+    Body: { "client_id": "...", "display_name": "...", "os_type": "...", "app_version": "..." }
+    """
+    from client_identity import register_client
+    try:
+        body = await request.json()
+        client_id = body.get("client_id")
+        display_name = body.get("display_name", "Unknown")
+        os_type = body.get("os_type", "unknown")
+        app_version = body.get("app_version")
+
+        if not client_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="client_id is required",
+            )
+
+        result = register_client(
+            client_id=client_id,
+            display_name=display_name,
+            os_type=os_type,
+            app_version=app_version,
+        )
+        if result:
+            return result
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to register client",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to register client: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to register client: {str(e)}",
+        )
+
+
+@v1_router.post("/clients/heartbeat", tags=["Clients"], dependencies=[Depends(require_api_key)])
+async def client_heartbeat_endpoint(request: Request):
+    """Update last_seen_at for a client.
+
+    Body: { "client_id": "...", "app_version": "..." }
+    """
+    from client_identity import heartbeat
+    try:
+        body = await request.json()
+        client_id = body.get("client_id")
+        if not client_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="client_id is required",
+            )
+        app_version = body.get("app_version")
+        success = heartbeat(client_id, app_version=app_version)
+        return {"ok": success}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to heartbeat client: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to heartbeat: {str(e)}",
+        )
+
+
+@v1_router.get("/clients", tags=["Clients"], dependencies=[Depends(require_api_key)])
+async def list_clients_endpoint():
+    """List all registered clients, most recently seen first."""
+    from client_identity import list_clients
+    try:
+        clients = list_clients()
+        return {"clients": clients, "count": len(clients)}
+    except Exception as e:
+        logger.error(f"Failed to list clients: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list clients: {str(e)}",
         )
 
 

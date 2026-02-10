@@ -24,6 +24,7 @@ def start_run(
     trigger: str = "manual",
     source_uri: Optional[str] = None,
     metadata: Optional[Dict[str, Any]] = None,
+    client_id: Optional[str] = None,
 ) -> str:
     """Record the start of an indexing run.
 
@@ -31,6 +32,7 @@ def start_run(
         trigger: What initiated the run ('manual', 'upload', 'cli', 'scheduled', 'api').
         source_uri: Optional source being indexed (file path, folder, etc.).
         metadata: Optional extra metadata to store with the run.
+        client_id: Optional client identity that initiated the run (#8).
 
     Returns:
         The UUID of the new run (as a string).
@@ -42,13 +44,13 @@ def start_run(
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO indexing_runs (id, trigger, source_uri, metadata)
-                    VALUES (%s, %s, %s, %s::jsonb)
+                    INSERT INTO indexing_runs (id, trigger, source_uri, metadata, client_id)
+                    VALUES (%s, %s, %s, %s::jsonb, %s)
                     """,
-                    (run_id, trigger, source_uri, _json_dumps(metadata or {})),
+                    (run_id, trigger, source_uri, _json_dumps(metadata or {}), client_id),
                 )
                 conn.commit()
-        logger.debug("Started indexing run %s (trigger=%s)", run_id, trigger)
+        logger.debug("Started indexing run %s (trigger=%s, client=%s)", run_id, trigger, client_id)
     except Exception as e:
         logger.warning("Failed to record indexing run start: %s", e)
     return run_id

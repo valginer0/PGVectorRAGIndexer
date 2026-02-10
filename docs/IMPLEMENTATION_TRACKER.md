@@ -133,14 +133,17 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Main window loads saved config on startup, initializes API client accordingly
 - [x] Tests: 21 tests (config persistence, backend mode helpers, API client init)
 
-### ⬜ #8 Client Identity and Sync
+### ✅ #8 Client Identity and Sync
 - **Effort**: ~8-12h | **Edition**: Team | **Dependencies**: #4, #11
-- **Branch**: `feature/client-identity`
-- [ ] Alembic migration: `clients` table (id, display_name, os_type, app_version, last_seen_at)
-- [ ] Alembic migration: add `client_id` column to `indexing_runs`
-- [ ] Client registration on first run (client_id + device name + OS info)
-- [ ] Per-run attribution: client_id stored in indexing_runs
-- [ ] UI: "Last seen" status for clients
+- **Branch**: `feature/roadmap-v4`
+- [x] Alembic migration 005: `clients` table (id, display_name, os_type, app_version, last_seen_at, created_at)
+- [x] Alembic migration 005: `client_id` column on `indexing_runs` (FK → clients)
+- [x] `client_identity.py` module: register, heartbeat, get, list, desktop helpers
+- [x] API endpoints: `POST /clients/register`, `POST /clients/heartbeat`, `GET /clients`
+- [x] Desktop client: auto-registration on first run (generates UUID, stores in app_config)
+- [x] Per-run attribution: `client_id` parameter in `start_run()`
+- [x] Desktop API methods: `register_client()`, `client_heartbeat()`, `list_clients()`
+- [x] Tests: 20 tests (migration, helpers, DB resilience, endpoint registration)
 
 ### ⬜ #15 Hosted Demo Instance
 - **Effort**: ~6-10h | **Edition**: N/A (marketing) | **Dependencies**: None

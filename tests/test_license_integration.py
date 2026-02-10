@@ -194,7 +194,7 @@ class TestMigrationChain:
                 "SELECT version_num FROM alembic_version"
             ))
             version = result.scalar()
-        assert version == "004"
+        assert version == "005"
 
 
 # ===========================================================================

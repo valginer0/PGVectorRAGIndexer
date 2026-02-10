@@ -312,6 +312,31 @@ class MainWindow(QMainWindow):
 
         self._remote_banner.setVisible(True)
 
+    def _register_client(self):
+        """Register this desktop client with the server (#8)."""
+        try:
+            from desktop_app.utils.app_config import get, set as config_set
+            from client_identity import generate_client_id, get_os_type, get_default_display_name
+
+            client_id = get("client_id")
+            if not client_id:
+                client_id = generate_client_id()
+                config_set("client_id", client_id)
+                logger.info("Generated new client_id: %s", client_id)
+
+            display_name = get("client_display_name") or get_default_display_name()
+            os_type = get_os_type()
+
+            self.api_client.register_client(
+                client_id=client_id,
+                display_name=display_name,
+                os_type=os_type,
+                app_version=getattr(self, '_app_version', None),
+            )
+            logger.info("Client registered: %s (%s)", display_name, client_id[:8])
+        except Exception as e:
+            logger.warning("Client registration failed (non-fatal): %s", e)
+
     def check_initial_status(self):
         """Check Docker and API status on startup."""
         if self._remote_mode:
@@ -490,6 +515,9 @@ class MainWindow(QMainWindow):
 
         # Update remote mode banner
         self._update_remote_banner()
+
+        # Register client identity (#8)
+        self._register_client()
         
         # Load data for tabs
         try:

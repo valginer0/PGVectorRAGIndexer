@@ -569,3 +569,64 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # Client Identity (#8)
+    # ------------------------------------------------------------------
+
+    def register_client(
+        self,
+        client_id: str,
+        display_name: str,
+        os_type: str,
+        app_version: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Register or update a client with the server.
+
+        Returns:
+            Dict with client info including last_seen_at.
+        """
+        response = requests.post(
+            f"{self.api_base}/clients/register",
+            json={
+                "client_id": client_id,
+                "display_name": display_name,
+                "os_type": os_type,
+                "app_version": app_version,
+            },
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def client_heartbeat(
+        self, client_id: str, app_version: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Send a heartbeat to update last_seen_at.
+
+        Returns:
+            Dict with {"ok": True/False}.
+        """
+        response = requests.post(
+            f"{self.api_base}/clients/heartbeat",
+            json={"client_id": client_id, "app_version": app_version},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def list_clients(self) -> Dict[str, Any]:
+        """List all registered clients.
+
+        Returns:
+            Dict with 'clients' list and 'count'.
+        """
+        response = requests.get(
+            f"{self.api_base}/clients",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

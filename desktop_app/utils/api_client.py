@@ -879,3 +879,46 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # Document Tree (#7)
+    # ------------------------------------------------------------------
+
+    def get_document_tree(
+        self,
+        parent_path: str = "",
+        limit: int = 200,
+        offset: int = 0,
+    ) -> Dict[str, Any]:
+        """Get one level of the document tree under parent_path."""
+        response = requests.get(
+            f"{self.api_base}/documents/tree",
+            params={"parent_path": parent_path, "limit": limit, "offset": offset},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_document_tree_stats(self) -> Dict[str, Any]:
+        """Get overall document tree statistics."""
+        response = requests.get(
+            f"{self.api_base}/documents/tree/stats",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def search_document_tree(
+        self, query: str, limit: int = 50
+    ) -> Dict[str, Any]:
+        """Search for documents matching a path pattern."""
+        response = requests.get(
+            f"{self.api_base}/documents/tree/search",
+            params={"q": query, "limit": limit},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

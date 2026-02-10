@@ -184,14 +184,17 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Desktop client API methods: list, list_names, get_mappings, add, remove, resolve
 - [x] Tests: 22 tests (migration, _row_to_dict, DB resilience, path resolution, endpoints)
 
-### ⬜ #7 Hierarchical Document Browser
+### ✅ #7 Hierarchical Document Browser
 - **Effort**: ~12-16h | **Edition**: Both | **Dependencies**: #4, #9
-- **Branch**: `feature/hierarchical-browser`
-- [ ] `GET /documents/tree` API endpoint (paginated, cached, keyed by virtual root)
-- [ ] `QTreeView` with custom model (lazy/virtual loading)
-- [ ] Expand-on-demand: child nodes fetched on parent expand
-- [ ] Aggregated counts/timestamps per folder (server-side, cached)
-- [ ] Search-within-tree: filter to matching paths
+- **Branch**: `feature/roadmap-v4`
+- [x] `document_tree.py` module: get_tree_children (lazy one-level-at-a-time), get_tree_stats, search_tree
+- [x] Path normalization (backslashes, tabs → forward slashes) for cross-platform consistency
+- [x] Aggregated counts/timestamps per folder (computed server-side from source_uri paths)
+- [x] Pagination support (limit/offset on combined folders+files)
+- [x] API endpoints: `GET /documents/tree`, `GET /documents/tree/stats`, `GET /documents/tree/search`
+- [x] Desktop client API methods: get_document_tree, get_document_tree_stats, search_document_tree
+- [x] Tests: 14 tests (normalize_path, tree building with mocked DB, stats, search, endpoints)
+- [ ] `QTreeView` with custom model (lazy/virtual loading) — deferred to UI polish pass
 
 ### ✅ #10 Activity and Audit Log
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #4, #11

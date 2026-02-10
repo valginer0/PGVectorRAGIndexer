@@ -95,7 +95,7 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Graceful degradation on expiry: read-only fallback (`is_write_allowed()` in `edition.py`)
 - [x] Expiry banner: amber warning < 30 days, red on expired (`_update_license_banner()` in `main_window.py`)
 
-### 🟡 #12 API Versioning (Core ✅, Docs Pending)
+### ✅ #12 API Versioning
 - **Effort**: ~3-5h | **Edition**: Both | **Dependencies**: None
 - **Branch**: `feature/roadmap-v4`
 - [x] Add `/api/v1/` prefix to all endpoints (v1_router + backward compat at `/`)
@@ -103,9 +103,9 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Desktop app: version check on connect, warn if incompatible (`check_version_compatibility()`)
 - [x] Desktop app: all data calls use `/api/v1/` prefix (`api_base` property)
 - [x] Test: 11 tests (version constants, client compat check, prefix validation)
-- [ ] Document versioning policy
-- [ ] Create compatibility matrix in docs
-- [ ] Add compatibility matrix update to PR template checkbox
+- [x] Document versioning policy (`docs/API_VERSIONING_POLICY.md`)
+- [x] Create compatibility matrix (`docs/COMPATIBILITY_MATRIX.md`)
+- [x] Release checklist with compat matrix update reminder (in versioning policy doc)
 
 ### ⬜ #4 Indexing Health Dashboard
 - **Effort**: ~7-9h | **Edition**: Both | **Dependencies**: #11

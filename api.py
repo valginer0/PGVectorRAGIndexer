@@ -1262,6 +1262,151 @@ async def list_clients_endpoint():
 
 
 # ---------------------------------------------------------------------------
+# Watched Folders Endpoints (#6)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.get("/watched-folders", tags=["Scheduling"], dependencies=[Depends(require_api_key)])
+async def list_watched_folders(enabled_only: bool = Query(default=False)):
+    """List all watched folders."""
+    from watched_folders import list_folders
+    try:
+        folders = list_folders(enabled_only=enabled_only)
+        return {"folders": folders, "count": len(folders)}
+    except Exception as e:
+        logger.error(f"Failed to list watched folders: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list watched folders: {str(e)}",
+        )
+
+
+@v1_router.post("/watched-folders", tags=["Scheduling"], dependencies=[Depends(require_api_key)])
+async def add_watched_folder(request: Request):
+    """Add or update a watched folder.
+
+    Body: { "folder_path": "...", "schedule_cron": "0 */6 * * *", "enabled": true, "client_id": "..." }
+    """
+    from watched_folders import add_folder
+    try:
+        body = await request.json()
+        folder_path = body.get("folder_path")
+        if not folder_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="folder_path is required",
+            )
+        result = add_folder(
+            folder_path=folder_path,
+            schedule_cron=body.get("schedule_cron", "0 */6 * * *"),
+            client_id=body.get("client_id"),
+            enabled=body.get("enabled", True),
+            metadata=body.get("metadata"),
+        )
+        if result:
+            return result
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to add watched folder",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to add watched folder: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to add watched folder: {str(e)}",
+        )
+
+
+@v1_router.put("/watched-folders/{folder_id}", tags=["Scheduling"], dependencies=[Depends(require_api_key)])
+async def update_watched_folder(folder_id: str, request: Request):
+    """Update a watched folder's settings.
+
+    Body: { "enabled": true/false, "schedule_cron": "..." }
+    """
+    from watched_folders import update_folder
+    try:
+        body = await request.json()
+        result = update_folder(
+            folder_id,
+            enabled=body.get("enabled"),
+            schedule_cron=body.get("schedule_cron"),
+        )
+        if result:
+            return result
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Watched folder not found: {folder_id}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update watched folder: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update watched folder: {str(e)}",
+        )
+
+
+@v1_router.delete("/watched-folders/{folder_id}", tags=["Scheduling"], dependencies=[Depends(require_api_key)])
+async def delete_watched_folder(folder_id: str):
+    """Remove a watched folder."""
+    from watched_folders import remove_folder
+    try:
+        if remove_folder(folder_id):
+            return {"ok": True}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Watched folder not found: {folder_id}",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to remove watched folder: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to remove watched folder: {str(e)}",
+        )
+
+
+@v1_router.post("/watched-folders/{folder_id}/scan", tags=["Scheduling"], dependencies=[Depends(require_api_key)])
+async def scan_watched_folder(folder_id: str, request: Request):
+    """Trigger an immediate scan of a watched folder.
+
+    Optional body: { "client_id": "..." }
+    """
+    from watched_folders import get_folder, scan_folder, mark_scanned
+    try:
+        folder = get_folder(folder_id)
+        if not folder:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Watched folder not found: {folder_id}",
+            )
+
+        client_id = None
+        try:
+            body = await request.json()
+            client_id = body.get("client_id")
+        except Exception:
+            pass
+
+        result = scan_folder(folder["folder_path"], client_id=client_id)
+        if result.get("run_id"):
+            mark_scanned(folder_id, run_id=result["run_id"])
+        return result
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to scan watched folder: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to scan: {str(e)}",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Mount versioned router at /api/v1 (canonical) and / (backward compat)
 # ---------------------------------------------------------------------------
 app.include_router(v1_router, prefix="/api/v1")

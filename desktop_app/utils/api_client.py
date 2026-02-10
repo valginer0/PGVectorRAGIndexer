@@ -630,3 +630,87 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # Watched Folders (#6)
+    # ------------------------------------------------------------------
+
+    def list_watched_folders(self, enabled_only: bool = False) -> Dict[str, Any]:
+        """List watched folders."""
+        response = requests.get(
+            f"{self.api_base}/watched-folders",
+            params={"enabled_only": enabled_only},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def add_watched_folder(
+        self,
+        folder_path: str,
+        schedule_cron: str = "0 */6 * * *",
+        client_id: Optional[str] = None,
+        enabled: bool = True,
+    ) -> Dict[str, Any]:
+        """Add or update a watched folder."""
+        response = requests.post(
+            f"{self.api_base}/watched-folders",
+            json={
+                "folder_path": folder_path,
+                "schedule_cron": schedule_cron,
+                "client_id": client_id,
+                "enabled": enabled,
+            },
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def update_watched_folder(
+        self,
+        folder_id: str,
+        enabled: Optional[bool] = None,
+        schedule_cron: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Update a watched folder's settings."""
+        body: Dict[str, Any] = {}
+        if enabled is not None:
+            body["enabled"] = enabled
+        if schedule_cron is not None:
+            body["schedule_cron"] = schedule_cron
+        response = requests.put(
+            f"{self.api_base}/watched-folders/{folder_id}",
+            json=body,
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def remove_watched_folder(self, folder_id: str) -> Dict[str, Any]:
+        """Remove a watched folder."""
+        response = requests.delete(
+            f"{self.api_base}/watched-folders/{folder_id}",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def scan_watched_folder(
+        self, folder_id: str, client_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Trigger an immediate scan of a watched folder."""
+        body: Dict[str, Any] = {}
+        if client_id:
+            body["client_id"] = client_id
+        response = requests.post(
+            f"{self.api_base}/watched-folders/{folder_id}/scan",
+            json=body,
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

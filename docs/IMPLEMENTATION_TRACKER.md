@@ -159,17 +159,19 @@ These have zero dependencies on each other and should start simultaneously.
 
 ## Phase 3: Automation and Navigation
 
-### ⬜ #6 Scheduled Automatic Indexing
+### 🟡 #6 Scheduled Automatic Indexing
 - **Effort**: ~14-20h | **Edition**: Team | **Dependencies**: #4, #8
-- **Branch**: `feature/scheduled-indexing`
-- [ ] Alembic migration: `watched_folders` table
-- [ ] Background service: Linux systemd (start here)
+- **Branch**: `feature/roadmap-v4`
+- [x] Alembic migration 006: `watched_folders` table (path, cron, enabled, last_scanned_at, client_id)
+- [x] `watched_folders.py` module: CRUD (add/remove/update/get/list), mark_scanned, scan_folder
+- [x] API endpoints: `GET/POST /watched-folders`, `PUT/DELETE /watched-folders/{id}`, `POST /watched-folders/{id}/scan`
+- [x] Desktop client API methods: list, add, update, remove, scan watched folders
+- [x] Tests: 17 tests (migration, helpers, DB resilience, endpoint registration)
+- [ ] In-app QTimer-based scheduler (fallback, start here)
+- [ ] Background service: Linux systemd
 - [ ] Background service: macOS launchd
 - [ ] Background service: Windows Task Scheduler
-- [ ] Fallback: in-app QTimer-based scheduler
-- [ ] UI: watched folders list (add/remove/enable/disable)
-- [ ] UI: per-folder schedule settings
-- [ ] UI: "Scan Now" button, status indicators, service toggle
+- [ ] UI: Watched Folders tab (add/remove/enable/disable, schedule, Scan Now)
 
 ### ⬜ #9 Path Mapping / Virtual Roots
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #1

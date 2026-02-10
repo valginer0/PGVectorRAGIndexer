@@ -20,18 +20,18 @@ Update status as work progresses. Move completed items to the bottom section.
 
 These have zero dependencies on each other and should start simultaneously.
 
-### ⬜ #11 Schema Migration Framework
+### ✅ #11 Schema Migration Framework
 - **Effort**: ~4-6h | **Edition**: Both | **Dependencies**: None
-- **Branch**: `feature/schema-migrations`
-- [ ] Add Alembic to `requirements.txt`
-- [ ] Create `alembic/` directory with `alembic.ini`, `env.py`
-- [ ] Write baseline migration from current `init-db.sql` schema
-- [ ] Auto-run pending migrations on app startup (Docker + desktop)
-- [ ] Add `alembic upgrade head` to Docker entrypoint
-- [ ] Implement pre-migration backup safety (check for recent backup, prompt user, auto `pg_dump` in Docker)
-- [ ] Test: migration on real v2.4 database with existing data
-- [ ] Test: fresh install (baseline + all migrations)
-- [ ] Test: idempotency (running migrations twice = no-op)
+- **Branch**: `feature/roadmap-v4`
+- [x] Add Alembic to `requirements.txt`
+- [x] Create `alembic/` directory with `alembic.ini`, `env.py`
+- [x] Write baseline migration from current `init-db.sql` schema
+- [x] Auto-run pending migrations on app startup (Docker + desktop)
+- [x] ~~Add `alembic upgrade head` to Docker entrypoint~~ (runs in `lifespan()` instead — same effect)
+- [x] Implement pre-migration backup safety (check for recent backup, prompt user, auto `pg_dump` in Docker)
+- [x] Test: migration on real v2.4 database with existing data (via testcontainers)
+- [x] Test: fresh install (baseline + all migrations)
+- [x] Test: idempotency (running migrations twice = no-op)
 - [ ] Documentation for contributors on creating new migrations
 
 ### ⬜ #13a Self-Serve Licensing — MVP Pricing Page
@@ -52,41 +52,48 @@ These have zero dependencies on each other and should start simultaneously.
 
 ## Phase 1: Security, Versioning, and Licensing Foundation
 
-### ⬜ #0 Remote Security Baseline
+### 🟡 #0 Remote Security Baseline (Backend ✅, Docs/CLI Pending)
 - **Effort**: ~8-12h | **Edition**: Both | **Dependencies**: None
-- **Branch**: `feature/remote-security`
-- [ ] `API_KEY` auth middleware in FastAPI
-- [ ] Config validation: block remote URL without API key
+- **Branch**: `feature/roadmap-v4`
+- [x] `API_KEY` auth middleware in FastAPI (`auth.py`, `require_api_key` dependency)
+- [x] Config validation: `API_REQUIRE_AUTH=true` env var enables auth
 - [ ] TLS support: self-signed guide + reverse proxy docs (Caddy/Nginx)
 - [ ] Explicit allow-list of origins and hosts
 - [ ] "Remote mode" warning banner with server URL and auth status
-- [ ] API key lifecycle: create via CLI (`pgvector-admin create-key --name "Alice"`) and Settings UI
-- [ ] API key lifecycle: list active keys (name, created, last-used)
-- [ ] API key lifecycle: revoke immediately
-- [ ] API key lifecycle: rotate (new key, 24h grace period, auto-revoke old)
-- [ ] API key storage: hashed (SHA-256) server-side, plaintext shown once at creation
-- [ ] Key prefix: `pgv_sk_` for identification
+- [x] API key lifecycle: create via API (`POST /api/keys?name=...`)
+- [ ] API key lifecycle: create via CLI (`pgvector-admin create-key --name "Alice"`)
+- [x] API key lifecycle: list active keys (`GET /api/keys` — name, created, last-used)
+- [x] API key lifecycle: revoke immediately (`DELETE /api/keys/{id}`)
+- [x] API key lifecycle: rotate (`POST /api/keys/{id}/rotate`, 24h grace period)
+- [x] API key storage: hashed (SHA-256) server-side, plaintext shown once at creation
+- [x] Key prefix: `pgv_sk_` for identification
+- [x] Desktop `api_client.py`: `X-API-Key` header on all requests
+- [x] `api_keys` table via Alembic migration 003
+- [x] Test: 32 unit + 7 integration tests (key gen, hash, verify, lifecycle)
 - [ ] Quickstart docs for reverse proxy setup
 
-### ⬜ #17 License Key Validation
-- **Effort**: ~6-8h | **Edition**: Both (this IS the edition gate) | **Dependencies**: #11 (server_settings table requires Alembic migration)
-- **Branch**: `feature/license-validation`
-- [ ] Create `license.py` module (not in config.py)
-- [ ] JWT signing/validation (HMAC-SHA256): edition, org, seats, expiry
-- [ ] Platform-specific key path: Linux/macOS `~/.pgvector-license/license.key`, Windows `%APPDATA%\PGVectorRAGIndexer\license.key`
+### 🟡 #17 License Key Validation (Backend ✅, UI ✅, Polish Pending)
+- **Effort**: ~6-8h | **Edition**: Both (this IS the edition gate) | **Dependencies**: #11 ✅
+- **Branch**: `feature/roadmap-v4`
+- [x] Create `license.py` module — Edition enum, LicenseInfo dataclass, JWT validation
+- [x] JWT signing/validation (HMAC-SHA256): edition, org, seats, expiry
+- [x] Platform-specific key path: Linux/macOS `~/.pgvector-license/license.key`, Windows `%APPDATA%\PGVectorRAGIndexer\license.key`
+- [x] Startup logic in `api.py`: missing → Community, valid → Team, expired/invalid → Community + warning
+- [x] `GET /license` API endpoint + edition in `/api` info
+- [x] `server_settings` table via Alembic migration 002
+- [x] `generate_license_key.py` CLI tool for manual sales
+- [x] Test: valid key, expired key, missing key, tampered key, offline validation (42 unit + 7 integration)
+- [x] UI: Settings → License section (edition badge, org, expiry, seats)
+- [x] UI: "Enter License Key" button (file picker → installs .key)
+- [x] UI: Community edition "Upgrade to Team" link (opens pricing page)
+- [x] UI: Locked-feature placeholder widget (`GatedFeatureWidget`)
+- [x] `edition.py` helper: `TEAM_FEATURES` map, `is_feature_available()`, `get_edition_display()`
+- [x] Test: 15 edition UI tests (feature map, gating logic, display, pricing URL)
 - [ ] File permissions: Linux `600`, Windows user-only ACL
-- [ ] Startup logic: missing → Community, valid → Team, expired/invalid → Community + warning
 - [ ] Short-expiry strategy: 90-day keys, auto-renewed via Stripe webhook
 - [ ] Optional online revocation check (graceful fallback, never blocks app)
 - [ ] Graceful degradation on expiry: read-only fallback (owner client retains write)
-- [ ] `server_settings` table with `owner_client_id`
 - [ ] Expiry banner: "Team license expired on [date]. Renew at [URL]."
-- [ ] UI: Settings → License section (edition, org, expiry, seats)
-- [ ] UI: "Enter License Key" button (paste or browse)
-- [ ] UI: Community edition "Upgrade to Team" link
-- [ ] UI: Locked-feature placeholders ("🔒 Team feature — requires a license")
-- [ ] Test: valid key, expired key, missing key, tampered key, offline validation
-- [ ] Manual key generation script for direct sales
 
 ### ⬜ #12 API Versioning
 - **Effort**: ~3-5h | **Edition**: Both | **Dependencies**: None

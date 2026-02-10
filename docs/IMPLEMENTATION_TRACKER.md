@@ -159,19 +159,20 @@ These have zero dependencies on each other and should start simultaneously.
 
 ## Phase 3: Automation and Navigation
 
-### 🟡 #6 Scheduled Automatic Indexing
+### ✅ #6 Scheduled Automatic Indexing
 - **Effort**: ~14-20h | **Edition**: Team | **Dependencies**: #4, #8
 - **Branch**: `feature/roadmap-v4`
 - [x] Alembic migration 006: `watched_folders` table (path, cron, enabled, last_scanned_at, client_id)
 - [x] `watched_folders.py` module: CRUD (add/remove/update/get/list), mark_scanned, scan_folder
 - [x] API endpoints: `GET/POST /watched-folders`, `PUT/DELETE /watched-folders/{id}`, `POST /watched-folders/{id}/scan`
 - [x] Desktop client API methods: list, add, update, remove, scan watched folders
-- [x] Tests: 17 tests (migration, helpers, DB resilience, endpoint registration)
-- [ ] In-app QTimer-based scheduler (fallback, start here)
-- [ ] Background service: Linux systemd
-- [ ] Background service: macOS launchd
-- [ ] Background service: Windows Task Scheduler
-- [ ] UI: Watched Folders tab (add/remove/enable/disable, schedule, Scan Now)
+- [x] `folder_scheduler.py`: In-app QTimer-based scheduler with cron parsing, due-check, auto-scan
+- [x] `watched_folders_tab.py`: Full UI tab (add/remove/enable/disable, schedule presets, Scan Now, scheduler toggle)
+- [x] Main window integration: Folders tab, scheduler init, client_id wiring in on_api_ready
+- [x] Tests: 39 tests (cron parsing, scheduler lifecycle, check logic, CRUD resilience, endpoints)
+- [ ] Background service: Linux systemd (deferred — in-app scheduler sufficient for now)
+- [ ] Background service: macOS launchd (deferred)
+- [ ] Background service: Windows Task Scheduler (deferred)
 
 ### ⬜ #9 Path Mapping / Virtual Roots
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #1

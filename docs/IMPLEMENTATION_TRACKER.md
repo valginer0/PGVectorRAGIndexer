@@ -95,12 +95,14 @@ These have zero dependencies on each other and should start simultaneously.
 - [ ] Graceful degradation on expiry: read-only fallback (owner client retains write)
 - [ ] Expiry banner: "Team license expired on [date]. Renew at [URL]."
 
-### ⬜ #12 API Versioning
+### 🟡 #12 API Versioning (Core ✅, Docs Pending)
 - **Effort**: ~3-5h | **Edition**: Both | **Dependencies**: None
-- **Branch**: `feature/api-versioning`
-- [ ] Add `/api/v1/` prefix to all endpoints (keep `/` redirecting to v1)
-- [ ] `GET /api/version` endpoint (server_version, api_version, min/max client versions)
-- [ ] Desktop app: version check on connect, warn if incompatible
+- **Branch**: `feature/roadmap-v4`
+- [x] Add `/api/v1/` prefix to all endpoints (v1_router + backward compat at `/`)
+- [x] `GET /api/version` endpoint (server_version, api_version, min/max client versions)
+- [x] Desktop app: version check on connect, warn if incompatible (`check_version_compatibility()`)
+- [x] Desktop app: all data calls use `/api/v1/` prefix (`api_base` property)
+- [x] Test: 11 tests (version constants, client compat check, prefix validation)
 - [ ] Document versioning policy
 - [ ] Create compatibility matrix in docs
 - [ ] Add compatibility matrix update to PR template checkbox

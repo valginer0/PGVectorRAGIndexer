@@ -307,6 +307,15 @@ class MainWindow(QMainWindow):
         logger.info("API is ready, performing initial data load...")
         self.initial_load_done = True
         
+        # Check version compatibility
+        compatible, version_msg = self.api_client.check_version_compatibility()
+        if not compatible:
+            QMessageBox.warning(
+                self,
+                "Version Mismatch",
+                version_msg,
+            )
+        
         # Load data for tabs
         try:
             # Documents Tab

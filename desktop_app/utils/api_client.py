@@ -3,11 +3,12 @@ REST API client for communicating with the backend.
 """
 
 import logging
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 
 import requests
 from desktop_app.utils.hashing import calculate_source_id
+from version import __version__ as CLIENT_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -24,8 +25,10 @@ class APIClient:
             api_key: Optional API key for authenticated access (remote mode)
         """
         self.base_url = base_url.rstrip('/')
+        self.api_base = f"{self.base_url}/api/v1"  # Versioned endpoint prefix
         self.timeout = 7200  # 2 hours for very large OCR files (200+ pages)
         self._api_key = api_key
+        self._server_version: Optional[str] = None
 
     @property
     def _headers(self) -> dict:
@@ -46,6 +49,55 @@ class APIClient:
             return response.status_code == 200
         except requests.RequestException:
             return False
+
+    def check_version_compatibility(self) -> Tuple[bool, str]:
+        """Check if this client version is compatible with the server.
+
+        Returns:
+            Tuple of (compatible, message).
+            compatible is True if versions match, False if mismatch.
+            message is empty on success, or a human-readable warning.
+        """
+        try:
+            response = requests.get(
+                f"{self.base_url}/api/version",
+                headers=self._headers,
+                timeout=5,
+            )
+            if response.status_code != 200:
+                return True, ""  # Endpoint missing (old server) — assume OK
+
+            data = response.json()
+            self._server_version = data.get("server_version", "unknown")
+            min_ver = data.get("min_client_version", "0.0.0")
+            max_ver = data.get("max_client_version", "99.99.99")
+
+            from packaging.version import Version, InvalidVersion
+            try:
+                client_v = Version(CLIENT_VERSION)
+                min_v = Version(min_ver)
+                max_v = Version(max_ver)
+            except InvalidVersion:
+                return True, ""  # Can't parse — don't block
+
+            if client_v < min_v:
+                return False, (
+                    f"This client (v{CLIENT_VERSION}) is too old for the server "
+                    f"(v{self._server_version}). Minimum required: v{min_ver}. "
+                    f"Please update the desktop app."
+                )
+            if client_v > max_v:
+                return False, (
+                    f"This client (v{CLIENT_VERSION}) is newer than the server "
+                    f"(v{self._server_version}) supports. Maximum: v{max_ver}. "
+                    f"Please update the server."
+                )
+            return True, ""
+        except ImportError:
+            logger.debug("packaging not installed, skipping version check")
+            return True, ""
+        except requests.RequestException:
+            return True, ""  # Can't reach server — don't block
 
     def check_document_exists(self, source_uri: str) -> bool:
         """
@@ -131,7 +183,7 @@ class APIClient:
                 data['ocr_mode'] = ocr_mode
             
             response = requests.post(
-                f"{self.base_url}/upload-and-index",
+                f"{self.api_base}/upload-and-index",
                 files=files,
                 data=data,
                 headers=self._headers,
@@ -184,7 +236,7 @@ class APIClient:
             payload["filters"] = {"type": document_type}
         
         response = requests.post(
-            f"{self.base_url}/search",
+            f"{self.api_base}/search",
             json=payload,
             headers=self._headers,
             timeout=self.timeout
@@ -209,7 +261,7 @@ class APIClient:
         }
 
         response = requests.get(
-            f"{self.base_url}/documents",
+            f"{self.api_base}/documents",
             params=params,
             headers=self._headers,
             timeout=self.timeout
@@ -274,7 +326,7 @@ class APIClient:
             requests.RequestException: If the request fails
         """
         response = requests.get(
-            f"{self.base_url}/documents/{document_id}",
+            f"{self.api_base}/documents/{document_id}",
             headers=self._headers,
             timeout=self.timeout
         )
@@ -297,7 +349,7 @@ class APIClient:
         logger.info(f"Deleting document: {document_id}")
         
         response = requests.delete(
-            f"{self.base_url}/documents/{document_id}",
+            f"{self.api_base}/documents/{document_id}",
             headers=self._headers,
             timeout=self.timeout
         )
@@ -315,7 +367,7 @@ class APIClient:
             requests.RequestException: If the request fails
         """
         response = requests.get(
-            f"{self.base_url}/statistics",
+            f"{self.api_base}/statistics",
             headers=self._headers,
             timeout=self.timeout
         )
@@ -338,7 +390,7 @@ class APIClient:
         payload = {"filters": filters, "preview": True}
         logger.info(f"bulk_delete_preview payload: {payload!r}")
         response = requests.post(
-            f"{self.base_url}/documents/bulk-delete",
+            f"{self.api_base}/documents/bulk-delete",
             json=payload,
             headers=self._headers,
             timeout=self.timeout
@@ -362,7 +414,7 @@ class APIClient:
         payload = {"filters": filters, "preview": False}
         logger.info(f"bulk_delete payload: {payload!r}")
         response = requests.post(
-            f"{self.base_url}/documents/bulk-delete",
+            f"{self.api_base}/documents/bulk-delete",
             json=payload,
             headers=self._headers,
             timeout=self.timeout
@@ -386,7 +438,7 @@ class APIClient:
         payload = {"filters": filters}
         logger.info(f"export_documents payload: {payload!r}")
         response = requests.post(
-            f"{self.base_url}/documents/export",
+            f"{self.api_base}/documents/export",
             json=payload,
             headers=self._headers,
             timeout=self.timeout
@@ -408,7 +460,7 @@ class APIClient:
             requests.RequestException: If the request fails
         """
         response = requests.post(
-            f"{self.base_url}/documents/restore",
+            f"{self.api_base}/documents/restore",
             json={"backup_data": backup_data},
             headers=self._headers,
             timeout=self.timeout
@@ -434,7 +486,7 @@ class APIClient:
             params['pattern'] = pattern
         
         response = requests.get(
-            f"{self.base_url}/metadata/keys",
+            f"{self.api_base}/metadata/keys",
             params=params,
             headers=self._headers,
             timeout=self.timeout
@@ -456,7 +508,7 @@ class APIClient:
             requests.RequestException: If the request fails
         """
         response = requests.get(
-            f"{self.base_url}/metadata/values",
+            f"{self.api_base}/metadata/values",
             params={"key": key},
             headers=self._headers,
             timeout=self.timeout

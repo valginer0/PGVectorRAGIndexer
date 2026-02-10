@@ -45,3 +45,6 @@ sqlalchemy>=2.0.0
 
 # License key validation
 PyJWT>=2.8.0
+
+# Version comparison (desktop client)
+packaging>=23.0

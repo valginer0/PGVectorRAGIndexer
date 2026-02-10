@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form, Query, status
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -220,6 +220,11 @@ static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
+# ---------------------------------------------------------------------------
+# Versioned API Router — all data endpoints live here
+# ---------------------------------------------------------------------------
+v1_router = APIRouter(tags=["v1"])
+
 # Initialize services (will be created on first request)
 indexer: Optional[DocumentIndexer] = None
 retriever: Optional[DocumentRetriever] = None
@@ -258,6 +263,14 @@ async def root():
     return "<h1>PGVectorRAGIndexer API</h1><p>Visit <a href='/docs'>/docs</a> for API documentation</p>"
 
 
+# ---------------------------------------------------------------------------
+# API Version Constants
+# ---------------------------------------------------------------------------
+API_VERSION = "1"                  # Current API version
+MIN_CLIENT_VERSION = "2.4.0"       # Oldest desktop client that works with this API
+MAX_CLIENT_VERSION = "99.99.99"    # No upper bound yet
+
+
 @app.get("/api", tags=["General"])
 async def api_info():
     """API information endpoint."""
@@ -265,11 +278,27 @@ async def api_info():
     license_info = get_current_license()
     return {
         "name": "PGVectorRAGIndexer API",
-        "version": "2.0.0",
+        "version": __version__,
+        "api_version": API_VERSION,
         "description": "Semantic document search using PostgreSQL and pgvector",
         "edition": license_info.edition.value,
         "docs": "/docs",
         "health": "/health"
+    }
+
+
+@app.get("/api/version", tags=["General"])
+async def api_version():
+    """Get detailed version and compatibility information.
+
+    Desktop clients should call this on connect and warn if their
+    version falls outside [min_client_version, max_client_version].
+    """
+    return {
+        "server_version": __version__,
+        "api_version": API_VERSION,
+        "min_client_version": MIN_CLIENT_VERSION,
+        "max_client_version": MAX_CLIENT_VERSION,
     }
 
 
@@ -304,7 +333,7 @@ async def health_check():
         )
 
 
-@app.get("/stats", response_model=StatsResponse, tags=["General"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/stats", response_model=StatsResponse, tags=["General"], dependencies=[Depends(require_api_key)])
 async def get_statistics():
     """Get system statistics."""
     try:
@@ -327,7 +356,7 @@ async def get_statistics():
         )
 
 
-@app.post("/index", response_model=IndexResponse, tags=["Indexing"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/index", response_model=IndexResponse, tags=["Indexing"], dependencies=[Depends(require_api_key)])
 async def index_document(request: IndexRequest):
     """Index a document from URI."""
     try:
@@ -355,7 +384,7 @@ async def index_document(request: IndexRequest):
         )
 
 
-@app.post("/upload-and-index", response_model=IndexResponse, tags=["Indexing"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/upload-and-index", response_model=IndexResponse, tags=["Indexing"], dependencies=[Depends(require_api_key)])
 async def upload_and_index(
     file: UploadFile = File(...),
     force_reindex: bool = Form(default=False),
@@ -544,7 +573,7 @@ async def upload_and_index(
                 logger.warning(f"Failed to clean up temp file {temp_path}: {e}")
 
 
-@app.post("/search", response_model=SearchResponse, tags=["Search"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/search", response_model=SearchResponse, tags=["Search"], dependencies=[Depends(require_api_key)])
 async def search_documents(request: SearchRequest):
     """Search for relevant documents."""
     import time
@@ -600,7 +629,7 @@ async def search_documents(request: SearchRequest):
         )
 
 
-@app.get("/documents", response_model=DocumentListResponse, tags=["Documents"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/documents", response_model=DocumentListResponse, tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def list_documents(
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum documents to return"),
     offset: int = Query(default=0, ge=0, description="Number of documents to skip"),
@@ -662,7 +691,7 @@ async def list_documents(
         )
 
 
-@app.get("/documents/encrypted", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/documents/encrypted", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def list_encrypted_pdfs(
     since: Optional[str] = Query(default=None, description="Return only PDFs detected after this ISO datetime"),
     clear: bool = Query(default=False, description="Clear the list after returning it")
@@ -701,7 +730,7 @@ async def list_encrypted_pdfs(
     }
 
 
-@app.get("/documents/{document_id}", response_model=DocumentInfo, tags=["Documents"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/documents/{document_id}", response_model=DocumentInfo, tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def get_document(document_id: str):
     """Get document information by ID."""
     try:
@@ -735,7 +764,7 @@ async def get_document(document_id: str):
         )
 
 
-@app.delete("/documents/{document_id}", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@v1_router.delete("/documents/{document_id}", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def delete_document(document_id: str):
     """Delete a document by ID."""
     try:
@@ -761,7 +790,7 @@ async def delete_document(document_id: str):
         )
 
 
-@app.get("/statistics", tags=["General"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/statistics", tags=["General"], dependencies=[Depends(require_api_key)])
 async def get_statistics():
     """Get system statistics."""
     try:
@@ -786,7 +815,7 @@ async def get_statistics():
         )
 
 
-@app.get("/context", tags=["RAG"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/context", tags=["RAG"], dependencies=[Depends(require_api_key)])
 async def get_context(
     query: str = Query(..., description="Search query"),
     top_k: int = Query(default=5, ge=1, le=20, description="Number of chunks"),
@@ -810,7 +839,7 @@ async def get_context(
         )
 
 
-@app.get("/metadata/keys", response_model=List[str], tags=["Metadata"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/metadata/keys", response_model=List[str], tags=["Metadata"], dependencies=[Depends(require_api_key)])
 async def get_metadata_keys(
     pattern: Optional[str] = Query(default=None, description="SQL LIKE pattern to filter keys (e.g., 't%')")
 ):
@@ -832,7 +861,7 @@ async def get_metadata_keys(
         )
 
 
-@app.get("/metadata/values", response_model=List[str], tags=["Metadata"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/metadata/values", response_model=List[str], tags=["Metadata"], dependencies=[Depends(require_api_key)])
 async def get_metadata_values(
     key: str = Query(..., description="Metadata key to get values for"),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum values to return")
@@ -855,7 +884,7 @@ async def get_metadata_values(
         )
 
 
-@app.post("/documents/bulk-delete", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/documents/bulk-delete", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def bulk_delete_documents(request: BulkDeleteRequest):
     """
     Bulk delete documents matching filter criteria.
@@ -899,7 +928,7 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
         )
 
 
-@app.post("/documents/export", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/documents/export", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def export_documents(request: ExportRequest):
     """
     Export documents matching filter criteria as JSON backup.
@@ -928,7 +957,7 @@ async def export_documents(request: ExportRequest):
         )
 
 
-@app.post("/documents/restore", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/documents/restore", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def restore_documents(request: RestoreRequest):
     """
     Restore documents from a backup (undo delete).
@@ -960,7 +989,7 @@ async def restore_documents(request: RestoreRequest):
 # ---------------------------------------------------------------------------
 
 
-@app.post("/api/keys", tags=["Auth"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/api/keys", tags=["Auth"], dependencies=[Depends(require_api_key)])
 async def create_key(name: str = Query(..., description="Human-readable name for the key")):
     """Create a new API key.
 
@@ -986,7 +1015,7 @@ async def create_key(name: str = Query(..., description="Human-readable name for
         )
 
 
-@app.get("/api/keys", tags=["Auth"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/api/keys", tags=["Auth"], dependencies=[Depends(require_api_key)])
 async def list_keys():
     """List all API keys (active and revoked).
 
@@ -1003,7 +1032,7 @@ async def list_keys():
         )
 
 
-@app.delete("/api/keys/{key_id}", tags=["Auth"], dependencies=[Depends(require_api_key)])
+@v1_router.delete("/api/keys/{key_id}", tags=["Auth"], dependencies=[Depends(require_api_key)])
 async def delete_key(key_id: int):
     """Revoke an API key immediately."""
     from auth import revoke_api_key
@@ -1025,7 +1054,7 @@ async def delete_key(key_id: int):
         )
 
 
-@app.post("/api/keys/{key_id}/rotate", tags=["Auth"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/api/keys/{key_id}/rotate", tags=["Auth"], dependencies=[Depends(require_api_key)])
 async def rotate_key(key_id: int):
     """Rotate an API key.
 
@@ -1058,6 +1087,13 @@ async def rotate_key(key_id: int):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to rotate API key: {str(e)}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Mount versioned router at /api/v1 (canonical) and / (backward compat)
+# ---------------------------------------------------------------------------
+app.include_router(v1_router, prefix="/api/v1")
+app.include_router(v1_router)  # backward compat: old unversioned paths
 
 
 # Error handlers

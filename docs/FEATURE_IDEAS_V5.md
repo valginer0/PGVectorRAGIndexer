@@ -338,7 +338,7 @@ Key changes:
 ---
 
 ### 17. License Key Validation (New)
-**Effort**: ~6-8h | **Dependencies**: None | **Edition**: Both (this IS the edition gate)
+**Effort**: ~6-8h | **Dependencies**: #11 (server_settings table requires Alembic migration) | **Edition**: Both (this IS the edition gate)
 
 **Problem**: The edition model needs enforcement. A config file switch (`EDITION = "team"` in config.py) is trivially bypassable and defeats the licensing model.
 

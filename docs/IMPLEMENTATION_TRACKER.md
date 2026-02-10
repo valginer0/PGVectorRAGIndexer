@@ -12,7 +12,7 @@ Update status as work progresses. Move completed items to the bottom section.
 | ⬜ | Not started |
 | 🟡 | In progress |
 | ✅ | Complete |
-| ⏸️ | Blocked |
+| ⏸️ | Blocked (note blocker, e.g., "⏸️ Blocked by #11") |
 
 ---
 
@@ -34,12 +34,16 @@ These have zero dependencies on each other and should start simultaneously.
 - [ ] Test: idempotency (running migrations twice = no-op)
 - [ ] Documentation for contributors on creating new migrations
 
-### ⬜ #13 Self-Serve Licensing
-- **Effort**: ~8-12h | **Edition**: N/A (website) | **Dependencies**: None
+### ⬜ #13a Self-Serve Licensing — MVP Pricing Page
+- **Effort**: ~2-4h | **Edition**: N/A (website) | **Dependencies**: None
 - **Repo**: `PGVectorRAGIndexerWebsite`
 - [ ] Design pricing page with tiers (Community / Team / Organization / Enterprise)
 - [ ] MVP: pricing page + "Reserve your license — email us" CTA
 - [ ] FAQ page for procurement questions
+
+### ⬜ #13b Self-Serve Licensing — Stripe Automation
+- **Effort**: ~6-8h | **Edition**: N/A (website + backend) | **Dependencies**: #13a, #17
+- **Repo**: `PGVectorRAGIndexerWebsite` + signing service
 - [ ] Stripe Checkout integration (Team + Organization tiers)
 - [ ] License key generation: Stripe webhook → signing service → email delivery
 - [ ] Manual key generation script for direct sales
@@ -65,7 +69,7 @@ These have zero dependencies on each other and should start simultaneously.
 - [ ] Quickstart docs for reverse proxy setup
 
 ### ⬜ #17 License Key Validation
-- **Effort**: ~6-8h | **Edition**: Both (this IS the edition gate) | **Dependencies**: None
+- **Effort**: ~6-8h | **Edition**: Both (this IS the edition gate) | **Dependencies**: #11 (server_settings table requires Alembic migration)
 - **Branch**: `feature/license-validation`
 - [ ] Create `license.py` module (not in config.py)
 - [ ] JWT signing/validation (HMAC-SHA256): edition, org, seats, expiry

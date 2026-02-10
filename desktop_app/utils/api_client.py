@@ -790,3 +790,92 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # Activity Log (#10)
+    # ------------------------------------------------------------------
+
+    def get_activity_log(
+        self,
+        limit: int = 50,
+        offset: int = 0,
+        client_id: Optional[str] = None,
+        action: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Query recent activity log entries."""
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
+        if client_id:
+            params["client_id"] = client_id
+        if action:
+            params["action"] = action
+        response = requests.get(
+            f"{self.api_base}/activity",
+            params=params,
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def post_activity(
+        self,
+        action: str,
+        client_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        details: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Record an activity log entry."""
+        response = requests.post(
+            f"{self.api_base}/activity",
+            json={
+                "action": action,
+                "client_id": client_id,
+                "user_id": user_id,
+                "details": details,
+            },
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_activity_action_types(self) -> Dict[str, Any]:
+        """Get distinct action types in the activity log."""
+        response = requests.get(
+            f"{self.api_base}/activity/actions",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def export_activity_csv(
+        self,
+        client_id: Optional[str] = None,
+        action: Optional[str] = None,
+    ) -> str:
+        """Export activity log as CSV string."""
+        params: Dict[str, Any] = {}
+        if client_id:
+            params["client_id"] = client_id
+        if action:
+            params["action"] = action
+        response = requests.get(
+            f"{self.api_base}/activity/export",
+            params=params,
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.text
+
+    def apply_activity_retention(self, days: int) -> Dict[str, Any]:
+        """Apply retention policy — delete entries older than N days."""
+        response = requests.post(
+            f"{self.api_base}/activity/retention",
+            json={"days": days},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

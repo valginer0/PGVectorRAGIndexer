@@ -1545,6 +1545,134 @@ async def resolve_virtual_path(request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Activity Log Endpoints (#10)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.get("/activity", tags=["Activity Log"], dependencies=[Depends(require_api_key)])
+async def get_activity_log(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    client_id: Optional[str] = Query(default=None),
+    action: Optional[str] = Query(default=None),
+):
+    """Query recent activity log entries."""
+    from activity_log import get_recent, get_activity_count
+    try:
+        entries = get_recent(limit=limit, offset=offset, client_id=client_id, action=action)
+        total = get_activity_count(client_id=client_id, action=action)
+        return {"entries": entries, "count": len(entries), "total": total}
+    except Exception as e:
+        logger.error(f"Failed to query activity log: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to query activity log: {str(e)}",
+        )
+
+
+@v1_router.post("/activity", tags=["Activity Log"], dependencies=[Depends(require_api_key)])
+async def post_activity(request: Request):
+    """Record an activity log entry.
+
+    Body: { "action": "...", "client_id": "...", "user_id": "...", "details": {...} }
+    """
+    from activity_log import log_activity
+    try:
+        body = await request.json()
+        action_type = body.get("action")
+        if not action_type:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="action is required",
+            )
+        entry_id = log_activity(
+            action=action_type,
+            client_id=body.get("client_id"),
+            user_id=body.get("user_id"),
+            details=body.get("details"),
+        )
+        if entry_id:
+            return {"id": entry_id, "ok": True}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to log activity",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to log activity: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to log activity: {str(e)}",
+        )
+
+
+@v1_router.get("/activity/actions", tags=["Activity Log"], dependencies=[Depends(require_api_key)])
+async def get_activity_action_types():
+    """Get distinct action types in the activity log."""
+    from activity_log import get_action_types
+    try:
+        types = get_action_types()
+        return {"actions": types, "count": len(types)}
+    except Exception as e:
+        logger.error(f"Failed to get action types: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get action types: {str(e)}",
+        )
+
+
+@v1_router.get("/activity/export", tags=["Activity Log"], dependencies=[Depends(require_api_key)])
+async def export_activity_csv(
+    client_id: Optional[str] = Query(default=None),
+    action: Optional[str] = Query(default=None),
+    limit: int = Query(default=10000, ge=1, le=100000),
+):
+    """Export activity log as CSV."""
+    from activity_log import export_csv
+    try:
+        csv_data = export_csv(client_id=client_id, action=action, limit=limit)
+        return JSONResponse(
+            content=csv_data,
+            media_type="text/csv",
+            headers={"Content-Disposition": "attachment; filename=activity_log.csv"},
+        )
+    except Exception as e:
+        logger.error(f"Failed to export activity log: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export: {str(e)}",
+        )
+
+
+@v1_router.post("/activity/retention", tags=["Activity Log"], dependencies=[Depends(require_api_key)])
+async def apply_activity_retention(request: Request):
+    """Apply retention policy — delete entries older than N days.
+
+    Body: { "days": 90 }
+    """
+    from activity_log import apply_retention
+    try:
+        body = await request.json()
+        days = body.get("days")
+        if not days or not isinstance(days, int) or days < 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="days must be a positive integer",
+            )
+        deleted = apply_retention(days)
+        return {"deleted": deleted, "ok": True}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to apply retention: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to apply retention: {str(e)}",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Mount versioned router at /api/v1 (canonical) and / (backward compat)
 # ---------------------------------------------------------------------------
 app.include_router(v1_router, prefix="/api/v1")

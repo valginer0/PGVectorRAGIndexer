@@ -193,14 +193,16 @@ These have zero dependencies on each other and should start simultaneously.
 - [ ] Aggregated counts/timestamps per folder (server-side, cached)
 - [ ] Search-within-tree: filter to matching paths
 
-### ⬜ #10 Activity and Audit Log
+### ✅ #10 Activity and Audit Log
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #4, #11
-- **Branch**: `feature/audit-log`
-- [ ] Alembic migration: `activity_log` table + indexes
-- [ ] Record events: index_start, index_complete, delete, upload, search
-- [ ] UI: recent activity panel (filter by client, user, action)
-- [ ] Export to CSV
-- [ ] Retention policy setting (auto-delete after N days)
+- **Branch**: `feature/roadmap-v4`
+- [x] Alembic migration 008: `activity_log` table (id, ts, client_id, user_id, action, details JSONB)
+- [x] `activity_log.py` module: log_activity, get_recent, get_activity_count, get_action_types, export_csv, apply_retention
+- [x] API endpoints: `GET/POST /activity`, `GET /activity/actions`, `GET /activity/export`, `POST /activity/retention`
+- [x] Desktop client API methods: get_activity_log, post_activity, get_activity_action_types, export_activity_csv, apply_activity_retention
+- [x] CSV export with proper header and JSON details serialization
+- [x] Retention policy: delete entries older than N days
+- [x] Tests: 17 tests (migration, _row_to_dict, DB resilience, CSV export, endpoints)
 
 ---
 

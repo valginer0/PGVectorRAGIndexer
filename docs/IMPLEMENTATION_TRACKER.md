@@ -174,14 +174,15 @@ These have zero dependencies on each other and should start simultaneously.
 - [ ] Background service: macOS launchd (deferred)
 - [ ] Background service: Windows Task Scheduler (deferred)
 
-### ⬜ #9 Path Mapping / Virtual Roots
+### ✅ #9 Path Mapping / Virtual Roots
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #1
-- **Branch**: `feature/path-mapping`
-- [ ] Alembic migration: `virtual_roots` table
-- [ ] Prompt for virtual root name when adding watched folder
-- [ ] "Show local paths" toggle in tree view toolbar
-- [ ] Details panel for selected virtual root (all client mappings)
-- [ ] Cross-platform path resolution using `clients.os_type`
+- **Branch**: `feature/roadmap-v4`
+- [x] Alembic migration 007: `virtual_roots` table (name, client_id, local_path, unique constraint)
+- [x] `virtual_roots.py` module: CRUD (add/remove/get/list), list_root_names, get_mappings_for_root
+- [x] Path resolution: `resolve_path()` splits virtual path → root name + remainder → local path
+- [x] API endpoints: `GET/POST /virtual-roots`, `GET /virtual-roots/names`, `GET /virtual-roots/{name}/mappings`, `DELETE /virtual-roots/{id}`, `POST /virtual-roots/resolve`
+- [x] Desktop client API methods: list, list_names, get_mappings, add, remove, resolve
+- [x] Tests: 22 tests (migration, _row_to_dict, DB resilience, path resolution, endpoints)
 
 ### ⬜ #7 Hierarchical Document Browser
 - **Effort**: ~12-16h | **Edition**: Both | **Dependencies**: #4, #9

@@ -714,3 +714,79 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # Virtual Roots (#9)
+    # ------------------------------------------------------------------
+
+    def list_virtual_roots(
+        self, client_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """List virtual roots, optionally filtered by client_id."""
+        params: Dict[str, Any] = {}
+        if client_id:
+            params["client_id"] = client_id
+        response = requests.get(
+            f"{self.api_base}/virtual-roots",
+            params=params,
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def list_virtual_root_names(self) -> Dict[str, Any]:
+        """List distinct virtual root names."""
+        response = requests.get(
+            f"{self.api_base}/virtual-roots/names",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_virtual_root_mappings(self, name: str) -> Dict[str, Any]:
+        """Get all client mappings for a virtual root name."""
+        response = requests.get(
+            f"{self.api_base}/virtual-roots/{name}/mappings",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def add_virtual_root(
+        self, name: str, client_id: str, local_path: str
+    ) -> Dict[str, Any]:
+        """Add or update a virtual root mapping."""
+        response = requests.post(
+            f"{self.api_base}/virtual-roots",
+            json={"name": name, "client_id": client_id, "local_path": local_path},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def remove_virtual_root(self, root_id: str) -> Dict[str, Any]:
+        """Remove a virtual root by ID."""
+        response = requests.delete(
+            f"{self.api_base}/virtual-roots/{root_id}",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def resolve_virtual_path(
+        self, virtual_path: str, client_id: str
+    ) -> Dict[str, Any]:
+        """Resolve a virtual path to a local path."""
+        response = requests.post(
+            f"{self.api_base}/virtual-roots/resolve",
+            json={"virtual_path": virtual_path, "client_id": client_id},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

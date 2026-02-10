@@ -97,6 +97,9 @@ class MainWindow(QMainWindow):
         
         # License expiry banner (hidden by default)
         self._create_license_banner(layout)
+
+        # Remote mode banner (hidden by default)
+        self._create_remote_banner(layout)
         
         # Tab widget
         self.tabs = QTabWidget()
@@ -247,8 +250,76 @@ class MainWindow(QMainWindow):
         from desktop_app.utils.edition import open_pricing_page
         open_pricing_page()
 
+    def _create_remote_banner(self, parent_layout):
+        """Create a remote-mode info banner (hidden by default)."""
+        self._remote_banner = QWidget()
+        self._remote_banner.setObjectName("remoteBanner")
+        self._remote_banner.setVisible(False)
+        self._remote_banner.setStyleSheet(
+            "#remoteBanner { background-color: #1e3a5f; border-radius: 6px; "
+            "border: 1px solid #2563eb; }"
+        )
+
+        banner_layout = QHBoxLayout(self._remote_banner)
+        banner_layout.setContentsMargins(15, 8, 15, 8)
+
+        icon_label = QLabel()
+        icon_label.setPixmap(
+            qta.icon('fa5s.cloud', color='#60a5fa').pixmap(16, 16)
+        )
+        banner_layout.addWidget(icon_label)
+
+        self._remote_banner_text = QLabel()
+        self._remote_banner_text.setWordWrap(True)
+        self._remote_banner_text.setStyleSheet("color: #bfdbfe;")
+        banner_layout.addWidget(self._remote_banner_text, 1)
+
+        self._remote_auth_badge = QLabel()
+        self._remote_auth_badge.setStyleSheet(
+            "color: white; font-weight: 600; padding: 2px 8px; "
+            "border-radius: 4px; font-size: 11px;"
+        )
+        banner_layout.addWidget(self._remote_auth_badge)
+
+        parent_layout.addWidget(self._remote_banner)
+
+    def _update_remote_banner(self):
+        """Show or hide the remote-mode banner based on current config."""
+        if not self._remote_mode:
+            self._remote_banner.setVisible(False)
+            return
+
+        from desktop_app.utils.app_config import get_backend_url, get_api_key
+        url = get_backend_url()
+        has_key = bool(get_api_key())
+
+        self._remote_banner_text.setText(
+            f"Remote mode — connected to <b>{url}</b>"
+        )
+
+        if has_key:
+            self._remote_auth_badge.setText("🔒 Authenticated")
+            self._remote_auth_badge.setStyleSheet(
+                "color: white; font-weight: 600; padding: 2px 8px; "
+                "border-radius: 4px; font-size: 11px; background-color: #166534;"
+            )
+        else:
+            self._remote_auth_badge.setText("⚠ No API Key")
+            self._remote_auth_badge.setStyleSheet(
+                "color: white; font-weight: 600; padding: 2px 8px; "
+                "border-radius: 4px; font-size: 11px; background-color: #92400e;"
+            )
+
+        self._remote_banner.setVisible(True)
+
     def check_initial_status(self):
         """Check Docker and API status on startup."""
+        if self._remote_mode:
+            # In remote mode, skip Docker entirely — just check API
+            self._update_remote_banner()
+            self.check_api_status()
+            return
+
         self.check_docker_status()
         
         # If containers are not running, ask to start them
@@ -316,6 +387,17 @@ class MainWindow(QMainWindow):
             else:
                 self.status_bar.showMessage("API not available. Please start containers.")
     
+    def check_api_status(self):
+        """Check API availability (used in remote mode where Docker is irrelevant)."""
+        if self.api_client.is_api_available():
+            self.status_bar.showMessage("Ready — connected to remote server")
+            if not self.initial_load_done:
+                self.on_api_ready()
+        else:
+            self.status_bar.showMessage("Remote server not reachable. Check Settings.")
+            # Retry after a delay
+            QTimer.singleShot(5000, self.check_api_status)
+
     def toggle_docker(self):
         """Toggle Docker containers on/off."""
         db_running, app_running = self.docker_manager.get_container_status()
@@ -405,6 +487,9 @@ class MainWindow(QMainWindow):
         
         # Update license expiry banner
         self._update_license_banner()
+
+        # Update remote mode banner
+        self._update_remote_banner()
         
         # Load data for tabs
         try:

@@ -206,6 +206,10 @@ class APIConfig(BaseSettings):
         default=False,
         description='Require API key authentication for all endpoints'
     )
+    allowed_hosts: list[str] = Field(
+        default=['*'],
+        description='Allowed Host headers (TrustedHostMiddleware). Set to specific hostnames in production.'
+    )
 
 
 class AppConfig(BaseSettings):

@@ -32,7 +32,7 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Test: migration on real v2.4 database with existing data (via testcontainers)
 - [x] Test: fresh install (baseline + all migrations)
 - [x] Test: idempotency (running migrations twice = no-op)
-- [ ] Documentation for contributors on creating new migrations
+- [x] Documentation for contributors on creating new migrations (`docs/MIGRATIONS_GUIDE.md`)
 
 ### ⬜ #13a Self-Serve Licensing — MVP Pricing Page
 - **Effort**: ~2-4h | **Edition**: N/A (website) | **Dependencies**: None
@@ -57,11 +57,11 @@ These have zero dependencies on each other and should start simultaneously.
 - **Branch**: `feature/roadmap-v4`
 - [x] `API_KEY` auth middleware in FastAPI (`auth.py`, `require_api_key` dependency)
 - [x] Config validation: `API_REQUIRE_AUTH=true` env var enables auth
-- [ ] TLS support: self-signed guide + reverse proxy docs (Caddy/Nginx)
-- [ ] Explicit allow-list of origins and hosts
+- [x] TLS support: self-signed guide + reverse proxy docs (`docs/REVERSE_PROXY_GUIDE.md`)
+- [x] Explicit allow-list of origins and hosts (`API_ALLOWED_HOSTS` + `TrustedHostMiddleware`)
 - [ ] "Remote mode" warning banner with server URL and auth status
 - [x] API key lifecycle: create via API (`POST /api/keys?name=...`)
-- [ ] API key lifecycle: create via CLI (`pgvector-admin create-key --name "Alice"`)
+- [x] API key lifecycle: create via CLI (`pgvector_admin.py create-key --name "Alice"`)
 - [x] API key lifecycle: list active keys (`GET /api/keys` — name, created, last-used)
 - [x] API key lifecycle: revoke immediately (`DELETE /api/keys/{id}`)
 - [x] API key lifecycle: rotate (`POST /api/keys/{id}/rotate`, 24h grace period)
@@ -70,7 +70,7 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Desktop `api_client.py`: `X-API-Key` header on all requests
 - [x] `api_keys` table via Alembic migration 003
 - [x] Test: 32 unit + 7 integration tests (key gen, hash, verify, lifecycle)
-- [ ] Quickstart docs for reverse proxy setup
+- [x] Quickstart docs for reverse proxy setup (`docs/REVERSE_PROXY_GUIDE.md`)
 
 ### 🟡 #17 License Key Validation (Backend ✅, UI ✅, Polish Pending)
 - **Effort**: ~6-8h | **Edition**: Both (this IS the edition gate) | **Dependencies**: #11 ✅

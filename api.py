@@ -206,6 +206,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Add TrustedHost middleware (restrict allowed Host headers)
+if config.api.allowed_hosts != ["*"]:
+    from starlette.middleware.trustedhost import TrustedHostMiddleware
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=config.api.allowed_hosts,
+    )
+
 # Mount static files for web UI
 import os
 static_dir = os.path.join(os.path.dirname(__file__), "static")

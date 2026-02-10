@@ -147,6 +147,44 @@ def get_license_dir() -> Path:
     return get_license_file_path().parent
 
 
+def secure_license_file(key_path: Optional[Path] = None) -> bool:
+    """Set restrictive file permissions on the license key file.
+
+    - Linux/macOS: chmod 600 (owner read/write only)
+    - Windows: best-effort — relies on user-profile ACLs
+
+    Args:
+        key_path: Path to the license file. Defaults to platform path.
+
+    Returns:
+        True if permissions were set successfully, False otherwise.
+    """
+    if key_path is None:
+        key_path = get_license_file_path()
+
+    if not key_path.exists():
+        return False
+
+    system = platform.system()
+    if system == "Windows":
+        # Windows: the file lives under %APPDATA% which is already
+        # user-only by default. No extra action needed.
+        logger.debug("Windows: relying on APPDATA ACLs for %s", key_path)
+        return True
+
+    # Linux / macOS: set 600
+    try:
+        import stat
+        key_path.chmod(stat.S_IRUSR | stat.S_IWUSR)  # 0o600
+        # Also secure the directory (700)
+        key_path.parent.chmod(stat.S_IRWXU)  # 0o700
+        logger.debug("Set permissions 600 on %s", key_path)
+        return True
+    except OSError as e:
+        logger.warning("Could not set permissions on %s: %s", key_path, e)
+        return False
+
+
 # ---------------------------------------------------------------------------
 # JWT validation
 # ---------------------------------------------------------------------------
@@ -277,6 +315,9 @@ def load_license(
         return LicenseInfo(
             warning=f"Could not read license file: {e}"
         )
+
+    # Secure file permissions (best-effort, non-blocking)
+    secure_license_file(key_path)
 
     if not key_string:
         logger.warning("License key file at %s is empty", key_path)

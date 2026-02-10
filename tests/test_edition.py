@@ -27,6 +27,7 @@ from license import (
 )
 from desktop_app.utils.edition import (
     is_feature_available,
+    is_write_allowed,
     get_edition_display,
     open_pricing_page,
     TEAM_FEATURES,
@@ -197,3 +198,82 @@ class TestOpenPricingPage:
 
     def test_pricing_url_is_valid(self):
         assert PRICING_URL.startswith("https://")
+
+
+# ===========================================================================
+# Test: is_write_allowed (graceful degradation)
+# ===========================================================================
+
+
+class TestIsWriteAllowed:
+    def test_community_allows_writes(self):
+        """Community edition (no license) allows writes."""
+        _set_community()
+        assert is_write_allowed() is True
+
+    def test_team_allows_writes(self):
+        """Valid Team license allows writes."""
+        _set_team()
+        assert is_write_allowed() is True
+
+    def test_expired_team_blocks_writes(self):
+        """Expired Team license blocks writes (read-only fallback)."""
+        set_current_license(LicenseInfo(
+            warning="Team license for 'Acme Corp' expired. Renew at https://ragvault.net/pricing"
+        ))
+        assert is_write_allowed() is False
+
+    def test_invalid_key_allows_writes(self):
+        """Invalid key warning (not expiry) still allows writes."""
+        set_current_license(LicenseInfo(
+            warning="License key signature is invalid (tampered or wrong secret)"
+        ))
+        assert is_write_allowed() is True
+
+    def test_missing_secret_allows_writes(self):
+        """Missing signing secret still allows writes."""
+        set_current_license(LicenseInfo(
+            warning="License key found but LICENSE_SIGNING_SECRET is not set"
+        ))
+        assert is_write_allowed() is True
+
+
+# ===========================================================================
+# Test: secure_license_file
+# ===========================================================================
+
+
+class TestSecureLicenseFile:
+    def test_nonexistent_file_returns_false(self, tmp_path):
+        from license import secure_license_file
+        result = secure_license_file(tmp_path / "nonexistent.key")
+        assert result is False
+
+    def test_sets_permissions_on_linux(self, tmp_path):
+        """On Linux, file should get 0o600 permissions."""
+        import stat as stat_mod
+        key_file = tmp_path / "license.key"
+        key_file.write_text("test-key-content")
+        # Make it world-readable first
+        key_file.chmod(0o644)
+
+        from license import secure_license_file
+        result = secure_license_file(key_file)
+        assert result is True
+
+        mode = key_file.stat().st_mode
+        assert mode & 0o777 == 0o600, f"Expected 0o600, got {oct(mode & 0o777)}"
+
+    def test_secures_parent_directory(self, tmp_path):
+        """Parent directory should get 0o700 permissions."""
+        import stat as stat_mod
+        sub = tmp_path / "license_dir"
+        sub.mkdir()
+        key_file = sub / "license.key"
+        key_file.write_text("test-key-content")
+
+        from license import secure_license_file
+        secure_license_file(key_file)
+
+        dir_mode = sub.stat().st_mode
+        assert dir_mode & 0o777 == 0o700, f"Expected 0o700, got {oct(dir_mode & 0o777)}"

@@ -85,6 +85,9 @@ class MainWindow(QMainWindow):
         # Docker status bar at top
         self.create_docker_status_bar(layout)
         
+        # License expiry banner (hidden by default)
+        self._create_license_banner(layout)
+        
         # Tab widget
         self.tabs = QTabWidget()
         self.tabs.setIconSize(qta.icon('fa5s.home').actualSize(QSize(20, 20))) # Dummy size init
@@ -160,6 +163,78 @@ class MainWindow(QMainWindow):
         
         parent_layout.addWidget(status_widget)
     
+    def _create_license_banner(self, parent_layout):
+        """Create a license expiry warning banner (hidden by default)."""
+        self._license_banner = QWidget()
+        self._license_banner.setObjectName("licenseBanner")
+        self._license_banner.setVisible(False)
+
+        banner_layout = QHBoxLayout(self._license_banner)
+        banner_layout.setContentsMargins(15, 8, 15, 8)
+
+        self._license_banner_icon = QLabel()
+        banner_layout.addWidget(self._license_banner_icon)
+
+        self._license_banner_text = QLabel()
+        self._license_banner_text.setWordWrap(True)
+        banner_layout.addWidget(self._license_banner_text, 1)
+
+        renew_btn = QPushButton("Renew")
+        renew_btn.setFlat(True)
+        renew_btn.setCursor(Qt.PointingHandCursor)
+        renew_btn.setStyleSheet("color: white; text-decoration: underline; border: none;")
+        renew_btn.clicked.connect(self._open_pricing)
+        banner_layout.addWidget(renew_btn)
+
+        parent_layout.addWidget(self._license_banner)
+
+    def _update_license_banner(self):
+        """Show or hide the license expiry banner based on current license."""
+        try:
+            from desktop_app.utils.edition import get_edition_display
+            info = get_edition_display()
+        except Exception:
+            self._license_banner.setVisible(False)
+            return
+
+        if not info["is_team"]:
+            # Community edition or no license — check for warning text
+            if info["warning_text"] and "expired" in info["warning_text"].lower():
+                self._license_banner.setStyleSheet(
+                    "#licenseBanner { background-color: #991b1b; border-radius: 6px; }"
+                )
+                self._license_banner_icon.setPixmap(
+                    qta.icon('fa5s.exclamation-triangle', color='white').pixmap(16, 16)
+                )
+                self._license_banner_text.setText(info["warning_text"])
+                self._license_banner_text.setStyleSheet("color: white;")
+                self._license_banner.setVisible(True)
+            else:
+                self._license_banner.setVisible(False)
+            return
+
+        # Team edition — check expiry
+        if info["expiry_warning"]:
+            days = info["days_left"]
+            self._license_banner.setStyleSheet(
+                "#licenseBanner { background-color: #92400e; border-radius: 6px; }"
+            )
+            self._license_banner_icon.setPixmap(
+                qta.icon('fa5s.clock', color='white').pixmap(16, 16)
+            )
+            self._license_banner_text.setText(
+                f"Team license expires in {days} days. Renew to avoid interruption."
+            )
+            self._license_banner_text.setStyleSheet("color: white;")
+            self._license_banner.setVisible(True)
+        else:
+            self._license_banner.setVisible(False)
+
+    def _open_pricing(self):
+        """Open the pricing page."""
+        from desktop_app.utils.edition import open_pricing_page
+        open_pricing_page()
+
     def check_initial_status(self):
         """Check Docker and API status on startup."""
         self.check_docker_status()
@@ -315,6 +390,9 @@ class MainWindow(QMainWindow):
                 "Version Mismatch",
                 version_msg,
             )
+        
+        # Update license expiry banner
+        self._update_license_banner()
         
         # Load data for tabs
         try:

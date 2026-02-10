@@ -242,6 +242,10 @@ class SettingsTab(QWidget):
             import shutil
             shutil.copy2(file_path, dest_file)
 
+            # Secure file permissions
+            from license import secure_license_file
+            secure_license_file(dest_file)
+
             # Reload license
             from license import reset_license
             reset_license()

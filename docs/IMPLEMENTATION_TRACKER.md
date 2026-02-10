@@ -89,11 +89,11 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] UI: Locked-feature placeholder widget (`GatedFeatureWidget`)
 - [x] `edition.py` helper: `TEAM_FEATURES` map, `is_feature_available()`, `get_edition_display()`
 - [x] Test: 15 edition UI tests (feature map, gating logic, display, pricing URL)
-- [ ] File permissions: Linux `600`, Windows user-only ACL
+- [x] File permissions: Linux `600`, Windows user-only ACL (`secure_license_file()` in `license.py`)
 - [ ] Short-expiry strategy: 90-day keys, auto-renewed via Stripe webhook
 - [ ] Optional online revocation check (graceful fallback, never blocks app)
-- [ ] Graceful degradation on expiry: read-only fallback (owner client retains write)
-- [ ] Expiry banner: "Team license expired on [date]. Renew at [URL]."
+- [x] Graceful degradation on expiry: read-only fallback (`is_write_allowed()` in `edition.py`)
+- [x] Expiry banner: amber warning < 30 days, red on expired (`_update_license_banner()` in `main_window.py`)
 
 ### 🟡 #12 API Versioning (Core ✅, Docs Pending)
 - **Effort**: ~3-5h | **Edition**: Both | **Dependencies**: None

@@ -77,6 +77,36 @@ def get_edition_display() -> dict:
     return result
 
 
+def is_write_allowed() -> bool:
+    """Check if write operations are allowed under the current license.
+
+    Graceful degradation policy:
+    - Community edition: writes always allowed (no license needed)
+    - Team edition (valid): writes allowed
+    - Team edition (expired): writes BLOCKED — read-only fallback
+
+    The "expired Team" case is detected by checking if the license
+    warning text mentions expiry while the edition fell back to Community.
+    """
+    info = get_current_license()
+
+    # Valid Team license → writes allowed
+    if info.is_team:
+        return True
+
+    # Community (no license ever) → writes allowed
+    if not info.warning:
+        return True
+
+    # Has a warning — check if it's an expiry warning
+    warning_lower = (info.warning or "").lower()
+    if "expired" in warning_lower:
+        return False  # Expired Team → read-only
+
+    # Other warnings (e.g., missing secret, invalid key) → allow writes
+    return True
+
+
 def open_pricing_page() -> None:
     """Open the pricing page in the default browser."""
     webbrowser.open(PRICING_URL)

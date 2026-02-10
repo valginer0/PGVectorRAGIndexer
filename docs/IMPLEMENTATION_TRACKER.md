@@ -52,14 +52,14 @@ These have zero dependencies on each other and should start simultaneously.
 
 ## Phase 1: Security, Versioning, and Licensing Foundation
 
-### 🟡 #0 Remote Security Baseline (Backend ✅, Docs/CLI Pending)
+### 🟡 #0 Remote Security Baseline (Backend ✅, Docs/CLI ✅, 1 item deferred to #1)
 - **Effort**: ~8-12h | **Edition**: Both | **Dependencies**: None
 - **Branch**: `feature/roadmap-v4`
 - [x] `API_KEY` auth middleware in FastAPI (`auth.py`, `require_api_key` dependency)
 - [x] Config validation: `API_REQUIRE_AUTH=true` env var enables auth
 - [x] TLS support: self-signed guide + reverse proxy docs (`docs/REVERSE_PROXY_GUIDE.md`)
 - [x] Explicit allow-list of origins and hosts (`API_ALLOWED_HOSTS` + `TrustedHostMiddleware`)
-- [ ] "Remote mode" warning banner with server URL and auth status
+- [ ] "Remote mode" warning banner with server URL and auth status *(deferred to #1 — no remote mode toggle yet)*
 - [x] API key lifecycle: create via API (`POST /api/keys?name=...`)
 - [x] API key lifecycle: create via CLI (`pgvector_admin.py create-key --name "Alice"`)
 - [x] API key lifecycle: list active keys (`GET /api/keys` — name, created, last-used)

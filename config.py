@@ -202,6 +202,10 @@ class APIConfig(BaseSettings):
         default=60,
         description='Rate limit per minute per IP'
     )
+    require_auth: bool = Field(
+        default=False,
+        description='Require API key authentication for all endpoints'
+    )
 
 
 class AppConfig(BaseSettings):

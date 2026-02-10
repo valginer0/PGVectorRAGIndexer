@@ -15,21 +15,32 @@ logger = logging.getLogger(__name__)
 class APIClient:
     """Client for interacting with the PGVectorRAGIndexer REST API."""
     
-    def __init__(self, base_url: str = "http://localhost:8000"):
+    def __init__(self, base_url: str = "http://localhost:8000", api_key: Optional[str] = None):
         """
         Initialize API client.
         
         Args:
             base_url: Base URL of the API
+            api_key: Optional API key for authenticated access (remote mode)
         """
         self.base_url = base_url.rstrip('/')
         self.timeout = 7200  # 2 hours for very large OCR files (200+ pages)
+        self._api_key = api_key
+
+    @property
+    def _headers(self) -> dict:
+        """Request headers, including API key if configured."""
+        headers = {}
+        if self._api_key:
+            headers["X-API-Key"] = self._api_key
+        return headers
     
     def is_api_available(self) -> bool:
         """Check if the API is available."""
         try:
             response = requests.get(
                 f"{self.base_url}/health",
+                headers=self._headers,
                 timeout=5
             )
             return response.status_code == 200
@@ -123,6 +134,7 @@ class APIClient:
                 f"{self.base_url}/upload-and-index",
                 files=files,
                 data=data,
+                headers=self._headers,
                 timeout=self.timeout
             )
             response.raise_for_status()
@@ -174,6 +186,7 @@ class APIClient:
         response = requests.post(
             f"{self.base_url}/search",
             json=payload,
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -198,6 +211,7 @@ class APIClient:
         response = requests.get(
             f"{self.base_url}/documents",
             params=params,
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -261,6 +275,7 @@ class APIClient:
         """
         response = requests.get(
             f"{self.base_url}/documents/{document_id}",
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -283,6 +298,7 @@ class APIClient:
         
         response = requests.delete(
             f"{self.base_url}/documents/{document_id}",
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -300,6 +316,7 @@ class APIClient:
         """
         response = requests.get(
             f"{self.base_url}/statistics",
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -323,6 +340,7 @@ class APIClient:
         response = requests.post(
             f"{self.base_url}/documents/bulk-delete",
             json=payload,
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -346,6 +364,7 @@ class APIClient:
         response = requests.post(
             f"{self.base_url}/documents/bulk-delete",
             json=payload,
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -369,6 +388,7 @@ class APIClient:
         response = requests.post(
             f"{self.base_url}/documents/export",
             json=payload,
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -390,6 +410,7 @@ class APIClient:
         response = requests.post(
             f"{self.base_url}/documents/restore",
             json={"backup_data": backup_data},
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -415,6 +436,7 @@ class APIClient:
         response = requests.get(
             f"{self.base_url}/metadata/keys",
             params=params,
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()
@@ -436,6 +458,7 @@ class APIClient:
         response = requests.get(
             f"{self.base_url}/metadata/values",
             params={"key": key},
+            headers=self._headers,
             timeout=self.timeout
         )
         response.raise_for_status()

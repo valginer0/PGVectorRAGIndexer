@@ -13,6 +13,10 @@ WORKDIR /app
 COPY *.py ./
 COPY init-db.sql ./
 
+# Copy migration infrastructure
+COPY alembic.ini ./
+COPY alembic/ ./alembic/
+
 # Copy static files for Web UI
 COPY static/ ./static/
 

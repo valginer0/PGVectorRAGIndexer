@@ -9,7 +9,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, status
+from fastapi import Depends, FastAPI, HTTPException, UploadFile, File, Form, Query, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -21,6 +21,7 @@ from embeddings import get_embedding_service
 from document_processor import DocumentProcessor, UnsupportedFormatError, DocumentProcessingError, EncryptedPDFError
 from indexer_v2 import DocumentIndexer
 from retriever_v2 import DocumentRetriever, SearchResult
+from auth import require_api_key
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -151,6 +152,22 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting PGVectorRAGIndexer API...")
     try:
+        # Run database migrations before initializing services
+        from migrate import run_migrations
+        if not run_migrations():
+            logger.warning(
+                "Database migration failed — the app may not work correctly. "
+                "Check database connection and logs."
+            )
+
+        # Load and validate license key
+        from license import load_license, set_current_license
+        license_info = load_license()
+        set_current_license(license_info)
+        logger.info("Edition: %s", license_info.edition.value.title())
+        if license_info.warning:
+            logger.warning("License warning: %s", license_info.warning)
+
         # Initialize services
         _ = get_db_manager()
         _ = get_embedding_service()
@@ -236,13 +253,23 @@ async def root():
 @app.get("/api", tags=["General"])
 async def api_info():
     """API information endpoint."""
+    from license import get_current_license
+    license_info = get_current_license()
     return {
         "name": "PGVectorRAGIndexer API",
         "version": "2.0.0",
         "description": "Semantic document search using PostgreSQL and pgvector",
+        "edition": license_info.edition.value,
         "docs": "/docs",
         "health": "/health"
     }
+
+
+@app.get("/license", tags=["General"])
+async def license_info():
+    """Get current license information."""
+    from license import get_current_license
+    return get_current_license().to_dict()
 
 
 @app.get("/health", response_model=HealthResponse, tags=["General"])
@@ -269,7 +296,7 @@ async def health_check():
         )
 
 
-@app.get("/stats", response_model=StatsResponse, tags=["General"])
+@app.get("/stats", response_model=StatsResponse, tags=["General"], dependencies=[Depends(require_api_key)])
 async def get_statistics():
     """Get system statistics."""
     try:
@@ -292,7 +319,7 @@ async def get_statistics():
         )
 
 
-@app.post("/index", response_model=IndexResponse, tags=["Indexing"])
+@app.post("/index", response_model=IndexResponse, tags=["Indexing"], dependencies=[Depends(require_api_key)])
 async def index_document(request: IndexRequest):
     """Index a document from URI."""
     try:
@@ -320,7 +347,7 @@ async def index_document(request: IndexRequest):
         )
 
 
-@app.post("/upload-and-index", response_model=IndexResponse, tags=["Indexing"])
+@app.post("/upload-and-index", response_model=IndexResponse, tags=["Indexing"], dependencies=[Depends(require_api_key)])
 async def upload_and_index(
     file: UploadFile = File(...),
     force_reindex: bool = Form(default=False),
@@ -509,7 +536,7 @@ async def upload_and_index(
                 logger.warning(f"Failed to clean up temp file {temp_path}: {e}")
 
 
-@app.post("/search", response_model=SearchResponse, tags=["Search"])
+@app.post("/search", response_model=SearchResponse, tags=["Search"], dependencies=[Depends(require_api_key)])
 async def search_documents(request: SearchRequest):
     """Search for relevant documents."""
     import time
@@ -565,7 +592,7 @@ async def search_documents(request: SearchRequest):
         )
 
 
-@app.get("/documents", response_model=DocumentListResponse, tags=["Documents"])
+@app.get("/documents", response_model=DocumentListResponse, tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def list_documents(
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum documents to return"),
     offset: int = Query(default=0, ge=0, description="Number of documents to skip"),
@@ -627,7 +654,7 @@ async def list_documents(
         )
 
 
-@app.get("/documents/encrypted", tags=["Documents"])
+@app.get("/documents/encrypted", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def list_encrypted_pdfs(
     since: Optional[str] = Query(default=None, description="Return only PDFs detected after this ISO datetime"),
     clear: bool = Query(default=False, description="Clear the list after returning it")
@@ -666,7 +693,7 @@ async def list_encrypted_pdfs(
     }
 
 
-@app.get("/documents/{document_id}", response_model=DocumentInfo, tags=["Documents"])
+@app.get("/documents/{document_id}", response_model=DocumentInfo, tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def get_document(document_id: str):
     """Get document information by ID."""
     try:
@@ -700,7 +727,7 @@ async def get_document(document_id: str):
         )
 
 
-@app.delete("/documents/{document_id}", tags=["Documents"])
+@app.delete("/documents/{document_id}", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def delete_document(document_id: str):
     """Delete a document by ID."""
     try:
@@ -726,7 +753,7 @@ async def delete_document(document_id: str):
         )
 
 
-@app.get("/statistics", tags=["General"])
+@app.get("/statistics", tags=["General"], dependencies=[Depends(require_api_key)])
 async def get_statistics():
     """Get system statistics."""
     try:
@@ -751,7 +778,7 @@ async def get_statistics():
         )
 
 
-@app.get("/context", tags=["RAG"])
+@app.get("/context", tags=["RAG"], dependencies=[Depends(require_api_key)])
 async def get_context(
     query: str = Query(..., description="Search query"),
     top_k: int = Query(default=5, ge=1, le=20, description="Number of chunks"),
@@ -775,7 +802,7 @@ async def get_context(
         )
 
 
-@app.get("/metadata/keys", response_model=List[str], tags=["Metadata"])
+@app.get("/metadata/keys", response_model=List[str], tags=["Metadata"], dependencies=[Depends(require_api_key)])
 async def get_metadata_keys(
     pattern: Optional[str] = Query(default=None, description="SQL LIKE pattern to filter keys (e.g., 't%')")
 ):
@@ -797,7 +824,7 @@ async def get_metadata_keys(
         )
 
 
-@app.get("/metadata/values", response_model=List[str], tags=["Metadata"])
+@app.get("/metadata/values", response_model=List[str], tags=["Metadata"], dependencies=[Depends(require_api_key)])
 async def get_metadata_values(
     key: str = Query(..., description="Metadata key to get values for"),
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum values to return")
@@ -820,7 +847,7 @@ async def get_metadata_values(
         )
 
 
-@app.post("/documents/bulk-delete", tags=["Documents"])
+@app.post("/documents/bulk-delete", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def bulk_delete_documents(request: BulkDeleteRequest):
     """
     Bulk delete documents matching filter criteria.
@@ -864,7 +891,7 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
         )
 
 
-@app.post("/documents/export", tags=["Documents"])
+@app.post("/documents/export", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def export_documents(request: ExportRequest):
     """
     Export documents matching filter criteria as JSON backup.
@@ -893,7 +920,7 @@ async def export_documents(request: ExportRequest):
         )
 
 
-@app.post("/documents/restore", tags=["Documents"])
+@app.post("/documents/restore", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def restore_documents(request: RestoreRequest):
     """
     Restore documents from a backup (undo delete).
@@ -917,6 +944,111 @@ async def restore_documents(request: RestoreRequest):
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to restore documents: {str(e)}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# API Key Management Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.post("/api/keys", tags=["Auth"], dependencies=[Depends(require_api_key)])
+async def create_key(name: str = Query(..., description="Human-readable name for the key")):
+    """Create a new API key.
+
+    The full key is returned ONCE in this response. Store it securely.
+    Only the SHA-256 hash is stored server-side.
+    """
+    from auth import create_api_key_record
+    try:
+        result = create_api_key_record(name)
+        return {
+            "key": result["key"],
+            "id": result["id"],
+            "name": result["name"],
+            "prefix": result["prefix"],
+            "created_at": result["created_at"],
+            "message": "Store this key securely. It will not be shown again.",
+        }
+    except Exception as e:
+        logger.error(f"Failed to create API key: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create API key: {str(e)}",
+        )
+
+
+@app.get("/api/keys", tags=["Auth"], dependencies=[Depends(require_api_key)])
+async def list_keys():
+    """List all API keys (active and revoked).
+
+    Never returns the hash or the full key.
+    """
+    from auth import list_api_keys
+    try:
+        return {"keys": list_api_keys()}
+    except Exception as e:
+        logger.error(f"Failed to list API keys: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list API keys: {str(e)}",
+        )
+
+
+@app.delete("/api/keys/{key_id}", tags=["Auth"], dependencies=[Depends(require_api_key)])
+async def delete_key(key_id: int):
+    """Revoke an API key immediately."""
+    from auth import revoke_api_key
+    try:
+        revoked = revoke_api_key(key_id)
+        if not revoked:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Key not found or already revoked",
+            )
+        return {"revoked": True, "id": key_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to revoke API key: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to revoke API key: {str(e)}",
+        )
+
+
+@app.post("/api/keys/{key_id}/rotate", tags=["Auth"], dependencies=[Depends(require_api_key)])
+async def rotate_key(key_id: int):
+    """Rotate an API key.
+
+    Creates a new key and revokes the old one with a 24-hour grace period.
+    During the grace period, both old and new keys work.
+    """
+    from auth import rotate_api_key
+    try:
+        result = rotate_api_key(key_id)
+        if not result:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Key not found or already revoked",
+            )
+        return {
+            "key": result["key"],
+            "id": result["id"],
+            "name": result["name"],
+            "prefix": result["prefix"],
+            "created_at": result["created_at"],
+            "old_key_id": result["old_key_id"],
+            "grace_period_hours": result["grace_period_hours"],
+            "message": f"Old key remains valid for {result['grace_period_hours']} hours. Store new key securely.",
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to rotate API key: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to rotate API key: {str(e)}",
         )
 
 

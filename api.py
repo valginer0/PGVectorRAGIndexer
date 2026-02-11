@@ -2119,6 +2119,198 @@ async def change_user_role_endpoint(user_id: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# SAML/SSO (#16 Enterprise Foundations Phase 2)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.get("/saml/metadata", tags=["SAML/SSO"])
+async def saml_metadata():
+    """Return SP metadata XML for configuring the IdP (Okta)."""
+    from saml_auth import is_saml_available, get_sp_metadata
+    if not is_saml_available():
+        raise HTTPException(status_code=404, detail="SAML/SSO is not enabled")
+    try:
+        metadata = get_sp_metadata()
+        from fastapi.responses import Response
+        return Response(content=metadata, media_type="application/xml")
+    except Exception as e:
+        logger.error(f"Failed to generate SP metadata: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to generate SP metadata: {str(e)}",
+        )
+
+
+@v1_router.get("/saml/login", tags=["SAML/SSO"])
+async def saml_login(request: Request, return_to: Optional[str] = Query(default=None)):
+    """Initiate SAML login — redirects the user to the IdP (Okta)."""
+    from saml_auth import is_saml_available, prepare_request_from_fastapi, initiate_login
+    if not is_saml_available():
+        raise HTTPException(status_code=404, detail="SAML/SSO is not enabled")
+    try:
+        req = prepare_request_from_fastapi(request)
+        redirect_url = initiate_login(req, return_to=return_to)
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=redirect_url)
+    except Exception as e:
+        logger.error(f"Failed to initiate SAML login: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to initiate SAML login: {str(e)}",
+        )
+
+
+@v1_router.post("/saml/acs", tags=["SAML/SSO"])
+async def saml_acs(request: Request):
+    """Assertion Consumer Service — process the IdP SAML response.
+
+    This is the callback URL that Okta POSTs to after the user authenticates.
+    On success, auto-provisions the user (if enabled) and creates a SAML session.
+    """
+    from saml_auth import (
+        is_saml_available, prepare_request_from_fastapi, process_acs,
+        provision_or_get_user, create_session, SAML_IDP_ENTITY_ID,
+    )
+    if not is_saml_available():
+        raise HTTPException(status_code=404, detail="SAML/SSO is not enabled")
+    try:
+        form_data = await request.form()
+        post_data = dict(form_data)
+        req = prepare_request_from_fastapi(request)
+        result = process_acs(req, post_data)
+
+        if not result.get("success"):
+            logger.error("SAML ACS failed: %s", result.get("errors"))
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"SAML authentication failed: {result.get('error_reason', 'Unknown error')}",
+            )
+
+        email = result.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No email address in SAML response",
+            )
+
+        # Auto-provision or find existing user
+        user = provision_or_get_user(email, display_name=result.get("display_name"))
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User provisioning failed or disabled",
+            )
+
+        # Create SAML session
+        session = create_session(
+            user_id=user["id"],
+            name_id=result.get("name_id", email),
+            name_id_format=result.get("name_id_format"),
+            session_index=result.get("session_index"),
+            idp_entity_id=SAML_IDP_ENTITY_ID,
+        )
+
+        # Log the login
+        from activity_log import log_activity
+        log_activity(
+            "user.saml_login",
+            user_id=user["id"],
+            details={"email": email, "idp": SAML_IDP_ENTITY_ID},
+        )
+
+        return {
+            "ok": True,
+            "user": user,
+            "session_id": session["id"] if session else None,
+            "expires_at": session["expires_at"] if session else None,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to process SAML ACS: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process SAML response: {str(e)}",
+        )
+
+
+@v1_router.get("/saml/logout", tags=["SAML/SSO"], dependencies=[Depends(require_api_key)])
+async def saml_logout(
+    request: Request,
+    session_id: str = Query(..., description="SAML session ID to terminate"),
+):
+    """Initiate SAML Single Logout (SLO)."""
+    from saml_auth import (
+        is_saml_available, prepare_request_from_fastapi,
+        get_session, expire_session, initiate_logout,
+    )
+    if not is_saml_available():
+        raise HTTPException(status_code=404, detail="SAML/SSO is not enabled")
+    try:
+        session = get_session(session_id)
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found or expired")
+
+        # Expire the local session
+        expire_session(session_id)
+
+        # Log the logout
+        from activity_log import log_activity
+        log_activity(
+            "user.saml_logout",
+            user_id=session.get("user_id"),
+            details={"session_id": session_id},
+        )
+
+        # Try to initiate SLO with the IdP
+        try:
+            req = prepare_request_from_fastapi(request)
+            redirect_url = initiate_logout(
+                req,
+                name_id=session.get("name_id"),
+                session_index=session.get("session_index"),
+            )
+            return {"ok": True, "redirect_url": redirect_url}
+        except Exception:
+            # SLO is optional — local session is already expired
+            return {"ok": True, "redirect_url": None, "note": "Local session expired; IdP SLO unavailable"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to process SAML logout: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to process SAML logout: {str(e)}",
+        )
+
+
+@v1_router.get("/saml/status", tags=["SAML/SSO"])
+async def saml_status():
+    """Check if SAML/SSO is enabled and configured."""
+    from saml_auth import is_saml_available, SAML_IDP_ENTITY_ID, SAML_SP_ENTITY_ID
+    return {
+        "enabled": is_saml_available(),
+        "idp_entity_id": SAML_IDP_ENTITY_ID if is_saml_available() else None,
+        "sp_entity_id": SAML_SP_ENTITY_ID if is_saml_available() else None,
+    }
+
+
+@v1_router.post("/saml/sessions/cleanup", tags=["SAML/SSO"], dependencies=[Depends(require_admin)])
+async def saml_cleanup_sessions():
+    """Remove expired SAML sessions (admin only)."""
+    from saml_auth import cleanup_expired_sessions
+    try:
+        deleted = cleanup_expired_sessions()
+        return {"deleted": deleted, "ok": True}
+    except Exception as e:
+        logger.error(f"Failed to cleanup SAML sessions: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cleanup sessions: {str(e)}",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Mount versioned router at /api/v1 (canonical) and / (backward compat)
 # ---------------------------------------------------------------------------
 app.include_router(v1_router, prefix="/api/v1")

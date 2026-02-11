@@ -280,8 +280,16 @@ These have zero dependencies on each other and should start simultaneously.
   - [x] API endpoints (6): GET /users, GET /users/{id}, POST /users (admin), PUT /users/{id} (admin), DELETE /users/{id} (admin), POST /users/{id}/role (admin)
   - [x] Desktop client API methods: list_users, get_user, create_user, update_user, delete_user, change_user_role
   - [x] Tests: 26 tests (migration, constants, row conversion, DB resilience, role validation, require_admin, endpoints)
-- **Phase 2 — SSO/SAML** (in progress — Okta):
-  - [ ] SSO/SAML: Okta integration
+- **Phase 2 — SSO/SAML** (complete — Okta):
+  - [x] Alembic migration 011: `saml_sessions` table (id, user_id FK, session_index, name_id, name_id_format, idp_entity_id, created_at, expires_at, is_active)
+  - [x] `saml_auth.py` module: SP metadata, login initiation, ACS callback, SLO, session CRUD, auto-provisioning
+  - [x] Configuration via env vars: SAML_ENABLED, SAML_IDP_*, SAML_SP_*, SAML_SESSION_LIFETIME_HOURS, SAML_AUTO_PROVISION, SAML_DEFAULT_ROLE
+  - [x] Auto-provision users on first SAML login (configurable)
+  - [x] Graceful degradation: python3-saml is optional; all endpoints return 404 if SAML not enabled
+  - [x] API endpoints (6): GET /saml/metadata, GET /saml/login, POST /saml/acs, GET /saml/logout, GET /saml/status, POST /saml/sessions/cleanup (admin)
+  - [x] Audit log: user.saml_login, user.saml_logout events
+  - [x] Tests: 29 tests (migration, config, settings builder, request prep, session conversion, DB resilience, auto-provisioning, endpoints)
+  - [x] `python3-saml` added to requirements.txt
 - **Phase 3** (future, multiple enterprise customers):
   - [ ] SCIM provisioning
   - [ ] Custom roles

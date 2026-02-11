@@ -140,7 +140,7 @@ class TestApiKeysMigration:
         """After full migration, head revision is 005."""
         _run_alembic_upgrade(db_url, "head")
         rev = _get_current_revision(db_url)
-        assert rev == "010"
+        assert rev == "011"
 
 
 # ---------------------------------------------------------------------------

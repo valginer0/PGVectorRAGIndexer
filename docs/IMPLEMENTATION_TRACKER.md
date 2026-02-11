@@ -34,12 +34,14 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Test: idempotency (running migrations twice = no-op)
 - [x] Documentation for contributors on creating new migrations (`docs/MIGRATIONS_GUIDE.md`)
 
-### ⬜ #13a Self-Serve Licensing — MVP Pricing Page
+### ✅ #13a Self-Serve Licensing — MVP Pricing Page
 - **Effort**: ~2-4h | **Edition**: N/A (website) | **Dependencies**: None
-- **Repo**: `PGVectorRAGIndexerWebsite`
-- [ ] Design pricing page with tiers (Community / Team / Organization / Enterprise)
-- [ ] MVP: pricing page + "Reserve your license — email us" CTA
-- [ ] FAQ page for procurement questions
+- **Repo**: `PGVectorRAGIndexerWebsite` | **Branch**: `feature/pricing-page`
+- [x] Pricing section with 4 tiers: Community (Free), Team ($299/yr), Organization ($799/yr), Enterprise (Custom)
+- [x] "Reserve your license" CTA (mailto) on Team tier, "Contact Us" on Org/Enterprise
+- [x] Pricing FAQ: 6 questions (personal use, commercial trigger, try-before-buy, data privacy, PO/invoice, renewal)
+- [x] Responsive CSS: 4-col → 2-col → 1-col grid, glassmorphism cards, featured card highlight
+- [x] Nav link added between Teams and Developers
 
 ### ⬜ #13b Self-Serve Licensing — Stripe Automation
 - **Effort**: ~6-8h | **Edition**: N/A (website + backend) | **Dependencies**: #13a, #17

@@ -1732,6 +1732,153 @@ async def search_document_tree(
 
 
 # ---------------------------------------------------------------------------
+# Document Locks Endpoints (#3 Multi-User, Phase 1)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.post("/documents/locks/acquire", tags=["Document Locks"], dependencies=[Depends(require_api_key)])
+async def acquire_document_lock(request: Request):
+    """Acquire a lock on a document for indexing.
+
+    Body: { "source_uri": "...", "client_id": "...", "ttl_minutes": 10, "lock_reason": "indexing" }
+    """
+    from document_locks import acquire_lock
+    try:
+        body = await request.json()
+        source_uri = body.get("source_uri")
+        client_id = body.get("client_id")
+        if not source_uri or not client_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="source_uri and client_id are required",
+            )
+        result = acquire_lock(
+            source_uri=source_uri,
+            client_id=client_id,
+            ttl_minutes=body.get("ttl_minutes", 10),
+            lock_reason=body.get("lock_reason", "indexing"),
+        )
+        if result.get("ok"):
+            return result
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=result.get("error", "Lock conflict"),
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to acquire lock: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to acquire lock: {str(e)}",
+        )
+
+
+@v1_router.post("/documents/locks/release", tags=["Document Locks"], dependencies=[Depends(require_api_key)])
+async def release_document_lock(request: Request):
+    """Release a lock on a document.
+
+    Body: { "source_uri": "...", "client_id": "..." }
+    """
+    from document_locks import release_lock
+    try:
+        body = await request.json()
+        source_uri = body.get("source_uri")
+        client_id = body.get("client_id")
+        if not source_uri or not client_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="source_uri and client_id are required",
+            )
+        success = release_lock(source_uri=source_uri, client_id=client_id)
+        return {"ok": success}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to release lock: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to release lock: {str(e)}",
+        )
+
+
+@v1_router.post("/documents/locks/force-release", tags=["Document Locks"], dependencies=[Depends(require_api_key)])
+async def force_release_document_lock(request: Request):
+    """Force-release a lock regardless of holder (admin operation).
+
+    Body: { "source_uri": "..." }
+    """
+    from document_locks import force_release_lock
+    try:
+        body = await request.json()
+        source_uri = body.get("source_uri")
+        if not source_uri:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="source_uri is required",
+            )
+        success = force_release_lock(source_uri=source_uri)
+        return {"ok": success}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to force-release lock: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to force-release lock: {str(e)}",
+        )
+
+
+@v1_router.get("/documents/locks", tags=["Document Locks"], dependencies=[Depends(require_api_key)])
+async def list_document_locks(
+    client_id: Optional[str] = Query(default=None),
+):
+    """List all active (non-expired) document locks."""
+    from document_locks import list_locks
+    try:
+        locks = list_locks(client_id=client_id)
+        return {"locks": locks, "count": len(locks)}
+    except Exception as e:
+        logger.error(f"Failed to list locks: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list locks: {str(e)}",
+        )
+
+
+@v1_router.get("/documents/locks/check", tags=["Document Locks"], dependencies=[Depends(require_api_key)])
+async def check_document_lock(
+    source_uri: str = Query(...),
+):
+    """Check if a specific document is locked."""
+    from document_locks import check_lock
+    try:
+        lock = check_lock(source_uri=source_uri)
+        return {"locked": lock is not None, "lock": lock}
+    except Exception as e:
+        logger.error(f"Failed to check lock: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to check lock: {str(e)}",
+        )
+
+
+@v1_router.post("/documents/locks/cleanup", tags=["Document Locks"], dependencies=[Depends(require_api_key)])
+async def cleanup_expired_document_locks():
+    """Remove all expired locks."""
+    from document_locks import cleanup_expired_locks
+    try:
+        deleted = cleanup_expired_locks()
+        return {"deleted": deleted, "ok": True}
+    except Exception as e:
+        logger.error(f"Failed to cleanup locks: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to cleanup locks: {str(e)}",
+        )
+
+
+# ---------------------------------------------------------------------------
 # Mount versioned router at /api/v1 (canonical) and / (backward compat)
 # ---------------------------------------------------------------------------
 app.include_router(v1_router, prefix="/api/v1")

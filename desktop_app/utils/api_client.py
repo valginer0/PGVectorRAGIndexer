@@ -922,3 +922,90 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # Document Locks (#3 Multi-User, Phase 1)
+    # ------------------------------------------------------------------
+
+    def acquire_document_lock(
+        self,
+        source_uri: str,
+        client_id: str,
+        ttl_minutes: int = 10,
+        lock_reason: str = "indexing",
+    ) -> Dict[str, Any]:
+        """Acquire a lock on a document for indexing."""
+        response = requests.post(
+            f"{self.api_base}/documents/locks/acquire",
+            json={
+                "source_uri": source_uri,
+                "client_id": client_id,
+                "ttl_minutes": ttl_minutes,
+                "lock_reason": lock_reason,
+            },
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def release_document_lock(
+        self, source_uri: str, client_id: str
+    ) -> Dict[str, Any]:
+        """Release a lock on a document."""
+        response = requests.post(
+            f"{self.api_base}/documents/locks/release",
+            json={"source_uri": source_uri, "client_id": client_id},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def force_release_document_lock(self, source_uri: str) -> Dict[str, Any]:
+        """Force-release a lock regardless of holder (admin)."""
+        response = requests.post(
+            f"{self.api_base}/documents/locks/force-release",
+            json={"source_uri": source_uri},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def list_document_locks(
+        self, client_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """List all active document locks."""
+        params: Dict[str, Any] = {}
+        if client_id:
+            params["client_id"] = client_id
+        response = requests.get(
+            f"{self.api_base}/documents/locks",
+            params=params,
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def check_document_lock(self, source_uri: str) -> Dict[str, Any]:
+        """Check if a specific document is locked."""
+        response = requests.get(
+            f"{self.api_base}/documents/locks/check",
+            params={"source_uri": source_uri},
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def cleanup_expired_locks(self) -> Dict[str, Any]:
+        """Remove all expired locks."""
+        response = requests.post(
+            f"{self.api_base}/documents/locks/cleanup",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

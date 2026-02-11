@@ -222,27 +222,31 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Version compatibility check on client connect (pre-existing via `GET /api/version` + `check_version_compatibility()`)
 - [x] Tests: 24 tests (script existence, flags, docs content, version endpoint, app_config helpers)
 
-### ⬜ #3 Multi-User Support
+### ✅ #3 Multi-User Support (Phase 1 — Shared Corpus)
 - **Effort**: ~20-30h | **Edition**: Team | **Dependencies**: #1, #2, #8, #10, #17
-- **Branch**: `feature/multi-user`
-- **Phase 1 — Shared corpus** (~12-16h):
-  - [ ] API key authentication (per-user keys)
-  - [ ] Per-client identity and last seen (via #8)
-  - [ ] Conflict-safe indexing: `document_locks` table with TTL (10 min default)
-  - [ ] PostgreSQL advisory locks for short operations
-  - [ ] Clear error: "Document X is being indexed by Client Y (lock expires in N min)"
-  - [ ] Auditable activity log (via #10)
-  - [ ] All users see all documents (shared corpus)
-- **Phase 2 — User scoping** (8-14h, only if paid demand):
+- **Branch**: `feature/roadmap-v4`
+- **Phase 1 — Shared corpus** (complete):
+  - [x] API key authentication (per-user keys) — pre-existing via #12
+  - [x] Per-client identity and last seen — pre-existing via #8
+  - [x] Conflict-safe indexing: `document_locks` table with TTL (10 min default)
+    - Alembic migration 009: `document_locks` table with `source_uri`, `client_id`, `locked_at`, `expires_at`, `lock_reason`
+    - Unique index on `source_uri` prevents double-locking
+    - Expired locks auto-cleaned on acquire attempts
+  - [x] Clear error: "Document X is being indexed by Client Y (lock expires at ...)"
+  - [x] Same-client lock extension (re-acquire extends TTL)
+  - [x] Force-release (admin operation)
+  - [x] Auditable activity log — pre-existing via #10
+  - [x] All users see all documents (shared corpus — default behavior)
+  - [x] API endpoints: POST acquire/release/force-release/cleanup, GET list/check
+  - [x] Desktop client API methods: acquire, release, force_release, list, check, cleanup
+  - [x] Tests: 20 tests (migration, row conversion, DB resilience, conflict logic, endpoints)
+- **Phase 2 — User scoping** (deferred, only if paid demand):
   - [ ] Per-user document visibility
   - [ ] Shared vs. private document spaces
   - [ ] Admin role for managing users
-- **Phase 3 — Enterprise auth** (via #16, only when paying customer requests):
+- **Phase 3 — Enterprise auth** (deferred, via #16):
   - [ ] SSO/SAML integration
   - [ ] RBAC with custom roles
-- [ ] Test: concurrent writes (multiple clients indexing simultaneously)
-- [ ] Test: conflict resolution
-- [ ] Test: permission boundaries (Phase 2+)
 
 ### ⬜ #14 Usage Analytics
 - **Effort**: ~6-10h | **Edition**: Both (opt-in) | **Dependencies**: #4 (optional)

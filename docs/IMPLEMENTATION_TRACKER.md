@@ -295,9 +295,21 @@ These have zero dependencies on each other and should start simultaneously.
   - [x] Audit log: user.saml_login, user.saml_logout events
   - [x] Tests: 29 tests (migration, config, settings builder, request prep, session conversion, DB resilience, auto-provisioning, endpoints)
   - [x] `python3-saml` added to requirements.txt
-- **Phase 3** (future, multiple enterprise customers):
-  - [ ] SCIM provisioning
-  - [ ] Custom roles
+- **Phase 3 — SCIM Provisioning** (complete):
+  - [x] `scim.py` module: RFC 7643/7644 compliant SCIM 2.0 server
+  - [x] Schema mapping: SCIM User ↔ users table (userName→email, displayName→display_name, active→is_active, custom role extension)
+  - [x] SCIM filter parser: eq, ne, co, sw, ew operators; and/or combinators; attribute mapping
+  - [x] SCIM PATCH processor: replace, add, remove operations; path-based and dict-based updates
+  - [x] Bearer token authentication via SCIM_BEARER_TOKEN env var
+  - [x] Discovery endpoints: GET /scim/v2/ServiceProviderConfig, /Schemas, /ResourceTypes
+  - [x] User CRUD: GET/POST /scim/v2/Users, GET/PUT/PATCH/DELETE /scim/v2/Users/{id}
+  - [x] DELETE = soft-deactivate (is_active=false), not hard delete
+  - [x] Graceful degradation: all endpoints return 404 if SCIM_ENABLED != true
+  - [x] Audit log: user.scim_provisioned, user.scim_updated, user.scim_patched, user.scim_deprovisioned events
+  - [x] Tests: 50 tests (config, bearer auth, user↔SCIM mapping, filter parser, PATCH ops, discovery, constants, endpoints)
+  - [x] Configuration: SCIM_ENABLED, SCIM_BEARER_TOKEN, SCIM_DEFAULT_ROLE env vars
+- **Phase 4** (future, if enterprise demand):
+  - [ ] Custom roles (beyond admin/user)
   - [ ] Data retention policies
   - [ ] Compliance exports
 

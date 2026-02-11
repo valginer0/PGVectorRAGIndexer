@@ -2119,6 +2119,44 @@ async def change_user_role_endpoint(user_id: str, request: Request):
 
 
 # ---------------------------------------------------------------------------
+# Roles & Permissions (#16 Enterprise Foundations Phase 4a)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.get("/roles", tags=["Roles & Permissions"], dependencies=[Depends(require_api_key)])
+async def list_roles_endpoint():
+    """List all available roles with their permissions."""
+    from role_permissions import list_roles
+    return {"roles": list_roles()}
+
+
+@v1_router.get("/roles/{role_name}", tags=["Roles & Permissions"], dependencies=[Depends(require_api_key)])
+async def get_role_endpoint(role_name: str):
+    """Get a specific role's definition and permissions."""
+    from role_permissions import get_role_info
+    info = get_role_info(role_name)
+    if not info:
+        raise HTTPException(status_code=404, detail=f"Role '{role_name}' not found")
+    return info
+
+
+@v1_router.get("/permissions", tags=["Roles & Permissions"], dependencies=[Depends(require_api_key)])
+async def list_permissions_endpoint():
+    """List all available granular permissions."""
+    from role_permissions import list_permissions
+    return {"permissions": list_permissions()}
+
+
+@v1_router.get("/roles/{role_name}/check/{permission}", tags=["Roles & Permissions"], dependencies=[Depends(require_api_key)])
+async def check_role_permission_endpoint(role_name: str, permission: str):
+    """Check if a role has a specific permission."""
+    from role_permissions import has_permission, is_valid_role
+    if not is_valid_role(role_name):
+        raise HTTPException(status_code=404, detail=f"Role '{role_name}' not found")
+    return {"role": role_name, "permission": permission, "granted": has_permission(role_name, permission)}
+
+
+# ---------------------------------------------------------------------------
 # Document Visibility (#3 Multi-User Support Phase 2)
 # ---------------------------------------------------------------------------
 

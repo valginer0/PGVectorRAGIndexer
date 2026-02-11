@@ -2,7 +2,9 @@
 Users module for RBAC and enterprise auth (#16).
 
 Manages user accounts with role-based access control.
-Roles: 'admin' (full access) and 'user' (index + search).
+Built-in roles: 'admin' (full access) and 'user' (index + search).
+Custom roles (e.g. 'researcher', 'sre', 'support') are defined in
+role_permissions.json — see role_permissions.py for details.
 """
 
 import logging
@@ -11,9 +13,23 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Valid roles
+# Built-in role constants (kept for backward compat)
 ROLE_ADMIN = "admin"
 ROLE_USER = "user"
+
+
+def _get_valid_roles():
+    """Get valid roles from role_permissions config (dynamic)."""
+    try:
+        from role_permissions import get_valid_roles
+        return get_valid_roles()
+    except Exception:
+        # Fallback if role_permissions not available
+        return {ROLE_ADMIN, ROLE_USER}
+
+
+# Legacy constant — now delegates to config. Code that checks
+# `role in VALID_ROLES` should use `_get_valid_roles()` instead.
 VALID_ROLES = {ROLE_ADMIN, ROLE_USER}
 
 # Valid auth providers
@@ -62,7 +78,7 @@ def create_user(
 
     Returns the created user dict, or None on failure.
     """
-    if role not in VALID_ROLES:
+    if role not in _get_valid_roles():
         logger.error("Invalid role: %s", role)
         return None
     if auth_provider not in VALID_AUTH_PROVIDERS:
@@ -184,7 +200,7 @@ def update_user(
         sets.append("display_name = %s")
         params.append(display_name)
     if role is not None:
-        if role not in VALID_ROLES:
+        if role not in _get_valid_roles():
             logger.error("Invalid role: %s", role)
             return None
         sets.append("role = %s")

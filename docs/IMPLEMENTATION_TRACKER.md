@@ -308,8 +308,20 @@ These have zero dependencies on each other and should start simultaneously.
   - [x] Audit log: user.scim_provisioned, user.scim_updated, user.scim_patched, user.scim_deprovisioned events
   - [x] Tests: 50 tests (config, bearer auth, user↔SCIM mapping, filter parser, PATCH ops, discovery, constants, endpoints)
   - [x] Configuration: SCIM_ENABLED, SCIM_BEARER_TOKEN, SCIM_DEFAULT_ROLE env vars
-- **Phase 4** (future, if enterprise demand):
-  - [ ] Custom roles (beyond admin/user)
+- **Phase 4a — Custom Roles & Permissions** (complete):
+  - [x] `role_permissions.py` module: 10 granular permissions (documents.read/write/delete/visibility/visibility.all, health.view, audit.view, users.manage, keys.manage, system.admin)
+  - [x] Config-driven roles via `role_permissions.json` — no restart needed to add roles (just edit JSON)
+  - [x] Built-in roles: admin (all perms), user (read+write+visibility), researcher (same as user), sre (full docs+health+audit), support (read-only+health+audit)
+  - [x] `require_permission()` factory in auth.py — creates FastAPI dependencies for any permission
+  - [x] `require_admin()` now delegates to `require_permission("system.admin")` — backward compatible
+  - [x] `users.py` dynamic role validation — accepts any role defined in config, not just admin/user
+  - [x] system.admin permission grants all other permissions automatically
+  - [x] Admin role always gets all permissions even if config file is edited (safety guard)
+  - [x] API endpoints (4): GET /roles, GET /roles/{name}, GET /permissions, GET /roles/{name}/check/{permission}
+  - [x] Tests: 54 tests (constants, built-in roles, config loading, permission checks, role validation, listing, require_permission factory, dynamic users.py, endpoints)
+  - [x] Upgrade path documented: replace `load_role_config()` to read from DB `roles` table for Phase 4b
+- **Phase 4b** (future, if enterprise demand):
+  - [ ] DB-backed roles table (migration 013) — runtime CRUD via API
   - [ ] Data retention policies
   - [ ] Compliance exports
 

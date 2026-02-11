@@ -376,6 +376,58 @@ async def require_api_key_admin(
     return await require_api_key(request, api_key)
 
 
+def require_permission(permission: str):
+    """Factory that creates a FastAPI dependency requiring a specific permission.
+
+    Usage:
+        @router.delete("/documents/{id}", dependencies=[Depends(require_permission("documents.delete"))])
+
+    The returned dependency:
+    - If auth is not required (local mode), returns None (allow).
+    - If auth is required, validates the API key AND checks that the
+      linked user's role has the requested permission.
+    - If no users exist yet (bootstrap), allows access.
+
+    Upgrade path to Phase 4b (DB-backed RBAC):
+    - Replace has_permission() in role_permissions.py to query a roles table.
+    - This function stays unchanged.
+    """
+    async def _check_permission(
+        request: Request,
+        api_key: Optional[str] = Security(api_key_header),
+    ) -> Optional[dict]:
+        key_record = await require_api_key(request, api_key)
+
+        # If auth is not enforced, allow
+        if key_record is None:
+            return None
+
+        try:
+            from users import get_user_by_api_key, count_admins
+            from role_permissions import has_permission as _has_perm
+
+            # Bootstrap: if no admin users exist yet, allow
+            if count_admins() == 0:
+                return key_record
+
+            user = get_user_by_api_key(key_record["id"])
+            if user and _has_perm(user.get("role", ""), permission):
+                return key_record
+
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission '{permission}' required.",
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error("Permission check failed: %s", e)
+            # Graceful degradation
+            return key_record
+
+    return _check_permission
+
+
 async def require_admin(
     request: Request,
     api_key: Optional[str] = Security(api_key_header),
@@ -384,35 +436,11 @@ async def require_admin(
 
     - If auth is not required (local mode), returns None (allow).
     - If auth is required, validates the API key AND checks that the
-      linked user has the 'admin' role.
+      linked user has the 'admin' role (system.admin permission).
     - If no users exist yet (bootstrap), allows access so the first
       admin can be created.
+
+    This is a convenience wrapper around require_permission("system.admin").
     """
-    key_record = await require_api_key(request, api_key)
-
-    # If auth is not enforced, allow
-    if key_record is None:
-        return None
-
-    # Check if the key is linked to an admin user
-    try:
-        from users import get_user_by_api_key, count_admins, ROLE_ADMIN
-
-        # Bootstrap: if no admin users exist yet, allow (so first admin can be created)
-        if count_admins() == 0:
-            return key_record
-
-        user = get_user_by_api_key(key_record["id"])
-        if user and user.get("role") == ROLE_ADMIN:
-            return key_record
-
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin access required.",
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Admin check failed: %s", e)
-        # If users table doesn't exist yet or DB error, allow (graceful degradation)
-        return key_record
+    checker = require_permission("system.admin")
+    return await checker(request, api_key)

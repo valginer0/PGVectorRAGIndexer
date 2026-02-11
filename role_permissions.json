@@ -1,0 +1,58 @@
+{
+  "admin": {
+    "description": "Full system access",
+    "is_system": true,
+    "permissions": [
+      "audit.view",
+      "documents.delete",
+      "documents.read",
+      "documents.visibility",
+      "documents.visibility.all",
+      "documents.write",
+      "health.view",
+      "keys.manage",
+      "system.admin",
+      "users.manage"
+    ]
+  },
+  "researcher": {
+    "description": "Read-heavy role — search and index, manage own visibility",
+    "is_system": false,
+    "permissions": [
+      "documents.read",
+      "documents.visibility",
+      "documents.write"
+    ]
+  },
+  "sre": {
+    "description": "Operations role — full document access, health monitoring, audit",
+    "is_system": false,
+    "permissions": [
+      "audit.view",
+      "documents.delete",
+      "documents.read",
+      "documents.visibility",
+      "documents.visibility.all",
+      "documents.write",
+      "health.view"
+    ]
+  },
+  "support": {
+    "description": "Support role — read-only access with health and audit visibility",
+    "is_system": false,
+    "permissions": [
+      "audit.view",
+      "documents.read",
+      "health.view"
+    ]
+  },
+  "user": {
+    "description": "Standard user — index and search documents",
+    "is_system": true,
+    "permissions": [
+      "documents.read",
+      "documents.visibility",
+      "documents.write"
+    ]
+  }
+}

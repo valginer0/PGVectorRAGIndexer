@@ -1,0 +1,64 @@
+# =============================================================================
+# PGVectorRAGIndexer — Demo Instance Docker Compose
+# =============================================================================
+#
+# Runs the read-only demo with a pre-seeded database.
+#
+# Usage:
+#   docker compose -f docker-compose.demo.yml up -d
+#
+# Auto-reset: use a cron job to restart daily:
+#   0 4 * * * cd /path/to/project && docker compose -f docker-compose.demo.yml down -v && docker compose -f docker-compose.demo.yml up -d
+# =============================================================================
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: demo_rag_db
+    restart: always
+    environment:
+      POSTGRES_USER: rag_user
+      POSTGRES_PASSWORD: rag_demo_password
+      POSTGRES_DB: rag_vector_db
+    volumes:
+      - demo_postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rag_user -d rag_vector_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - demo_network
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.demo
+    container_name: demo_rag_app
+    restart: always
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      POSTGRES_USER: rag_user
+      POSTGRES_PASSWORD: rag_demo_password
+      POSTGRES_DB: rag_vector_db
+      DEMO_MODE: "1"
+    ports:
+      - "8000:8000"
+    volumes:
+      - demo_model_cache:/root/.cache/huggingface
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - demo_network
+    command: uvicorn api:app --host 0.0.0.0 --port 8000
+
+volumes:
+  demo_postgres_data:
+  demo_model_cache:
+
+networks:
+  demo_network:
+    driver: bridge

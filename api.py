@@ -5,6 +5,7 @@ Provides HTTP endpoints for indexing, searching, and managing documents.
 """
 
 import logging
+import os
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from contextlib import asynccontextmanager
@@ -214,8 +215,51 @@ if config.api.allowed_hosts != ["*"]:
         allowed_hosts=config.api.allowed_hosts,
     )
 
+# ---------------------------------------------------------------------------
+# Demo / Read-Only Mode (#15)
+# ---------------------------------------------------------------------------
+DEMO_MODE = os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes")
+
+# Paths that are allowed even in demo mode (reads + search)
+_DEMO_ALLOWED_POST_PATHS = {
+    "/search",
+    "/api/v1/search",
+    "/virtual-roots/resolve",
+    "/api/v1/virtual-roots/resolve",
+}
+
+if DEMO_MODE:
+    from starlette.middleware.base import BaseHTTPMiddleware
+    from starlette.responses import JSONResponse as StarletteJSONResponse
+
+    class DemoModeMiddleware(BaseHTTPMiddleware):
+        """Block write operations in demo mode."""
+        async def dispatch(self, request, call_next):
+            method = request.method.upper()
+            path = request.url.path.rstrip("/")
+
+            # Allow all GET/HEAD/OPTIONS
+            if method in ("GET", "HEAD", "OPTIONS"):
+                return await call_next(request)
+
+            # Allow whitelisted POST paths (search, resolve)
+            if method == "POST" and path in _DEMO_ALLOWED_POST_PATHS:
+                return await call_next(request)
+
+            # Block all other writes
+            return StarletteJSONResponse(
+                status_code=403,
+                content={
+                    "detail": "This is a read-only demo instance. "
+                    "Install PGVectorRAG locally to index your own documents.",
+                    "demo": True,
+                },
+            )
+
+    app.add_middleware(DemoModeMiddleware)
+    logger.info("DEMO_MODE enabled — write operations are blocked")
+
 # Mount static files for web UI
-import os
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 if os.path.exists(static_dir):
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -276,15 +320,18 @@ async def api_info():
     """API information endpoint."""
     from license import get_current_license
     license_info = get_current_license()
-    return {
+    info = {
         "name": "PGVectorRAGIndexer API",
         "version": __version__,
         "api_version": API_VERSION,
         "description": "Semantic document search using PostgreSQL and pgvector",
         "edition": license_info.edition.value,
         "docs": "/docs",
-        "health": "/health"
+        "health": "/health",
     }
+    if DEMO_MODE:
+        info["demo"] = True
+    return info
 
 
 @app.get("/api/version", tags=["General"])
@@ -294,12 +341,15 @@ async def api_version():
     Desktop clients should call this on connect and warn if their
     version falls outside [min_client_version, max_client_version].
     """
-    return {
+    info = {
         "server_version": __version__,
         "api_version": API_VERSION,
         "min_client_version": MIN_CLIENT_VERSION,
         "max_client_version": MAX_CLIENT_VERSION,
     }
+    if DEMO_MODE:
+        info["demo"] = True
+    return info
 
 
 @app.get("/license", tags=["General"])

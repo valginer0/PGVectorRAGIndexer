@@ -147,15 +147,22 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Desktop API methods: `register_client()`, `client_heartbeat()`, `list_clients()`
 - [x] Tests: 20 tests (migration, helpers, DB resilience, endpoint registration)
 
-### ⬜ #15 Hosted Demo Instance
+### 🟡 #15 Hosted Demo Instance
 - **Effort**: ~6-10h | **Edition**: N/A (marketing) | **Dependencies**: None
-- [ ] Pre-built Docker image with sample corpus baked in
-- [ ] Read-only mode (indexing disabled)
+- **Branch**: `feature/roadmap-v4`
+- [x] Read-only mode: `DEMO_MODE=1` env var blocks all write operations (middleware)
+  - Allows GET/HEAD/OPTIONS + POST to /search and /virtual-roots/resolve
+  - Returns 403 with helpful message for blocked writes
+  - `/api` and `/api/version` include `"demo": true` flag
+- [x] `Dockerfile.demo`: demo image with DEMO_MODE=1, healthcheck
+- [x] `docker-compose.demo.yml`: full demo stack (db + app), auto-reset instructions
+- [x] Tests: 11 tests (constants, API responses, Docker files)
 - [ ] Deploy to small VM (Railway/Fly.io/$5 VPS)
 - [ ] "Try it now" button on website
 - [ ] Banner: "This demo runs on our server with sample data. The real product runs entirely on yours."
 - [ ] Conversion CTA: "Like what you see? Install the local version →"
-- [ ] Auto-reset daily
+- [ ] Sample corpus: pre-index demo documents into the image
+- [ ] Auto-reset daily (cron job documented in docker-compose.demo.yml)
 
 ---
 

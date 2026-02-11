@@ -66,25 +66,25 @@ class UploadTab(QWidget):
         info_text.setStyleSheet("color: #9ca3af; padding: 8px; margin-bottom: 5px;")
         layout.addWidget(info_text)
         
-        # File selection
-        file_group = QGroupBox("Select File")
+        # File selection — folder-first layout (#5 Upload Streamlining)
+        file_group = QGroupBox("Select Documents")
         file_layout = QVBoxLayout(file_group)
         
-        select_btn_layout = QHBoxLayout()
-        
-        self.select_files_btn = QPushButton("Select Files")
-        self.select_files_btn.setIcon(qta.icon('fa5s.file-alt', color='white'))
-        self.select_files_btn.clicked.connect(self.select_files)
-        self.select_files_btn.setMinimumHeight(40)
-        select_btn_layout.addWidget(self.select_files_btn)
-        
-        self.select_folder_btn = QPushButton("Select Folder")
+        # Primary action: Index Folder (prominent)
+        self.select_folder_btn = QPushButton("  Index Folder")
         self.select_folder_btn.setIcon(qta.icon('fa5s.folder-open', color='white'))
         self.select_folder_btn.clicked.connect(self.select_folder)
-        self.select_folder_btn.setMinimumHeight(40)
-        select_btn_layout.addWidget(self.select_folder_btn)
+        self.select_folder_btn.setMinimumHeight(48)
+        self.select_folder_btn.setProperty("class", "primary")
+        file_layout.addWidget(self.select_folder_btn)
         
-        file_layout.addLayout(select_btn_layout)
+        # Secondary action: Select Files (smaller, subdued)
+        self.select_files_btn = QPushButton("Select Individual Files")
+        self.select_files_btn.setIcon(qta.icon('fa5s.file-alt', color='#9ca3af'))
+        self.select_files_btn.clicked.connect(self.select_files)
+        self.select_files_btn.setMinimumHeight(32)
+        self.select_files_btn.setStyleSheet("font-size: 12px; color: #9ca3af;")
+        file_layout.addWidget(self.select_files_btn)
         
         self.file_path_label = QLabel("No files selected")
         self.file_path_label.setStyleSheet("color: #9ca3af; padding: 10px; background: #1f2937; border-radius: 5px; border: 1px dashed #374151;")
@@ -92,6 +92,12 @@ class UploadTab(QWidget):
         self.file_path_label.setAlignment(Qt.AlignCenter)
         self.file_path_label.setMinimumHeight(40)  # Ensure visibility
         file_layout.addWidget(self.file_path_label)
+        
+        # Last Indexed timestamp (#5)
+        self.last_indexed_label = QLabel("")
+        self.last_indexed_label.setStyleSheet("color: #6b7280; font-size: 11px; padding: 2px 10px;")
+        self.last_indexed_label.setVisible(False)
+        file_layout.addWidget(self.last_indexed_label)
         
         layout.addWidget(file_group)
         
@@ -305,6 +311,7 @@ class UploadTab(QWidget):
             self.log(f"Folder selected: {count} files found in {folder_path}")
             self.stats_label.setVisible(False)
             self.view_errors_btn.setVisible(False)
+            self._update_last_indexed(folder_path)
     
     def upload_file(self):
         """Upload the selected files."""
@@ -469,6 +476,27 @@ class UploadTab(QWidget):
         self.log_text.verticalScrollBar().setValue(
             self.log_text.verticalScrollBar().maximum()
         )
+
+    def _update_last_indexed(self, folder_path: str) -> None:
+        """Query the API for the last indexed timestamp of a folder and display it."""
+        try:
+            if not self.api_client or not self.api_client.is_api_available():
+                self.last_indexed_label.setVisible(False)
+                return
+            result = self.api_client.search_document_tree(query=folder_path, limit=1)
+            results = result.get("results", [])
+            if results:
+                ts = results[0].get("indexed_at") or results[0].get("updated_at", "")
+                if ts:
+                    # Format the timestamp for display
+                    display_ts = ts.replace("T", " ").split(".")[0] if "T" in ts else ts
+                    self.last_indexed_label.setText(f"Last indexed: {display_ts}")
+                    self.last_indexed_label.setVisible(True)
+                    return
+            self.last_indexed_label.setText("Not previously indexed")
+            self.last_indexed_label.setVisible(True)
+        except Exception:
+            self.last_indexed_label.setVisible(False)
 
     @staticmethod
     def _format_elapsed(seconds: float) -> str:

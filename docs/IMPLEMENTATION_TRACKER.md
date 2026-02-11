@@ -276,11 +276,14 @@ These have zero dependencies on each other and should start simultaneously.
 
 ## Lower Priority (Any Time)
 
-### ⬜ #5 Upload Tab UI Streamlining
+### ✅ #5 Upload Tab UI Streamlining
 - **Effort**: ~3-5h | **Edition**: Both | **Dependencies**: None
-- [ ] Make "Index Folder" the primary action
-- [ ] Show "Last Indexed" timestamp per folder
-- [ ] Minimize "Index File" button (secondary option)
+- **Branch**: `feature/roadmap-v4`
+- [x] Make "Index Folder" the primary action (larger button, `primary` class, listed first)
+- [x] Show "Last Indexed" timestamp per folder (queries document tree API on folder select)
+- [x] Minimize "Select Individual Files" button (smaller, subdued styling, secondary position)
+- [x] Renamed group box from "Select File" to "Select Documents"
+- [x] Tests: 11 tests (button properties, label visibility, API error handling, timestamp display)
 
 ---
 

@@ -7,6 +7,9 @@
 #
 # Or with options:
 #   curl -fsSL ... | bash -s -- --channel dev --install-dir ~/MyApps/PGVectorRAGIndexer
+#
+# For remote-only clients (no Docker needed):
+#   curl -fsSL ... | bash -s -- --remote-backend http://your-server:8000
 
 set -e
 
@@ -15,6 +18,7 @@ GITHUB_REPO="valginer0/PGVectorRAGIndexer"
 BRANCH="main"
 INSTALL_DIR="$HOME/PGVectorRAGIndexer"
 CHANNEL="prod"
+REMOTE_BACKEND=""
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -29,6 +33,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --branch)
             BRANCH="$2"
+            shift 2
+            ;;
+        --remote-backend)
+            REMOTE_BACKEND="$2"
             shift 2
             ;;
         *)
@@ -103,13 +111,17 @@ else
     exit 1
 fi
 
-# Check Docker (optional but recommended)
-if command -v docker &> /dev/null; then
+# Check Docker (optional — not needed for remote-only clients)
+if [ -n "$REMOTE_BACKEND" ]; then
+    echo -e "${GREEN}✓ Remote backend mode — Docker not required${NC}"
+    echo -e "  Server URL: ${CYAN}$REMOTE_BACKEND${NC}"
+elif command -v docker &> /dev/null; then
     DOCKER_VERSION=$(docker --version 2>&1)
     echo -e "✓ Found: ${GREEN}$DOCKER_VERSION${NC}"
 else
-    echo -e "${YELLOW}⚠ Docker not found (optional - needed for database backend)${NC}"
+    echo -e "${YELLOW}⚠ Docker not found (optional - needed for local database backend)${NC}"
     echo -e "${YELLOW}  Install from: https://docs.docker.com/get-docker/${NC}"
+    echo -e "${YELLOW}  Or use --remote-backend URL to connect to a remote server${NC}"
 fi
 
 echo ""
@@ -177,11 +189,26 @@ pip install -q -r "$REQUIREMENTS_FILE"
 
 echo ""
 
-# Update Docker containers if manage.sh exists and docker is available
-if [ -f "./manage.sh" ] && command -v docker &> /dev/null; then
+# Update Docker containers if manage.sh exists and docker is available (skip in remote mode)
+if [ -z "$REMOTE_BACKEND" ] && [ -f "./manage.sh" ] && command -v docker &> /dev/null; then
     echo -e "${YELLOW}Updating Docker containers (channel: $CHANNEL)...${NC}"
     chmod +x ./manage.sh
     ./manage.sh update "$CHANNEL" || echo -e "${YELLOW}Docker update skipped (containers may need manual setup)${NC}"
+    echo ""
+fi
+
+# Pre-seed remote backend configuration if --remote-backend was provided
+if [ -n "$REMOTE_BACKEND" ]; then
+    echo -e "${YELLOW}Configuring remote backend: $REMOTE_BACKEND${NC}"
+    $PYTHON_CMD -c "
+import sys, os
+sys.path.insert(0, '.')
+from desktop_app.utils import app_config
+app_config.set_backend_mode(app_config.BACKEND_MODE_REMOTE)
+app_config.set_backend_url('$REMOTE_BACKEND')
+print('  ✓ Remote backend configured')
+print('  Note: You will need to enter your API key in the Settings tab')
+" 2>/dev/null || echo -e "${YELLOW}  ⚠ Could not pre-seed config. Set remote backend in Settings tab.${NC}"
     echo ""
 fi
 
@@ -189,6 +216,11 @@ echo -e "${GREEN}==========================================${NC}"
 echo -e "${GREEN}Installation Complete!${NC}"
 echo -e "${GREEN}==========================================${NC}"
 echo ""
+if [ -n "$REMOTE_BACKEND" ]; then
+    echo -e "${CYAN}Remote backend: $REMOTE_BACKEND${NC}"
+    echo -e "${CYAN}Open Settings tab to enter your API key.${NC}"
+    echo ""
+fi
 echo -e "${CYAN}To run the desktop app:${NC}"
 echo -e "  cd $INSTALL_DIR"
 echo -e "  source venv/bin/activate"

@@ -211,14 +211,16 @@ These have zero dependencies on each other and should start simultaneously.
 
 ## Phase 4: Multi-User and Enterprise
 
-### ⬜ #2 Split Deployment
+### ✅ #2 Split Deployment
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #1, #0, #12
-- **Branch**: `feature/split-deployment`
-- [ ] `server-setup.sh` for Linux/macOS/NAS
-- [ ] Modified bootstrap script with `--remote-backend` flag
-- [ ] WSL-based setup for Windows servers
-- [ ] Platform support matrix in deployment docs
-- [ ] Version compatibility check on client connect (via #12)
+- **Branch**: `feature/roadmap-v4`
+- [x] `server-setup.sh` for Linux/macOS/NAS (port config, auto-key generation, Docker health wait)
+- [x] `server-setup-wsl.sh` for Windows servers (WSL2 detection, delegates to main script, firewall notes)
+- [x] `bootstrap_desktop_app.sh` — `--remote-backend URL` flag (skips Docker, pre-seeds remote config)
+- [x] `bootstrap_desktop_app.ps1` — `-RemoteBackend URL` parameter (same behavior)
+- [x] `docs/DEPLOYMENT.md` — platform support matrix, architecture diagram, security guide, troubleshooting
+- [x] Version compatibility check on client connect (pre-existing via `GET /api/version` + `check_version_compatibility()`)
+- [x] Tests: 24 tests (script existence, flags, docs content, version endpoint, app_config helpers)
 
 ### ⬜ #3 Multi-User Support
 - **Effort**: ~20-30h | **Edition**: Team | **Dependencies**: #1, #2, #8, #10, #17

@@ -6,7 +6,8 @@ param(
     [string]$Branch = "main",
     [string]$InstallDir = "$env:USERPROFILE\PGVectorRAGIndexer",
     [ValidateSet("prod", "dev")]
-    [string]$Channel = "prod"
+    [string]$Channel = "prod",
+    [string]$RemoteBackend = ""
 )
 
 Write-Host "==========================================" -ForegroundColor Cyan
@@ -99,11 +100,27 @@ Write-Host "Installing dependencies..." -ForegroundColor Yellow
 
 Write-Host ""
 
-# Update Docker containers if manage.ps1 exists
-$manageScript = ".\manage.ps1"
-if (Test-Path $manageScript) {
-    Write-Host "Updating Docker containers (channel: $Channel)..." -ForegroundColor Yellow
-    & $manageScript -Action update -Channel $Channel
+# Update Docker containers if manage.ps1 exists (skip in remote mode)
+if (-not $RemoteBackend) {
+    $manageScript = ".\manage.ps1"
+    if (Test-Path $manageScript) {
+        Write-Host "Updating Docker containers (channel: $Channel)..." -ForegroundColor Yellow
+        & $manageScript -Action update -Channel $Channel
+        Write-Host ""
+    }
+}
+
+# Pre-seed remote backend configuration if -RemoteBackend was provided
+if ($RemoteBackend) {
+    Write-Host "Configuring remote backend: $RemoteBackend" -ForegroundColor Yellow
+    & ".\venv-windows\Scripts\python.exe" -c @"
+import sys; sys.path.insert(0, '.')
+from desktop_app.utils import app_config
+app_config.set_backend_mode(app_config.BACKEND_MODE_REMOTE)
+app_config.set_backend_url('$RemoteBackend')
+print('  Remote backend configured')
+print('  Note: Enter your API key in the Settings tab')
+"@
     Write-Host ""
 }
 
@@ -113,10 +130,15 @@ if (Test-Path "create_desktop_shortcut.ps1") {
     & ".\create_desktop_shortcut.ps1"
 }
 
-Write-Host "==========================================" -ForegroundColor Green
+Write-Host "=========================================" -ForegroundColor Green
 Write-Host "Installation Complete!" -ForegroundColor Green
-Write-Host "==========================================" -ForegroundColor Green
+Write-Host "=========================================" -ForegroundColor Green
 Write-Host ""
+if ($RemoteBackend) {
+    Write-Host "Remote backend: $RemoteBackend" -ForegroundColor Cyan
+    Write-Host "Open Settings tab to enter your API key." -ForegroundColor Cyan
+    Write-Host ""
+}
 Write-Host "To run the desktop app:" -ForegroundColor Cyan
 Write-Host "  cd $InstallDir" -ForegroundColor White
 Write-Host "  .\venv-windows\Scripts\Activate.ps1" -ForegroundColor White

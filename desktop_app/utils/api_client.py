@@ -1009,3 +1009,91 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # User Management (#16 Enterprise Foundations)
+    # ------------------------------------------------------------------
+
+    def list_users(self, role: str = None, active_only: bool = True) -> dict:
+        """List all users, optionally filtered by role."""
+        params = {"active_only": active_only}
+        if role:
+            params["role"] = role
+        response = requests.get(
+            f"{self.api_base}/users",
+            headers=self._headers,
+            params=params,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def get_user(self, user_id: str) -> dict:
+        """Get a user by ID."""
+        response = requests.get(
+            f"{self.api_base}/users/{user_id}",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def create_user(
+        self,
+        *,
+        email: str = None,
+        display_name: str = None,
+        role: str = "user",
+        api_key_id: int = None,
+        client_id: str = None,
+    ) -> dict:
+        """Create a new user (admin only)."""
+        payload = {"role": role}
+        if email:
+            payload["email"] = email
+        if display_name:
+            payload["display_name"] = display_name
+        if api_key_id is not None:
+            payload["api_key_id"] = api_key_id
+        if client_id:
+            payload["client_id"] = client_id
+        response = requests.post(
+            f"{self.api_base}/users",
+            headers=self._headers,
+            json=payload,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def update_user(self, user_id: str, **kwargs) -> dict:
+        """Update a user (admin only). Pass email, display_name, role, is_active."""
+        response = requests.put(
+            f"{self.api_base}/users/{user_id}",
+            headers=self._headers,
+            json=kwargs,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def delete_user(self, user_id: str) -> dict:
+        """Delete a user (admin only)."""
+        response = requests.delete(
+            f"{self.api_base}/users/{user_id}",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def change_user_role(self, user_id: str, role: str) -> dict:
+        """Change a user's role (admin only)."""
+        response = requests.post(
+            f"{self.api_base}/users/{user_id}/role",
+            headers=self._headers,
+            json={"role": role},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

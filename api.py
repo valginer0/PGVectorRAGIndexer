@@ -22,7 +22,7 @@ from embeddings import get_embedding_service
 from document_processor import DocumentProcessor, UnsupportedFormatError, DocumentProcessingError, EncryptedPDFError
 from indexer_v2 import DocumentIndexer
 from retriever_v2 import DocumentRetriever, SearchResult
-from auth import require_api_key
+from auth import require_api_key, require_admin
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -1925,6 +1925,196 @@ async def cleanup_expired_document_locks():
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to cleanup locks: {str(e)}",
+        )
+
+
+# ---------------------------------------------------------------------------
+# User Management (#16 Enterprise Foundations)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.get("/users", tags=["Users"], dependencies=[Depends(require_api_key)])
+async def list_users_endpoint(
+    role: Optional[str] = Query(default=None, description="Filter by role (admin/user)"),
+    active_only: bool = Query(default=True, description="Only return active users"),
+):
+    """List all users."""
+    from users import list_users
+    try:
+        users = list_users(role=role, active_only=active_only)
+        return {"users": users, "count": len(users)}
+    except Exception as e:
+        logger.error(f"Failed to list users: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list users: {str(e)}",
+        )
+
+
+@v1_router.get("/users/{user_id}", tags=["Users"], dependencies=[Depends(require_api_key)])
+async def get_user_endpoint(user_id: str):
+    """Get a user by ID."""
+    from users import get_user
+    try:
+        user = get_user(user_id)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get user: {str(e)}",
+        )
+
+
+@v1_router.post("/users", tags=["Users"], dependencies=[Depends(require_admin)])
+async def create_user_endpoint(request: Request):
+    """Create a new user (admin only).
+
+    Body: {"email": "...", "display_name": "...", "role": "user"|"admin",
+           "api_key_id": ..., "client_id": "..."}
+    """
+    from users import create_user
+    try:
+        body = await request.json()
+        user = create_user(
+            email=body.get("email"),
+            display_name=body.get("display_name"),
+            role=body.get("role", "user"),
+            auth_provider=body.get("auth_provider", "api_key"),
+            api_key_id=body.get("api_key_id"),
+            client_id=body.get("client_id"),
+        )
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to create user. Check role and email uniqueness.",
+            )
+        # Log the user creation in activity log
+        from activity_log import log_activity
+        log_activity(
+            "user.created",
+            details={"user_id": user["id"], "email": user.get("email"), "role": user["role"]},
+        )
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create user: {str(e)}",
+        )
+
+
+@v1_router.put("/users/{user_id}", tags=["Users"], dependencies=[Depends(require_admin)])
+async def update_user_endpoint(user_id: str, request: Request):
+    """Update a user (admin only).
+
+    Body: {"email": "...", "display_name": "...", "role": "...", "is_active": true/false}
+    """
+    from users import update_user
+    try:
+        body = await request.json()
+        user = update_user(
+            user_id,
+            email=body.get("email"),
+            display_name=body.get("display_name"),
+            role=body.get("role"),
+            is_active=body.get("is_active"),
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found or invalid data")
+        # Log the update
+        from activity_log import log_activity
+        log_activity(
+            "user.updated",
+            details={"user_id": user_id, "changes": body},
+        )
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to update user: {str(e)}",
+        )
+
+
+@v1_router.delete("/users/{user_id}", tags=["Users"], dependencies=[Depends(require_admin)])
+async def delete_user_endpoint(user_id: str):
+    """Delete a user (admin only)."""
+    from users import delete_user, count_admins, get_user, ROLE_ADMIN
+    try:
+        # Prevent deleting the last admin
+        user = get_user(user_id)
+        if user and user.get("role") == ROLE_ADMIN and count_admins() <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot delete the last admin user.",
+            )
+        deleted = delete_user(user_id)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="User not found")
+        from activity_log import log_activity
+        log_activity("user.deleted", details={"user_id": user_id})
+        return {"ok": True, "deleted": user_id}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete user: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to delete user: {str(e)}",
+        )
+
+
+@v1_router.post("/users/{user_id}/role", tags=["Users"], dependencies=[Depends(require_admin)])
+async def change_user_role_endpoint(user_id: str, request: Request):
+    """Change a user's role (admin only).
+
+    Body: {"role": "admin"|"user"}
+    """
+    from users import change_role, count_admins, get_user, ROLE_ADMIN
+    try:
+        body = await request.json()
+        new_role = body.get("role")
+        if not new_role:
+            raise HTTPException(status_code=400, detail="'role' is required")
+
+        # Prevent demoting the last admin
+        user = get_user(user_id)
+        if (
+            user
+            and user.get("role") == ROLE_ADMIN
+            and new_role != ROLE_ADMIN
+            and count_admins() <= 1
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Cannot demote the last admin user.",
+            )
+
+        updated = change_role(user_id, new_role)
+        if not updated:
+            raise HTTPException(status_code=404, detail="User not found or invalid role")
+        from activity_log import log_activity
+        log_activity(
+            "user.role_changed",
+            details={"user_id": user_id, "old_role": user.get("role") if user else None, "new_role": new_role},
+        )
+        return updated
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to change user role: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to change role: {str(e)}",
         )
 
 

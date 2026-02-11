@@ -266,15 +266,22 @@ These have zero dependencies on each other and should start simultaneously.
 - [ ] "What we collect" page on website with example JSON payload
 - [ ] No PII, no document content, no file names, no search queries
 
-### ⬜ #16 Enterprise Foundations
+### 🟡 #16 Enterprise Foundations
 - **Effort**: ~15-25h | **Edition**: Team (enterprise tier) | **Dependencies**: #0, #8
-- **Build on-demand only** — when a paying customer requests it.
-- **Phase 1** (~10-15h):
-  - [ ] Alembic migration: `users` table (id, email, display_name, role, auth_provider)
-  - [ ] RBAC: Admin and User roles
-  - [ ] Audit log extension: login/logout, permission changes
-- **Phase 2** (~10-15h, only when paid demand):
-  - [ ] SSO/SAML: one provider (Okta or Azure AD)
+- **Branch**: `feature/roadmap-v4`
+- **Phase 1 — RBAC and Users** (complete):
+  - [x] Alembic migration 010: `users` table (id, email, display_name, role, auth_provider, api_key_id FK, client_id FK, timestamps, is_active)
+  - [x] `users.py` module: create, get, get_by_email, get_by_api_key, list, update, delete, deactivate, is_admin, record_login, change_role, count_admins
+  - [x] RBAC: `require_admin` FastAPI dependency in `auth.py` — checks API key → user → admin role
+    - Bootstrap mode: allows access when no admin users exist yet
+    - Graceful degradation on DB errors
+  - [x] Audit log extension: user.created, user.updated, user.deleted, user.role_changed events via activity_log
+  - [x] Safety: cannot delete or demote the last admin user
+  - [x] API endpoints (6): GET /users, GET /users/{id}, POST /users (admin), PUT /users/{id} (admin), DELETE /users/{id} (admin), POST /users/{id}/role (admin)
+  - [x] Desktop client API methods: list_users, get_user, create_user, update_user, delete_user, change_user_role
+  - [x] Tests: 26 tests (migration, constants, row conversion, DB resilience, role validation, require_admin, endpoints)
+- **Phase 2 — SSO/SAML** (in progress — Okta):
+  - [ ] SSO/SAML: Okta integration
 - **Phase 3** (future, multiple enterprise customers):
   - [ ] SCIM provisioning
   - [ ] Custom roles

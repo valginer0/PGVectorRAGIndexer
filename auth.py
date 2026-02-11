@@ -374,3 +374,45 @@ async def require_api_key_admin(
     to prevent unauthorized key creation.
     """
     return await require_api_key(request, api_key)
+
+
+async def require_admin(
+    request: Request,
+    api_key: Optional[str] = Security(api_key_header),
+) -> Optional[dict]:
+    """FastAPI dependency that requires the caller to be an admin user.
+
+    - If auth is not required (local mode), returns None (allow).
+    - If auth is required, validates the API key AND checks that the
+      linked user has the 'admin' role.
+    - If no users exist yet (bootstrap), allows access so the first
+      admin can be created.
+    """
+    key_record = await require_api_key(request, api_key)
+
+    # If auth is not enforced, allow
+    if key_record is None:
+        return None
+
+    # Check if the key is linked to an admin user
+    try:
+        from users import get_user_by_api_key, count_admins, ROLE_ADMIN
+
+        # Bootstrap: if no admin users exist yet, allow (so first admin can be created)
+        if count_admins() == 0:
+            return key_record
+
+        user = get_user_by_api_key(key_record["id"])
+        if user and user.get("role") == ROLE_ADMIN:
+            return key_record
+
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required.",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Admin check failed: %s", e)
+        # If users table doesn't exist yet or DB error, allow (graceful degradation)
+        return key_record

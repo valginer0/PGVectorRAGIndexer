@@ -230,7 +230,7 @@ class TestMigrationIdempotency:
         _run_alembic_upgrade(db_url, "head")
 
         rev = _get_current_revision(db_url)
-        assert rev == "011"
+        assert rev == "012"
 
     def test_upgrade_after_manual_schema(self, db_url, pg_connection):
         """Simulate a v2.4 database that already has init-db.sql applied.
@@ -265,7 +265,7 @@ class TestMigrationIdempotency:
         _run_alembic_upgrade(db_url, "head")
 
         rev = _get_current_revision(db_url)
-        assert rev == "011"
+        assert rev == "012"
 
 
 class TestDataPreservation:
@@ -396,7 +396,7 @@ class TestDowngrade:
         _run_alembic_upgrade(db_url, "head")
 
         rev = _get_current_revision(db_url)
-        assert rev == "011"
+        assert rev == "012"
 
 
 class TestRunMigrationsIntegration:

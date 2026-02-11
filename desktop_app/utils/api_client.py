@@ -1097,3 +1097,73 @@ class APIClient:
         )
         response.raise_for_status()
         return response.json()
+
+    # ------------------------------------------------------------------
+    # Document Visibility (#3 Multi-User Support Phase 2)
+    # ------------------------------------------------------------------
+
+    def get_document_visibility(self, document_id: str) -> dict:
+        """Get visibility info for a document."""
+        response = requests.get(
+            f"{self.api_base}/documents/{document_id}/visibility",
+            headers=self._headers,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def set_document_visibility(
+        self, document_id: str, *, visibility: str = None, owner_id: str = None
+    ) -> dict:
+        """Set visibility and/or owner for a document."""
+        payload = {}
+        if visibility:
+            payload["visibility"] = visibility
+        if owner_id:
+            payload["owner_id"] = owner_id
+        response = requests.put(
+            f"{self.api_base}/documents/{document_id}/visibility",
+            headers=self._headers,
+            json=payload,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def transfer_document_ownership(self, document_id: str, new_owner_id: str) -> dict:
+        """Transfer document ownership to another user (admin only)."""
+        response = requests.post(
+            f"{self.api_base}/documents/{document_id}/transfer",
+            headers=self._headers,
+            json={"new_owner_id": new_owner_id},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def list_user_documents(
+        self, user_id: str, visibility: str = None, limit: int = 100, offset: int = 0
+    ) -> dict:
+        """List documents owned by a specific user."""
+        params = {"limit": limit, "offset": offset}
+        if visibility:
+            params["visibility"] = visibility
+        response = requests.get(
+            f"{self.api_base}/users/{user_id}/documents",
+            headers=self._headers,
+            params=params,
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    def bulk_set_document_visibility(self, document_ids: list, visibility: str) -> dict:
+        """Set visibility for multiple documents at once (admin only)."""
+        response = requests.post(
+            f"{self.api_base}/documents/bulk-visibility",
+            headers=self._headers,
+            json={"document_ids": document_ids, "visibility": visibility},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return response.json()

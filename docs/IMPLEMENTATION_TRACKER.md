@@ -231,7 +231,7 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Version compatibility check on client connect (pre-existing via `GET /api/version` + `check_version_compatibility()`)
 - [x] Tests: 24 tests (script existence, flags, docs content, version endpoint, app_config helpers)
 
-### ✅ #3 Multi-User Support (Phase 1 — Shared Corpus)
+### ✅ #3 Multi-User Support
 - **Effort**: ~20-30h | **Edition**: Team | **Dependencies**: #1, #2, #8, #10, #17
 - **Branch**: `feature/roadmap-v4`
 - **Phase 1 — Shared corpus** (complete):
@@ -249,13 +249,18 @@ These have zero dependencies on each other and should start simultaneously.
   - [x] API endpoints: POST acquire/release/force-release/cleanup, GET list/check
   - [x] Desktop client API methods: acquire, release, force_release, list, check, cleanup
   - [x] Tests: 20 tests (migration, row conversion, DB resilience, conflict logic, endpoints)
-- **Phase 2 — User scoping** (deferred, only if paid demand):
-  - [ ] Per-user document visibility
-  - [ ] Shared vs. private document spaces
-  - [ ] Admin role for managing users
-- **Phase 3 — Enterprise auth** (deferred, via #16):
-  - [ ] SSO/SAML integration
-  - [ ] RBAC with custom roles
+- **Phase 2 — User scoping** (complete):
+  - [x] Alembic migration 012: `owner_id` (FK → users) and `visibility` columns on `document_chunks`
+  - [x] `document_visibility.py` module: visibility_where_clause (SQL filter generation), set_document_owner, set_document_visibility, set_document_owner_and_visibility, get_document_visibility, list_user_documents, bulk_set_visibility, transfer_ownership
+  - [x] Visibility rules: shared (default, visible to all), private (owner + admins only), NULL owner = shared (backward compat)
+  - [x] Updated `document_stats` view to include owner_id and visibility
+  - [x] API endpoints (5): GET/PUT /documents/{id}/visibility, POST /documents/{id}/transfer (admin), GET /users/{id}/documents, POST /documents/bulk-visibility (admin)
+  - [x] Desktop client API methods: get_document_visibility, set_document_visibility, transfer_document_ownership, list_user_documents, bulk_set_document_visibility
+  - [x] Audit log: document.visibility_changed, document.ownership_transferred, document.bulk_visibility_changed events
+  - [x] Tests: 28 tests (migration, constants, SQL filter generation, DB resilience, validation, endpoints)
+- **Phase 3 — Enterprise auth** (complete via #16):
+  - [x] SSO/SAML integration (Okta) — see #16 Phase 2
+  - [x] RBAC with admin/user roles — see #16 Phase 1
 
 ### ⬜ #14 Usage Analytics
 - **Effort**: ~6-10h | **Edition**: Both (opt-in) | **Dependencies**: #4 (optional)

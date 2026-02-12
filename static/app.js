@@ -436,10 +436,12 @@ function extractSnippet(text, query, window = 200) {
     const words = query.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
     if (!words.length) return text.length <= window ? text : text.slice(0, window).trim() + '...';
     const textLower = text.toLowerCase();
+    // Sort by length descending — prefer longest (most specific) word
+    const sorted = [...words].sort((a, b) => b.length - a.length);
     let bestPos = -1;
-    for (const word of words) {
+    for (const word of sorted) {
         const pos = textLower.indexOf(word);
-        if (pos !== -1 && (bestPos === -1 || pos < bestPos)) bestPos = pos;
+        if (pos !== -1) { bestPos = pos; break; }
     }
     if (bestPos === -1) return text.length <= window ? text : text.slice(0, window).trim() + '...';
     const half = Math.floor(window / 2);

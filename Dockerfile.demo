@@ -24,9 +24,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Python dependencies
+# Python dependencies — install CPU-only PyTorch first to avoid the
+# full CUDA-enabled torch (~2GB install, ~400MB+ RAM). CPU-only is
+# ~200MB and fits within Render free tier's 512MB RAM limit.
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --no-cache-dir -r requirements.txt
 
 # Application code
 COPY . .

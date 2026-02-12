@@ -154,7 +154,10 @@ _init_error = None
 def _run_startup():
     """Run the heavy startup tasks (migrations, services)."""
     global _init_complete, _init_error
+    import sys
     try:
+        logger.info("[init] Running database migrations...")
+        sys.stdout.flush()
         # Run database migrations before initializing services
         from migrate import run_migrations
         if not run_migrations():
@@ -162,6 +165,8 @@ def _run_startup():
                 "Database migration failed — the app may not work correctly. "
                 "Check database connection and logs."
             )
+        logger.info("[init] Migrations complete")
+        sys.stdout.flush()
 
         # Load and validate license key
         from license import load_license, set_current_license
@@ -181,14 +186,19 @@ def _run_startup():
             )
 
         # Initialize services
+        logger.info("[init] Initializing database manager...")
+        sys.stdout.flush()
         _ = get_db_manager()
+        logger.info("[init] Database manager ready. Loading embedding model...")
+        sys.stdout.flush()
         _ = get_embedding_service()
-        logger.info("Services initialized successfully")
+        logger.info("[init] Services initialized successfully")
+        sys.stdout.flush()
         _init_complete = True
     except Exception as e:
-        logger.error(f"Failed to initialize services: {e}")
+        logger.error(f"[init] Failed to initialize services: {e}", exc_info=True)
+        sys.stdout.flush()
         _init_error = str(e)
-        raise
 
 
 # Lifespan context manager for startup/shutdown

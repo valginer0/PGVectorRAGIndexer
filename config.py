@@ -21,6 +21,7 @@ class DatabaseConfig(BaseSettings):
     name: str = Field(default='rag_vector_db', alias='POSTGRES_DB', description='Database name')
     user: str = Field(default='rag_user', alias='POSTGRES_USER', description='Database user')
     password: str = Field(default='rag_password', alias='POSTGRES_PASSWORD', description='Database password')
+    sslmode: Optional[str] = Field(default=None, description='SSL mode (e.g., require for cloud providers like Neon)')
     
     # Connection pool settings
     pool_size: int = Field(default=10, description='Connection pool size')
@@ -31,12 +32,14 @@ class DatabaseConfig(BaseSettings):
     @property
     def connection_string(self) -> str:
         """Generate PostgreSQL connection string."""
-        return f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+        base = f"postgresql://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+        return f"{base}?sslmode={self.sslmode}" if self.sslmode else base
     
     @property
     def async_connection_string(self) -> str:
         """Generate async PostgreSQL connection string."""
-        return f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+        base = f"postgresql+asyncpg://{self.user}:{self.password}@{self.host}:{self.port}/{self.name}"
+        return f"{base}?ssl=true" if self.sslmode else base
 
 
 class EmbeddingConfig(BaseSettings):

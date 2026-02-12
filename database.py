@@ -58,14 +58,19 @@ class DatabaseManager:
             return
         
         try:
-            self._pool = pool.ThreadedConnectionPool(
-                minconn=1,
-                maxconn=self.config.pool_size,
+            conn_kwargs = dict(
                 host=self.config.host,
                 port=self.config.port,
                 dbname=self.config.name,
                 user=self.config.user,
-                password=self.config.password
+                password=self.config.password,
+            )
+            if self.config.sslmode:
+                conn_kwargs['sslmode'] = self.config.sslmode
+            self._pool = pool.ThreadedConnectionPool(
+                minconn=1,
+                maxconn=self.config.pool_size,
+                **conn_kwargs,
             )
             self._initialized = True
             logger.info(

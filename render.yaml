@@ -3,23 +3,17 @@
 # =============================================================================
 #
 # Deploys a read-only demo instance on Render free tier with auto-sleep.
-# The web service uses Dockerfile.demo and connects to a free PostgreSQL instance.
+# Uses Dockerfile.demo and connects to an EXTERNAL PostgreSQL with pgvector
+# (e.g., Neon free tier — Render's free PG does not include pgvector).
 #
 # To deploy:
-#   1. Push this file to your repo
-#   2. Go to https://dashboard.render.com/blueprints
-#   3. Connect your GitHub repo and select this blueprint
+#   1. Create a Neon project at https://neon.tech (free, includes pgvector)
+#   2. Push this file to your repo
+#   3. Go to https://dashboard.render.com → New Web Service → connect repo
+#   4. Set the env vars below from your Neon connection details
 #
 # The demo URL will be: https://demo-pgvectorrag.onrender.com
 # =============================================================================
-
-databases:
-  - name: demo-pgvectorrag-db
-    plan: free
-    databaseName: rag_vector_db
-    user: rag_user
-    postgresMajorVersion: "16"
-    ipAllowList: []  # Only internal connections
 
 services:
   - type: web
@@ -28,30 +22,23 @@ services:
     runtime: docker
     dockerfilePath: ./Dockerfile.demo
     dockerContext: .
+    branch: feature/roadmap-v4
     healthCheckPath: /health
     envVars:
       - key: DEMO_MODE
         value: "1"
       - key: DB_HOST
-        fromDatabase:
-          name: demo-pgvectorrag-db
-          property: host
+        sync: false  # Set from Neon dashboard: ep-xxx.us-east-2.aws.neon.tech
       - key: DB_PORT
-        fromDatabase:
-          name: demo-pgvectorrag-db
-          property: port
+        value: "5432"
       - key: POSTGRES_USER
-        fromDatabase:
-          name: demo-pgvectorrag-db
-          property: user
+        sync: false  # Set from Neon dashboard
       - key: POSTGRES_PASSWORD
-        fromDatabase:
-          name: demo-pgvectorrag-db
-          property: password
+        sync: false  # Set from Neon dashboard (secret)
       - key: POSTGRES_DB
-        fromDatabase:
-          name: demo-pgvectorrag-db
-          property: database
+        value: "neondb"
+      - key: DB_SSLMODE
+        value: "require"
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: API_HOST

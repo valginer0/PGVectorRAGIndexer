@@ -330,7 +330,7 @@ def get_retriever() -> DocumentRetriever:
 
 # API Endpoints
 
-@app.get("/", response_class=HTMLResponse, include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], response_class=HTMLResponse, include_in_schema=False)
 async def root():
     """Serve the web UI."""
     static_dir = os.path.join(os.path.dirname(__file__), "static")

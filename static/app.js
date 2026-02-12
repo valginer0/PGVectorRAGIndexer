@@ -3,9 +3,11 @@ const API_BASE = '';
 
 // State
 let currentDocuments = [];
+let isDemoMode = false;
 
 // Initialize
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await detectDemoMode();
     initTabs();
     initSearch();
     initUpload();
@@ -14,10 +16,27 @@ document.addEventListener('DOMContentLoaded', () => {
     loadStatistics();
 });
 
+async function detectDemoMode() {
+    try {
+        const response = await fetch(`${API_BASE}/api`);
+        const data = await response.json();
+        isDemoMode = !!data.demo;
+    } catch (e) {
+        isDemoMode = false;
+    }
+}
+
 // Tab Navigation
 function initTabs() {
     const tabs = document.querySelectorAll('.tab');
     const contents = document.querySelectorAll('.tab-content');
+
+    // Hide upload tab in demo mode (uploads are blocked)
+    if (isDemoMode) {
+        tabs.forEach(tab => {
+            if (tab.dataset.tab === 'upload') tab.style.display = 'none';
+        });
+    }
 
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
@@ -288,7 +307,13 @@ function displayDocuments(documents) {
         return;
     }
 
-    container.innerHTML = documents.map(doc => `
+    const desktopHint = isDemoMode ? `
+        <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:0.9em;color:#a5b4fc">
+            💡 In the desktop app, click any document to open it in the editor and browse its indexed chunks.
+        </div>
+    ` : '';
+
+    container.innerHTML = desktopHint + documents.map(doc => `
         <div class="document-card">
             <div class="document-info">
                 <h3>📄 ${escapeHtml(doc.source_uri)}</h3>
@@ -298,11 +323,11 @@ function displayDocuments(documents) {
                     <span>📅 ${new Date(doc.indexed_at).toLocaleString()}</span>
                 </div>
             </div>
-            <div class="document-actions">
+            ${isDemoMode ? '' : `<div class="document-actions">
                 <button class="btn btn-danger" onclick="deleteDocument('${doc.document_id}')">
                     🗑️ Delete
                 </button>
-            </div>
+            </div>`}
         </div>
     `).join('');
 }

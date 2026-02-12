@@ -118,12 +118,21 @@ def is_loopback_request(request: Request) -> bool:
 def is_auth_required(request: Request) -> bool:
     """Determine if authentication is required for this request.
 
-    Auth is required when API_REQUIRE_AUTH=true.
-    When not explicitly set, auth is NOT required (local mode default).
+    Auth is required when API_REQUIRE_AUTH=true, UNLESS the request
+    originates from a loopback address (127.0.0.1 / ::1). This allows
+    the local desktop app to work seamlessly while remote connections
+    are still protected.
+
+    When API_REQUIRE_AUTH is not set, auth is NOT required (local mode default).
     """
     from config import get_config
     config = get_config()
-    return getattr(config.api, 'require_auth', False)
+    if not getattr(config.api, 'require_auth', False):
+        return False
+    # Auth is enabled — but exempt loopback requests (local desktop app)
+    if is_loopback_request(request):
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -421,9 +430,17 @@ def require_permission(permission: str):
         except HTTPException:
             raise
         except Exception as e:
-            logger.error("Permission check failed: %s", e)
-            # Graceful degradation
-            return key_record
+            # Fail open ONLY if users table doesn't exist yet (bootstrap).
+            # All other errors fail closed to prevent unauthorized access.
+            err_str = str(e).lower()
+            if "users" in err_str and ("not exist" in err_str or "undefined" in err_str or "no such" in err_str):
+                logger.warning("Users table not found — allowing access (bootstrap): %s", e)
+                return key_record
+            logger.error("Permission check failed — denying access: %s", e)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Permission check unavailable. Please try again later.",
+            )
 
     return _check_permission
 

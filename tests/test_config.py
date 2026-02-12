@@ -144,7 +144,7 @@ class TestAPIConfig:
     def test_default_values(self):
         """Test default API configuration."""
         config = APIConfig()
-        assert config.host == '0.0.0.0'
+        assert config.host == '127.0.0.1'
         assert config.port == 8000
         assert config.workers == 4
         assert config.log_level == 'info'

@@ -174,10 +174,22 @@ class TestAuthRequired:
         assert is_auth_required(request) is False
 
     @patch("config.get_config")
-    def test_auth_enabled(self, mock_config):
+    def test_auth_enabled_remote(self, mock_config):
         mock_config.return_value.api.require_auth = True
-        request = self._make_request()
+        request = self._make_request(host="192.168.1.100")
         assert is_auth_required(request) is True
+
+    @patch("config.get_config")
+    def test_auth_enabled_loopback_exempt(self, mock_config):
+        mock_config.return_value.api.require_auth = True
+        request = self._make_request(host="127.0.0.1")
+        assert is_auth_required(request) is False
+
+    @patch("config.get_config")
+    def test_auth_enabled_ipv6_loopback_exempt(self, mock_config):
+        mock_config.return_value.api.require_auth = True
+        request = self._make_request(host="::1")
+        assert is_auth_required(request) is False
 
 
 # ---------------------------------------------------------------------------

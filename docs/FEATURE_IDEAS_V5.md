@@ -15,6 +15,7 @@ This revision builds on v4 by introducing the **Edition Model** (Community vs Te
 7. **API changes must be versioned to support mixed client/server versions.**
 8. **The edition (Community vs Team) is derived from a license key, never from a config file.**
 9. **SSO and enterprise features are built on-demand (when a paying customer requests them), not speculatively.**
+10. **Local-only by design: no hosted indexing or storage.**
 
 ---
 
@@ -39,7 +40,7 @@ The product ships as **one codebase, one binary, two editions** — determined a
   - **Windows**: `%APPDATA%\PGVectorRAGIndexer\license.key`
 - **No key or invalid key** → Community Edition (all local/solo features enabled, team features hidden)
 - **Valid key** → Team Edition (all features enabled, edition/expiry shown in Settings tab)
-- The license key is a **signed token** (HMAC-SHA256 or RSA-signed JWT) encoding: edition, org name, seat count, expiry date
+- The license key is a **signed token** (HMAC-SHA256 JWT, HS256) encoding: edition, org name, seat count, expiry date. RSA signing deferred until third-party verification is needed.
 - Keys cannot be forged without the signing secret
 - **Optional online validation**: on startup, ping a lightweight license endpoint to check revocation. Graceful fallback to offline validation if no internet.
 - The edition is **never stored in config.py or .env** — it is always computed from the license key at runtime
@@ -386,20 +387,13 @@ CREATE TABLE server_settings (
 -- Initial row: ('owner_client_id', '<client_id of the setup client>')
 ```
 
-When a Team license expires, the app does not lock data or block access. The behavior depends on whether RBAC (#16) has been implemented:
+When a Team license expires, the app does not lock data or block access:
 
-**Without RBAC (before #16 ships)**:
 - **Shared corpus**: Remains fully readable and searchable. No data is lost or hidden.
-- **Indexing**: All write operations switch to single-client mode — only the owner client (per `server_settings.owner_client_id`) retains write access. This is a deterministic rule, not a role check.
-- **Multi-user sessions**: Existing sessions continue read-only until disconnect. New connections are read-only for all non-owner clients.
-- **Watched folders / scheduling**: Background scheduling pauses. "Scan Now" remains available to the owner client.
-- **Activity log**: Continues recording (read-only access for non-owner clients).
-
-**With RBAC (#16 Phase 1+)**:
-- Same as above, but "owner client" is replaced by "users with admin role." The `server_settings.owner_client_id` fallback is no longer used once RBAC is active.
-
-**In both cases**:
-- **Banner**: All clients show a persistent (non-blocking) banner: "Team license expired on [date]. Renew at [pricing page URL]. Read access continues; write access is limited."
+- **Indexing**: All write operations are blocked for ALL users (including admins). This is simpler and more secure than role-based expiry exceptions.
+- **Watched folders / scheduling**: Background scheduling pauses.
+- **Activity log**: Continues recording.
+- **Banner**: All clients show a persistent (non-blocking) banner: "Team license expired on [date]. Renew at [pricing page URL]. Read access continues; write access is blocked."
 - **Goal**: Never hold data hostage. The worst case is a graceful read-only fallback, not a lockout.
 
 UI changes:

@@ -22,7 +22,7 @@ from embeddings import get_embedding_service
 from document_processor import DocumentProcessor, UnsupportedFormatError, DocumentProcessingError, EncryptedPDFError
 from indexer_v2 import DocumentIndexer
 from retriever_v2 import DocumentRetriever, SearchResult
-from auth import require_api_key, require_admin
+from auth import require_api_key, require_admin, require_permission
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -168,6 +168,15 @@ async def lifespan(app: FastAPI):
         logger.info("Edition: %s", license_info.edition.value.title())
         if license_info.warning:
             logger.warning("License warning: %s", license_info.warning)
+
+        # Security check: warn if binding to all interfaces without auth
+        if config.api.host in ("0.0.0.0", "::") and not config.api.require_auth:
+            logger.warning(
+                "⚠️  SECURITY WARNING: Server is binding to %s (all interfaces) "
+                "with authentication DISABLED. Any host on the network can access "
+                "this API. Set API_REQUIRE_AUTH=true or API_HOST=127.0.0.1.",
+                config.api.host,
+            )
 
         # Initialize services
         _ = get_db_manager()
@@ -1063,7 +1072,7 @@ async def restore_documents(request: RestoreRequest):
 # ---------------------------------------------------------------------------
 
 
-@v1_router.post("/api/keys", tags=["Auth"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/api/keys", tags=["Auth"], dependencies=[Depends(require_permission("keys.manage"))])
 async def create_key(name: str = Query(..., description="Human-readable name for the key")):
     """Create a new API key.
 
@@ -1089,7 +1098,7 @@ async def create_key(name: str = Query(..., description="Human-readable name for
         )
 
 
-@v1_router.get("/api/keys", tags=["Auth"], dependencies=[Depends(require_api_key)])
+@v1_router.get("/api/keys", tags=["Auth"], dependencies=[Depends(require_permission("keys.manage"))])
 async def list_keys():
     """List all API keys (active and revoked).
 
@@ -1106,7 +1115,7 @@ async def list_keys():
         )
 
 
-@v1_router.delete("/api/keys/{key_id}", tags=["Auth"], dependencies=[Depends(require_api_key)])
+@v1_router.delete("/api/keys/{key_id}", tags=["Auth"], dependencies=[Depends(require_permission("keys.manage"))])
 async def delete_key(key_id: int):
     """Revoke an API key immediately."""
     from auth import revoke_api_key
@@ -1128,7 +1137,7 @@ async def delete_key(key_id: int):
         )
 
 
-@v1_router.post("/api/keys/{key_id}/rotate", tags=["Auth"], dependencies=[Depends(require_api_key)])
+@v1_router.post("/api/keys/{key_id}/rotate", tags=["Auth"], dependencies=[Depends(require_permission("keys.manage"))])
 async def rotate_key(key_id: int):
     """Rotate an API key.
 

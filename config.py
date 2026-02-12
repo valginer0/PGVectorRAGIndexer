@@ -186,7 +186,7 @@ class APIConfig(BaseSettings):
     
     model_config = SettingsConfigDict(env_prefix='API_', case_sensitive=False)
     
-    host: str = Field(default='0.0.0.0', description='API host')
+    host: str = Field(default='127.0.0.1', description='API host (set to 0.0.0.0 for network access)')
     port: int = Field(default=8000, description='API port')
     workers: int = Field(default=4, description='Number of worker processes')
     reload: bool = Field(default=False, description='Enable auto-reload for development')

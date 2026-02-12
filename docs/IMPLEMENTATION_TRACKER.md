@@ -157,12 +157,18 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] `Dockerfile.demo`: demo image with DEMO_MODE=1, healthcheck
 - [x] `docker-compose.demo.yml`: full demo stack (db + app), auto-reset instructions
 - [x] Tests: 11 tests (constants, API responses, Docker files)
-- [ ] Deploy to small VM (Railway/Fly.io/$5 VPS)
-- [ ] "Try it now" button on website
+- [x] `render.yaml`: Render Blueprint for free tier deployment
+- [x] SSL/sslmode support: `DB_SSLMODE` config field for cloud PostgreSQL (Neon)
+- [x] Warm-up interstitial page (`demo.html` in Website repo)
+  - Polls demo server `/health` endpoint every 3s during cold start
+  - Shows feature cards and sample queries while waiting
+  - Auto-redirects when server responds; graceful fallback on timeout
+- [x] "Try Live Demo" button on website (hero section + FAQ link)
+- [x] Deployed to Render free tier (auto-sleep) + Neon free tier (pgvector DB)
+  - URL: https://demo-pgvectorrag.onrender.com
+- [ ] Sample corpus: pre-index demo documents via seeding script
 - [ ] Banner: "This demo runs on our server with sample data. The real product runs entirely on yours."
 - [ ] Conversion CTA: "Like what you see? Install the local version →"
-- [ ] Sample corpus: pre-index demo documents into the image
-- [ ] Auto-reset daily (cron job documented in docker-compose.demo.yml)
 
 ---
 

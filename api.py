@@ -146,12 +146,14 @@ class RestoreRequest(BaseModel):
     backup_data: List[Dict[str, Any]] = Field(..., description="Backup data from export")
 
 
-# Lifespan context manager for startup/shutdown
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Manage application lifespan."""
-    # Startup
-    logger.info("Starting PGVectorRAGIndexer API...")
+# Track initialization state for deferred startup in demo mode
+_init_complete = False
+_init_error = None
+
+
+def _run_startup():
+    """Run the heavy startup tasks (migrations, services)."""
+    global _init_complete, _init_error
     try:
         # Run database migrations before initializing services
         from migrate import run_migrations
@@ -182,10 +184,33 @@ async def lifespan(app: FastAPI):
         _ = get_db_manager()
         _ = get_embedding_service()
         logger.info("Services initialized successfully")
+        _init_complete = True
     except Exception as e:
         logger.error(f"Failed to initialize services: {e}")
+        _init_error = str(e)
         raise
-    
+
+
+# Lifespan context manager for startup/shutdown
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Manage application lifespan."""
+    global _init_complete, _init_error
+    # Startup
+    logger.info("Starting PGVectorRAGIndexer API...")
+
+    demo_mode = os.environ.get("DEMO_MODE", "").strip() == "1"
+    if demo_mode:
+        # In demo mode, defer heavy init to a background thread so the
+        # server binds the port immediately and passes health checks on
+        # resource-constrained hosts (e.g. Render free tier, 0.1 CPU).
+        import threading
+        init_thread = threading.Thread(target=_run_startup, daemon=True)
+        init_thread.start()
+        logger.info("Demo mode: deferring initialization to background thread")
+    else:
+        _run_startup()
+
     yield
     
     # Shutdown
@@ -371,6 +396,20 @@ async def license_info():
 @app.get("/health", response_model=HealthResponse, tags=["General"])
 async def health_check():
     """Check API and database health."""
+    # In demo mode, return 200 during initialization so the host's
+    # health check passes while services are still loading.
+    if not _init_complete:
+        if _init_error:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Initialization failed: {_init_error}"
+            )
+        return HealthResponse(
+            status="initializing",
+            timestamp=datetime.utcnow().isoformat(),
+            database={"status": "initializing"},
+            embedding_model={"status": "loading"}
+        )
     try:
         db_manager = get_db_manager()
         db_health = db_manager.health_check()

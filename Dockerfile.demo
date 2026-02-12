@@ -34,6 +34,10 @@ COPY . .
 # Sample corpus for demo (create if not present)
 RUN mkdir -p /app/demo-corpus
 
+# Pre-download embedding model so it's cached in the image
+# (avoids slow download at runtime on free-tier hosts)
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
 # Demo mode environment
 ENV DEMO_MODE=1
 ENV PYTHONUNBUFFERED=1

@@ -50,7 +50,7 @@ function initTabs() {
                 🌳 Document tree navigation · 📦 Export &amp; restore
             </span>
             <div style="margin-top:8px">
-                <a href="https://pgvectorragindexer.com" target="_blank" style="color:#818cf8;text-decoration:underline">Learn more →</a>
+                <a href="https://www.ragvault.net/" target="_blank" style="color:#818cf8;text-decoration:underline">Learn more →</a>
             </div>
         `;
         const tabsNav = document.querySelector('.tabs');

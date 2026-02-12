@@ -191,7 +191,11 @@ function displaySearchResults(results) {
                 <div class="result-source">📄 ${escapeHtml(result.source_uri)}</div>
                 <div class="result-score">${(result.relevance_score * 100).toFixed(1)}%</div>
             </div>
-            <div class="result-content">${highlightTerms(escapeHtml(extractSnippet(result.text_content, currentQuery, 200)), currentQuery)}</div>
+            <div class="result-content">
+                <div style="font-size:0.75em;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;margin-bottom:4px">Content Preview</div>
+                <div>${highlightTerms(escapeHtml(extractSnippet(result.text_content, currentQuery, 150)), currentQuery)}</div>
+                ${result.text_content.length > 150 ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:0.85em;color:#a5b4fc">Show full text</summary><div style="margin-top:6px;padding:8px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:0.9em">${escapeHtml(result.text_content)}</div></details>` : ''}
+            </div>
             <div class="result-meta">
                 <span>📍 Chunk ${result.chunk_index}</span>
                 <span>🆔 ${result.document_id}</span>

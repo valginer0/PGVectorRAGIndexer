@@ -18,18 +18,18 @@ document.addEventListener('DOMContentLoaded', () => {
 function initTabs() {
     const tabs = document.querySelectorAll('.tab');
     const contents = document.querySelectorAll('.tab-content');
-    
+
     tabs.forEach(tab => {
         tab.addEventListener('click', () => {
             const targetId = tab.dataset.tab;
-            
+
             // Update active states
             tabs.forEach(t => t.classList.remove('active'));
             contents.forEach(c => c.classList.remove('active'));
-            
+
             tab.classList.add('active');
             document.getElementById(targetId).classList.add('active');
-            
+
             // Load data for specific tabs
             if (targetId === 'documents') {
                 loadDocuments();
@@ -45,10 +45,10 @@ async function checkSystemHealth() {
     try {
         const response = await fetch(`${API_BASE}/health`);
         const data = await response.json();
-        
+
         const indicator = document.getElementById('statusIndicator');
         const statusText = document.getElementById('statusText');
-        
+
         if (data.status === 'healthy') {
             indicator.classList.remove('error');
             statusText.textContent = 'System Healthy';
@@ -68,11 +68,31 @@ async function checkSystemHealth() {
 function initSearch() {
     const searchBtn = document.getElementById('searchBtn');
     const searchQuery = document.getElementById('searchQuery');
-    
+
     searchBtn.addEventListener('click', performSearch);
     searchQuery.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') performSearch();
     });
+
+    // Show sample queries so users know what to search for
+    const resultsContainer = document.getElementById('searchResults');
+    const sampleQueries = [
+        'How does semantic search work?',
+        'What is RAG and how does it help LLMs?',
+        'How are documents processed and chunked?',
+        'What security features are available?',
+        'How to deploy and configure the system?',
+        'What is HNSW and how does it speed up search?',
+    ];
+    resultsContainer.innerHTML = `
+        <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <p>Try one of these sample queries:</p>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px">
+                ${sampleQueries.map(q => `<button class="btn" style="font-size:0.85em" onclick="document.getElementById('searchQuery').value='${q}';performSearch()">${q}</button>`).join('')}
+            </div>
+        </div>
+    `;
 }
 
 async function performSearch() {
@@ -81,14 +101,14 @@ async function performSearch() {
     const threshold = parseFloat(document.getElementById('threshold').value);
     const method = document.getElementById('searchMethod').value;
     const resultsContainer = document.getElementById('searchResults');
-    
+
     if (!query) {
         showMessage(resultsContainer, '⚠️ Please enter a search query', 'warning');
         return;
     }
-    
+
     resultsContainer.innerHTML = '<div class="loading"></div>';
-    
+
     try {
         const endpoint = method === 'hybrid' ? '/search/hybrid' : '/search';
         const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -100,7 +120,7 @@ async function performSearch() {
                 min_score: threshold
             })
         });
-        
+
         const data = await response.json();
         displaySearchResults(data.results || []);
     } catch (error) {
@@ -110,7 +130,7 @@ async function performSearch() {
 
 function displaySearchResults(results) {
     const container = document.getElementById('searchResults');
-    
+
     if (results.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -120,7 +140,7 @@ function displaySearchResults(results) {
         `;
         return;
     }
-    
+
     container.innerHTML = results.map(result => `
         <div class="result-card">
             <div class="result-header">
@@ -140,10 +160,10 @@ function displaySearchResults(results) {
 function initUpload() {
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
-    
+
     // Click to browse (NO drag & drop)
     uploadArea.addEventListener('click', () => fileInput.click());
-    
+
     // Handle file selection
     fileInput.addEventListener('change', (e) => {
         handleFiles(e.target.files);
@@ -154,21 +174,21 @@ async function handleFiles(files) {
     const progressContainer = document.getElementById('uploadProgress');
     const forceReindex = document.getElementById('forceReindex').checked;
     const customSourceUri = document.getElementById('customSourceUri').value.trim();
-    
+
     progressContainer.innerHTML = '';
-    
+
     for (const file of files) {
         // Try to get full path from file object (browser-dependent)
         let sourceUri = file.path || file.mozFullPath || file.webkitRelativePath || file.name;
-        
+
         // If custom source URI is provided for single file, override
         if (files.length === 1 && customSourceUri) {
             sourceUri = customSourceUri;
         }
-        
+
         await uploadFile(file, forceReindex, progressContainer, sourceUri);
     }
-    
+
     // Clear custom source URI after upload
     if (customSourceUri) {
         document.getElementById('customSourceUri').value = '';
@@ -191,12 +211,12 @@ async function uploadFile(file, forceReindex, container, customSourceUri = null)
         </div>
     `;
     container.insertAdjacentHTML('beforeend', progressHtml);
-    
+
     const progressItem = document.getElementById(progressId);
     const progressFill = progressItem.querySelector('.progress-fill');
     const progressPercent = progressItem.querySelector('.progress-percent');
     const progressStatus = progressItem.querySelector('.progress-status');
-    
+
     try {
         const formData = new FormData();
         formData.append('file', file);
@@ -204,17 +224,17 @@ async function uploadFile(file, forceReindex, container, customSourceUri = null)
         if (customSourceUri) {
             formData.append('custom_source_uri', customSourceUri);
         }
-        
+
         const response = await fetch(`${API_BASE}/upload-and-index`, {
             method: 'POST',
             body: formData
         });
-        
+
         const data = await response.json();
-        
+
         progressFill.style.width = '100%';
         progressPercent.textContent = '100%';
-        
+
         if (response.ok) {
             progressStatus.textContent = `✅ Indexed ${data.chunks_indexed} chunks`;
             progressStatus.classList.add('success');
@@ -239,10 +259,11 @@ function initDocuments() {
 async function loadDocuments() {
     const container = document.getElementById('documentsList');
     container.innerHTML = '<div class="loading"></div>';
-    
+
     try {
         const response = await fetch(`${API_BASE}/documents`);
-        const documents = await response.json();
+        const data = await response.json();
+        const documents = Array.isArray(data) ? data : (data.items || []);
         currentDocuments = documents;
         displayDocuments(documents);
     } catch (error) {
@@ -252,7 +273,7 @@ async function loadDocuments() {
 
 function displayDocuments(documents) {
     const container = document.getElementById('documentsList');
-    
+
     if (documents.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
@@ -262,7 +283,7 @@ function displayDocuments(documents) {
         `;
         return;
     }
-    
+
     container.innerHTML = documents.map(doc => `
         <div class="document-card">
             <div class="document-info">
@@ -286,12 +307,12 @@ async function deleteDocument(documentId) {
     if (!confirm('Are you sure you want to delete this document?')) {
         return;
     }
-    
+
     try {
         const response = await fetch(`${API_BASE}/documents/${documentId}`, {
             method: 'DELETE'
         });
-        
+
         if (response.ok) {
             loadDocuments();
         } else {
@@ -307,7 +328,7 @@ async function deleteDocument(documentId) {
 async function loadStatistics() {
     const container = document.getElementById('statsContainer');
     container.innerHTML = '<div class="loading"></div>';
-    
+
     try {
         const response = await fetch(`${API_BASE}/statistics`);
         const stats = await response.json();
@@ -319,7 +340,7 @@ async function loadStatistics() {
 
 function displayStatistics(stats) {
     const container = document.getElementById('statsContainer');
-    
+
     container.innerHTML = `
         <div class="stat-card">
             <div class="stat-label">Total Documents</div>

@@ -31,11 +31,30 @@ function initTabs() {
     const tabs = document.querySelectorAll('.tab');
     const contents = document.querySelectorAll('.tab-content');
 
-    // Hide upload tab in demo mode (uploads are blocked)
+    // In demo mode: hide upload tab and show capabilities banner
     if (isDemoMode) {
         tabs.forEach(tab => {
             if (tab.dataset.tab === 'upload') tab.style.display = 'none';
         });
+
+        const banner = document.createElement('div');
+        banner.style.cssText = 'background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;padding:16px 20px;margin-bottom:20px;font-size:0.88em;line-height:1.6;color:#c4b5fd';
+        banner.innerHTML = `
+            <strong style="color:#a5b4fc;font-size:1.05em">🎯 This demo showcases core search &amp; retrieval.</strong>
+            The full application also includes:
+            <span style="display:inline-block;margin-top:4px">
+                📤 Document upload &amp; indexing · 🔄 Smart re-indexing (only changed files) ·
+                📁 Watched folders with scheduled auto-indexing ·
+                🖥️ Desktop app with click-to-open results ·
+                🔐 API key auth, SSO/SAML &amp; per-user document visibility ·
+                🌳 Document tree navigation · 📦 Export &amp; restore
+            </span>
+            <div style="margin-top:8px">
+                <a href="https://pgvectorragindexer.com" target="_blank" style="color:#818cf8;text-decoration:underline">Learn more →</a>
+            </div>
+        `;
+        const tabsNav = document.querySelector('.tabs');
+        tabsNav.parentNode.insertBefore(banner, tabsNav);
     }
 
     tabs.forEach(tab => {

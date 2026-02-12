@@ -43,12 +43,23 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Responsive CSS: 4-col → 2-col → 1-col grid, glassmorphism cards, featured card highlight
 - [x] Nav link added between Teams and Developers
 
-### ⬜ #13b Self-Serve Licensing — Stripe Automation
+### ✅ #13b Self-Serve Licensing — Stripe Automation
 - **Effort**: ~6-8h | **Edition**: N/A (website + backend) | **Dependencies**: #13a, #17
-- **Repo**: `PGVectorRAGIndexerWebsite` + signing service
-- [ ] Stripe Checkout integration (Team + Organization tiers)
-- [ ] License key generation: Stripe webhook → signing service → email delivery
-- [ ] Manual key generation script for direct sales
+- **Repo**: `PGVectorRAGIndexerWebsite` (Vercel serverless functions)
+- [x] Stripe Checkout integration (Team $299/yr + Organization $799/yr)
+  - `api/checkout.js`: creates Stripe Checkout sessions per tier
+  - Pricing page buttons wired to checkout API with loading state
+  - Success modal on return from Stripe (`#purchase-success` hash)
+- [x] License key generation: Stripe webhook → JWT signing → email delivery
+  - `api/webhook.js`: handles `checkout.session.completed` event
+  - Generates JWT license key (same format as `generate_license_key.py`)
+  - Emails key via Zoho Mail SMTP (`hello@ragvault.net`)
+  - Includes installation instructions for macOS/Linux/Windows
+- [x] Manual key generation script for direct sales (`generate_license_key.py` — existed)
+- [x] Stripe Products + Prices created (test mode)
+- [x] Webhook endpoint configured (`checkout.session.completed`)
+- [x] End-to-end tested: checkout → payment → license key email delivered
+- **Note**: Yahoo Mail rejects emails from new domain (PH01 policy); Gmail/corporate works fine. Consider Resend for better deliverability.
 
 ---
 

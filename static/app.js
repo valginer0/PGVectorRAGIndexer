@@ -141,7 +141,11 @@ function displaySearchResults(results) {
         return;
     }
 
-    container.innerHTML = results.map(result => `
+    container.innerHTML = `
+        <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:0.9em;color:#a5b4fc">
+            💡 In the desktop app, click any result to open the document with the matched section highlighted.
+        </div>
+    ` + results.map(result => `
         <div class="result-card">
             <div class="result-header">
                 <div class="result-source">📄 ${escapeHtml(result.source_uri)}</div>

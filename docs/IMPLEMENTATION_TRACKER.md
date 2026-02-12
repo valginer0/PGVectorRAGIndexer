@@ -147,7 +147,7 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Desktop API methods: `register_client()`, `client_heartbeat()`, `list_clients()`
 - [x] Tests: 20 tests (migration, helpers, DB resilience, endpoint registration)
 
-### 🟡 #15 Hosted Demo Instance
+### ✅ #15 Hosted Demo Instance
 - **Effort**: ~6-10h | **Edition**: N/A (marketing) | **Dependencies**: None
 - **Branch**: `feature/roadmap-v4`
 - [x] Read-only mode: `DEMO_MODE=1` env var blocks all write operations (middleware)
@@ -163,7 +163,7 @@ These have zero dependencies on each other and should start simultaneously.
   - Polls demo server `/health` endpoint every 3s during cold start
   - Shows feature cards and sample queries while waiting
   - Auto-redirects when server responds; graceful fallback on timeout
-- [x] "Try Live Demo" button on website (hero section + FAQ link)
+- [x] "Try Live Demo" button on website (bold gradient CTA in hero section)
 - [x] Deployed to Render free tier (auto-sleep) + Neon free tier (pgvector DB)
   - URL: https://demo-pgvectorrag.onrender.com
   - CPU-only PyTorch for 512MB RAM limit; deferred init for fast port binding
@@ -171,8 +171,10 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Sample corpus: `scripts/seed_demo.py` — 8 documents, 40 chunks seeded into Neon
   - Topics: getting started, vector embeddings, document processing, API reference,
     RAG concepts, deployment guide, security, performance tuning
-- [ ] Banner: "This demo runs on our server with sample data. The real product runs entirely on yours."
-- [ ] Conversion CTA: "Like what you see? Install the local version →"
+- [x] Demo UX: capabilities banner listing full app features + "Learn more →" link to ragvault.net
+- [x] Demo UX: hide Upload tab and Delete buttons in demo mode (detected via `/api` demo flag)
+- [x] Demo UX: clickable sample query buttons so users know what to search
+- [x] Demo UX: desktop app hint banners on Search and Documents tabs
 
 ---
 

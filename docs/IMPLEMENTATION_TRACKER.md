@@ -166,7 +166,11 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] "Try Live Demo" button on website (hero section + FAQ link)
 - [x] Deployed to Render free tier (auto-sleep) + Neon free tier (pgvector DB)
   - URL: https://demo-pgvectorrag.onrender.com
-- [ ] Sample corpus: pre-index demo documents via seeding script
+  - CPU-only PyTorch for 512MB RAM limit; deferred init for fast port binding
+  - HEAD support on root endpoint for Render port detection
+- [x] Sample corpus: `scripts/seed_demo.py` — 8 documents, 40 chunks seeded into Neon
+  - Topics: getting started, vector embeddings, document processing, API reference,
+    RAG concepts, deployment guide, security, performance tuning
 - [ ] Banner: "This demo runs on our server with sample data. The real product runs entirely on yours."
 - [ ] Conversion CTA: "Like what you see? Install the local version →"
 

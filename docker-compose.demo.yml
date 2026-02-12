@@ -44,20 +44,18 @@ services:
       POSTGRES_PASSWORD: rag_demo_password
       POSTGRES_DB: rag_vector_db
       DEMO_MODE: "1"
+      API_REQUIRE_AUTH: "false"
     ports:
-      - "8000:8000"
-    volumes:
-      - demo_model_cache:/root/.cache/huggingface
+      - "10000:10000"
     depends_on:
       db:
         condition: service_healthy
     networks:
       - demo_network
-    command: uvicorn api:app --host 0.0.0.0 --port 8000
+    command: ["bash", "scripts/demo-entrypoint.sh"]
 
 volumes:
   demo_postgres_data:
-  demo_model_cache:
 
 networks:
   demo_network:

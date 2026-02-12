@@ -1,0 +1,60 @@
+# =============================================================================
+# PGVectorRAGIndexer — Render Blueprint (Demo Instance)
+# =============================================================================
+#
+# Deploys a read-only demo instance on Render free tier with auto-sleep.
+# The web service uses Dockerfile.demo and connects to a free PostgreSQL instance.
+#
+# To deploy:
+#   1. Push this file to your repo
+#   2. Go to https://dashboard.render.com/blueprints
+#   3. Connect your GitHub repo and select this blueprint
+#
+# The demo URL will be: https://demo-pgvectorrag.onrender.com
+# =============================================================================
+
+databases:
+  - name: demo-pgvectorrag-db
+    plan: free
+    databaseName: rag_vector_db
+    user: rag_user
+    postgresMajorVersion: "16"
+    ipAllowList: []  # Only internal connections
+
+services:
+  - type: web
+    name: demo-pgvectorrag
+    plan: free
+    runtime: docker
+    dockerfilePath: ./Dockerfile.demo
+    dockerContext: .
+    healthCheckPath: /health
+    envVars:
+      - key: DEMO_MODE
+        value: "1"
+      - key: DB_HOST
+        fromDatabase:
+          name: demo-pgvectorrag-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: demo-pgvectorrag-db
+          property: port
+      - key: POSTGRES_USER
+        fromDatabase:
+          name: demo-pgvectorrag-db
+          property: user
+      - key: POSTGRES_PASSWORD
+        fromDatabase:
+          name: demo-pgvectorrag-db
+          property: password
+      - key: POSTGRES_DB
+        fromDatabase:
+          name: demo-pgvectorrag-db
+          property: database
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: API_HOST
+        value: "0.0.0.0"
+      - key: API_REQUIRE_AUTH
+        value: "false"

@@ -4,6 +4,7 @@ const API_BASE = '';
 // State
 let currentDocuments = [];
 let isDemoMode = false;
+let currentQuery = '';
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
@@ -160,6 +161,7 @@ async function performSearch() {
         });
 
         const data = await response.json();
+        currentQuery = query;
         displaySearchResults(data.results || []);
     } catch (error) {
         showMessage(resultsContainer, `❌ Search failed: ${error.message}`, 'error');
@@ -189,7 +191,7 @@ function displaySearchResults(results) {
                 <div class="result-source">📄 ${escapeHtml(result.source_uri)}</div>
                 <div class="result-score">${(result.relevance_score * 100).toFixed(1)}%</div>
             </div>
-            <div class="result-content">${escapeHtml(result.text_content)}</div>
+            <div class="result-content">${highlightTerms(escapeHtml(extractSnippet(result.text_content, currentQuery, 200)), currentQuery)}</div>
             <div class="result-meta">
                 <span>📍 Chunk ${result.chunk_index}</span>
                 <span>🆔 ${result.document_id}</span>
@@ -422,6 +424,36 @@ function formatBytes(bytes) {
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
+function extractSnippet(text, query, window = 200) {
+    if (!text) return '';
+    if (!query) return text.length <= window ? text : text.slice(0, window).trim() + '...';
+    const words = query.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+    if (!words.length) return text.length <= window ? text : text.slice(0, window).trim() + '...';
+    const textLower = text.toLowerCase();
+    let bestPos = -1;
+    for (const word of words) {
+        const pos = textLower.indexOf(word);
+        if (pos !== -1 && (bestPos === -1 || pos < bestPos)) bestPos = pos;
+    }
+    if (bestPos === -1) return text.length <= window ? text : text.slice(0, window).trim() + '...';
+    const half = Math.floor(window / 2);
+    let start = Math.max(0, bestPos - half);
+    let end = Math.min(text.length, bestPos + half);
+    if (start === 0) end = Math.min(text.length, window);
+    else if (end === text.length) start = Math.max(0, text.length - window);
+    const prefix = start > 0 ? '...' : '';
+    const suffix = end < text.length ? '...' : '';
+    return prefix + text.slice(start, end).trim() + suffix;
+}
+
+function highlightTerms(html, query) {
+    if (!html || !query) return html;
+    const words = query.split(/\s+/).filter(w => w.length >= 2);
+    if (!words.length) return html;
+    const pattern = new RegExp('(' + words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+    return html.replace(pattern, '<mark style="background:rgba(99,102,241,0.3);color:inherit;border-radius:2px;padding:0 2px">$1</mark>');
 }
 
 function showMessage(container, message, type) {

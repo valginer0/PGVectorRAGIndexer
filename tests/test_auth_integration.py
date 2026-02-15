@@ -21,7 +21,11 @@ import psycopg2
 # Ensure project root is on the path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from testcontainers.postgres import PostgresContainer
+testcontainers_postgres = pytest.importorskip(
+    "testcontainers.postgres",
+    reason="testcontainers is required for auth integration tests",
+)
+PostgresContainer = testcontainers_postgres.PostgresContainer
 
 logger = logging.getLogger(__name__)
 

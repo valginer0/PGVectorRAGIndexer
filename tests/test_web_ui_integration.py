@@ -4,7 +4,7 @@ Integration tests for Web UI functionality with actual API calls.
 
 import pytest
 import io
-import httpx
+from fastapi.testclient import TestClient
 from api import app
 import api as api_module
 import embeddings
@@ -46,20 +46,18 @@ class TestWebUIIntegration:
         embeddings._embedding_service = None
 
     @pytest.fixture
-    async def client(self):
-        """Create async ASGI test client."""
-        transport = httpx.ASGITransport(app=app)
-        async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
-            yield client
+    def client(self):
+        """Create test client."""
+        return TestClient(app)
     
-    async def test_upload_and_search_workflow(self, client, db_manager):
+    def test_upload_and_search_workflow(self, client, db_manager):
         """Test complete workflow: upload document, then search for content."""
         # Step 1: Upload a document
         file_content = b"The principal architect designed the system with scalability in mind."
         file_data = io.BytesIO(file_content)
         filename = "architect_doc.txt"
         
-        upload_response = await client.post(
+        upload_response = client.post(
             "/upload-and-index",
             files={"file": (filename, file_data, "text/plain")}
         )
@@ -71,13 +69,13 @@ class TestWebUIIntegration:
         document_id = upload_data["document_id"]
         
         # Diagnostic: ensure DB shows chunks before searching
-        stats_pre_search = await client.get("/statistics")
+        stats_pre_search = client.get("/statistics")
         assert stats_pre_search.status_code == 200
         stats_payload = stats_pre_search.json()
         assert stats_payload.get("total_chunks", 0) > 0, "Stats should reflect inserted chunk before search"
 
         # Step 2: Search for content that exists in the document
-        search_response = await client.post(
+        search_response = client.post(
             "/search",
             json={
                 "query": "principal architect",
@@ -106,7 +104,7 @@ class TestWebUIIntegration:
         assert len(first_result["text_content"]) > 0
         
         # Step 3: Verify document appears in list
-        docs_response = await client.get("/documents")
+        docs_response = client.get("/documents")
         assert docs_response.status_code == 200
         payload = docs_response.json()
         docs = payload.get("items", [])
@@ -117,7 +115,7 @@ class TestWebUIIntegration:
         assert uploaded_doc["chunk_count"] > 0
         
         # Step 4: Verify statistics are updated
-        stats_response = await client.get("/statistics")
+        stats_response = client.get("/statistics")
         assert stats_response.status_code == 200
         stats = stats_response.json()
         
@@ -126,15 +124,15 @@ class TestWebUIIntegration:
         assert "embedding_model" in stats
         
         # Cleanup
-        await client.delete(f"/documents/{document_id}")
+        client.delete(f"/documents/{document_id}")
     
-    async def test_search_with_different_thresholds(self, client, db_manager):
+    def test_search_with_different_thresholds(self, client):
         """Test that search respects min_score threshold."""
         # Upload test document
         file_content = b"Machine learning is a subset of artificial intelligence."
         file_data = io.BytesIO(file_content)
         
-        upload_response = await client.post(
+        upload_response = client.post(
             "/upload-and-index",
             files={"file": ("ml_doc.txt", file_data, "text/plain")}
         )
@@ -142,7 +140,7 @@ class TestWebUIIntegration:
         document_id = upload_response.json()["document_id"]
         
         # Search with very low threshold (should return results)
-        response_low = await client.post(
+        response_low = client.post(
             "/search",
             json={"query": "machine learning", "top_k": 5, "min_score": 0.0}
         )
@@ -150,7 +148,7 @@ class TestWebUIIntegration:
         results_low = response_low.json()["results"]
         
         # Search with very high threshold (should return fewer or no results)
-        response_high = await client.post(
+        response_high = client.post(
             "/search",
             json={"query": "machine learning", "top_k": 5, "min_score": 0.99}
         )
@@ -161,16 +159,16 @@ class TestWebUIIntegration:
         assert len(results_low) >= len(results_high)
         
         # Cleanup
-        await client.delete(f"/documents/{document_id}")
+        client.delete(f"/documents/{document_id}")
     
-    async def test_documents_list_shows_source_uri(self, client, db_manager):
+    def test_documents_list_shows_source_uri(self, client):
         """Test that documents list includes source_uri field."""
         # Upload a document
         file_content = b"Test document for source URI verification."
         file_data = io.BytesIO(file_content)
         filename = "source_uri_test.txt"
         
-        upload_response = await client.post(
+        upload_response = client.post(
             "/upload-and-index",
             files={"file": (filename, file_data, "text/plain")}
         )
@@ -178,7 +176,7 @@ class TestWebUIIntegration:
         document_id = upload_response.json()["document_id"]
         
         # Get documents list
-        docs_response = await client.get("/documents")
+        docs_response = client.get("/documents")
         assert docs_response.status_code == 200
         payload = docs_response.json()
         docs = payload.get("items", [])
@@ -193,15 +191,15 @@ class TestWebUIIntegration:
         assert our_doc["source_uri"] != ""
         
         # Cleanup
-        await client.delete(f"/documents/{document_id}")
+        client.delete(f"/documents/{document_id}")
     
-    async def test_search_results_include_all_required_fields(self, client, db_manager):
+    def test_search_results_include_all_required_fields(self, client):
         """Test that search results include all fields needed by Web UI."""
         # Upload a document
         file_content = b"Testing search result fields for web UI display."
         file_data = io.BytesIO(file_content)
         
-        upload_response = await client.post(
+        upload_response = client.post(
             "/upload-and-index",
             files={"file": ("fields_test.txt", file_data, "text/plain")}
         )
@@ -209,7 +207,7 @@ class TestWebUIIntegration:
         document_id = upload_response.json()["document_id"]
         
         # Perform search
-        search_response = await client.post(
+        search_response = client.post(
             "/search",
             json={"query": "testing search", "top_k": 5, "min_score": 0.0}
         )
@@ -241,11 +239,11 @@ class TestWebUIIntegration:
         assert isinstance(result["document_id"], str)
         
         # Cleanup
-        await client.delete(f"/documents/{document_id}")
+        client.delete(f"/documents/{document_id}")
     
-    async def test_statistics_endpoint_returns_valid_data(self, client, db_manager):
+    def test_statistics_endpoint_returns_valid_data(self, client):
         """Test that statistics endpoint returns all required fields."""
-        response = await client.get("/statistics")
+        response = client.get("/statistics")
         assert response.status_code == 200
         
         stats = response.json()

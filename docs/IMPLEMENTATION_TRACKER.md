@@ -206,6 +206,64 @@ These have zero dependencies on each other and should start simultaneously.
 - [ ] Background service: macOS launchd (deferred)
 - [ ] Background service: Windows Task Scheduler (deferred)
 
+### ⬜ #6b Server-First Automation Profile (safe mixed-mode scheduling)
+- **Effort**: ~8-14h | **Edition**: Team | **Dependencies**: #6, #9, #10, #11
+- **Branch**: `feature/roadmap-v5-server-first-automation` (recommended)
+- **Design reference**: `docs/RFC_6B_SERVER_FIRST_AUTOMATION.md`
+- **Compatibility guardrails**:
+  - [ ] backward compatible by default (`execution_scope='client'` for existing rows)
+  - [ ] server scheduler is opt-in (disabled by default)
+  - [ ] no dependency on #16 Phase 4b (DB-backed roles/compliance)
+- [ ] Add explicit watched-root execution scope: `client` vs `server`
+- [ ] Enforce source partitioning:
+  - [ ] `client` roots can only be scanned by matching client scheduler
+  - [ ] `server` roots can only be scanned by server scheduler
+  - [ ] reject wrong-scope scan requests with clear 409 error
+- [ ] Add stable scheduler root identity (`root_id`) and executor identity (`executor_id`)
+- [ ] Add normalized path + scoped uniqueness model for watched roots:
+  - [ ] add `normalized_folder_path` and normalize existing paths during backfill
+  - [ ] replace global unique `folder_path` with partial unique `(executor_id, normalized_folder_path)` for `client` scope
+  - [ ] add partial unique `(normalized_folder_path)` for `server` scope
+- [ ] Enforce DB invariants with `CHECK` constraint:
+  - [ ] `execution_scope='client' => executor_id IS NOT NULL`
+  - [ ] `execution_scope='server' => executor_id IS NULL`
+- [ ] Enforce explicit scope transition flow:
+  - [ ] disallow ad-hoc `execution_scope` changes in generic update paths
+  - [ ] add explicit transition API with preflight conflict check
+  - [ ] perform transition as in-place update preserving `root_id`
+- [ ] Add canonical document identity (`canonical_source_key`) and dedupe policy:
+  - [ ] key format `client:<client_id>:<normalized_path>` for client roots
+  - [ ] key format `server:<root_id>:<normalized_path>` for server roots
+  - [ ] dedupe by canonical key first, then content hash
+- [ ] Upgrade lock keying for scheduler safety:
+  - [ ] lock on `(root_id, relative_path)` instead of plain `source_uri`
+  - [ ] keep TTL auto-expiry and force-release admin controls
+- [ ] Add server automation safety controls:
+  - [ ] dry-run mode (no writes, report-only)
+  - [ ] soft-delete/quarantine window before hard delete
+  - [ ] per-root scan watermarks (`last_scan_started_at`, `last_scan_completed_at`, `last_successful_scan_at`)
+  - [ ] failure backoff with `consecutive_failures` and `last_error_at`
+  - [ ] per-root concurrency cap (default 1)
+- [ ] Add observability and admin controls:
+  - [ ] scheduler status API by root (next run, last run, failure streak)
+  - [ ] activity log fields: `executor_scope`, `executor_id`, `root_id`, `run_id`
+  - [ ] admin UI controls for server roots: pause/resume/scan-now
+- [ ] Alembic migration updates:
+  - [ ] extend `watched_folders` with `execution_scope`, `executor_id`, `normalized_folder_path`, `root_id`, failure fields
+  - [ ] backfill existing rows (`execution_scope='client'`, `executor_id=client_id`, generated `root_id`)
+  - [ ] add indexes on `(execution_scope, enabled, schedule_cron)` and `(root_id, execution_scope)`
+- [ ] Tests:
+  - [ ] mixed-mode conflict tests (server root + desktop root with same relative path)
+  - [ ] wrong-scope rejection tests (409 path)
+  - [ ] lock race tests across server/client schedulers
+  - [ ] dedupe/identity invariants under path normalization
+  - [ ] delete quarantine lifecycle tests
+
+Implementation sequencing (recommended):
+- [ ] Phase 6b-MVP: scope partitioning + server scheduler (single active loop) + status/pause/resume/scan-now + 409 protection
+- [ ] Phase 6b.2: canonical identity + lock key migration `(root_id, relative_path)`
+- [ ] Phase 6b.3: quarantine delete lifecycle + dry-run reporting polish
+
 ### ✅ #9 Path Mapping / Virtual Roots
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #1
 - **Branch**: `feature/roadmap-v4`
@@ -369,4 +427,4 @@ These have zero dependencies on each other and should start simultaneously.
 
 ---
 
-Last updated: 2026-02-10
+Last updated: 2026-02-16

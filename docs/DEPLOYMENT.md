@@ -119,6 +119,32 @@ docker exec -it vector_rag_app python mcp_server.py
 
 ---
 
+## Server-First Automation Profile (#6b, optional)
+
+For deployments where source folders live on server disks/NAS mounts, scheduled indexing can run server-side.
+
+- Default behavior remains desktop-compatible (`client` scope watched roots).
+- Server scheduler is opt-in (`SERVER_SCHEDULER_ENABLED=false` by default).
+- Mixed-mode is supported via explicit execution scope per watched root:
+  - `client` scope: desktop scheduler for that client
+  - `server` scope: server scheduler
+- Root path uniqueness is scoped (not global):
+  - client scope: unique on `(executor_id, normalized_folder_path)`
+  - server scope: unique on `(normalized_folder_path)`
+- `execution_scope` changes must use explicit transition API (`POST /watched-folders/{id}/transition-scope`).
+- Scope transition is an in-place update (same root row / `root_id`) with preflight conflict checks.
+- Wrong-scope scan attempts should be rejected with HTTP 409 (conflict) to prevent duplicate ownership.
+
+Rollout recommendation:
+1. Upgrade and migrate database schema.
+2. Keep all existing roots client-scoped first (no behavior change).
+3. Move selected roots to server scope.
+4. Enable server scheduler after validating status endpoints.
+
+See: `docs/RFC_6B_SERVER_FIRST_AUTOMATION.md`.
+
+---
+
 ## Version Compatibility
 
 The desktop client checks version compatibility on connect via `GET /api/version`:

@@ -38,6 +38,8 @@ This design is intentional. It means:
 - There are no accounts, subscriptions, or hidden data flows
 - You can use it safely with personal, private, or sensitive documents
 
+**Policy:** PGVectorRAGIndexer is local-only by design — your data stays on your hardware, and we do not offer hosted indexing or storage.
+
 Unlike chat-based tools, this app focuses on **search and discovery**, not conversation.  
 It helps you *find and rediscover* documents by meaning — even when you don’t remember the exact words.
 

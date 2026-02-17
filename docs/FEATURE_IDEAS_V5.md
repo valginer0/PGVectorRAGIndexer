@@ -176,6 +176,7 @@ These two have **zero dependency on each other** and should start simultaneously
 | Feature | Track | Effort | Why |
 |---------|-------|--------|-----|
 | **#6 Scheduled Indexing** | Tech | ~14-20h | Team edition feature, requires background service |
+| **#6b Server-First Automation Profile** | Tech | ~8-14h | Required when watched roots live on server/mounted shares |
 | **#9 Path Mapping (Virtual Roots)** | Tech | ~6-10h | Required for #7 in remote setups |
 | **#7 Hierarchical Browser** | Tech | ~12-16h | Major UX improvement, available in both editions |
 | **#10 Activity and Audit Log** | Tech | ~6-10h | Required for #3 |
@@ -535,6 +536,85 @@ UI features:
 - Status indicators by client
 - Toggle: "Run as background service" vs "Run only while app is open"
 - Service status indicator (running/stopped/not installed)
+
+### 6b. Server-First Automation Profile (when files live on server storage)
+**Effort**: ~8-14h | **Dependencies**: #6, #9, #10, #11 | **Edition**: Team
+
+When folders are on server disks or server-mounted shares, indexing must run server-side on a schedule. This profile extends #6 with explicit source partitioning and conflict safety for mixed environments (server roots + desktop-local roots).
+
+Source ownership and partitioning rules:
+- Every watched root has an explicit execution scope: `client` or `server`.
+- `client` scope: scanned by desktop scheduler with that `client_id`.
+- `server` scope: scanned by server scheduler; `client_id` is NULL and `executor_id` is NULL.
+- A root cannot be both `client` and `server` scope at the same time.
+- Scope changes (`client <-> server`) must use an explicit transition API and happen as in-place updates (same row/root identity).
+
+Compatibility and rollout constraints (must-haves):
+- Backward compatibility first: existing installs default to `execution_scope='client'` and continue desktop-only behavior.
+- Server scheduler is opt-in (disabled by default).
+- Existing desktop clients can keep using current watched-folder flows without breakage.
+- No Phase 4b dependency: this feature must ship independently of DB-backed roles/compliance work.
+
+Canonical identity and dedupe rules:
+- Add `canonical_source_key` to each indexed document/chunk metadata.
+- `canonical_source_key` format:
+  - client scope: `client:<client_id>:<normalized_path>`
+  - server scope: `server:<root_id>:<normalized_path>`
+- Deduplicate by `canonical_source_key` first, then content hash.
+- If same content appears under different keys, keep separate records unless admin enables cross-root dedupe.
+
+Conflict resolution rules:
+- If two schedulers claim the same root, server scheduler wins for `server` scope and client scheduler wins for `client` scope.
+- Writes from wrong scope are rejected with explicit 409 message.
+- Locking remains TTL-based (`document_locks`) but lock key is upgraded from `source_uri` to `(root_id, relative_path)` for scheduler safety.
+
+Server scheduler runtime model (MVP):
+- Run scheduler in-process on the API server, guarded by a DB lease/advisory lock so only one active scheduler loop runs.
+- Do not require distributed scheduler election for this phase.
+- Add explicit env toggle: `SERVER_SCHEDULER_ENABLED` (default false).
+
+Safety controls required:
+- Dry-run mode: scan and report planned adds/updates/deletes without writing.
+- Delete policy: soft-delete first (quarantine window, e.g. 7 days), then hard-delete.
+- Scan watermark per root (`last_scan_started_at`, `last_scan_completed_at`, `last_successful_scan_at`).
+- Root health state (`healthy`, `degraded`, `error`) with backoff and retry policy.
+- Per-root concurrency cap (default 1) to avoid duplicate scans.
+
+Operational observability:
+- Activity log must record `executor_scope` (`client`/`server`), `executor_id`, root id, and run id.
+- New API endpoint for scheduler status by root (next run, last run, error streak).
+- Admin UI panel to view/force-pause/resume server-scope roots.
+
+Migration updates required:
+- Extend `watched_folders`:
+  - `execution_scope TEXT NOT NULL DEFAULT 'client' CHECK (execution_scope IN ('client','server'))`
+  - `executor_id TEXT NULL` (`client_id` for client scope, `NULL` for server scope)
+  - `normalized_folder_path TEXT NOT NULL` (normalized path key for scoped uniqueness)
+  - `CHECK` invariant: `client => executor_id IS NOT NULL`, `server => executor_id IS NULL`
+  - `root_id UUID NOT NULL` (stable scheduler root identity)
+  - `last_error_at TIMESTAMPTZ`, `consecutive_failures INT DEFAULT 0`
+- Backfill existing rows with `execution_scope='client'`, `executor_id=client_id`, generated `root_id`.
+- Add `canonical_source_key` as a real indexed field (not metadata-only) for reliable dedupe/lookups.
+- Replace global unique `folder_path` with scoped unique indexes on normalized path:
+  - partial unique `(executor_id, normalized_folder_path)` where `execution_scope='client'`
+  - partial unique `(normalized_folder_path)` where `execution_scope='server'`
+- Add indexes:
+  - `(execution_scope, enabled, schedule_cron)`
+  - `(root_id, execution_scope)`
+
+API/versioning notes:
+- Keep changes additive under `/api/v1`.
+- New fields on watched-folder payloads are optional and default-safe.
+- Expose scheduler capability flags/status endpoints without breaking old clients.
+
+Recommended delivery sequence:
+1. MVP: scope partitioning + server scheduler + status/pause/resume/scan-now + 409 protection.
+2. Identity hardening: canonical key + lock key migration.
+3. Safety polish: quarantine lifecycle (if needed after MVP).
+
+Non-goals for this phase:
+- Cross-tenant global dedupe.
+- Distributed scheduler cluster election across multiple API replicas (single active scheduler is sufficient initially).
 
 ---
 

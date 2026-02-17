@@ -206,66 +206,66 @@ These have zero dependencies on each other and should start simultaneously.
 - [ ] Background service: macOS launchd (deferred)
 - [ ] Background service: Windows Task Scheduler (deferred)
 
-### ⬜ #6b Server-First Automation Profile (safe mixed-mode scheduling)
+### ✅ #6b Server-First Automation Profile — MVP (safe mixed-mode scheduling)
 - **Effort**: ~8-14h | **Edition**: Team | **Dependencies**: #6, #9, #10, #11
 - **Branch**: `feature/roadmap-v5-server-first-automation` (recommended)
 - **Design reference**: `docs/RFC_6B_SERVER_FIRST_AUTOMATION.md`
 - **Compatibility guardrails**:
-  - [ ] backward compatible by default (`execution_scope='client'` for existing rows)
-  - [ ] server scheduler is opt-in (disabled by default)
-  - [ ] no dependency on #16 Phase 4b (DB-backed roles/compliance)
-- [ ] Add explicit watched-root execution scope: `client` vs `server`
-- [ ] Enforce source partitioning:
-  - [ ] `client` roots can only be scanned by matching client scheduler
-  - [ ] `server` roots can only be scanned by server scheduler
-  - [ ] reject wrong-scope scan requests with clear 409 error
-- [ ] Add stable scheduler root identity (`root_id`) and executor identity (`executor_id`)
-- [ ] Add normalized path + scoped uniqueness model for watched roots:
-  - [ ] add `normalized_folder_path` and normalize existing paths during backfill
-  - [ ] replace global unique `folder_path` with partial unique `(executor_id, normalized_folder_path)` for `client` scope
-  - [ ] add partial unique `(normalized_folder_path)` for `server` scope
-- [ ] Enforce DB invariants with `CHECK` constraint:
-  - [ ] `execution_scope='client' => executor_id IS NOT NULL`
-  - [ ] `execution_scope='server' => executor_id IS NULL`
-- [ ] Enforce explicit scope transition flow:
-  - [ ] disallow ad-hoc `execution_scope` changes in generic update paths
-  - [ ] add explicit transition API with preflight conflict check
-  - [ ] perform transition as in-place update preserving `root_id`
-- [ ] Server scheduler with async scan execution (amendments 1, 4):
-  - [ ] `asyncio.to_thread()` wrapper for `scan_folder()` to avoid blocking event loop
-  - [ ] deterministic advisory lock ID (`2050923308` = CRC32 of `pgvector_server_scheduler`)
-  - [ ] singleton scheduler loop, scans `execution_scope='server'` + `paused=false` roots
-- [ ] Desktop `FolderScheduler` scope filtering (amendment 2):
-  - [ ] `_check_folders()` must skip roots where `execution_scope != 'client'`
-  - [ ] `_check_folders()` must skip roots where `executor_id != self._client_id`
-- [ ] `GET /watched-folders` query filter params (amendment 5):
-  - [ ] `execution_scope=client|server` filter
-  - [ ] `executor_id=<client_id>` filter
-- [ ] Filesystem access validation for server roots (amendment 3):
-  - [ ] `POST /watched-folders` validates path exists when `execution_scope='server'`
+  - [x] backward compatible by default (`execution_scope='client'` for existing rows)
+  - [x] server scheduler is opt-in (disabled by default)
+  - [x] no dependency on #16 Phase 4b (DB-backed roles/compliance)
+- [x] Add explicit watched-root execution scope: `client` vs `server`
+- [x] Enforce source partitioning:
+  - [x] `client` roots can only be scanned by matching client scheduler
+  - [x] `server` roots can only be scanned by server scheduler
+  - [x] reject wrong-scope scan requests with clear 409 error
+- [x] Add stable scheduler root identity (`root_id`) and executor identity (`executor_id`)
+- [x] Add normalized path + scoped uniqueness model for watched roots:
+  - [x] add `normalized_folder_path` and normalize existing paths during backfill
+  - [x] replace global unique `folder_path` with partial unique `(executor_id, normalized_folder_path)` for `client` scope
+  - [x] add partial unique `(normalized_folder_path)` for `server` scope
+- [x] Enforce DB invariants with `CHECK` constraint:
+  - [x] `execution_scope='client' => executor_id IS NOT NULL`
+  - [x] `execution_scope='server' => executor_id IS NULL`
+- [x] Enforce explicit scope transition flow:
+  - [x] disallow ad-hoc `execution_scope` changes in generic update paths
+  - [x] add explicit transition API with preflight conflict check
+  - [x] perform transition as in-place update preserving `root_id`
+- [x] Server scheduler with async scan execution (amendments 1, 4):
+  - [x] `asyncio.to_thread()` wrapper for `scan_folder()` to avoid blocking event loop
+  - [x] deterministic advisory lock ID (`2050923308` = CRC32 of `pgvector_server_scheduler`)
+  - [x] singleton scheduler loop, scans `execution_scope='server'` + `paused=false` roots
+- [x] Desktop `FolderScheduler` scope filtering (amendment 2):
+  - [x] `_check_folders()` must skip roots where `execution_scope != 'client'`
+  - [x] `_check_folders()` must skip roots where `executor_id != self._client_id`
+- [x] `GET /watched-folders` query filter params (amendment 5):
+  - [x] `execution_scope=client|server` filter
+  - [x] `executor_id=<client_id>` filter
+- [x] Filesystem access validation for server roots (amendment 3):
+  - [x] `POST /watched-folders` validates path exists when `execution_scope='server'`
   - [ ] doc: Docker bind-mount requirement, bare-metal process user access
-- [ ] Add server automation safety controls:
-  - [ ] per-root scan watermarks (`last_scan_started_at`, `last_scan_completed_at`, `last_successful_scan_at`)
-  - [ ] failure backoff with `consecutive_failures` and `last_error_at`
-  - [ ] per-root concurrency cap (default 1)
-- [ ] Add observability and admin controls:
-  - [ ] scheduler status API by root (next run, last run, failure streak)
+- [x] Add server automation safety controls:
+  - [x] per-root scan watermarks (`last_scan_started_at`, `last_scan_completed_at`, `last_successful_scan_at`)
+  - [x] failure backoff with `consecutive_failures` and `last_error_at`
+  - [x] per-root concurrency cap (default 1)
+- [x] Add observability and admin controls:
+  - [x] scheduler status API by root (next run, last run, failure streak)
   - [ ] activity log fields: `executor_scope`, `executor_id`, `root_id`, `run_id`
-  - [ ] admin UI controls for server roots: pause/resume/scan-now
-- [ ] Alembic migration updates:
-  - [ ] extend `watched_folders` with `execution_scope`, `executor_id`, `normalized_folder_path`, `root_id`, failure fields
-  - [ ] backfill existing rows (`execution_scope='client'`, `executor_id=client_id`, generated `root_id`)
-  - [ ] add indexes on `(execution_scope, enabled, schedule_cron)` and `(root_id, execution_scope)`
-- [ ] Tests:
-  - [ ] mixed-mode conflict tests (server root + desktop root with same relative path)
-  - [ ] wrong-scope rejection tests (409 path)
-  - [ ] async scan execution test (does not block event loop)
-  - [ ] desktop scheduler scope filtering regression
-  - [ ] filesystem validation for server-scope root creation
-  - [ ] API filter params (`execution_scope`, `executor_id`)
+  - [x] admin UI controls for server roots: pause/resume/scan-now
+- [x] Alembic migration updates:
+  - [x] extend `watched_folders` with `execution_scope`, `executor_id`, `normalized_folder_path`, `root_id`, failure fields
+  - [x] backfill existing rows (`execution_scope='client'`, `executor_id=client_id`, generated `root_id`)
+  - [x] add indexes on `(execution_scope, enabled, schedule_cron)` and `(root_id, execution_scope)`
+- [x] Tests (38 tests):
+  - [x] mixed-mode conflict tests (server root + desktop root with same relative path)
+  - [x] wrong-scope rejection tests (409 path)
+  - [x] async scan execution test (does not block event loop)
+  - [x] desktop scheduler scope filtering regression
+  - [x] filesystem validation for server-scope root creation
+  - [x] API filter params (`execution_scope`, `executor_id`)
 
 Implementation sequencing (recommended):
-- [ ] Phase 6b-MVP: scope partitioning + server scheduler (async, singleton) + desktop scope filtering + API filter params + filesystem validation + status/pause/resume/scan-now + 409 protection
+- [x] Phase 6b-MVP: scope partitioning + server scheduler (async, singleton) + desktop scope filtering + API filter params + filesystem validation + status/pause/resume/scan-now + 409 protection
 - [ ] Phase 6b.2 (deferred): canonical identity (`canonical_source_key`) + lock key migration `(root_id, relative_path)`
 - [ ] Phase 6b.3 (deferred): quarantine delete lifecycle + dry-run reporting polish
 

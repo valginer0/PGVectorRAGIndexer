@@ -146,7 +146,11 @@ class FolderScheduler(QObject):
     # ------------------------------------------------------------------
 
     def _check_folders(self):
-        """Fetch enabled folders and scan any that are due."""
+        """Fetch enabled folders and scan any that are due.
+
+        #6b: Only scans client-scope roots owned by this client.
+        Skips server-scope roots and roots owned by other clients.
+        """
         try:
             data = self._api_client.list_watched_folders(enabled_only=True)
             folders = data.get("folders", [])
@@ -155,6 +159,16 @@ class FolderScheduler(QObject):
             return
 
         for folder in folders:
+            # #6b scope filtering: skip non-client roots
+            scope = folder.get("execution_scope", "client")
+            if scope != "client":
+                continue
+
+            # #6b executor filtering: skip roots owned by other clients
+            executor = folder.get("executor_id")
+            if executor and self._client_id and executor != self._client_id:
+                continue
+
             folder_id = folder.get("id")
             folder_path = folder.get("folder_path", "")
             cron = folder.get("schedule_cron", "0 */6 * * *")

@@ -231,16 +231,20 @@ These have zero dependencies on each other and should start simultaneously.
   - [ ] disallow ad-hoc `execution_scope` changes in generic update paths
   - [ ] add explicit transition API with preflight conflict check
   - [ ] perform transition as in-place update preserving `root_id`
-- [ ] Add canonical document identity (`canonical_source_key`) and dedupe policy:
-  - [ ] key format `client:<client_id>:<normalized_path>` for client roots
-  - [ ] key format `server:<root_id>:<normalized_path>` for server roots
-  - [ ] dedupe by canonical key first, then content hash
-- [ ] Upgrade lock keying for scheduler safety:
-  - [ ] lock on `(root_id, relative_path)` instead of plain `source_uri`
-  - [ ] keep TTL auto-expiry and force-release admin controls
+- [ ] Server scheduler with async scan execution (amendments 1, 4):
+  - [ ] `asyncio.to_thread()` wrapper for `scan_folder()` to avoid blocking event loop
+  - [ ] deterministic advisory lock ID (`2050923308` = CRC32 of `pgvector_server_scheduler`)
+  - [ ] singleton scheduler loop, scans `execution_scope='server'` + `paused=false` roots
+- [ ] Desktop `FolderScheduler` scope filtering (amendment 2):
+  - [ ] `_check_folders()` must skip roots where `execution_scope != 'client'`
+  - [ ] `_check_folders()` must skip roots where `executor_id != self._client_id`
+- [ ] `GET /watched-folders` query filter params (amendment 5):
+  - [ ] `execution_scope=client|server` filter
+  - [ ] `executor_id=<client_id>` filter
+- [ ] Filesystem access validation for server roots (amendment 3):
+  - [ ] `POST /watched-folders` validates path exists when `execution_scope='server'`
+  - [ ] doc: Docker bind-mount requirement, bare-metal process user access
 - [ ] Add server automation safety controls:
-  - [ ] dry-run mode (no writes, report-only)
-  - [ ] soft-delete/quarantine window before hard delete
   - [ ] per-root scan watermarks (`last_scan_started_at`, `last_scan_completed_at`, `last_successful_scan_at`)
   - [ ] failure backoff with `consecutive_failures` and `last_error_at`
   - [ ] per-root concurrency cap (default 1)
@@ -255,14 +259,15 @@ These have zero dependencies on each other and should start simultaneously.
 - [ ] Tests:
   - [ ] mixed-mode conflict tests (server root + desktop root with same relative path)
   - [ ] wrong-scope rejection tests (409 path)
-  - [ ] lock race tests across server/client schedulers
-  - [ ] dedupe/identity invariants under path normalization
-  - [ ] delete quarantine lifecycle tests
+  - [ ] async scan execution test (does not block event loop)
+  - [ ] desktop scheduler scope filtering regression
+  - [ ] filesystem validation for server-scope root creation
+  - [ ] API filter params (`execution_scope`, `executor_id`)
 
 Implementation sequencing (recommended):
-- [ ] Phase 6b-MVP: scope partitioning + server scheduler (single active loop) + status/pause/resume/scan-now + 409 protection
-- [ ] Phase 6b.2: canonical identity + lock key migration `(root_id, relative_path)`
-- [ ] Phase 6b.3: quarantine delete lifecycle + dry-run reporting polish
+- [ ] Phase 6b-MVP: scope partitioning + server scheduler (async, singleton) + desktop scope filtering + API filter params + filesystem validation + status/pause/resume/scan-now + 409 protection
+- [ ] Phase 6b.2 (deferred): canonical identity (`canonical_source_key`) + lock key migration `(root_id, relative_path)`
+- [ ] Phase 6b.3 (deferred): quarantine delete lifecycle + dry-run reporting polish
 
 ### ✅ #9 Path Mapping / Virtual Roots
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #1

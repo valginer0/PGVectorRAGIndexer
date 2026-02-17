@@ -1,6 +1,6 @@
 # RFC: #6b Server-First Automation Profile
 
-Status: Draft (proposed)
+Status: Draft (proposed, amended after review)
 Owner: Core backend
 Related roadmap items: #6, #6b, #9, #10, #11, #3 (document locks)
 
@@ -72,6 +72,8 @@ Scope transition invariants:
 
 ## 5.2 Document identity (`canonical_source_key`)
 
+> **Deferred to Phase 6b.2.** Not required for MVP — the 409 wrong-scope protection prevents cross-scope collisions operationally.
+
 Add `canonical_source_key TEXT NULL` to `document_chunks` and index it.
 
 Format:
@@ -81,8 +83,11 @@ Format:
 Dedupe policy:
 1. Canonical key match => update/replace that logical document.
 2. If no key match, optionally dedupe by content hash if configured.
+3. Content-hash dedupe is OFF by default — enable per-root to avoid surprising behavior.
 
 ## 5.3 Document lock keying migration
+
+> **Deferred to Phase 6b.2.** Not required for MVP.
 
 Current lock identity is `source_uri`, which is not safe for mixed scope.
 
@@ -101,6 +106,10 @@ Migration strategy:
 
 - Continues unchanged for `execution_scope='client'` roots.
 - Client scheduler must only scan roots where `executor_id == client_id`.
+- **Amendment:** `FolderScheduler._check_folders()` must filter by scope and executor ownership. Each folder returned from the API must satisfy:
+  - `execution_scope == 'client'`
+  - `executor_id == self._client_id` (or `executor_id` is absent for legacy rows)
+- Alternatively, the desktop scheduler should call `list_watched_folders(execution_scope='client', executor_id=<client_id>)` so the server returns only relevant roots (see §7.1).
 
 ## 6.2 Server scheduler (new)
 
@@ -108,6 +117,38 @@ Migration strategy:
 - Enabled by env flag (default off): `SERVER_SCHEDULER_ENABLED=false`.
 - Uses DB advisory lease with non-blocking `pg_try_advisory_lock(...)` to ensure one active scheduler instance.
 - Scans only `execution_scope='server'` and `paused=false` roots.
+
+### Advisory lock ID
+
+Use a deterministic, well-known constant for the advisory lock to avoid ID collisions:
+
+```python
+# CRC32("pgvector_server_scheduler") → deterministic constant
+SERVER_SCHEDULER_LOCK_ID = 2050923308
+```
+
+### Async scan execution
+
+**Critical:** The existing `scan_folder()` in `watched_folders.py` is synchronous (uses `os.walk()` + `DocumentIndexer`). Running it directly in the FastAPI async event loop would block all API requests for the duration of the scan.
+
+The server scheduler must wrap scan calls with `asyncio.to_thread()`:
+
+```python
+async def _run_scan(folder_path: str, client_id=None):
+    """Run a folder scan in a thread pool to avoid blocking the event loop."""
+    result = await asyncio.to_thread(scan_folder, folder_path, client_id)
+    return result
+```
+
+This keeps the existing sync `scan_folder()` code unchanged while preventing event loop starvation. No refactoring of `indexer_v2.py` or `watched_folders.py` is needed.
+
+### Filesystem access requirements
+
+Server-scope roots require that the folder path is accessible from the API server process filesystem:
+- **Docker deployments:** Source directories must be bind-mounted into the container (e.g., `-v /data/docs:/data/docs`).
+- **Bare-metal deployments:** The path must be readable by the API process user.
+
+The `POST /watched-folders` endpoint should validate that the path exists on the server when `execution_scope='server'` to fail fast rather than failing silently during the first scheduled scan.
 
 ## 6.3 Wrong-scope protection
 
@@ -125,6 +166,15 @@ All scan requests validate scope and executor ownership.
 - `max_concurrency`
 
 Defaults preserve current behavior when omitted.
+
+### Query filter parameters (amendment)
+
+`GET /watched-folders` must support optional query parameters for efficient scope/owner filtering:
+- `execution_scope=client|server` — filter by scope
+- `executor_id=<client_id>` — filter by owner (client-scope roots)
+- `enabled=true|false` — filter by enabled state (already exists as `enabled_only`)
+
+Both the desktop scheduler and the server scheduler should use these filters to query only their relevant roots, rather than fetching all roots and filtering client-side. This avoids unnecessary data transfer and scales better with many roots.
 
 ## 7.2 New endpoints
 
@@ -169,9 +219,12 @@ Scheduler status response should include:
 ### Phase 6b-MVP
 1. `watched_folders` schema extension + backfill.
 2. Scope/ownership checks + 409 path.
-3. Server scheduler (opt-in) with singleton lease.
-4. Scheduler status + pause/resume + scan-now endpoints.
-5. Basic tests for mixed-mode conflict and wrong-scope rejection.
+3. Server scheduler (opt-in) with singleton lease and `asyncio.to_thread()` scan wrapper.
+4. Desktop `FolderScheduler` scope filtering (skip non-client roots).
+5. `GET /watched-folders` query filter params (`execution_scope`, `executor_id`).
+6. Filesystem path validation for server-scope roots on creation.
+7. Scheduler status + pause/resume + scan-now endpoints.
+8. Basic tests for mixed-mode conflict and wrong-scope rejection.
 
 ### Phase 6b.2
 1. `canonical_source_key` column and indexing behavior.
@@ -190,15 +243,17 @@ Scheduler status response should include:
 - Wrong-scope write rejection (409) tests.
 - Mixed root collision tests (same relative path across scopes).
 - Server scheduler lease/singleton behavior.
+- Server scheduler async scan execution (does not block event loop).
 - Concurrency cap behavior.
 - Failure backoff and recovery.
 - Activity log field presence for scheduler runs.
+- Filesystem validation for server-scope root creation.
 
 ## 12. Open decisions
 
-1. Keep server scheduler in-process (recommended for MVP) vs external worker.
-2. Whether quarantine delete ships in MVP or phase 2.
-3. Whether content-hash dedupe is enabled by default.
+1. ~~Keep server scheduler in-process (recommended for MVP) vs external worker.~~ **Decided: in-process with `asyncio.to_thread()`.**
+2. ~~Whether quarantine delete ships in MVP or phase 2.~~ **Decided: deferred to Phase 6b.3.**
+3. ~~Whether content-hash dedupe is enabled by default.~~ **Decided: OFF by default, enable per-root.**
 
 ## 13. Expected effort
 
@@ -220,9 +275,9 @@ Existing files to extend:
 - `tests/test_api_versioning.py`
 
 New files to add:
-- `tests/test_server_scheduler.py` (singleton lease, scope filtering, pause/resume)
-- `tests/test_server_first_api.py` (409 wrong-scope, scheduler status/admin endpoints)
-- `tests/test_canonical_source_key.py` (canonical identity format + dedupe behavior)
+- `tests/test_server_scheduler.py` (singleton lease, scope filtering, pause/resume, async scan)
+- `tests/test_server_first_api.py` (409 wrong-scope, scheduler status/admin endpoints, query filter params)
+- `tests/test_canonical_source_key.py` (canonical identity format + dedupe behavior — Phase 6b.2)
 
 ### 14.2 Checkpoint-to-test mapping
 
@@ -250,6 +305,9 @@ New files to add:
 7. Additive API versioning/non-breaking responses:
    - `tests/test_api_versioning.py`
 
+8. Filesystem validation for server-scope roots:
+   - `tests/test_server_first_api.py`
+
 ### 14.3 Commands (local + CI)
 
 Fast pre-merge run:
@@ -269,3 +327,13 @@ python -m pytest tests/ -m "not slow" -v
 - No checkpoint is considered complete without a corresponding automated test assertion.
 - No manual QA step is required for RFC acceptance.
 - All new tests must pass in CI and locally before merge.
+
+## 15. Amendment log
+
+| # | Amendment | Rationale |
+|---|---|---|
+| 1 | Server scheduler must use `asyncio.to_thread()` for scan execution | `scan_folder()` is synchronous — would block the entire API event loop during scans |
+| 2 | Desktop `FolderScheduler._check_folders()` must filter by scope + executor | Without filtering, desktop scheduler would attempt to scan server-scope roots |
+| 3 | Server-scope roots require filesystem access documentation + path validation on creation | Fail fast on invalid paths instead of silent failure at first scan |
+| 4 | Advisory lock ID specified as deterministic constant (`2050923308`) | Avoids collision risk from arbitrary ID selection |
+| 5 | `GET /watched-folders` must support `execution_scope` and `executor_id` query filter params | Both schedulers need efficient server-side filtering, not client-side post-fetch filtering |

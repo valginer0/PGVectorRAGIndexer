@@ -555,27 +555,39 @@ Compatibility and rollout constraints (must-haves):
 - Existing desktop clients can keep using current watched-folder flows without breakage.
 - No Phase 4b dependency: this feature must ship independently of DB-backed roles/compliance work.
 
-Canonical identity and dedupe rules:
+Canonical identity and dedupe rules (Phase 6b.2, deferred from MVP):
 - Add `canonical_source_key` to each indexed document/chunk metadata.
 - `canonical_source_key` format:
   - client scope: `client:<client_id>:<normalized_path>`
   - server scope: `server:<root_id>:<normalized_path>`
 - Deduplicate by `canonical_source_key` first, then content hash.
+- Content-hash dedupe is OFF by default — enable per-root to avoid surprising behavior.
 - If same content appears under different keys, keep separate records unless admin enables cross-root dedupe.
 
 Conflict resolution rules:
 - If two schedulers claim the same root, server scheduler wins for `server` scope and client scheduler wins for `client` scope.
 - Writes from wrong scope are rejected with explicit 409 message.
-- Locking remains TTL-based (`document_locks`) but lock key is upgraded from `source_uri` to `(root_id, relative_path)` for scheduler safety.
+- Locking remains TTL-based (`document_locks`) but lock key is upgraded from `source_uri` to `(root_id, relative_path)` for scheduler safety (Phase 6b.2).
 
 Server scheduler runtime model (MVP):
-- Run scheduler in-process on the API server, guarded by a DB lease/advisory lock so only one active scheduler loop runs.
+- Run scheduler in-process on the API server, guarded by a DB advisory lock (deterministic lock ID: `2050923308` = CRC32 of `pgvector_server_scheduler`) so only one active scheduler loop runs.
 - Do not require distributed scheduler election for this phase.
 - Add explicit env toggle: `SERVER_SCHEDULER_ENABLED` (default false).
+- **Critical: async scan execution.** `scan_folder()` is synchronous (`os.walk` + `DocumentIndexer`). The server scheduler must wrap calls with `asyncio.to_thread()` to avoid blocking the API event loop.
+
+Desktop scheduler amendments (MVP):
+- `FolderScheduler._check_folders()` must filter by scope and executor ownership — skip any root where `execution_scope != 'client'` or `executor_id != self._client_id`.
+- Alternatively, the desktop scheduler should call `list_watched_folders(execution_scope='client', executor_id=<client_id>)` so the server returns only relevant roots.
+
+Filesystem access requirements:
+- Server-scope roots require that the folder path is accessible from the API server process filesystem.
+- Docker deployments: source directories must be bind-mounted into the container.
+- Bare-metal deployments: the path must be readable by the API process user.
+- `POST /watched-folders` should validate that the path exists on the server when `execution_scope='server'` (fail fast vs failing silently during first scan).
 
 Safety controls required:
 - Dry-run mode: scan and report planned adds/updates/deletes without writing.
-- Delete policy: soft-delete first (quarantine window, e.g. 7 days), then hard-delete.
+- Delete policy: soft-delete first (quarantine window, e.g. 7 days), then hard-delete (Phase 6b.3, deferred from MVP).
 - Scan watermark per root (`last_scan_started_at`, `last_scan_completed_at`, `last_successful_scan_at`).
 - Root health state (`healthy`, `degraded`, `error`) with backoff and retry policy.
 - Per-root concurrency cap (default 1) to avoid duplicate scans.
@@ -594,7 +606,7 @@ Migration updates required:
   - `root_id UUID NOT NULL` (stable scheduler root identity)
   - `last_error_at TIMESTAMPTZ`, `consecutive_failures INT DEFAULT 0`
 - Backfill existing rows with `execution_scope='client'`, `executor_id=client_id`, generated `root_id`.
-- Add `canonical_source_key` as a real indexed field (not metadata-only) for reliable dedupe/lookups.
+- Add `canonical_source_key` as a real indexed field (Phase 6b.2, not in MVP migration).
 - Replace global unique `folder_path` with scoped unique indexes on normalized path:
   - partial unique `(executor_id, normalized_folder_path)` where `execution_scope='client'`
   - partial unique `(normalized_folder_path)` where `execution_scope='server'`
@@ -605,10 +617,11 @@ Migration updates required:
 API/versioning notes:
 - Keep changes additive under `/api/v1`.
 - New fields on watched-folder payloads are optional and default-safe.
+- `GET /watched-folders` must support `execution_scope` and `executor_id` query filter params so both schedulers can efficiently query only their relevant roots.
 - Expose scheduler capability flags/status endpoints without breaking old clients.
 
 Recommended delivery sequence:
-1. MVP: scope partitioning + server scheduler + status/pause/resume/scan-now + 409 protection.
+1. MVP: scope partitioning + server scheduler (async) + desktop scope filtering + API filter params + filesystem validation + status/pause/resume/scan-now + 409 protection.
 2. Identity hardening: canonical key + lock key migration.
 3. Safety polish: quarantine lifecycle (if needed after MVP).
 

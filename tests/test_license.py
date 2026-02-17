@@ -42,6 +42,7 @@ from license import (
     set_current_license,
     reset_license,
     is_team_edition,
+    check_license_revocation,
 )
 
 # Test signing secret (NOT a real secret)
@@ -169,6 +170,24 @@ class TestLicenseInfo:
         info = LicenseInfo(warning="Test warning")
         d = info.to_dict()
         assert d["warning"] == "Test warning"
+
+    def test_to_dict_includes_key_id(self):
+        """to_dict() must include key_id for API consumers."""
+        info = LicenseInfo(
+            edition=Edition.TEAM,
+            org_name="Acme",
+            seats=5,
+            key_id="kid-abc-123",
+            expiry_timestamp=time.time() + 86400,
+        )
+        d = info.to_dict()
+        assert d["key_id"] == "kid-abc-123"
+
+    def test_to_dict_empty_key_id(self):
+        """Default LicenseInfo has empty key_id."""
+        info = LicenseInfo()
+        d = info.to_dict()
+        assert d["key_id"] == ""
 
 
 # ===========================================================================
@@ -440,3 +459,180 @@ class TestKeyGeneration:
         assert info.edition == Edition.TEAM
         assert info.org_name == "Round Trip Org"
         assert info.seats == 5
+
+
+# ===========================================================================
+# Test: Online revocation check
+# ===========================================================================
+
+
+class TestRevocationCheck:
+    """Tests for the optional online license revocation check."""
+
+    def test_revocation_url_not_set_skips(self):
+        """No URL → no HTTP call, returns None."""
+        result = check_license_revocation("some-key-id", "")
+        assert result is None
+
+    def test_empty_key_id_skips(self):
+        """Empty key_id → no HTTP call, returns None."""
+        result = check_license_revocation("", "https://example.com/check")
+        assert result is None
+
+    @patch("license.urllib.request.urlopen")
+    def test_revoked_key_returns_reason(self, mock_urlopen):
+        """Revoked key → returns the revocation reason."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps(
+            {"revoked": True, "reason": "Refund processed"}
+        ).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+
+        result = check_license_revocation("kid-123", "https://api.example.com/check")
+        assert result == "Refund processed"
+
+    @patch("license.urllib.request.urlopen")
+    def test_valid_key_returns_none(self, mock_urlopen):
+        """Valid (not revoked) key → returns None."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"revoked": False}).encode()
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+
+        result = check_license_revocation("kid-123", "https://api.example.com/check")
+        assert result is None
+
+    @patch("license.urllib.request.urlopen")
+    def test_timeout_returns_none(self, mock_urlopen):
+        """Timeout → graceful fallback, returns None."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.URLError("timed out")
+
+        result = check_license_revocation("kid-123", "https://api.example.com/check")
+        assert result is None
+
+    @patch("license.urllib.request.urlopen")
+    def test_http_error_returns_none(self, mock_urlopen):
+        """HTTP 500 → graceful fallback, returns None."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.HTTPError(
+            "https://api.example.com/check", 500, "Internal Server Error",
+            {}, None
+        )
+
+        result = check_license_revocation("kid-123", "https://api.example.com/check")
+        assert result is None
+
+    @patch("license.urllib.request.urlopen")
+    def test_dns_error_returns_none(self, mock_urlopen):
+        """DNS failure → graceful fallback, returns None."""
+        import urllib.error
+        mock_urlopen.side_effect = urllib.error.URLError(
+            "Name or service not known"
+        )
+
+        result = check_license_revocation("kid-123", "https://api.example.com/check")
+        assert result is None
+
+    @patch("license.urllib.request.urlopen")
+    def test_malformed_response_returns_none(self, mock_urlopen):
+        """Malformed JSON → graceful fallback, returns None."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"not json at all"
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        mock_urlopen.return_value = mock_resp
+
+        result = check_license_revocation("kid-123", "https://api.example.com/check")
+        assert result is None
+
+
+# ===========================================================================
+# Test: Revocation integrated with load_license
+# ===========================================================================
+
+
+class TestLoadLicenseRevocation:
+    """Tests for revocation check integration in load_license."""
+
+    @patch("license.check_license_revocation")
+    def test_load_license_with_revoked_key(self, mock_revocation, tmp_path):
+        """Valid JWT + revoked → Community with warning."""
+        mock_revocation.return_value = "Subscription cancelled"
+        key_file = tmp_path / "license.key"
+        key_file.write_text(_make_key())
+
+        with patch.dict(os.environ, {"LICENSE_REVOCATION_URL": "https://api.example.com/check"}):
+            info = load_license(signing_secret=TEST_SECRET, key_path=key_file)
+
+        assert info.edition == Edition.COMMUNITY
+        assert "revoked" in info.warning.lower()
+        assert "Subscription cancelled" in info.warning
+        mock_revocation.assert_called_once()
+
+    @patch("license.check_license_revocation")
+    def test_load_license_not_revoked(self, mock_revocation, tmp_path):
+        """Valid JWT + not revoked → Team edition."""
+        mock_revocation.return_value = None
+        key_file = tmp_path / "license.key"
+        key_file.write_text(_make_key())
+
+        with patch.dict(os.environ, {"LICENSE_REVOCATION_URL": "https://api.example.com/check"}):
+            info = load_license(signing_secret=TEST_SECRET, key_path=key_file)
+
+        assert info.edition == Edition.TEAM
+        assert not info.warning
+        mock_revocation.assert_called_once()
+
+    def test_load_license_no_revocation_url(self, tmp_path):
+        """No LICENSE_REVOCATION_URL → skip check entirely."""
+        key_file = tmp_path / "license.key"
+        key_file.write_text(_make_key())
+
+        # Ensure the env var is NOT set
+        with patch.dict(os.environ, {}, clear=True):
+            # Set the signing secret directly so it doesn't depend on env
+            info = load_license(signing_secret=TEST_SECRET, key_path=key_file)
+
+        assert info.edition == Edition.TEAM
+        assert not info.warning
+
+
+# ===========================================================================
+# Test: Short-expiry key validation
+# ===========================================================================
+
+
+class TestShortExpiryKeys:
+    """Tests verifying 90-day keys work correctly."""
+
+    def test_90_day_key_validates(self):
+        """A 90-day key should validate successfully."""
+        key = _make_key(days=90)
+        info = validate_license_key(key, TEST_SECRET)
+        assert info.edition == Edition.TEAM
+        assert 85 <= info.days_until_expiry <= 91  # Allow for clock drift
+
+    def test_90_day_key_no_near_expiry_warning(self, tmp_path):
+        """A fresh 90-day key should NOT trigger the 14-day expiry warning."""
+        key_file = tmp_path / "license.key"
+        key_file.write_text(_make_key(days=90))
+        info = load_license(signing_secret=TEST_SECRET, key_path=key_file)
+        assert info.edition == Edition.TEAM
+        assert not info.warning
+
+    def test_89_day_key_validates(self):
+        """Edge case: 89-day key validates fine."""
+        key = _make_key(days=89)
+        info = validate_license_key(key, TEST_SECRET)
+        assert not info.is_expired
+
+    def test_1_day_key_validates(self):
+        """Minimum viable key: 1 day."""
+        key = _make_key(days=1)
+        info = validate_license_key(key, TEST_SECRET)
+        assert info.edition == Edition.TEAM
+        assert 0 <= info.days_until_expiry <= 1

@@ -10,10 +10,13 @@ license key.
 """
 
 import enum
+import json as _json
 import logging
 import os
 import platform
 import time
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -27,6 +30,11 @@ logger = logging.getLogger(__name__)
 
 # Environment variable for the HMAC signing secret
 LICENSE_SECRET_ENV = "LICENSE_SIGNING_SECRET"
+
+# Environment variable for optional online revocation endpoint
+# When set, load_license() pings this URL on startup to check revocation.
+# Example: https://api.ragvault.net/license/check
+LICENSE_REVOCATION_URL_ENV = "LICENSE_REVOCATION_URL"
 
 # Default license key file name
 LICENSE_FILENAME = "license.key"
@@ -107,6 +115,7 @@ class LicenseInfo:
             "org_name": self.org_name,
             "seats": self.seats,
             "days_until_expiry": self.days_until_expiry,
+            "key_id": self.key_id,
         }
         if self.warning:
             result["warning"] = self.warning
@@ -183,6 +192,64 @@ def secure_license_file(key_path: Optional[Path] = None) -> bool:
     except OSError as e:
         logger.warning("Could not set permissions on %s: %s", key_path, e)
         return False
+
+
+# ---------------------------------------------------------------------------
+# Online revocation check
+# ---------------------------------------------------------------------------
+
+
+def check_license_revocation(
+    key_id: str,
+    revocation_url: str,
+    timeout: float = 5.0,
+) -> Optional[str]:
+    """Check if a license key has been revoked via an online endpoint.
+
+    This is an optional, best-effort check. On any failure (timeout,
+    DNS error, HTTP error, malformed response), it returns None
+    (treat as not revoked) so the app never blocks on network issues.
+
+    Args:
+        key_id: The license key ID (jti/kid claim from the JWT).
+        revocation_url: Base URL of the revocation endpoint.
+        timeout: HTTP timeout in seconds (default 5).
+
+    Returns:
+        None if not revoked or check failed/skipped.
+        A revocation reason string if the key is revoked.
+    """
+    if not key_id or not revocation_url:
+        return None
+
+    # Build the check URL
+    separator = "&" if "?" in revocation_url else "?"
+    url = f"{revocation_url}{separator}kid={urllib.request.quote(key_id)}"
+
+    try:
+        req = urllib.request.Request(url, method="GET")
+        req.add_header("Accept", "application/json")
+        req.add_header("User-Agent", "PGVectorRAGIndexer-LicenseCheck/1.0")
+
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read(4096)  # Cap read size
+            data = _json.loads(body)
+
+            if data.get("revoked") is True:
+                reason = data.get("reason", "License revoked")
+                return str(reason)
+
+        return None
+
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        logger.debug("Revocation check failed (network): %s", e)
+        return None
+    except (ValueError, KeyError, _json.JSONDecodeError) as e:
+        logger.debug("Revocation check failed (parse): %s", e)
+        return None
+    except Exception as e:
+        logger.debug("Revocation check failed (unexpected): %s", e)
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -356,6 +423,21 @@ def load_license(
             license_info.seats,
             license_info.days_until_expiry,
         )
+
+        # Optional online revocation check
+        revocation_url = os.environ.get(LICENSE_REVOCATION_URL_ENV, "")
+        if revocation_url and license_info.is_team and license_info.key_id:
+            reason = check_license_revocation(
+                license_info.key_id, revocation_url
+            )
+            if reason:
+                logger.warning(
+                    "License %s revoked: %s",
+                    license_info.key_id, reason,
+                )
+                return LicenseInfo(
+                    warning=f"License revoked: {reason}"
+                )
 
         # Warn if expiring soon (< 14 days)
         if 0 < license_info.days_until_expiry <= 14:

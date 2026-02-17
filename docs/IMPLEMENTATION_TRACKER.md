@@ -85,7 +85,7 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Test: 32 unit + 7 integration tests (key gen, hash, verify, lifecycle)
 - [x] Quickstart docs for reverse proxy setup (`docs/REVERSE_PROXY_GUIDE.md`)
 
-### 🟡 #17 License Key Validation (Backend ✅, UI ✅, Polish Pending)
+### ✅ #17 License Key Validation (Backend ✅, UI ✅, Polish ✅)
 - **Effort**: ~6-8h | **Edition**: Both (this IS the edition gate) | **Dependencies**: #11 ✅
 - **Branch**: `feature/roadmap-v4`
 - [x] Create `license.py` module — Edition enum, LicenseInfo dataclass, JWT validation
@@ -103,8 +103,8 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] `edition.py` helper: `TEAM_FEATURES` map, `is_feature_available()`, `get_edition_display()`
 - [x] Test: 15 edition UI tests (feature map, gating logic, display, pricing URL)
 - [x] File permissions: Linux `600`, Windows user-only ACL (`secure_license_file()` in `license.py`)
-- [ ] Short-expiry strategy: 90-day keys, auto-renewed via Stripe webhook
-- [ ] Optional online revocation check (graceful fallback, never blocks app)
+- [x] Short-expiry strategy: 90-day keys, auto-renewed via Stripe webhook (`invoice.paid`)
+- [x] Optional online revocation check (`check_license_revocation()` in `license.py`, graceful fallback, off by default)
 - [x] Graceful degradation on expiry: read-only fallback (`is_write_allowed()` in `edition.py`)
 - [x] Expiry banner: amber warning < 30 days, red on expired (`_update_license_banner()` in `main_window.py`)
 

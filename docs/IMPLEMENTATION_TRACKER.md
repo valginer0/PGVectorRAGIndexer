@@ -266,8 +266,21 @@ These have zero dependencies on each other and should start simultaneously.
 
 Implementation sequencing (recommended):
 - [x] Phase 6b-MVP: scope partitioning + server scheduler (async, singleton) + desktop scope filtering + API filter params + filesystem validation + status/pause/resume/scan-now + 409 protection
-- [ ] Phase 6b.2 (deferred): canonical identity (`canonical_source_key`) + lock key migration `(root_id, relative_path)`
-- [ ] Phase 6b.3 (deferred): quarantine delete lifecycle + dry-run reporting polish
+- [x] Phase 6b.2: canonical identity (`canonical_source_key`) + lock key migration `(root_id, relative_path)`:
+  - [x] Alembic migration 014: `UNIQUE(root_id)` constraint, `canonical_source_key TEXT` on `document_chunks`, `root_id`/`relative_path` on `document_locks`
+  - [x] `canonical_identity.py`: build/resolve canonical keys (`client:<id>:<path>`, `server:<root>:<path>`), `bulk_set_canonical_keys`, `find_by_canonical_key`
+  - [x] `document_locks.py`: dual-key lock resolution (`root_id`+`relative_path` with `source_uri` fallback)
+  - [x] `watched_folders.py`: `root_id` param on `scan_folder()`, `_backfill_canonical_keys()` post-scan
+  - [x] `server_scheduler.py`: passes `root_id` to `scan_folder()`
+  - [x] Tests: 32 tests in `test_canonical_source_key.py`
+- [x] Phase 6b.3: quarantine delete lifecycle + dry-run reporting:
+  - [x] Alembic migration 015: `quarantined_at TIMESTAMPTZ`, `quarantine_reason TEXT`, partial index on `document_chunks`
+  - [x] `quarantine.py`: quarantine/restore/list/purge/stats with configurable retention (`QUARANTINE_RETENTION_DAYS`)
+  - [x] `watched_folders.py`: `dry_run=True` param, `_dry_run_scan()`, `_quarantine_missing_sources()` post-scan
+  - [x] `server_scheduler.py`: `_maybe_purge_quarantine()` periodic purge (24h interval)
+  - [x] `api.py`: `?dry_run=true` on scan endpoint + 4 quarantine endpoints (`GET /quarantine`, `POST /quarantine/{uri}/restore`, `POST /quarantine/purge`, `GET /quarantine/stats`)
+  - [x] Tests: 23 tests in `test_quarantine.py`
+  - [x] Full regression: 93 tests pass across 4 #6b suites, zero failures
 
 ### ✅ #9 Path Mapping / Virtual Roots
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #1

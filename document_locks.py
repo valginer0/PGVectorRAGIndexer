@@ -22,14 +22,16 @@ def _get_db_connection():
     return get_db_manager().get_connection()
 
 
-_COLUMNS = ("id", "source_uri", "client_id", "locked_at", "expires_at", "lock_reason")
+_COLUMNS = ("id", "source_uri", "client_id", "locked_at", "expires_at", "lock_reason",
+            "root_id", "relative_path")
 
 
 def _row_to_dict(row) -> Dict[str, Any]:
     """Convert a DB row tuple to a dict with ISO timestamps."""
     d = dict(zip(_COLUMNS, row))
-    if d.get("id") is not None:
-        d["id"] = str(d["id"])
+    for uuid_key in ("id", "root_id"):
+        if d.get(uuid_key) is not None:
+            d[uuid_key] = str(d[uuid_key])
     for ts_key in ("locked_at", "expires_at"):
         ts = d.get(ts_key)
         if isinstance(ts, datetime):
@@ -42,11 +44,27 @@ def _row_to_dict(row) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
+def _build_lock_where(source_uri: str, root_id=None, relative_path=None):
+    """Build WHERE clause and params for dual-key lock resolution.
+
+    Prefers (root_id, relative_path) when both are provided;
+    falls back to source_uri.
+    """
+    if root_id and relative_path:
+        return (
+            "(root_id = %s AND relative_path = %s) OR source_uri = %s",
+            (root_id, relative_path, source_uri),
+        )
+    return ("source_uri = %s", (source_uri,))
+
+
 def acquire_lock(
     source_uri: str,
     client_id: str,
     ttl_minutes: int = DEFAULT_TTL_MINUTES,
     lock_reason: str = "indexing",
+    root_id: Optional[str] = None,
+    relative_path: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Try to acquire a lock on a document.
 
@@ -61,6 +79,8 @@ def acquire_lock(
         client_id: The client requesting the lock.
         ttl_minutes: Lock duration in minutes.
         lock_reason: Why the lock is being acquired.
+        root_id: Optional watched-folder root_id for dual-key locking.
+        relative_path: Optional relative path within root for dual-key locking.
 
     Returns:
         Dict with 'ok': True and lock info on success,
@@ -70,18 +90,20 @@ def acquire_lock(
         conn = _get_db_connection()
         cur = conn.cursor()
 
-        # First, clean up expired locks for this source_uri
+        where, params = _build_lock_where(source_uri, root_id, relative_path)
+
+        # First, clean up expired locks
         cur.execute(
-            "DELETE FROM document_locks WHERE source_uri = %s AND expires_at < now()",
-            (source_uri,),
+            f"DELETE FROM document_locks WHERE ({where}) AND expires_at < now()",
+            params,
         )
 
         # Check if there's an active lock
         cur.execute(
-            "SELECT {cols} FROM document_locks WHERE source_uri = %s".format(
-                cols=", ".join(_COLUMNS)
+            "SELECT {cols} FROM document_locks WHERE {where}".format(
+                cols=", ".join(_COLUMNS), where=where
             ),
-            (source_uri,),
+            params,
         )
         existing = cur.fetchone()
 
@@ -95,10 +117,10 @@ def acquire_lock(
                     SET expires_at = now() + interval '%s minutes',
                         locked_at = now(),
                         lock_reason = %s
-                    WHERE source_uri = %s AND client_id = %s
+                    WHERE id = %s
                     RETURNING {cols}
                     """.format(cols=", ".join(_COLUMNS)),
-                    (ttl_minutes, lock_reason, source_uri, client_id),
+                    (ttl_minutes, lock_reason, existing_dict["id"]),
                 )
                 row = cur.fetchone()
                 conn.commit()
@@ -121,11 +143,13 @@ def acquire_lock(
         lock_id = str(uuid.uuid4())
         cur.execute(
             """
-            INSERT INTO document_locks (id, source_uri, client_id, expires_at, lock_reason)
-            VALUES (%s, %s, %s, now() + interval '%s minutes', %s)
+            INSERT INTO document_locks
+                (id, source_uri, client_id, expires_at, lock_reason, root_id, relative_path)
+            VALUES (%s, %s, %s, now() + interval '%s minutes', %s, %s, %s)
             RETURNING {cols}
             """.format(cols=", ".join(_COLUMNS)),
-            (lock_id, source_uri, client_id, ttl_minutes, lock_reason),
+            (lock_id, source_uri, client_id, ttl_minutes, lock_reason,
+             root_id, relative_path),
         )
         row = cur.fetchone()
         conn.commit()
@@ -138,10 +162,16 @@ def acquire_lock(
         return {"ok": False, "error": f"Lock acquisition failed: {str(e)}"}
 
 
-def release_lock(source_uri: str, client_id: str) -> bool:
+def release_lock(
+    source_uri: str,
+    client_id: str,
+    root_id: Optional[str] = None,
+    relative_path: Optional[str] = None,
+) -> bool:
     """Release a lock on a document.
 
     Only the client that holds the lock can release it.
+    Supports dual-key resolution when root_id + relative_path are provided.
 
     Returns:
         True if the lock was released, False otherwise.
@@ -149,9 +179,10 @@ def release_lock(source_uri: str, client_id: str) -> bool:
     try:
         conn = _get_db_connection()
         cur = conn.cursor()
+        where, params = _build_lock_where(source_uri, root_id, relative_path)
         cur.execute(
-            "DELETE FROM document_locks WHERE source_uri = %s AND client_id = %s",
-            (source_uri, client_id),
+            f"DELETE FROM document_locks WHERE ({where}) AND client_id = %s",
+            params + (client_id,),
         )
         deleted = cur.rowcount > 0
         conn.commit()
@@ -191,8 +222,14 @@ def force_release_lock(source_uri: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def check_lock(source_uri: str) -> Optional[Dict[str, Any]]:
+def check_lock(
+    source_uri: str,
+    root_id: Optional[str] = None,
+    relative_path: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     """Check if a document is currently locked.
+
+    Supports dual-key resolution when root_id + relative_path are provided.
 
     Returns:
         Lock info dict if locked (and not expired), None otherwise.
@@ -200,12 +237,12 @@ def check_lock(source_uri: str) -> Optional[Dict[str, Any]]:
     try:
         conn = _get_db_connection()
         cur = conn.cursor()
+        where, params = _build_lock_where(source_uri, root_id, relative_path)
         cur.execute(
-            """
-            SELECT {cols} FROM document_locks
-            WHERE source_uri = %s AND expires_at > now()
-            """.format(cols=", ".join(_COLUMNS)),
-            (source_uri,),
+            "SELECT {cols} FROM document_locks WHERE ({where}) AND expires_at > now()".format(
+                cols=", ".join(_COLUMNS), where=where
+            ),
+            params,
         )
         row = cur.fetchone()
         cur.close()

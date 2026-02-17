@@ -1534,10 +1534,11 @@ async def delete_watched_folder(folder_id: str):
 
 
 @v1_router.post("/watched-folders/{folder_id}/scan", tags=["Scheduling"], dependencies=[Depends(require_api_key)])
-async def scan_watched_folder(folder_id: str, request: Request):
+async def scan_watched_folder(folder_id: str, request: Request, dry_run: bool = Query(default=False)):
     """Trigger an immediate scan of a watched folder.
 
     Optional body: { "client_id": "..." }
+    Optional query: ?dry_run=true (preview changes without mutations).
     Wrong-scope scan requests return 409 (#6b).
     """
     from watched_folders import get_folder, scan_folder, mark_scanned
@@ -1578,8 +1579,13 @@ async def scan_watched_folder(folder_id: str, request: Request):
                     ),
                 )
 
-        result = scan_folder(folder["folder_path"], client_id=client_id)
-        if result.get("run_id"):
+        result = scan_folder(
+            folder["folder_path"],
+            client_id=client_id,
+            root_id=folder.get("root_id"),
+            dry_run=dry_run,
+        )
+        if not dry_run and result.get("run_id"):
             mark_scanned(folder_id, run_id=result["run_id"])
         return result
     except HTTPException:
@@ -1724,6 +1730,50 @@ async def scan_root_now(root_id: str):
             detail=result["error"],
         )
     return result["scan_result"]
+
+
+# ---------------------------------------------------------------------------
+# Quarantine Endpoints (#6b.3)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.get("/quarantine", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
+async def list_quarantined_docs(
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    """List quarantined documents with pagination."""
+    from quarantine import list_quarantined
+    items = list_quarantined(limit=limit, offset=offset)
+    return {"quarantined": items, "count": len(items)}
+
+
+@v1_router.post("/quarantine/{source_uri:path}/restore", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
+async def restore_quarantined(source_uri: str):
+    """Remove quarantine status from a document's chunks."""
+    from quarantine import restore_chunks
+    count = restore_chunks(source_uri)
+    if count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No quarantined chunks found for: {source_uri}",
+        )
+    return {"restored": count, "source_uri": source_uri}
+
+
+@v1_router.post("/quarantine/purge", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
+async def purge_quarantine(retention_days: Optional[int] = Query(default=None)):
+    """Permanently delete chunks quarantined longer than the retention window."""
+    from quarantine import purge_expired
+    count = purge_expired(retention_days=retention_days)
+    return {"purged": count}
+
+
+@v1_router.get("/quarantine/stats", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
+async def quarantine_stats():
+    """Get quarantine summary statistics."""
+    from quarantine import get_quarantine_stats
+    return get_quarantine_stats()
 
 
 # ---------------------------------------------------------------------------

@@ -30,6 +30,9 @@ POLL_INTERVAL = 60
 MAX_FAILURE_STREAK = 5
 FAILURE_BACKOFF_SECONDS = 3600  # 1 hour
 
+# Quarantine purge interval (once per 24h)
+PURGE_INTERVAL_SECONDS = 86400
+
 
 class ServerScheduler:
     """In-process scheduler for server-scope watched folders.
@@ -45,6 +48,7 @@ class ServerScheduler:
         self._running = False
         self._lease_held = False
         self._last_poll_at: Optional[str] = None
+        self._last_purge_at: float = 0.0
         self._active_scans: int = 0
 
     @staticmethod
@@ -88,7 +92,7 @@ class ServerScheduler:
         }
 
     async def _scheduler_loop(self) -> None:
-        """Main scheduler loop: acquire lease, poll, scan."""
+        """Main scheduler loop: acquire lease, poll, scan, purge."""
         while self._running:
             try:
                 if not self._lease_held:
@@ -102,6 +106,10 @@ class ServerScheduler:
                         continue
 
                 await self._run_pending_scans()
+
+                # Periodic quarantine purge (once per 24h)
+                await self._maybe_purge_quarantine()
+
                 self._last_poll_at = datetime.now(timezone.utc).isoformat()
             except asyncio.CancelledError:
                 break
@@ -254,7 +262,9 @@ class ServerScheduler:
         self._active_scans += 1
 
         try:
-            result = await asyncio.to_thread(scan_folder, folder_path)
+            result = await asyncio.to_thread(
+                scan_folder, folder_path, None, folder.get("root_id"),
+            )
 
             # Update watermarks based on result
             scan_status = result.get("status", "failed")
@@ -286,6 +296,21 @@ class ServerScheduler:
             return {"status": "failed", "error": str(e)}
         finally:
             self._active_scans -= 1
+
+    async def _maybe_purge_quarantine(self) -> None:
+        """Purge expired quarantined chunks if enough time has elapsed."""
+        now = time.time()
+        if now - self._last_purge_at < PURGE_INTERVAL_SECONDS:
+            return
+
+        try:
+            from quarantine import purge_expired
+            count = await asyncio.to_thread(purge_expired)
+            self._last_purge_at = now
+            if count > 0:
+                logger.info("Server scheduler: purged %d expired quarantined chunks", count)
+        except Exception as e:
+            logger.warning("Server scheduler: quarantine purge failed: %s", e)
 
     async def scan_root_now(self, root_id: str) -> dict:
         """Trigger an immediate scan of a server-scope root by root_id.

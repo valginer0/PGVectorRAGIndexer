@@ -193,7 +193,7 @@ class TestAsyncScan:
                     result = await scheduler._run_scan(folder)
 
         assert result["status"] == "success"
-        mock_sf.assert_called_once_with("/test/path")
+        mock_sf.assert_called_once_with("/test/path", None, None)
 
     @pytest.mark.asyncio
     async def test_scan_failure_updates_watermarks(self):

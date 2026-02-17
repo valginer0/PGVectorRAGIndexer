@@ -540,13 +540,29 @@ def transition_scope(
 # ---------------------------------------------------------------------------
 
 
-def scan_folder(folder_path: str, client_id: Optional[str] = None) -> Dict[str, Any]:
+def scan_folder(
+    folder_path: str,
+    client_id: Optional[str] = None,
+    root_id: Optional[str] = None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
     """Trigger an indexing scan of a folder.
 
     Uses the existing indexer to walk the folder and index new/changed files.
     Returns a summary dict with counts.
+
+    Args:
+        folder_path: Directory to scan.
+        client_id: Optional client identifier.
+        root_id: Optional watched-folder root_id for canonical key backfill.
+        dry_run: If True, report what would happen without making changes.
     """
     import os
+
+    # -- Dry-run mode: walk and report without mutations ---------------------
+    if dry_run:
+        return _dry_run_scan(folder_path)
+
     from indexing_runs import start_run, complete_run
 
     run_id = start_run(trigger="scheduled", source_uri=folder_path, client_id=client_id)
@@ -596,6 +612,14 @@ def scan_folder(folder_path: str, client_id: Optional[str] = None) -> Dict[str, 
             files_failed=failed,
             errors=errors if errors else None,
         )
+
+        # Backfill canonical source keys if root_id is known
+        if root_id:
+            _backfill_canonical_keys(root_id, folder_path)
+
+        # Quarantine/restore stale chunks
+        _quarantine_missing_sources(folder_path)
+
         return {
             "run_id": run_id,
             "status": final_status,
@@ -621,3 +645,111 @@ def scan_folder(folder_path: str, client_id: Optional[str] = None) -> Dict[str, 
             "files_added": added,
             "files_failed": failed,
         }
+
+
+def _dry_run_scan(folder_path: str) -> Dict[str, Any]:
+    """Walk a folder and report what would happen without making DB changes."""
+    import os
+
+    if not os.path.isdir(folder_path):
+        return {
+            "dry_run": True,
+            "status": "failed",
+            "error": f"Directory not found: {folder_path}",
+        }
+
+    would_index = []
+    for root, _dirs, files in os.walk(folder_path):
+        for fname in files:
+            fpath = os.path.join(root, fname)
+            would_index.append(fpath)
+
+    # Check for previously indexed files that are now missing
+    would_quarantine = []
+    try:
+        conn = _get_db_connection()
+        cur = conn.cursor()
+        prefix = folder_path.replace("\\", "/").rstrip("/") + "/"
+        cur.execute(
+            "SELECT DISTINCT source_uri FROM document_chunks WHERE source_uri LIKE %s",
+            (prefix + "%",),
+        )
+        indexed_uris = {row[0] for row in cur.fetchall()}
+        cur.close()
+        conn.close()
+
+        current_files = {f.replace("\\", "/") for f in would_index}
+        for uri in indexed_uris:
+            normalized = uri.replace("\\", "/")
+            if normalized not in current_files:
+                would_quarantine.append(uri)
+    except Exception as e:
+        logger.warning("Dry-run quarantine check failed: %s", e)
+
+    return {
+        "dry_run": True,
+        "status": "success",
+        "would_index": would_index,
+        "would_quarantine": would_quarantine,
+        "total_files": len(would_index),
+        "total_quarantine": len(would_quarantine),
+    }
+
+
+def _backfill_canonical_keys(root_id: str, folder_path: str) -> None:
+    """Backfill canonical_source_key for chunks under a watched root."""
+    try:
+        folder = get_folder_by_root_id(root_id)
+        if not folder:
+            logger.warning("Cannot backfill canonical keys: root %s not found", root_id)
+            return
+
+        scope = folder.get("execution_scope", "client")
+        identity = folder.get("executor_id") if scope == "client" else root_id
+
+        from canonical_identity import bulk_set_canonical_keys
+        count = bulk_set_canonical_keys(root_id, folder_path, scope, identity)
+        if count > 0:
+            logger.info("Backfilled %d canonical keys for root %s", count, root_id)
+    except Exception as e:
+        logger.warning("Canonical key backfill failed for root %s: %s", root_id, e)
+
+
+def _quarantine_missing_sources(folder_path: str) -> None:
+    """After a scan, quarantine chunks whose source files no longer exist
+    and restore chunks whose source files have reappeared."""
+    import os
+
+    try:
+        conn = _get_db_connection()
+        cur = conn.cursor()
+        prefix = folder_path.replace("\\", "/").rstrip("/") + "/"
+        cur.execute(
+            "SELECT DISTINCT source_uri, (quarantined_at IS NOT NULL) AS is_quarantined "
+            "FROM document_chunks WHERE source_uri LIKE %s",
+            (prefix + "%",),
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        from quarantine import quarantine_chunks, restore_chunks
+
+        quarantined_count = 0
+        restored_count = 0
+        for source_uri, is_quarantined in rows:
+            file_exists = os.path.isfile(source_uri)
+            if not file_exists and not is_quarantined:
+                quarantine_chunks(source_uri, "source_file_missing")
+                quarantined_count += 1
+            elif file_exists and is_quarantined:
+                restore_chunks(source_uri)
+                restored_count += 1
+
+        if quarantined_count > 0:
+            logger.info("Quarantined %d missing sources under %s", quarantined_count, folder_path)
+        if restored_count > 0:
+            logger.info("Restored %d reappeared sources under %s", restored_count, folder_path)
+
+    except Exception as e:
+        logger.warning("Quarantine scan failed for %s: %s", folder_path, e)

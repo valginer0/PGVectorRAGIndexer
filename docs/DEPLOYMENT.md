@@ -213,6 +213,53 @@ server {
 
 ---
 
+## Server-Scope Filesystem Access
+
+When using server-scope watched roots (#6b), the API container must be able to read the source directories. This requires either Docker bind-mounts or bare-metal filesystem access.
+
+### Docker: Bind-Mount Volumes
+
+Add volume entries for every directory that will be registered as a server-scope watched root:
+
+```yaml
+# docker-compose.yml
+services:
+  app:
+    image: ghcr.io/valginer0/pgvectorragindexer:latest
+    volumes:
+      - /srv/shared-docs:/data/shared-docs:ro     # read-only is sufficient
+      - /home/team/reports:/data/reports:ro
+    environment:
+      - SERVER_SCHEDULER_ENABLED=true
+```
+
+> **Important**: The `folder_path` registered via `POST /watched-folders` must be the **container-side** path (e.g., `/data/shared-docs`), not the host-side path.
+
+### Bare-Metal Deployments
+
+When running without Docker, the process user must have read access to all server-scope root paths:
+
+```bash
+# Verify the process user can read the directory
+sudo -u pgvector ls /srv/shared-docs
+
+# If needed, grant read access
+sudo chmod -R o+rX /srv/shared-docs
+# Or add the user to the owning group
+sudo usermod -aG docs-team pgvector
+```
+
+### Permission Troubleshooting
+
+If a server-scope scan fails with "Directory not found" or permission errors:
+
+1. **Docker**: Verify the volume is mounted: `docker exec -it vector_rag_app ls /data/shared-docs`
+2. **Docker**: Check mount is not empty (common if host path doesn't exist)
+3. **Bare-metal**: Verify `os.access(path, os.R_OK)` returns True for the process user
+4. Server-scope root creation validates path existence upfront (`POST /watched-folders` returns 422 if path is missing)
+
+---
+
 ## Troubleshooting
 
 ### Server won't start

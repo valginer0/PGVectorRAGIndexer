@@ -243,14 +243,14 @@ These have zero dependencies on each other and should start simultaneously.
   - [x] `executor_id=<client_id>` filter
 - [x] Filesystem access validation for server roots (amendment 3):
   - [x] `POST /watched-folders` validates path exists when `execution_scope='server'`
-  - [ ] doc: Docker bind-mount requirement, bare-metal process user access
+  - [x] doc: Docker bind-mount requirement, bare-metal process user access (DEPLOYMENT.md)
 - [x] Add server automation safety controls:
   - [x] per-root scan watermarks (`last_scan_started_at`, `last_scan_completed_at`, `last_successful_scan_at`)
   - [x] failure backoff with `consecutive_failures` and `last_error_at`
   - [x] per-root concurrency cap (default 1)
 - [x] Add observability and admin controls:
   - [x] scheduler status API by root (next run, last run, failure streak)
-  - [ ] activity log fields: `executor_scope`, `executor_id`, `root_id`, `run_id`
+  - [x] activity log fields: `executor_scope`, `executor_id`, `root_id`, `run_id` (migration 016)
   - [x] admin UI controls for server roots: pause/resume/scan-now
 - [x] Alembic migration updates:
   - [x] extend `watched_folders` with `execution_scope`, `executor_id`, `normalized_folder_path`, `root_id`, failure fields
@@ -419,8 +419,12 @@ Implementation sequencing (recommended):
   - [x] API endpoints (4): GET /roles, GET /roles/{name}, GET /permissions, GET /roles/{name}/check/{permission}
   - [x] Tests: 54 tests (constants, built-in roles, config loading, permission checks, role validation, listing, require_permission factory, dynamic users.py, endpoints)
   - [x] Upgrade path documented: replace `load_role_config()` to read from DB `roles` table for Phase 4b
-- **Phase 4b** (future, if enterprise demand):
-  - [ ] DB-backed roles table (migration 013) — runtime CRUD via API
+- **Phase 4b — DB-Backed Roles** (complete):
+  - [x] DB-backed roles table (migration 016) — runtime CRUD via API
+  - [x] `role_permissions.py`: `load_role_config()` reads from DB first, falls back to JSON/built-in
+  - [x] `create_role()`, `update_role()`, `delete_role()` CRUD functions
+  - [x] API endpoints: POST/PUT/DELETE `/roles` (admin-only, system role protection)
+  - [x] Tests: 26 tests in `test_db_roles.py` + 54 existing in `test_role_permissions.py` pass
   - [ ] Data retention policies
   - [ ] Compliance exports
 

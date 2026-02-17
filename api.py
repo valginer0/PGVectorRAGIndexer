@@ -2475,6 +2475,79 @@ async def check_role_permission_endpoint(role_name: str, permission: str):
         raise HTTPException(status_code=404, detail=f"Role '{role_name}' not found")
     return {"role": role_name, "permission": permission, "granted": has_permission(role_name, permission)}
 
+# --- Role CRUD (Phase 4b) ---
+
+
+@v1_router.post("/roles", tags=["Roles & Permissions"], dependencies=[Depends(require_admin)])
+async def create_role_endpoint(request: Request):
+    """Create a new custom role (admin only).
+
+    Body: { "name": "...", "description": "...", "permissions": ["documents.read", ...] }
+    """
+    from role_permissions import create_role
+    try:
+        body = await request.json()
+        name = body.get("name")
+        if not name:
+            raise HTTPException(status_code=400, detail="Role name is required")
+        role = create_role(
+            name=name,
+            description=body.get("description", ""),
+            permissions=body.get("permissions"),
+        )
+        return role
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create role: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to create role: {str(e)}")
+
+
+@v1_router.put("/roles/{role_name}", tags=["Roles & Permissions"], dependencies=[Depends(require_admin)])
+async def update_role_endpoint(role_name: str, request: Request):
+    """Update an existing role's description and/or permissions (admin only).
+
+    Body: { "description": "...", "permissions": ["documents.read", ...] }
+    """
+    from role_permissions import update_role
+    try:
+        body = await request.json()
+        result = update_role(
+            name=role_name,
+            description=body.get("description"),
+            permissions=body.get("permissions"),
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Role '{role_name}' not found")
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to update role: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to update role: {str(e)}")
+
+
+@v1_router.delete("/roles/{role_name}", tags=["Roles & Permissions"], dependencies=[Depends(require_admin)])
+async def delete_role_endpoint(role_name: str):
+    """Delete a custom role (admin only). System roles cannot be deleted."""
+    from role_permissions import delete_role
+    try:
+        deleted = delete_role(role_name)
+        if not deleted:
+            raise HTTPException(status_code=404, detail=f"Role '{role_name}' not found")
+        return {"deleted": True, "role": role_name}
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete role: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete role: {str(e)}")
+
 
 # ---------------------------------------------------------------------------
 # Document Visibility (#3 Multi-User Support Phase 2)

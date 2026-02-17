@@ -117,7 +117,7 @@ BUILTIN_ROLES: Dict[str, Dict[str, Any]] = {
 }
 
 # ---------------------------------------------------------------------------
-# Config loading
+# Config loading — Phase 4b: DB-backed with JSON/built-in fallback
 # ---------------------------------------------------------------------------
 
 _CONFIG_FILE = os.environ.get(
@@ -129,18 +129,73 @@ _CONFIG_FILE = os.environ.get(
 _role_config: Optional[Dict[str, Dict[str, Any]]] = None
 
 
+def _get_db_connection():
+    """Get a database connection from the global DB manager."""
+    from database import get_db_manager
+    return get_db_manager().get_connection()
+
+
+def _load_from_db() -> Optional[Dict[str, Dict[str, Any]]]:
+    """Attempt to load roles from the DB `roles` table.
+
+    Returns None if the DB is unavailable or the table doesn't exist.
+    """
+    try:
+        conn = _get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT name, description, permissions, is_system FROM roles ORDER BY name"
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+
+        if not rows:
+            return None
+
+        config: Dict[str, Dict[str, Any]] = {}
+        for name, description, permissions, is_system in rows:
+            # permissions may be a list (from JSONB) or a string
+            perms = permissions if isinstance(permissions, list) else []
+            config[name] = {
+                "description": description or "",
+                "permissions": perms,
+                "is_system": bool(is_system),
+            }
+
+        # Ensure admin always has all permissions (safety guard)
+        if "admin" in config:
+            config["admin"]["permissions"] = sorted(ALL_PERMISSIONS)
+            config["admin"]["is_system"] = True
+
+        return config
+    except Exception as e:
+        logger.debug("Could not load roles from DB: %s — will use fallback", e)
+        return None
+
+
 def load_role_config(force_reload: bool = False) -> Dict[str, Dict[str, Any]]:
-    """Load role → permissions mapping from config file or defaults.
+    """Load role → permissions mapping.
 
-    Loads from role_permissions.json if it exists, otherwise uses BUILTIN_ROLES.
+    Priority order:
+    1. DB `roles` table (Phase 4b)
+    2. role_permissions.json config file
+    3. Built-in BUILTIN_ROLES defaults
+
     The config is cached after first load; use force_reload=True to re-read.
-
-    Upgrade path: replace this function to read from a `roles` DB table.
     """
     global _role_config
     if _role_config is not None and not force_reload:
         return _role_config
 
+    # Try DB first (Phase 4b)
+    db_config = _load_from_db()
+    if db_config:
+        _role_config = db_config
+        logger.info("Loaded role permissions from DB (%d roles)", len(db_config))
+        return _role_config
+
+    # Fallback to JSON config file
     config_path = Path(_CONFIG_FILE)
     if config_path.exists():
         try:
@@ -163,7 +218,7 @@ def load_role_config(force_reload: bool = False) -> Dict[str, Dict[str, Any]]:
 
 
 def save_role_config(config: Optional[Dict[str, Dict[str, Any]]] = None) -> bool:
-    """Save the current role config to the JSON file.
+    """Save the current role config to the JSON file (legacy fallback).
 
     Returns True on success.
     """
@@ -183,6 +238,191 @@ def save_role_config(config: Optional[Dict[str, Dict[str, Any]]] = None) -> bool
     except Exception as e:
         logger.error("Failed to save role_permissions.json: %s", e)
         return False
+
+
+# ---------------------------------------------------------------------------
+# DB CRUD for roles (Phase 4b)
+# ---------------------------------------------------------------------------
+
+
+def create_role(
+    name: str,
+    description: str = "",
+    permissions: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    """Create a new custom role in the DB.
+
+    Args:
+        name: Role name (must be unique).
+        description: Human-readable description.
+        permissions: List of permission strings.
+
+    Returns:
+        Dict with the created role info.
+
+    Raises:
+        ValueError: If the role name already exists or is invalid.
+    """
+    if not name or not name.strip():
+        raise ValueError("Role name cannot be empty")
+
+    perms = permissions or []
+    # Validate permissions
+    invalid = set(perms) - ALL_PERMISSIONS
+    if invalid:
+        raise ValueError(f"Invalid permissions: {', '.join(sorted(invalid))}")
+
+    try:
+        conn = _get_db_connection()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO roles (name, description, permissions, is_system)
+            VALUES (%s, %s, %s::jsonb, FALSE)
+            RETURNING name, description, permissions, is_system, created_at
+            """,
+            (name.strip(), description, json.dumps(sorted(perms))),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        # Invalidate cache
+        global _role_config
+        _role_config = None
+
+        return {
+            "name": row[0],
+            "description": row[1],
+            "permissions": row[2] if isinstance(row[2], list) else [],
+            "is_system": bool(row[3]),
+            "created_at": row[4].isoformat() if row[4] else None,
+        }
+    except Exception as e:
+        if "duplicate key" in str(e).lower() or "unique" in str(e).lower():
+            raise ValueError(f"Role '{name}' already exists")
+        raise
+
+
+def update_role(
+    name: str,
+    description: Optional[str] = None,
+    permissions: Optional[List[str]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Update an existing role's description and/or permissions.
+
+    System roles (admin, user) cannot have their is_system flag changed.
+    Admin role permissions are always enforced to ALL_PERMISSIONS.
+
+    Returns:
+        Updated role dict, or None if role not found.
+
+    Raises:
+        ValueError: If trying to update a system role's protected attributes.
+    """
+    if name == "admin" and permissions is not None:
+        # Admin always gets all permissions — silently override
+        permissions = sorted(ALL_PERMISSIONS)
+
+    # Validate permissions if provided
+    if permissions is not None:
+        invalid = set(permissions) - ALL_PERMISSIONS
+        if invalid:
+            raise ValueError(f"Invalid permissions: {', '.join(sorted(invalid))}")
+
+    try:
+        conn = _get_db_connection()
+        cur = conn.cursor()
+
+        sets = []
+        params: list = []
+        if description is not None:
+            sets.append("description = %s")
+            params.append(description)
+        if permissions is not None:
+            sets.append("permissions = %s::jsonb")
+            params.append(json.dumps(sorted(permissions)))
+
+        if not sets:
+            return get_role_info(name)
+
+        sets.append("updated_at = now()")
+        params.append(name)
+
+        cur.execute(
+            f"UPDATE roles SET {', '.join(sets)} WHERE name = %s "
+            "RETURNING name, description, permissions, is_system, updated_at",
+            params,
+        )
+        row = cur.fetchone()
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if not row:
+            return None
+
+        # Invalidate cache
+        global _role_config
+        _role_config = None
+
+        return {
+            "name": row[0],
+            "description": row[1],
+            "permissions": row[2] if isinstance(row[2], list) else [],
+            "is_system": bool(row[3]),
+            "updated_at": row[4].isoformat() if row[4] else None,
+        }
+    except Exception as e:
+        logger.error("Failed to update role '%s': %s", name, e)
+        raise
+
+
+def delete_role(name: str) -> bool:
+    """Delete a custom role from the DB.
+
+    System roles (is_system=True) cannot be deleted.
+
+    Returns:
+        True if the role was deleted.
+
+    Raises:
+        ValueError: If trying to delete a system role.
+    """
+    try:
+        conn = _get_db_connection()
+        cur = conn.cursor()
+
+        # Check if system role
+        cur.execute("SELECT is_system FROM roles WHERE name = %s", (name,))
+        row = cur.fetchone()
+        if not row:
+            cur.close()
+            conn.close()
+            return False
+        if row[0]:
+            cur.close()
+            conn.close()
+            raise ValueError(f"Cannot delete system role '{name}'")
+
+        cur.execute("DELETE FROM roles WHERE name = %s AND is_system = FALSE", (name,))
+        deleted = cur.rowcount > 0
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if deleted:
+            # Invalidate cache
+            global _role_config
+            _role_config = None
+
+        return deleted
+    except ValueError:
+        raise
+    except Exception as e:
+        logger.error("Failed to delete role '%s': %s", name, e)
+        raise
 
 
 # ---------------------------------------------------------------------------

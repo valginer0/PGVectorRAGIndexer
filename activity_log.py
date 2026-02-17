@@ -22,7 +22,8 @@ def _get_db_connection():
     return get_db_manager().get_connection()
 
 
-_COLUMNS = ("id", "ts", "client_id", "user_id", "action", "details")
+_COLUMNS = ("id", "ts", "client_id", "user_id", "action", "details",
+            "executor_scope", "executor_id", "root_id", "run_id")
 
 
 def _row_to_dict(row) -> Dict[str, Any]:
@@ -47,6 +48,10 @@ def log_activity(
     client_id: Optional[str] = None,
     user_id: Optional[str] = None,
     details: Optional[Dict[str, Any]] = None,
+    executor_scope: Optional[str] = None,
+    executor_id: Optional[str] = None,
+    root_id: Optional[str] = None,
+    run_id: Optional[str] = None,
 ) -> Optional[str]:
     """Record an activity log entry.
 
@@ -56,6 +61,10 @@ def log_activity(
         client_id: Optional client that performed the action.
         user_id: Optional user (for future multi-user #3).
         details: Optional extra details as a JSON-serializable dict.
+        executor_scope: Optional 'client' or 'server' (#6b).
+        executor_id: Optional executor identity (#6b).
+        root_id: Optional watched folder root_id (#6b).
+        run_id: Optional indexing run ID (#6b).
 
     Returns:
         The UUID of the log entry, or None on failure.
@@ -66,10 +75,13 @@ def log_activity(
         cur = conn.cursor()
         cur.execute(
             """
-            INSERT INTO activity_log (id, client_id, user_id, action, details)
-            VALUES (%s, %s, %s, %s, %s::jsonb)
+            INSERT INTO activity_log
+                (id, client_id, user_id, action, details,
+                 executor_scope, executor_id, root_id, run_id)
+            VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
             """,
-            (entry_id, client_id, user_id, action, json.dumps(details or {})),
+            (entry_id, client_id, user_id, action, json.dumps(details or {}),
+             executor_scope, executor_id, root_id, run_id),
         )
         conn.commit()
         cur.close()
@@ -90,6 +102,8 @@ def get_recent(
     offset: int = 0,
     client_id: Optional[str] = None,
     action: Optional[str] = None,
+    root_id: Optional[str] = None,
+    run_id: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Query recent activity log entries.
 
@@ -98,6 +112,8 @@ def get_recent(
         offset: Pagination offset.
         client_id: Optional filter by client.
         action: Optional filter by action type.
+        root_id: Optional filter by watched folder root_id.
+        run_id: Optional filter by indexing run ID.
 
     Returns:
         List of activity dicts, newest first.
@@ -114,6 +130,12 @@ def get_recent(
         if action:
             conditions.append("action = %s")
             params.append(action)
+        if root_id:
+            conditions.append("root_id = %s")
+            params.append(root_id)
+        if run_id:
+            conditions.append("run_id = %s")
+            params.append(run_id)
         if conditions:
             sql += " WHERE " + " AND ".join(conditions)
         sql += " ORDER BY ts DESC LIMIT %s OFFSET %s"
@@ -191,7 +213,8 @@ def export_csv(
     output = io.StringIO()
     writer = csv.DictWriter(
         output,
-        fieldnames=["id", "ts", "client_id", "user_id", "action", "details"],
+        fieldnames=["id", "ts", "client_id", "user_id", "action", "details",
+                    "executor_scope", "executor_id", "root_id", "run_id"],
     )
     writer.writeheader()
     for entry in entries:

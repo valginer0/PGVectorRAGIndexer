@@ -370,7 +370,7 @@ Implementation sequencing (recommended):
 - [ ] "What we collect" page on website with example JSON payload
 - [ ] No PII, no document content, no file names, no search queries
 
-### 🟡 #16 Enterprise Foundations
+### ✅ #16 Enterprise Foundations
 - **Effort**: ~15-25h | **Edition**: Team (enterprise tier) | **Dependencies**: #0, #8
 - **Branch**: `feature/roadmap-v4`
 - **Phase 1 — RBAC and Users** (complete):
@@ -439,7 +439,7 @@ Implementation sequencing (recommended):
     - [x] API compatibility/deprecation path:
       - [x] keep existing `/activity/retention` and `/quarantine/purge` endpoints for compatibility
       - [x] add `/retention/*` orchestration endpoints as additive layer
-      - [ ] deprecate legacy endpoints only after client migration window
+      - [x] deprecate legacy endpoints only after client migration window
     - [x] Runtime model:
       - [x] retention execution must not depend only on server scheduler flag
       - [x] add independent maintenance loop/startup path (or external cron) for purge jobs
@@ -450,8 +450,8 @@ Implementation sequencing (recommended):
     - [x] Rollout order:
       - [x] docs/policy matrix first
       - [x] additive APIs + maintenance runner second
-      - [ ] deprecation notices last
-  - [ ] Compliance exports
+      - [x] deprecation notices last
+  - [x] Compliance exports (`compliance_export.py`, admin-only `GET /compliance/export` ZIP endpoint)
 
 ---
 

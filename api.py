@@ -29,6 +29,13 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+def _add_deprecation_headers(response: Response) -> None:
+    """Add RFC 8594 deprecation headers to a response."""
+    response.headers["Deprecation"] = "true"
+    response.headers["Sunset"] = "Sat, 01 Nov 2026 00:00:00 GMT"
+    response.headers["Link"] = '</api/v1/retention/run>; rel="successor-version"'
+
+
 # Pydantic models for API requests/responses
 class IndexRequest(BaseModel):
     """Request model for indexing a document."""
@@ -805,9 +812,17 @@ async def list_documents(
     limit: int = Query(default=100, ge=1, le=1000, description="Maximum documents to return"),
     offset: int = Query(default=0, ge=0, description="Number of documents to skip"),
     sort_by: str = Query(default="indexed_at", description="Field to sort by"),
-    sort_dir: str = Query(default="desc", description="Sort direction: asc or desc")
+    sort_dir: str = Query(default="desc", description="Sort direction: asc or desc"),
+    source_prefix: Optional[str] = Query(default=None, description="Filter to documents under this folder path (e.g. '/docs')"),
 ):
-    """List all indexed documents."""
+    """List all indexed documents.
+
+    When *source_prefix* is supplied, only documents whose normalised
+    ``source_uri`` starts with that prefix are returned (trailing-slash
+    semantics: ``/docs`` matches ``/docs/file.txt`` but not
+    ``/docs2/file.txt``).  A value of ``"/"`` is treated the same as
+    omitting the parameter (returns all documents).
+    """
     try:
         idx = get_indexer()
         db_manager = get_db_manager()
@@ -821,6 +836,7 @@ async def list_documents(
                 offset=offset,
                 sort_by=normalized_sort_by,
                 sort_dir=normalized_sort_dir,
+                source_prefix=source_prefix,
                 with_total=True
             )
         except ValueError as e:
@@ -1787,9 +1803,15 @@ async def restore_quarantined(source_uri: str):
     return {"restored": count, "source_uri": source_uri}
 
 
-@v1_router.post("/quarantine/purge", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
-async def purge_quarantine(retention_days: Optional[int] = Query(default=None)):
-    """Permanently delete chunks quarantined longer than the retention window."""
+@v1_router.post("/quarantine/purge", tags=["Quarantine"], dependencies=[Depends(require_api_key)],
+                 deprecated=True)
+async def purge_quarantine(response: Response, retention_days: Optional[int] = Query(default=None)):
+    """Permanently delete chunks quarantined longer than the retention window.
+
+    .. deprecated:: 2.4.5
+        Use ``POST /retention/run`` instead. This endpoint will be removed after 2026-11-01.
+    """
+    _add_deprecation_headers(response)
     from retention_policy import apply_retention
 
     result = apply_retention(quarantine_days=retention_days, cleanup_saml_sessions=False)
@@ -2043,12 +2065,17 @@ async def export_activity_csv(
         )
 
 
-@v1_router.post("/activity/retention", tags=["Activity Log"], dependencies=[Depends(require_api_key)])
-async def apply_activity_retention(request: Request):
+@v1_router.post("/activity/retention", tags=["Activity Log"], dependencies=[Depends(require_api_key)],
+                 deprecated=True)
+async def apply_activity_retention(request: Request, response: Response):
     """Apply retention policy — delete entries older than N days.
+
+    .. deprecated:: 2.4.5
+        Use ``POST /retention/run`` instead. This endpoint will be removed after 2026-11-01.
 
     Body: { "days": 90 }
     """
+    _add_deprecation_headers(response)
     from retention_policy import apply_retention as apply_retention_policy
     try:
         body = await request.json()
@@ -2113,6 +2140,29 @@ async def get_retention_status():
 
     runner = get_retention_maintenance_runner()
     return runner.get_status()
+
+
+# ---------------------------------------------------------------------------
+# Compliance Export (#16)
+# ---------------------------------------------------------------------------
+
+
+@v1_router.get("/compliance/export", tags=["Compliance"], dependencies=[Depends(require_admin)])
+async def compliance_export():
+    """Export compliance report as ZIP (admin-only).
+
+    Returns a ZIP archive containing metadata, users, activity log,
+    indexing summaries, quarantine stats, and retention policy.
+    No document content is included.
+    """
+    from compliance_export import export_compliance_report
+
+    data = export_compliance_report()
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=compliance_report.zip"},
+    )
 
 
 # ---------------------------------------------------------------------------

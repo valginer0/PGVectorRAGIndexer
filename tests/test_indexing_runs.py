@@ -197,6 +197,38 @@ class TestGetRunById:
         assert result is None
 
 
+class TestApplyRetention:
+    @patch("indexing_runs.get_db_manager")
+    def test_returns_zero_on_db_failure(self, mock_get_db):
+        mock_get_db.return_value = _mock_db_failure()
+
+        from indexing_runs import apply_retention
+        assert apply_retention(365) == 0
+
+    @patch("indexing_runs.get_db_manager")
+    def test_uses_terminal_state_guardrails(self, mock_get_db):
+        mock_db = MagicMock()
+        mock_conn = MagicMock()
+        mock_cur = MagicMock()
+        mock_cur.rowcount = 4
+
+        mock_db.get_connection.return_value.__enter__ = MagicMock(return_value=mock_conn)
+        mock_db.get_connection.return_value.__exit__ = MagicMock(return_value=False)
+        mock_conn.cursor.return_value.__enter__ = MagicMock(return_value=mock_cur)
+        mock_conn.cursor.return_value.__exit__ = MagicMock(return_value=False)
+        mock_get_db.return_value = mock_db
+
+        from indexing_runs import apply_retention
+        deleted = apply_retention(365)
+
+        assert deleted == 4
+        sql = mock_cur.execute.call_args[0][0]
+        params = mock_cur.execute.call_args[0][1]
+        assert "status IN ('success', 'partial', 'failed')" in sql
+        assert "COALESCE(completed_at, started_at)" in sql
+        assert params == (365,)
+
+
 # ===========================================================================
 # Test: API endpoints exist
 # ===========================================================================

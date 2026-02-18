@@ -250,7 +250,8 @@ class APIClient:
         limit: int = 100,
         offset: int = 0,
         sort_by: str = "indexed_at",
-        sort_dir: str = "desc"
+        sort_dir: str = "desc",
+        source_prefix: str | None = None,
     ) -> Dict[str, Any]:
         """Retrieve documents with pagination metadata."""
         params = {
@@ -259,6 +260,8 @@ class APIClient:
             "sort_by": sort_by,
             "sort_dir": sort_dir,
         }
+        if source_prefix:
+            params["source_prefix"] = source_prefix
 
         response = requests.get(
             f"{self.api_base}/documents",

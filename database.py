@@ -18,6 +18,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from pgvector.psycopg2 import register_vector
 
 from config import get_config
+from path_utils import normalize_path as _normalize_prefix, NORMALIZED_URI_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -374,6 +375,7 @@ class DocumentRepository:
         sort_by: Union[str, Sequence[str]] = "indexed_at",
         sort_dir: Union[str, Sequence[str]] = "desc",
         *,
+        source_prefix: Optional[str] = None,
         with_total: bool = False
     ) -> Union[List[Dict[str, Any]], Tuple[List[Dict[str, Any]], int]]:
         """
@@ -384,6 +386,10 @@ class DocumentRepository:
             offset: Number of documents to skip
             sort_by: Field(s) to sort by (validated against whitelist)
             sort_dir: Sort direction(s) ('asc' or 'desc')
+            source_prefix: If set, filter to documents whose normalized
+                source_uri starts with this prefix.  Uses trailing-slash
+                semantics (``/docs`` matches ``/docs/file.txt`` but NOT
+                ``/docs2/file.txt``).  ``None`` or ``"/"`` means no filter.
             with_total: If True, also return total document count
 
         Returns:
@@ -433,6 +439,15 @@ class DocumentRepository:
 
         order_by_sql = ", ".join(order_clauses)
 
+        # ---- source_prefix filter --------------------------------
+        # None or "/" → no filter (returns all documents)
+        prefix_clause = ""
+        prefix_params: list = []
+        if source_prefix and source_prefix.rstrip("/") != "":
+            norm = _normalize_prefix(source_prefix).rstrip("/")
+            prefix_clause = f"WHERE {NORMALIZED_URI_SQL} LIKE %s"
+            prefix_params = [norm + "/%"]
+
         query = f"""
         SELECT 
             document_id,
@@ -442,21 +457,22 @@ class DocumentRepository:
             MAX(indexed_at) as last_updated,
             (array_agg(metadata->>'type'))[1] as document_type
         FROM document_chunks
+        {prefix_clause}
         GROUP BY document_id, source_uri
         ORDER BY {order_by_sql}
         LIMIT %s OFFSET %s
         """
 
         with self.db.get_cursor(dict_cursor=True) as cursor:
-            cursor.execute(query, (limit, offset))
+            cursor.execute(query, (*prefix_params, limit, offset))
             results = [dict(row) for row in cursor.fetchall()]
 
         if not with_total:
             return results
 
-        total_query = "SELECT COUNT(DISTINCT document_id) FROM document_chunks"
+        total_query = f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {prefix_clause}"
         with self.db.get_cursor() as cursor:
-            cursor.execute(total_query)
+            cursor.execute(total_query, prefix_params)
             total = cursor.fetchone()[0]
 
         return results, total

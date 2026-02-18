@@ -10,6 +10,8 @@ import logging
 import posixpath
 from typing import Any, Dict, List, Optional
 
+from path_utils import normalize_path, NORMALIZED_URI_SQL
+
 logger = logging.getLogger(__name__)
 
 
@@ -20,8 +22,12 @@ def _get_db_connection():
 
 
 def _normalize_path(path: str) -> str:
-    """Normalize a path to forward slashes for consistent tree building."""
-    return path.replace("\\", "/").replace("\t", "/").replace("\n", "/").replace("\r", "/")
+    """Normalize a path to forward slashes for consistent tree building.
+
+    Delegates to :func:`path_utils.normalize_path` (single source of truth).
+    Kept as a thin wrapper for backward compatibility with tests.
+    """
+    return normalize_path(path)
 
 
 def get_tree_children(
@@ -57,15 +63,15 @@ def get_tree_children(
 
         # Get all distinct normalized source_uri paths under this parent
         cur.execute(
-            """
+            f"""
             SELECT
-                REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') AS norm_uri,
+                {NORMALIZED_URI_SQL} AS norm_uri,
                 document_id,
                 COUNT(*) AS chunk_count,
                 MIN(indexed_at) AS indexed_at,
                 MAX(indexed_at) AS last_updated
             FROM document_chunks
-            WHERE REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') LIKE %s
+            WHERE {NORMALIZED_URI_SQL} LIKE %s
             GROUP BY norm_uri, document_id
             ORDER BY norm_uri
             """,
@@ -174,10 +180,10 @@ def get_tree_stats() -> Dict[str, Any]:
         total_chunks = cur.fetchone()[0]
 
         # Count distinct top-level folders
-        cur.execute("""
+        cur.execute(f"""
             SELECT COUNT(DISTINCT
                 SPLIT_PART(
-                    REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/'),
+                    {NORMALIZED_URI_SQL},
                     '/', 1
                 )
             )
@@ -216,14 +222,14 @@ def search_tree(
 
         pattern = f"%{_normalize_path(query)}%"
         cur.execute(
-            """
+            f"""
             SELECT
-                REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') AS norm_uri,
+                {NORMALIZED_URI_SQL} AS norm_uri,
                 document_id,
                 COUNT(*) AS chunk_count,
                 MIN(indexed_at) AS indexed_at
             FROM document_chunks
-            WHERE REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s
+            WHERE {NORMALIZED_URI_SQL} ILIKE %s
             GROUP BY norm_uri, document_id
             ORDER BY norm_uri
             LIMIT %s

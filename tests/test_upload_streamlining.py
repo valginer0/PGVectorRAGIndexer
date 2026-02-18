@@ -84,7 +84,9 @@ class TestUploadTabStreamlining:
             "count": 1,
         }
         self.tab._update_last_indexed("/docs")
-        assert self.tab.last_indexed_label.isVisible()
+        # Use isHidden() instead of isVisible() — isVisible() requires
+        # the entire parent chain to be shown, which isn't the case in tests.
+        assert not self.tab.last_indexed_label.isHidden()
         assert "2026-02-10" in self.tab.last_indexed_label.text()
 
     def test_update_last_indexed_shows_not_indexed(self):
@@ -95,5 +97,5 @@ class TestUploadTabStreamlining:
             "count": 0,
         }
         self.tab._update_last_indexed("/new/folder")
-        assert self.tab.last_indexed_label.isVisible()
+        assert not self.tab.last_indexed_label.isHidden()
         assert "Not previously indexed" in self.tab.last_indexed_label.text()

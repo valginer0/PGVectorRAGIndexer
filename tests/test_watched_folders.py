@@ -96,7 +96,7 @@ class TestAddFolder:
     @patch("watched_folders._get_db_connection", side_effect=Exception("DB down"))
     def test_returns_none_on_db_failure(self, _mock):
         from watched_folders import add_folder
-        assert add_folder("/data/docs") is None
+        assert add_folder("/data/docs", client_id="test-client") is None
 
 
 class TestRemoveFolder:

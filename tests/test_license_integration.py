@@ -187,14 +187,14 @@ class TestMigrationChain:
                 ))
                 assert result.scalar() is True, f"Table {table_name} not found"
 
-    def test_alembic_version_is_002(self, migrated_db):
-        """Alembic version table shows revision 002."""
+    def test_alembic_version_is_017(self, migrated_db):
+        """Alembic version table shows revision 017."""
         with _engine.connect() as conn:
             result = conn.execute(text(
                 "SELECT version_num FROM alembic_version"
             ))
             version = result.scalar()
-        assert version == "012"
+        assert version == "017"
 
 
 # ===========================================================================

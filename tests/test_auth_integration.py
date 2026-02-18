@@ -140,11 +140,11 @@ class TestApiKeysMigration:
                 ("test2", "hash_abc123", "pgv_sk_def2"),
             )
 
-    def test_revision_is_005(self, db_url, pg_connection):
-        """After full migration, head revision is 005."""
+    def test_revision_is_017(self, db_url, pg_connection):
+        """After full migration, head revision is 017."""
         _run_alembic_upgrade(db_url, "head")
         rev = _get_current_revision(db_url)
-        assert rev == "012"
+        assert rev == "017"
 
 
 # ---------------------------------------------------------------------------

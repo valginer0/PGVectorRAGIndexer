@@ -146,6 +146,15 @@ class RestoreRequest(BaseModel):
     backup_data: List[Dict[str, Any]] = Field(..., description="Backup data from export")
 
 
+class RetentionRunRequest(BaseModel):
+    """Request model for retention orchestration runs."""
+
+    activity_days: Optional[int] = Field(default=None, ge=1)
+    quarantine_days: Optional[int] = Field(default=None, ge=1)
+    indexing_runs_days: Optional[int] = Field(default=None, ge=1)
+    cleanup_saml_sessions: bool = Field(default=True)
+
+
 # Track initialization state for deferred startup in demo mode
 _init_complete = False
 _init_error = None
@@ -232,12 +241,29 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("Failed to start server scheduler: %s", e)
 
+    # Start retention maintenance runner (independent of server scheduler)
+    _retention_runner = None
+    try:
+        from retention_maintenance import (
+            RetentionMaintenanceRunner,
+            get_retention_maintenance_runner,
+        )
+
+        if RetentionMaintenanceRunner.is_enabled():
+            _retention_runner = get_retention_maintenance_runner()
+            await _retention_runner.start()
+            logger.info("Retention maintenance runner started")
+    except Exception as e:
+        logger.warning("Failed to start retention maintenance runner: %s", e)
+
     yield
     
     # Shutdown
     logger.info("Shutting down PGVectorRAGIndexer API...")
     if _server_scheduler:
         await _server_scheduler.stop()
+    if _retention_runner:
+        await _retention_runner.stop()
     close_db_manager()
     logger.info("Cleanup complete")
 
@@ -1764,8 +1790,10 @@ async def restore_quarantined(source_uri: str):
 @v1_router.post("/quarantine/purge", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
 async def purge_quarantine(retention_days: Optional[int] = Query(default=None)):
     """Permanently delete chunks quarantined longer than the retention window."""
-    from quarantine import purge_expired
-    count = purge_expired(retention_days=retention_days)
+    from retention_policy import apply_retention
+
+    result = apply_retention(quarantine_days=retention_days, cleanup_saml_sessions=False)
+    count = result.get("quarantine_purged", 0)
     return {"purged": count}
 
 
@@ -2021,7 +2049,7 @@ async def apply_activity_retention(request: Request):
 
     Body: { "days": 90 }
     """
-    from activity_log import apply_retention
+    from retention_policy import apply_retention as apply_retention_policy
     try:
         body = await request.json()
         days = body.get("days")
@@ -2030,7 +2058,11 @@ async def apply_activity_retention(request: Request):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="days must be a positive integer",
             )
-        deleted = apply_retention(days)
+        result = apply_retention_policy(
+            activity_days=days,
+            cleanup_saml_sessions=False,
+        )
+        deleted = result.get("activity_deleted", 0)
         return {"deleted": deleted, "ok": True}
     except HTTPException:
         raise
@@ -2040,6 +2072,47 @@ async def apply_activity_retention(request: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to apply retention: {str(e)}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Retention policy orchestration endpoints
+# ---------------------------------------------------------------------------
+
+
+@v1_router.get("/retention/policy", tags=["Retention"], dependencies=[Depends(require_api_key)])
+async def get_retention_policy():
+    """Return effective per-category retention defaults."""
+    from retention_policy import get_policy_defaults
+
+    return {"policy": get_policy_defaults()}
+
+
+@v1_router.post("/retention/run", tags=["Retention"], dependencies=[Depends(require_api_key)])
+async def run_retention_policy(request: RetentionRunRequest):
+    """Run retention orchestration once with optional per-category overrides."""
+    from retention_policy import apply_retention
+
+    result = apply_retention(
+        activity_days=request.activity_days,
+        quarantine_days=request.quarantine_days,
+        indexing_runs_days=request.indexing_runs_days,
+        cleanup_saml_sessions=request.cleanup_saml_sessions,
+    )
+    if not result.get("ok", False):
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.get("error", "Retention run failed"),
+        )
+    return result
+
+
+@v1_router.get("/retention/status", tags=["Retention"], dependencies=[Depends(require_api_key)])
+async def get_retention_status():
+    """Get retention maintenance runner status."""
+    from retention_maintenance import get_retention_maintenance_runner
+
+    runner = get_retention_maintenance_runner()
+    return runner.get_status()
 
 
 # ---------------------------------------------------------------------------

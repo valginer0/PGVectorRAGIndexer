@@ -425,7 +425,32 @@ Implementation sequencing (recommended):
   - [x] `create_role()`, `update_role()`, `delete_role()` CRUD functions
   - [x] API endpoints: POST/PUT/DELETE `/roles` (admin-only, system role protection)
   - [x] Tests: 26 tests in `test_db_roles.py` + 54 existing in `test_role_permissions.py` pass
-  - [ ] Data retention policies
+  - [x] Data retention policies (scoped rollout):
+    - [x] Policy matrix defaults (by data class):
+      - [x] `document_chunks`: keep indefinitely by default (no auto-purge)
+      - [x] quarantine rows: 30 days (configurable) before hard purge
+      - [x] `activity_log`: 2555 days (~7 years) default, configurable
+      - [x] `indexing_runs`: 10950 days (~30 years) default, terminal states only
+      - [x] SAML/auth sessions: expiry-driven cleanup only (explicitly excluded from long-retention presets)
+    - [x] Safety predicates for `indexing_runs` purge:
+      - [x] never delete active/running rows
+      - [x] purge only terminal states
+      - [x] document timestamp predicate (`COALESCE(completed_at, started_at)`) in code + tests
+    - [x] API compatibility/deprecation path:
+      - [x] keep existing `/activity/retention` and `/quarantine/purge` endpoints for compatibility
+      - [x] add `/retention/*` orchestration endpoints as additive layer
+      - [ ] deprecate legacy endpoints only after client migration window
+    - [x] Runtime model:
+      - [x] retention execution must not depend only on server scheduler flag
+      - [x] add independent maintenance loop/startup path (or external cron) for purge jobs
+    - [x] Automated tests:
+      - [x] per-category retention policy tests
+      - [x] indexing-runs guardrail tests (active rows preserved)
+      - [x] endpoint compatibility tests (legacy + new orchestration)
+    - [x] Rollout order:
+      - [x] docs/policy matrix first
+      - [x] additive APIs + maintenance runner second
+      - [ ] deprecation notices last
   - [ ] Compliance exports
 
 ---

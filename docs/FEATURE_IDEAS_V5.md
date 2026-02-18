@@ -816,6 +816,21 @@ Phase 3 (future, only if multiple enterprise customers request):
 - Data retention policies
 - Compliance exports
 
+Scoped retention defaults (proposed baseline):
+
+| Data class | Default policy | Why |
+|---|---|---|
+| Document corpus (`document_chunks`) | Keep indefinitely (no auto-purge) | Core product data; deleting by default is risky and surprising |
+| Quarantine soft-delete rows | 30 days, then hard purge | Operational safety window without indefinite bloat |
+| Activity/audit log | 2555 days (~7 years) | Common compliance/audit expectation with bounded growth |
+| Indexing run history (`indexing_runs`) | 10950 days (~30 years), terminal states only | Lightweight metadata; keep by default for long-term diagnostics |
+| SAML sessions / auth sessions | Expiry-driven cleanup only (no long-retention override) | Session artifacts are ephemeral; should not be retained for years |
+
+Policy notes:
+- The previously requested long-retention behavior should apply only to durable audit categories, not to session/auth artifacts.
+- If a "keep for 30 years" preset is offered, it should target activity/audit logs only (opt-in), not SAML sessions.
+- New `/retention/*` APIs should act as an orchestration layer while existing endpoints (`/activity/retention`, `/quarantine/purge`) remain supported for backward compatibility during rollout.
+
 Data model (via Alembic migration):
 ```sql
 CREATE TABLE users (

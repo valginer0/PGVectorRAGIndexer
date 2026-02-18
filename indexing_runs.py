@@ -217,6 +217,42 @@ def get_run_summary() -> Dict[str, Any]:
         }
 
 
+def apply_retention(days: int) -> int:
+    """Delete old terminal-state indexing runs.
+
+    Safety rules:
+    - Never deletes active rows (`status='running'`).
+    - Deletes only terminal states: success, partial, failed.
+    - Uses COALESCE(completed_at, started_at) as the age timestamp.
+
+    Returns:
+        Number of rows deleted.
+    """
+    db = get_db_manager()
+    try:
+        with db.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    DELETE FROM indexing_runs
+                    WHERE status IN ('success', 'partial', 'failed')
+                      AND COALESCE(completed_at, started_at) < now() - interval '%s days'
+                    """,
+                    (days,),
+                )
+                deleted = cur.rowcount
+                conn.commit()
+        logger.info(
+            "Retention: deleted %d indexing run rows older than %d days",
+            deleted,
+            days,
+        )
+        return deleted
+    except Exception as e:
+        logger.warning("Failed to apply indexing run retention: %s", e)
+        return 0
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

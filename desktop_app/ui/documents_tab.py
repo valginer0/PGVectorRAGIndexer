@@ -68,18 +68,15 @@ class DocumentsTab(QWidget):
         header_layout.addStretch()
         
         # View toggle buttons
-        self._list_btn = QPushButton()
+        self._list_btn = QPushButton(" List")
         self._list_btn.setIcon(qta.icon('fa5s.list', color='#6366f1'))
-        self._list_btn.setToolTip("List view")
-        self._list_btn.setFixedSize(32, 32)
-        self._list_btn.setStyleSheet("border: 1px solid #6366f1;")
+        self._list_btn.setStyleSheet("border: 2px solid #6366f1; padding: 6px 12px;")
         self._list_btn.clicked.connect(lambda: self._set_view_mode("list"))
         header_layout.addWidget(self._list_btn)
 
-        self._tree_btn = QPushButton()
+        self._tree_btn = QPushButton(" Tree")
         self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='white'))
-        self._tree_btn.setToolTip("Tree view")
-        self._tree_btn.setFixedSize(32, 32)
+        self._tree_btn.setStyleSheet("padding: 6px 12px;")
         self._tree_btn.clicked.connect(lambda: self._set_view_mode("tree"))
         header_layout.addWidget(self._tree_btn)
 
@@ -599,17 +596,19 @@ class DocumentsTab(QWidget):
     def _set_view_mode(self, mode: str) -> None:
         """Switch between 'list' and 'tree' view."""
         self._view_mode = mode
+        _active = "border: 2px solid #6366f1; padding: 6px 12px;"
+        _inactive = "padding: 6px 12px;"
         if mode == "list":
             self._view_stack.setCurrentIndex(0)
-            self._list_btn.setStyleSheet("border: 1px solid #6366f1;")
+            self._list_btn.setStyleSheet(_active)
             self._list_btn.setIcon(qta.icon('fa5s.list', color='#6366f1'))
-            self._tree_btn.setStyleSheet("")
+            self._tree_btn.setStyleSheet(_inactive)
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='white'))
         else:
             self._view_stack.setCurrentIndex(1)
-            self._tree_btn.setStyleSheet("border: 1px solid #6366f1;")
+            self._tree_btn.setStyleSheet(_active)
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='#6366f1'))
-            self._list_btn.setStyleSheet("")
+            self._list_btn.setStyleSheet(_inactive)
             self._list_btn.setIcon(qta.icon('fa5s.list', color='white'))
             if self._doc_tree.topLevelItemCount() == 0:
                 self._load_tree_level()

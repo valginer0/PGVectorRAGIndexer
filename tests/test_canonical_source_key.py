@@ -11,6 +11,7 @@ Covers:
 
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -432,7 +433,7 @@ class TestMigration014Metadata:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             "migration_014",
-            "/home/valginer0/projects/PGVectorRAGIndexer/alembic/versions/014_canonical_identity.py",
+            str(Path(__file__).parent.parent / "alembic" / "versions" / "014_canonical_identity.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -443,7 +444,7 @@ class TestMigration014Metadata:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             "migration_014",
-            "/home/valginer0/projects/PGVectorRAGIndexer/alembic/versions/014_canonical_identity.py",
+            str(Path(__file__).parent.parent / "alembic" / "versions" / "014_canonical_identity.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)

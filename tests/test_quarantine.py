@@ -13,6 +13,7 @@ Covers:
 import os
 import time
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -358,7 +359,7 @@ class TestMigration015Metadata:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             "migration_015",
-            "/home/valginer0/projects/PGVectorRAGIndexer/alembic/versions/015_quarantine.py",
+            str(Path(__file__).parent.parent / "alembic" / "versions" / "015_quarantine.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -369,7 +370,7 @@ class TestMigration015Metadata:
         import importlib.util
         spec = importlib.util.spec_from_file_location(
             "migration_015",
-            "/home/valginer0/projects/PGVectorRAGIndexer/alembic/versions/015_quarantine.py",
+            str(Path(__file__).parent.parent / "alembic" / "versions" / "015_quarantine.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)

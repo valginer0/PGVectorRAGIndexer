@@ -12,6 +12,7 @@ Covers:
 
 import importlib.util
 from datetime import datetime, timezone
+from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 
 import pytest
@@ -26,7 +27,7 @@ class TestMigration017Metadata:
     def _load_migration(self):
         spec = importlib.util.spec_from_file_location(
             "migration_017",
-            "/home/valginer0/projects/PGVectorRAGIndexer/alembic/versions/017_retention_policies.py",
+            str(Path(__file__).parent.parent / "alembic" / "versions" / "017_retention_policies.py"),
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)

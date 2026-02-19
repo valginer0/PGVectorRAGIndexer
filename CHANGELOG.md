@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.6] - 2026-02-18
+
+### Added
+- **Source prefix filtering**: `GET /documents` now accepts `source_prefix` parameter to filter documents by path prefix with trailing-slash semantics.
+- **Data retention policies**: Scoped purge across activity logs, quarantine, indexing runs, and SAML sessions with configurable per-category defaults (migration 017).
+- **Compliance export**: Admin-only `GET /compliance/export` endpoint returning a ZIP with metadata, users, activity logs, indexing summaries, quarantine stats, and retention policy.
+- **RFC 8594 deprecation headers**: Legacy `POST /activity/retention` and `POST /quarantine/purge` endpoints now return `Deprecation`, `Sunset`, and `Link` headers pointing to `POST /retention/run`.
+- **Server-first automation** (#6b): Canonical identity, quarantine lifecycle, and automation profile.
+- **DB-backed roles** (Phase 4b): Activity log executor fields and database-backed role system.
+- **Shared path normalization**: `path_utils.py` module as single source of truth for path normalization across document tree and database queries.
+
+### Fixed
+- **CSV export endpoint**: Fixed `GET /activity/export` returning JSON-encoded CSV instead of raw CSV (was using `JSONResponse` instead of `Response`).
+- **Pre-existing test failures**: Fixed 6 test files — alembic revision expectations (012→017), Qt `isVisible` vs `isHidden`, `add_folder` client_id requirement, retention policy default values, APIClient property errors.
+
+### Changed
+- **Retention defaults**: Activity log retention default 2555 days (~7 years), indexing runs 10950 days (~30 years).
+- Legacy retention endpoints marked `deprecated=True` in OpenAPI spec.
+
 ## [2.4.5] - 2026-02-09
 
 ### Added

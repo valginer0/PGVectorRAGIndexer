@@ -83,10 +83,144 @@ def default_start_dir() -> str:
     return str(start)
 
 
-def pick_directory(parent, title: str = "Select Folder") -> str:
-    """Show a properly-sized directory picker dialog. Returns path or empty string."""
-    from PySide6.QtWidgets import QFileDialog
+# ---------------------------------------------------------------------------
+# Windows-native file dialogs via PowerShell (used on WSL)
+# ---------------------------------------------------------------------------
 
+def _wsl_to_win(wsl_path: str) -> str:
+    """Convert a WSL path to a Windows path via wslpath."""
+    try:
+        r = subprocess.run(["wslpath", "-w", wsl_path], capture_output=True, text=True, check=True)
+        return r.stdout.strip()
+    except Exception:
+        return wsl_path
+
+
+def _win_to_wsl(win_path: str) -> str:
+    """Convert a Windows path to a WSL path via wslpath."""
+    try:
+        r = subprocess.run(["wslpath", "-u", win_path], capture_output=True, text=True, check=True)
+        return r.stdout.strip()
+    except Exception:
+        return win_path
+
+
+def _powershell_pick_directory(title: str) -> str:
+    """Use Windows native FolderBrowserDialog via PowerShell."""
+    start_win = _wsl_to_win(default_start_dir())
+    script = (
+        "Add-Type -AssemblyName System.Windows.Forms;"
+        "[System.Windows.Forms.Application]::EnableVisualStyles();"
+        "$d = New-Object System.Windows.Forms.FolderBrowserDialog;"
+        f"$d.Description = '{title}';"
+        f"$d.SelectedPath = '{start_win}';"
+        "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.SelectedPath }"
+    )
+    try:
+        r = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", script],
+            capture_output=True, text=True, timeout=120,
+        )
+        win_path = r.stdout.strip()
+        if win_path:
+            return _win_to_wsl(win_path)
+    except Exception as e:
+        _logger.warning("PowerShell folder dialog failed: %s", e)
+    return ""
+
+
+def _powershell_pick_save_file(title: str, default_name: str, filter_str: str) -> str:
+    """Use Windows native SaveFileDialog via PowerShell."""
+    start_win = _wsl_to_win(default_start_dir())
+    ps_filter = _qt_filter_to_win(filter_str)
+    script = (
+        "Add-Type -AssemblyName System.Windows.Forms;"
+        "[System.Windows.Forms.Application]::EnableVisualStyles();"
+        "$d = New-Object System.Windows.Forms.SaveFileDialog;"
+        f"$d.Title = '{title}';"
+        f"$d.InitialDirectory = '{start_win}';"
+        f"$d.FileName = '{default_name}';"
+        f"$d.Filter = '{ps_filter}';"
+        "if ($d.ShowDialog() -eq 'OK') { Write-Output $d.FileName }"
+    )
+    try:
+        r = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", script],
+            capture_output=True, text=True, timeout=120,
+        )
+        win_path = r.stdout.strip()
+        if win_path:
+            return _win_to_wsl(win_path)
+    except Exception as e:
+        _logger.warning("PowerShell save dialog failed: %s", e)
+    return ""
+
+
+def _powershell_pick_open_files(title: str, filter_str: str, multi: bool = False) -> list:
+    """Use Windows native OpenFileDialog via PowerShell."""
+    start_win = _wsl_to_win(default_start_dir())
+    ps_filter = _qt_filter_to_win(filter_str)
+    multi_str = "$true" if multi else "$false"
+    script = (
+        "Add-Type -AssemblyName System.Windows.Forms;"
+        "[System.Windows.Forms.Application]::EnableVisualStyles();"
+        "$d = New-Object System.Windows.Forms.OpenFileDialog;"
+        f"$d.Title = '{title}';"
+        f"$d.InitialDirectory = '{start_win}';"
+        f"$d.Filter = '{ps_filter}';"
+        f"$d.Multiselect = {multi_str};"
+        "if ($d.ShowDialog() -eq 'OK') { $d.FileNames -join '|' }"
+    )
+    try:
+        r = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", script],
+            capture_output=True, text=True, timeout=120,
+        )
+        raw = r.stdout.strip()
+        if raw:
+            return [_win_to_wsl(p) for p in raw.split("|") if p]
+    except Exception as e:
+        _logger.warning("PowerShell open dialog failed: %s", e)
+    return []
+
+
+def _qt_filter_to_win(qt_filter: str) -> str:
+    """Convert Qt filter string to Windows Forms filter.
+
+    Qt:   'JSON Files (*.json);;All Files (*)'
+    Win:  'JSON Files|*.json|All Files|*.*'
+    """
+    import re
+    parts = []
+    for segment in qt_filter.split(";;"):
+        segment = segment.strip()
+        m = re.match(r"(.+?)\s*\((.+?)\)", segment)
+        if m:
+            label, patterns = m.group(1), m.group(2)
+            # Replace standalone * with *.*
+            patterns = patterns.replace("(*)", "(*.*)")
+            if patterns.strip() == "*":
+                patterns = "*.*"
+            parts.append(f"{label}|{patterns}")
+        elif segment:
+            parts.append(f"{segment}|*.*")
+    return "|".join(parts) if parts else "All Files|*.*"
+
+
+# ---------------------------------------------------------------------------
+# Public file-picker API (auto-selects WSL-native or Qt fallback)
+# ---------------------------------------------------------------------------
+
+def pick_directory(parent, title: str = "Select Folder") -> str:
+    """Show a directory picker dialog. Returns path or empty string."""
+    if _is_wsl():
+        result = _powershell_pick_directory(title)
+        if result:
+            return result
+        # If PowerShell dialog was cancelled, return empty (don't fall through)
+        return ""
+
+    from PySide6.QtWidgets import QFileDialog
     dialog = QFileDialog(parent, title, default_start_dir())
     dialog.setFileMode(QFileDialog.Directory)
     dialog.setOption(QFileDialog.ShowDirsOnly, True)
@@ -99,9 +233,14 @@ def pick_directory(parent, title: str = "Select Folder") -> str:
 
 
 def pick_save_file(parent, title: str, default_name: str, filter_str: str) -> str:
-    """Show a properly-sized save-file dialog. Returns path or empty string."""
-    from PySide6.QtWidgets import QFileDialog
+    """Show a save-file dialog. Returns path or empty string."""
+    if _is_wsl():
+        result = _powershell_pick_save_file(title, default_name, filter_str)
+        if result:
+            return result
+        return ""
 
+    from PySide6.QtWidgets import QFileDialog
     dialog = QFileDialog(parent, title, str(Path(default_start_dir()) / default_name))
     dialog.setAcceptMode(QFileDialog.AcceptSave)
     dialog.setNameFilter(filter_str)
@@ -114,9 +253,12 @@ def pick_save_file(parent, title: str, default_name: str, filter_str: str) -> st
 
 
 def pick_open_file(parent, title: str, filter_str: str) -> str:
-    """Show a properly-sized open-file dialog. Returns path or empty string."""
-    from PySide6.QtWidgets import QFileDialog
+    """Show an open-file dialog. Returns path or empty string."""
+    if _is_wsl():
+        results = _powershell_pick_open_files(title, filter_str, multi=False)
+        return results[0] if results else ""
 
+    from PySide6.QtWidgets import QFileDialog
     dialog = QFileDialog(parent, title, default_start_dir())
     dialog.setFileMode(QFileDialog.ExistingFile)
     dialog.setNameFilter(filter_str)
@@ -129,9 +271,11 @@ def pick_open_file(parent, title: str, filter_str: str) -> str:
 
 
 def pick_open_files(parent, title: str, filter_str: str) -> list:
-    """Show a properly-sized open-files dialog. Returns list of paths."""
-    from PySide6.QtWidgets import QFileDialog
+    """Show an open-files dialog. Returns list of paths."""
+    if _is_wsl():
+        return _powershell_pick_open_files(title, filter_str, multi=True)
 
+    from PySide6.QtWidgets import QFileDialog
     dialog = QFileDialog(parent, title, default_start_dir())
     dialog.setFileMode(QFileDialog.ExistingFiles)
     dialog.setNameFilter(filter_str)

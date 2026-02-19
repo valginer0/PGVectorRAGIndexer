@@ -63,6 +63,26 @@ import logging
 
 _logger = logging.getLogger(__name__)
 
+def default_start_dir() -> str:
+    """Return a sensible starting directory for file dialogs (WSL-aware).
+
+    On WSL, returns the user's Windows home (e.g. /mnt/c/Users/john).
+    Otherwise returns the user's home directory.
+    """
+    start = Path.home()
+    wsl_win_home = Path("/mnt/c/Users")
+    if wsl_win_home.exists():
+        candidates = [
+            d for d in wsl_win_home.iterdir()
+            if d.is_dir() and not d.name.startswith(("Default", "Public", "All"))
+        ]
+        if len(candidates) == 1:
+            start = candidates[0]
+        else:
+            start = wsl_win_home
+    return str(start)
+
+
 def system_open(path: Path) -> None:
     """Open a file or directory using the system default application.
     

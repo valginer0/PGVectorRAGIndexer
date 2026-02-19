@@ -13,21 +13,10 @@ from PySide6.QtWidgets import (
     QTableWidgetItem,
     QHeaderView,
     QLabel,
-    QStyledItemDelegate,
-    QStyleOptionViewItem,
     QGroupBox
 )
 
 from .source_open_manager import SourceOpenManager, RecentEntry
-
-
-class _NoElideDelegate(QStyledItemDelegate):
-    """Ensure text is never elided in the Path column."""
-
-    def paint(self, painter, option, index):
-        no_elide = QStyleOptionViewItem(option)
-        no_elide.textElideMode = Qt.ElideNone
-        super().paint(painter, no_elide, index)
 
 
 class RecentActivityTab(QWidget):
@@ -114,10 +103,10 @@ class RecentActivityTab(QWidget):
         header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(4, QHeaderView.ResizeToContents)
         header.setSectionResizeMode(5, QHeaderView.ResizeToContents)
-        self.table.setTextElideMode(Qt.ElideNone)
-        self.table.setItemDelegateForColumn(0, _NoElideDelegate(self.table))
+        self.table.setTextElideMode(Qt.ElideMiddle)
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.table.setHorizontalScrollMode(QTableWidget.ScrollPerPixel)
         self.table.viewport().setCursor(Qt.PointingHandCursor)
         table_layout.addWidget(self.table)
         

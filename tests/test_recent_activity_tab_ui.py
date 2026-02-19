@@ -43,7 +43,7 @@ def test_recent_tab_path_tooltip_and_elide_mode(recent_tab):
 
     item = recent_tab.table.item(0, 0)
 
-    assert recent_tab.table.textElideMode() == Qt.ElideNone
+    assert recent_tab.table.textElideMode() == Qt.ElideMiddle
     assert item is not None
     assert item.toolTip() == "/tmp/example.txt"
     assert bool(item.font().underline()) is True

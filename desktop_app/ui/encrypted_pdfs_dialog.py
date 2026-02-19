@@ -115,10 +115,12 @@ class EncryptedPDFsDialog(QDialog):
             QMessageBox.information(self, "No Data", "No encrypted PDFs to export.")
             return
         
+        from .shared import default_start_dir
+        from pathlib import Path
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save Encrypted PDFs List",
-            "encrypted_pdfs.csv",
+            str(Path(default_start_dir()) / "encrypted_pdfs.csv"),
             "CSV Files (*.csv)"
         )
         

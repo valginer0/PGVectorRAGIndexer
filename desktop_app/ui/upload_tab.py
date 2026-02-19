@@ -222,10 +222,11 @@ class UploadTab(QWidget):
     def select_files(self):
         """Open file dialog to select multiple files."""
         documents_filter = self._build_documents_filter()
+        from .shared import default_start_dir
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
             "Select Documents to Upload",
-            self._default_start_dir(),
+            default_start_dir(),
             f"{documents_filter};;All Files (*)"
         )
         
@@ -260,40 +261,17 @@ class UploadTab(QWidget):
             self.stats_label.setVisible(False)
             self.view_errors_btn.setVisible(False)
     
-    @staticmethod
-    def _default_start_dir() -> str:
-        """Return a sensible starting directory for file dialogs (WSL-aware)."""
-        start_dir = Path.home()
-        wsl_win_home = Path("/mnt/c/Users")
-        if wsl_win_home.exists():
-            candidates = [
-                d for d in wsl_win_home.iterdir()
-                if d.is_dir() and not d.name.startswith(("Default", "Public", "All"))
-            ]
-            if len(candidates) == 1:
-                start_dir = candidates[0]
-            else:
-                start_dir = wsl_win_home
-        return str(start_dir)
-
     def select_folder(self):
         """Open folder dialog to select a directory and index all supported files."""
-        documents_filter = self._build_documents_filter()
-        dialog = QFileDialog(self, "Select Folder to Index (Recursive)")
-        dialog.setFileMode(QFileDialog.Directory)
-        dialog.setOption(QFileDialog.ShowDirsOnly, False)
-        dialog.setOption(QFileDialog.DontUseNativeDialog, True)
-        dialog.setNameFilter(f"{documents_filter};;All Files (*)")
-        dialog.setDirectory(self._default_start_dir())
+        from .shared import default_start_dir
 
-        if not dialog.exec():
+        folder_path = QFileDialog.getExistingDirectory(
+            self,
+            "Select Folder to Index (Recursive)",
+            default_start_dir(),
+        )
+        if not folder_path:
             return
-
-        selected = dialog.selectedFiles()
-        if not selected:
-            return
-
-        folder_path = selected[0]
         folder = Path(folder_path)
         found_files = self._find_supported_files(folder)
 

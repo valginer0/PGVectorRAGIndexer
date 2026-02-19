@@ -461,10 +461,11 @@ class SettingsTab(QWidget):
 
     def _enter_license_key(self):
         """Let the user browse for a .key file and install it."""
+        from .shared import default_start_dir
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Select License Key File",
-            "",
+            default_start_dir(),
             "License Key Files (*.key);;All Files (*)",
         )
         if not file_path:

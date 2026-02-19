@@ -222,14 +222,13 @@ class UploadTab(QWidget):
     def select_files(self):
         """Open file dialog to select multiple files."""
         documents_filter = self._build_documents_filter()
-        from .shared import default_start_dir
-        file_paths, _ = QFileDialog.getOpenFileNames(
+        from .shared import pick_open_files
+        file_paths = pick_open_files(
             self,
             "Select Documents to Upload",
-            default_start_dir(),
             f"{documents_filter};;All Files (*)"
         )
-        
+
         if file_paths:
             # Filter out Office temp files (~$*)
             filtered_paths = [
@@ -263,13 +262,9 @@ class UploadTab(QWidget):
     
     def select_folder(self):
         """Open folder dialog to select a directory and index all supported files."""
-        from .shared import default_start_dir
+        from .shared import pick_directory
 
-        folder_path = QFileDialog.getExistingDirectory(
-            self,
-            "Select Folder to Index (Recursive)",
-            default_start_dir(),
-        )
+        folder_path = pick_directory(self, "Select Folder to Index (Recursive)")
         if not folder_path:
             return
         folder = Path(folder_path)

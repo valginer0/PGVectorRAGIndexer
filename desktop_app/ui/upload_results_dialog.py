@@ -178,12 +178,11 @@ class UploadResultsDialog(QDialog):
     
     def _export_to_csv(self):
         """Export error list to CSV file."""
-        from .shared import default_start_dir
-        from pathlib import Path
-        file_path, _ = QFileDialog.getSaveFileName(
+        from .shared import pick_save_file
+        file_path = pick_save_file(
             self,
             "Export Upload Errors",
-            str(Path(default_start_dir()) / "upload_errors.csv"),
+            "upload_errors.csv",
             "CSV Files (*.csv)"
         )
         

@@ -265,11 +265,11 @@ class ManageTab(QWidget):
             return
         
         # Ask where to save
-        from .shared import default_start_dir
-        file_path, _ = QFileDialog.getSaveFileName(
+        from .shared import pick_save_file
+        file_path = pick_save_file(
             self,
             "Save Backup File",
-            str(Path(default_start_dir()) / "documents_backup.json"),
+            "documents_backup.json",
             "JSON Files (*.json)"
         )
         
@@ -466,11 +466,10 @@ class ManageTab(QWidget):
         """Restore documents from last backup (undo)."""
         if not self.last_backup:
             # Try to load from file
-            from .shared import default_start_dir
-            file_path, _ = QFileDialog.getOpenFileName(
+            from .shared import pick_open_file
+            file_path = pick_open_file(
                 self,
                 "Select Backup File",
-                default_start_dir(),
                 "JSON Files (*.json)"
             )
             

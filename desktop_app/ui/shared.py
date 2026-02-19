@@ -83,6 +83,64 @@ def default_start_dir() -> str:
     return str(start)
 
 
+def pick_directory(parent, title: str = "Select Folder") -> str:
+    """Show a properly-sized directory picker dialog. Returns path or empty string."""
+    from PySide6.QtWidgets import QFileDialog
+
+    dialog = QFileDialog(parent, title, default_start_dir())
+    dialog.setFileMode(QFileDialog.Directory)
+    dialog.setOption(QFileDialog.ShowDirsOnly, True)
+    dialog.resize(900, 560)
+    if dialog.exec():
+        selected = dialog.selectedFiles()
+        if selected:
+            return selected[0]
+    return ""
+
+
+def pick_save_file(parent, title: str, default_name: str, filter_str: str) -> str:
+    """Show a properly-sized save-file dialog. Returns path or empty string."""
+    from PySide6.QtWidgets import QFileDialog
+
+    dialog = QFileDialog(parent, title, str(Path(default_start_dir()) / default_name))
+    dialog.setAcceptMode(QFileDialog.AcceptSave)
+    dialog.setNameFilter(filter_str)
+    dialog.resize(900, 560)
+    if dialog.exec():
+        selected = dialog.selectedFiles()
+        if selected:
+            return selected[0]
+    return ""
+
+
+def pick_open_file(parent, title: str, filter_str: str) -> str:
+    """Show a properly-sized open-file dialog. Returns path or empty string."""
+    from PySide6.QtWidgets import QFileDialog
+
+    dialog = QFileDialog(parent, title, default_start_dir())
+    dialog.setFileMode(QFileDialog.ExistingFile)
+    dialog.setNameFilter(filter_str)
+    dialog.resize(900, 560)
+    if dialog.exec():
+        selected = dialog.selectedFiles()
+        if selected:
+            return selected[0]
+    return ""
+
+
+def pick_open_files(parent, title: str, filter_str: str) -> list:
+    """Show a properly-sized open-files dialog. Returns list of paths."""
+    from PySide6.QtWidgets import QFileDialog
+
+    dialog = QFileDialog(parent, title, default_start_dir())
+    dialog.setFileMode(QFileDialog.ExistingFiles)
+    dialog.setNameFilter(filter_str)
+    dialog.resize(900, 560)
+    if dialog.exec():
+        return dialog.selectedFiles()
+    return []
+
+
 def system_open(path: Path) -> None:
     """Open a file or directory using the system default application.
     

@@ -270,10 +270,8 @@ class WatchedFoldersTab(QWidget):
     # ------------------------------------------------------------------
 
     def _add_folder(self):
-        from .shared import default_start_dir
-        folder_path = QFileDialog.getExistingDirectory(
-            self, "Select Folder to Watch", default_start_dir()
-        )
+        from .shared import pick_directory
+        folder_path = pick_directory(self, "Select Folder to Watch")
         if not folder_path:
             return
 

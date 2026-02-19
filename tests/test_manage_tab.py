@@ -104,13 +104,13 @@ def test_export_backup(manage_tab, mock_api_client):
     manage_tab.type_combo.setCurrentText("resume")
     mock_api_client.export_documents.return_value = {"backup_data": []}
     
-    with patch("PySide6.QtWidgets.QFileDialog.getSaveFileName", return_value=("/tmp/backup.json", "")), \
+    with patch("desktop_app.ui.shared.pick_save_file", return_value="/tmp/backup.json"), \
          patch("builtins.open", mock_open()) as mock_file, \
          patch("json.dump") as mock_json_dump, \
          patch("PySide6.QtWidgets.QMessageBox.information") as mock_info:
-        
+
         manage_tab.export_backup()
-        
+
         mock_api_client.export_documents.assert_called_once()
         mock_file.assert_called_once_with("/tmp/backup.json", 'w')
         mock_json_dump.assert_called_once()

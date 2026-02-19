@@ -115,11 +115,9 @@ def test_clear_failures_on_new_upload(upload_tab):
 
 def test_select_files(upload_tab):
     """Test file selection dialog."""
-    with patch("PySide6.QtWidgets.QFileDialog.getOpenFileNames") as mock_dialog:
-        mock_dialog.return_value = (["/path/to/file1.txt", "/path/to/file2.pdf"], "filter")
-        
+    with patch("desktop_app.ui.shared.pick_open_files", return_value=["/path/to/file1.txt", "/path/to/file2.pdf"]):
         upload_tab.select_files()
-        
+
         assert len(upload_tab.selected_files) == 2
         assert upload_tab.selected_files[0] == Path("/path/to/file1.txt")
         assert upload_tab.upload_btn.isEnabled()
@@ -129,14 +127,13 @@ def test_select_folder(upload_tab):
     mock_folder_dialog = MagicMock()
     mock_folder_dialog.exec.return_value = True
     mock_folder_dialog.get_filtered_files.return_value = [Path("/path/to/folder/file1.txt")]
-    
-    with patch("PySide6.QtWidgets.QFileDialog.exec", return_value=True), \
-         patch("PySide6.QtWidgets.QFileDialog.selectedFiles", return_value=["/path/to/folder"]), \
+
+    with patch("desktop_app.ui.shared.pick_directory", return_value="/path/to/folder"), \
          patch.object(upload_tab, "_find_supported_files", return_value=[Path("/path/to/folder/file1.txt")]), \
          patch("desktop_app.ui.upload_tab.FolderIndexDialog", return_value=mock_folder_dialog):
-        
+
         upload_tab.select_folder()
-        
+
         assert len(upload_tab.selected_files) == 1
         assert upload_tab.selected_files[0] == Path("/path/to/folder/file1.txt")
         assert upload_tab.upload_btn.isEnabled()

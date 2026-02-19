@@ -38,10 +38,41 @@ class QueryError(DatabaseError):
     pass
 
 
+class _PooledConnection:
+    """Thin wrapper that returns the connection to the pool on close().
+
+    psycopg2 connection objects have read-only C-level attributes, so we
+    can't monkey-patch ``close()``.  This wrapper delegates every attribute
+    to the real connection but overrides ``close()`` to call ``putconn()``.
+    """
+
+    def __init__(self, conn, pool):
+        self._conn = conn
+        self._pool = pool
+
+    # --- public override ---------------------------------------------------
+    def close(self):
+        """Return the connection to the pool instead of closing it."""
+        try:
+            self._pool.putconn(self._conn)
+        except Exception:
+            pass
+
+    # --- delegate everything else to the real connection --------------------
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+
 class DatabaseManager:
     """
     Manages database connections with connection pooling.
-    
+
     Provides both synchronous and context manager interfaces for
     database operations with automatic connection management.
     """
@@ -128,16 +159,7 @@ class DatabaseManager:
             self.initialize()
         conn = self._pool.getconn()
         register_vector(conn)
-        pool = self._pool
-
-        def _return_to_pool():
-            try:
-                pool.putconn(conn)
-            except Exception:
-                pass
-
-        conn.close = _return_to_pool
-        return conn
+        return _PooledConnection(conn, self._pool)
 
     @contextmanager
     def get_cursor(self, dict_cursor: bool = False):

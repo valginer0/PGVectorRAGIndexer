@@ -452,6 +452,7 @@ Implementation sequencing (recommended):
       - [x] additive APIs + maintenance runner second
       - [x] deprecation notices last
   - [x] Compliance exports (`compliance_export.py`, admin-only `GET /compliance/export` ZIP endpoint)
+  - **Note**: Migration 017 creates a `retention_policies` DB table (schema-only). DB-backed admin overrides are a future item — runtime currently reads from env vars / hardcoded defaults only.
 
 ---
 

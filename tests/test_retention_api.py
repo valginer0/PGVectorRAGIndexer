@@ -2,6 +2,7 @@
 
 import os
 import sys
+from unittest.mock import patch
 
 import pytest
 
@@ -48,3 +49,39 @@ class TestDeprecationHeaders:
         from api import purge_quarantine
         sig = inspect.signature(purge_quarantine)
         assert "response" in sig.parameters
+
+
+class TestDeprecationResponseHeaders:
+    """Verify legacy endpoints return RFC 8594 deprecation headers via HTTP."""
+
+    @pytest.fixture(autouse=True)
+    def _client(self):
+        from fastapi.testclient import TestClient
+        from api import app
+        from auth import require_api_key
+
+        # Bypass auth for test requests
+        app.dependency_overrides[require_api_key] = lambda: None
+        self.client = TestClient(app, raise_server_exceptions=False)
+        yield
+        app.dependency_overrides.clear()
+
+    @patch("retention_policy.apply_retention", return_value={
+        "ok": True, "activity_deleted": 0, "quarantine_purged": 0,
+        "indexing_runs_deleted": 0, "saml_sessions_deleted": 0,
+    })
+    def test_activity_retention_headers(self, _mock):
+        resp = self.client.post("/api/v1/activity/retention", json={"days": 90})
+        assert resp.headers.get("Deprecation") == "true"
+        assert "2026" in resp.headers.get("Sunset", "")
+        assert "successor-version" in resp.headers.get("Link", "")
+
+    @patch("retention_policy.apply_retention", return_value={
+        "ok": True, "activity_deleted": 0, "quarantine_purged": 0,
+        "indexing_runs_deleted": 0, "saml_sessions_deleted": 0,
+    })
+    def test_quarantine_purge_headers(self, _mock):
+        resp = self.client.post("/api/v1/quarantine/purge")
+        assert resp.headers.get("Deprecation") == "true"
+        assert "2026" in resp.headers.get("Sunset", "")
+        assert "successor-version" in resp.headers.get("Link", "")

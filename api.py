@@ -2052,7 +2052,7 @@ async def export_activity_csv(
     from activity_log import export_csv
     try:
         csv_data = export_csv(client_id=client_id, action=action, limit=limit)
-        return JSONResponse(
+        return Response(
             content=csv_data,
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=activity_log.csv"},

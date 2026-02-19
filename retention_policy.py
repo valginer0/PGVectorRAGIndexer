@@ -3,6 +3,16 @@
 Provides per-category defaults and a single orchestration function that
 applies retention across activity logs, quarantine, indexing runs, and
 SAML sessions.
+
+Configuration sources (current):
+    - Environment variables: ``ACTIVITY_RETENTION_DAYS``,
+      ``INDEXING_RUNS_RETENTION_DAYS``
+    - Quarantine retention via ``quarantine.get_retention_days()``
+
+Note:
+    Migration 017 creates a ``retention_policies`` DB table, but it is
+    **not yet wired** to this module.  The table is reserved for a future
+    admin API that will allow per-category DB-backed overrides.
 """
 
 from __future__ import annotations

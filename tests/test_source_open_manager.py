@@ -36,23 +36,53 @@ def test_normalize_path_not_exists_no_resolve(source_manager):
         mock_warn.assert_called_once()
 
 def test_resolve_path_mismatch_success(source_manager):
-    """Test successful path resolution."""
+    """Test successful path resolution via rglob fallback."""
     original_path = "C:\\Users\\User\\Documents\\resume.pdf"
     expected_path = Path("/mock/project/documents/resume.pdf")
-    
-    with patch("pathlib.Path.exists", return_value=True), \
+
+    # WSL path won't exist, but documents dir does → falls through to rglob
+    def selective_exists(self):
+        s = str(self)
+        if s.startswith("/mnt/"):
+            return False
+        if s == str(source_manager.project_root / "documents"):
+            return True
+        return False
+
+    with patch("pathlib.Path.exists", selective_exists), \
          patch("pathlib.Path.rglob", return_value=[expected_path]):
-        
+
         resolved = source_manager._resolve_path_mismatch(original_path)
         assert resolved == expected_path
+
+def test_resolve_path_mismatch_wsl(source_manager):
+    """Test Windows path resolved to WSL mount path."""
+    original_path = "C:\\Users\\User\\Documents\\resume.pdf"
+    wsl_path = Path("/mnt/c/Users/User/Documents/resume.pdf")
+
+    def selective_exists(self):
+        return str(self) == str(wsl_path)
+
+    with patch("pathlib.Path.exists", selective_exists):
+        resolved = source_manager._resolve_path_mismatch(original_path)
+        assert resolved == wsl_path
 
 def test_resolve_path_mismatch_failure(source_manager):
     """Test failed path resolution."""
     original_path = "C:\\Users\\User\\Documents\\missing.pdf"
-    
-    with patch("pathlib.Path.exists", return_value=True), \
+
+    # WSL path won't exist, documents dir exists, but rglob finds nothing
+    def selective_exists(self):
+        s = str(self)
+        if s.startswith("/mnt/"):
+            return False
+        if s == str(source_manager.project_root / "documents"):
+            return True
+        return False
+
+    with patch("pathlib.Path.exists", selective_exists), \
          patch("pathlib.Path.rglob", return_value=[]):
-        
+
         resolved = source_manager._resolve_path_mismatch(original_path)
         assert resolved is None
 

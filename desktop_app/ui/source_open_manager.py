@@ -74,42 +74,52 @@ class SourceOpenManager(QObject):
         return normalized
 
     def _resolve_path_mismatch(self, original_path: str) -> Optional[Path]:
-        """Attempt to find the file in the local project directory."""
+        """Attempt to resolve a path that doesn't exist locally.
+
+        Handles:
+        1. Windows paths on WSL  (C:\\Users\\... → /mnt/c/Users/...)
+        2. Fallback search by filename in project documents directory
+        """
+        logger.info(f"Attempting to resolve path mismatch for: {original_path}")
+
+        # 1. Windows path on WSL/Linux → /mnt/<drive>/...
+        if sys.platform != "win32" and len(original_path) >= 3 and original_path[1:3] in (":\\", ":/"):
+            drive = original_path[0].lower()
+            rest = original_path[3:].replace("\\", "/")
+            wsl_path = Path(f"/mnt/{drive}/{rest}")
+            if wsl_path.exists():
+                logger.info(f"Resolved Windows path to WSL: {wsl_path}")
+                return wsl_path
+
+        # 2. Fallback: search by filename in project documents dir
         if not self.project_root:
             logger.warning("Project root not set in SourceOpenManager")
             return None
-            
+
         filename = Path(original_path).name
         documents_dir = self.project_root / "documents"
-        
-        logger.info(f"Attempting to resolve path mismatch for: {original_path}")
-        logger.info(f"Searching in: {documents_dir}")
-        
+
         if not documents_dir.exists():
             logger.warning(f"Documents directory not found: {documents_dir}")
             return None
-            
-        # 1. Try to find by filename in documents directory (recursive)
+
         try:
             found = list(documents_dir.rglob(filename))
             if found:
                 logger.info(f"Found {len(found)} candidate(s): {found}")
-                # If multiple found, try to match parent folder name
                 if len(found) > 1:
                     parent_name = Path(original_path).parent.name
                     for f in found:
                         if f.parent.name == parent_name:
                             logger.info(f"Matched parent folder '{parent_name}': {f}")
                             return f
-                
                 logger.info(f"Returning first match: {found[0]}")
                 return found[0]
             else:
                 logger.warning(f"No file named '{filename}' found in {documents_dir}")
         except Exception as e:
             logger.error(f"Error during path resolution: {e}")
-            pass
-            
+
         return None
 
     def get_recent_entries(self) -> List[RecentEntry]:

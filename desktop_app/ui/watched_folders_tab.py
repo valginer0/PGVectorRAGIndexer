@@ -95,12 +95,12 @@ class WatchedFoldersTab(QWidget):
         header.addStretch()
 
         self._scheduler_btn = QPushButton("Start Scheduler")
-        self._scheduler_btn.setFixedWidth(140)
+        self._scheduler_btn.setMinimumWidth(160)
         self._scheduler_btn.clicked.connect(self._toggle_scheduler)
         header.addWidget(self._scheduler_btn)
 
         self._refresh_btn = QPushButton("Refresh")
-        self._refresh_btn.setFixedWidth(80)
+        self._refresh_btn.setMinimumWidth(100)
         self._refresh_btn.clicked.connect(self.load_folders)
         header.addWidget(self._refresh_btn)
 

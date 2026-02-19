@@ -660,7 +660,12 @@ class DocumentsTab(QWidget):
             item = QTreeWidgetItem()
             name = child.get("name", "")
             node_type = child.get("type", "")
-            item.setText(0, name)
+
+            # Skip empty-name folders (artifacts from relative paths)
+            if not name and node_type == "folder" and not parent_item:
+                continue
+
+            item.setText(0, name or "(root)")
 
             if node_type == "folder":
                 item.setIcon(0, qta.icon('fa5s.folder', color='#f59e0b'))

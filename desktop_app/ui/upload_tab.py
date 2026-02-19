@@ -225,7 +225,7 @@ class UploadTab(QWidget):
         file_paths, _ = QFileDialog.getOpenFileNames(
             self,
             "Select Documents to Upload",
-            "",
+            self._default_start_dir(),
             f"{documents_filter};;All Files (*)"
         )
         
@@ -260,6 +260,22 @@ class UploadTab(QWidget):
             self.stats_label.setVisible(False)
             self.view_errors_btn.setVisible(False)
     
+    @staticmethod
+    def _default_start_dir() -> str:
+        """Return a sensible starting directory for file dialogs (WSL-aware)."""
+        start_dir = Path.home()
+        wsl_win_home = Path("/mnt/c/Users")
+        if wsl_win_home.exists():
+            candidates = [
+                d for d in wsl_win_home.iterdir()
+                if d.is_dir() and not d.name.startswith(("Default", "Public", "All"))
+            ]
+            if len(candidates) == 1:
+                start_dir = candidates[0]
+            else:
+                start_dir = wsl_win_home
+        return str(start_dir)
+
     def select_folder(self):
         """Open folder dialog to select a directory and index all supported files."""
         documents_filter = self._build_documents_filter()
@@ -268,6 +284,7 @@ class UploadTab(QWidget):
         dialog.setOption(QFileDialog.ShowDirsOnly, False)
         dialog.setOption(QFileDialog.DontUseNativeDialog, True)
         dialog.setNameFilter(f"{documents_filter};;All Files (*)")
+        dialog.setDirectory(self._default_start_dir())
 
         if not dialog.exec():
             return

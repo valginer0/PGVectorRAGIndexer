@@ -917,6 +917,64 @@ async def list_encrypted_pdfs(
     }
 
 
+# ---------------------------------------------------------------------------
+# Document Tree Endpoints (must be before /documents/{document_id} catch-all)
+# ---------------------------------------------------------------------------
+
+@v1_router.get("/documents/tree", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
+async def get_document_tree(
+    parent_path: str = Query(default=""),
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+):
+    """Get one level of the document tree under parent_path.
+
+    Returns folders (with aggregated counts) and files at the next level.
+    """
+    from document_tree import get_tree_children
+    try:
+        result = get_tree_children(parent_path=parent_path, limit=limit, offset=offset)
+        return result
+    except Exception as e:
+        logger.error(f"Failed to get document tree: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get document tree: {str(e)}",
+        )
+
+
+@v1_router.get("/documents/tree/stats", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
+async def get_document_tree_stats():
+    """Get overall document tree statistics."""
+    from document_tree import get_tree_stats
+    try:
+        return get_tree_stats()
+    except Exception as e:
+        logger.error(f"Failed to get tree stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get tree stats: {str(e)}",
+        )
+
+
+@v1_router.get("/documents/tree/search", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
+async def search_document_tree(
+    q: str = Query(..., min_length=1),
+    limit: int = Query(default=50, ge=1, le=500),
+):
+    """Search for documents matching a path pattern."""
+    from document_tree import search_tree
+    try:
+        results = search_tree(query=q, limit=limit)
+        return {"results": results, "count": len(results), "query": q}
+    except Exception as e:
+        logger.error(f"Failed to search document tree: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to search tree: {str(e)}",
+        )
+
+
 @v1_router.get("/documents/{document_id}", response_model=DocumentInfo, tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def get_document(document_id: str):
     """Get document information by ID."""
@@ -2168,60 +2226,6 @@ async def compliance_export():
 # ---------------------------------------------------------------------------
 # Document Tree Endpoints (#7)
 # ---------------------------------------------------------------------------
-
-
-@v1_router.get("/documents/tree", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
-async def get_document_tree(
-    parent_path: str = Query(default=""),
-    limit: int = Query(default=200, ge=1, le=1000),
-    offset: int = Query(default=0, ge=0),
-):
-    """Get one level of the document tree under parent_path.
-
-    Returns folders (with aggregated counts) and files at the next level.
-    """
-    from document_tree import get_tree_children
-    try:
-        result = get_tree_children(parent_path=parent_path, limit=limit, offset=offset)
-        return result
-    except Exception as e:
-        logger.error(f"Failed to get document tree: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get document tree: {str(e)}",
-        )
-
-
-@v1_router.get("/documents/tree/stats", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
-async def get_document_tree_stats():
-    """Get overall document tree statistics."""
-    from document_tree import get_tree_stats
-    try:
-        return get_tree_stats()
-    except Exception as e:
-        logger.error(f"Failed to get tree stats: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get tree stats: {str(e)}",
-        )
-
-
-@v1_router.get("/documents/tree/search", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
-async def search_document_tree(
-    q: str = Query(..., min_length=1),
-    limit: int = Query(default=50, ge=1, le=500),
-):
-    """Search for documents matching a path pattern."""
-    from document_tree import search_tree
-    try:
-        results = search_tree(query=q, limit=limit)
-        return {"results": results, "count": len(results), "query": q}
-    except Exception as e:
-        logger.error(f"Failed to search document tree: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to search tree: {str(e)}",
-        )
 
 
 # ---------------------------------------------------------------------------

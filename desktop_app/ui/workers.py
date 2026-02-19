@@ -49,6 +49,30 @@ class DocumentsWorker(QThread):
             logger.error(f"Load documents failed: {e}")
             self.finished.emit(False, str(e))
 
+class TreeWorker(QThread):
+    """Worker thread for loading one level of the document tree."""
+    finished = Signal(bool, object, str)  # success, data, parent_path
+
+    def __init__(self, api_client, parent_path="", limit=200, offset=0):
+        super().__init__()
+        self.api_client = api_client
+        self.parent_path = parent_path
+        self.limit = limit
+        self.offset = offset
+
+    def run(self):
+        try:
+            results = self.api_client.get_document_tree(
+                parent_path=self.parent_path,
+                limit=self.limit,
+                offset=self.offset,
+            )
+            self.finished.emit(True, results, self.parent_path)
+        except Exception as e:
+            logger.error(f"Load tree level failed: {e}")
+            self.finished.emit(False, str(e), self.parent_path)
+
+
 class DeleteWorker(QThread):
     """Worker thread for deleting a document."""
     finished = Signal(bool, str)

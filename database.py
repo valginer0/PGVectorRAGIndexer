@@ -117,6 +117,28 @@ class DatabaseManager:
             if conn:
                 self._pool.putconn(conn)
     
+    def get_connection_raw(self):
+        """Get a raw connection from the pool.
+
+        Unlike get_connection(), this returns the connection directly,
+        not as a context manager.  Calling ``conn.close()`` returns
+        the connection to the pool (it does NOT destroy the TCP link).
+        """
+        if not self._initialized:
+            self.initialize()
+        conn = self._pool.getconn()
+        register_vector(conn)
+        pool = self._pool
+
+        def _return_to_pool():
+            try:
+                pool.putconn(conn)
+            except Exception:
+                pass
+
+        conn.close = _return_to_pool
+        return conn
+
     @contextmanager
     def get_cursor(self, dict_cursor: bool = False):
         """

@@ -34,7 +34,7 @@ def _get_db_connection():
     """Get a database connection from the global DB manager."""
     from database import get_db_manager
     db = get_db_manager()
-    return db.get_connection()
+    return db.get_connection_raw()
 
 
 # ---------------------------------------------------------------------------

@@ -81,8 +81,8 @@ class MainWindow(QMainWindow):
     def setup_ui(self):
         """Setup the user interface."""
         self.setWindowTitle("PGVectorRAGIndexer - Document Management")
-        # Height: Need ~880px for content + safety margin
-        self.setMinimumSize(1100, 950)
+        # Height: Need enough room for Settings tab content
+        self.setMinimumSize(1100, 1000)
         
         # Central widget
         central_widget = QWidget()

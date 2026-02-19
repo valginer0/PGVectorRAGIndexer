@@ -122,7 +122,7 @@ class ServerScheduler:
         """Attempt to acquire the advisory lock. Non-blocking."""
         try:
             from database import get_db_manager
-            conn = get_db_manager().get_connection()
+            conn = get_db_manager().get_connection_raw()
             cur = conn.cursor()
             cur.execute(
                 "SELECT pg_try_advisory_lock(%s)", (SERVER_SCHEDULER_LOCK_ID,)
@@ -139,7 +139,7 @@ class ServerScheduler:
         """Release the advisory lock."""
         try:
             from database import get_db_manager
-            conn = get_db_manager().get_connection()
+            conn = get_db_manager().get_connection_raw()
             cur = conn.cursor()
             cur.execute(
                 "SELECT pg_advisory_unlock(%s)", (SERVER_SCHEDULER_LOCK_ID,)

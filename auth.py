@@ -143,7 +143,7 @@ def is_auth_required(request: Request) -> bool:
 def _get_db_connection():
     """Get a raw database connection for key operations."""
     from database import get_db_manager
-    return get_db_manager().get_connection()
+    return get_db_manager().get_connection_raw()
 
 
 def lookup_api_key(key_hash: str) -> Optional[dict]:

@@ -19,7 +19,7 @@ DEFAULT_TTL_MINUTES = 10
 def _get_db_connection():
     """Get a database connection from the global DB manager."""
     from database import get_db_manager
-    return get_db_manager().get_connection()
+    return get_db_manager().get_connection_raw()
 
 
 _COLUMNS = ("id", "source_uri", "client_id", "locked_at", "expires_at", "lock_reason",

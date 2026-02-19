@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 def _get_db_connection():
     """Get a database connection from the global DB manager."""
     from db import get_db_manager
-    return get_db_manager().get_connection()
+    return get_db_manager().get_connection_raw()
 
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QTextEdit, QMessageBox, QGridLayout, QFileDialog,
-    QLineEdit, QRadioButton, QButtonGroup,
+    QLineEdit, QRadioButton, QButtonGroup, QScrollArea,
 )
 import qtawesome as qta
 from PySide6.QtCore import QThread, Signal, QSize, Qt
@@ -32,22 +32,38 @@ class SettingsTab(QWidget):
     
     def setup_ui(self):
         """Setup the user interface."""
-        layout = QVBoxLayout(self)
-        layout.setSpacing(20)
-        layout.setContentsMargins(20, 20, 20, 20)
-        
+        # Outer layout holds a scroll area so content doesn't get compressed
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        self._scroll = QScrollArea()
+        self._scroll.setWidgetResizable(True)
+        self._scroll.setFrameShape(QScrollArea.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setSpacing(10)
+        layout.setContentsMargins(16, 12, 16, 12)
+
+        self._scroll.setWidget(container)
+        outer.addWidget(self._scroll)
+
         # Title
         header_layout = QHBoxLayout()
         title = QLabel("Settings & Management")
         title.setProperty("class", "header")
         header_layout.addWidget(title)
         header_layout.addStretch()
-        
+
         layout.addLayout(header_layout)
         
+        # Compact group-box margins for this tab (override QSS margin-top: 1.5em)
+        _compact_gb = "QGroupBox { margin-top: 0.8em; padding-top: 8px; }"
+
         # Statistics
         if self.api_client:
             stats_group = QGroupBox("Database Statistics")
+            stats_group.setStyleSheet(_compact_gb)
             stats_layout = QVBoxLayout(stats_group)
             
             self.stats_grid = QGridLayout()
@@ -87,6 +103,7 @@ class SettingsTab(QWidget):
 
         # Docker controls
         self._docker_group = QGroupBox("Docker Container Management")
+        self._docker_group.setStyleSheet(_compact_gb)
         docker_group = self._docker_group
         docker_layout = QVBoxLayout(docker_group)
         
@@ -107,19 +124,19 @@ class SettingsTab(QWidget):
         
         # Logs display
         self._logs_group = QGroupBox("Container Logs")
+        self._logs_group.setStyleSheet(_compact_gb)
         logs_group = self._logs_group
         logs_layout = QVBoxLayout(logs_group)
         
         self.logs_text = QTextEdit()
         self.logs_text.setReadOnly(True)
-        self.logs_text.setMaximumHeight(200)
+        self.logs_text.setMaximumHeight(120)
         self.logs_text.setPlaceholderText("Click 'View Application Logs' to load logs...")
         logs_layout.addWidget(self.logs_text)
         
+        logs_group.setVisible(False)  # Hidden until user clicks "View Application Logs"
         layout.addWidget(logs_group)
-        
-        layout.addStretch()
-    
+
     # ------------------------------------------------------------------
     # Backend connection panel (#1)
     # ------------------------------------------------------------------
@@ -131,7 +148,9 @@ class SettingsTab(QWidget):
             BACKEND_MODE_LOCAL, BACKEND_MODE_REMOTE, DEFAULT_LOCAL_URL,
         )
 
+        _compact_gb = "QGroupBox { margin-top: 0.8em; padding-top: 8px; }"
         backend_group = QGroupBox("Backend Connection")
+        backend_group.setStyleSheet(_compact_gb)
         grid = QGridLayout(backend_group)
         grid.setSpacing(8)
 
@@ -337,7 +356,9 @@ class SettingsTab(QWidget):
 
     def _build_license_panel(self, parent_layout):
         """Build the License information group box."""
+        _compact_gb = "QGroupBox { margin-top: 0.8em; padding-top: 8px; }"
         license_group = QGroupBox("License")
+        license_group.setStyleSheet(_compact_gb)
         grid = QGridLayout(license_group)
         grid.setSpacing(8)
 
@@ -549,5 +570,9 @@ class SettingsTab(QWidget):
     
     def view_logs(self):
         """View container logs."""
+        self._logs_group.setVisible(True)
         logs = self.docker_manager.get_logs()
         self.logs_text.setPlainText(logs)
+        # Scroll down so the logs panel is visible
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(50, lambda: self._scroll.ensureWidgetVisible(self._logs_group))

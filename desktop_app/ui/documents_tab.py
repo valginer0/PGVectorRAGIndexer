@@ -15,12 +15,13 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QGroupBox, QMenu, QComboBox,
-    QTreeWidget, QTreeWidgetItem, QStackedWidget,
+    QTreeView, QStackedWidget,
 )
 import qtawesome as qta
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, QThread, Signal, QPoint, QSignalBlocker, QSize
-from .workers import DocumentsWorker, DeleteWorker, TreeWorker
+from .workers import DocumentsWorker, DeleteWorker
+from .document_tree_model import DocumentTreeModel
 
 # ... imports ...
 
@@ -44,7 +45,6 @@ class DocumentsTab(QWidget):
         self.sort_directions: List[str] = ["desc"]
         self.is_loading = False
         self._view_mode = "list"  # "list" or "tree"
-        self._tree_workers = []
         self.sort_column_mapping = {
             0: "source_uri",
             1: "document_type",
@@ -157,19 +157,24 @@ class DocumentsTab(QWidget):
         tree_group = QGroupBox("Document Tree")
         tree_group_layout = QVBoxLayout(tree_group)
 
-        self._doc_tree = QTreeWidget()
-        self._doc_tree.setHeaderLabels(["Name", "Type", "Chunks", "Indexed"])
-        self._doc_tree.setColumnCount(4)
+        self._tree_model = DocumentTreeModel(self.api_client)
+        self._tree_model.loading.connect(self._on_tree_loading)
+        self._tree_model.loaded.connect(self._on_tree_loaded)
+        self._tree_model.load_failed.connect(self._on_tree_load_failed)
+
+        self._doc_tree = QTreeView()
+        self._doc_tree.setModel(self._tree_model)
         tree_header = self._doc_tree.header()
         tree_header.setStretchLastSection(False)
         tree_header.setSectionResizeMode(0, QHeaderView.Stretch)
         tree_header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
         tree_header.setSectionResizeMode(2, QHeaderView.ResizeToContents)
         tree_header.setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self._doc_tree.setSelectionBehavior(QTreeWidget.SelectRows)
-        self._doc_tree.setEditTriggers(QTreeWidget.NoEditTriggers)
-        self._doc_tree.itemExpanded.connect(self._on_tree_item_expanded)
-        self._doc_tree.itemDoubleClicked.connect(self._on_tree_item_double_clicked)
+        self._doc_tree.setSelectionBehavior(QTreeView.SelectRows)
+        self._doc_tree.setEditTriggers(QTreeView.NoEditTriggers)
+        self._doc_tree.doubleClicked.connect(self._on_tree_item_double_clicked)
+        self._doc_tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._doc_tree.customContextMenuRequested.connect(self._show_tree_context_menu)
         tree_group_layout.addWidget(self._doc_tree)
 
         tree_page_layout.addWidget(tree_group)
@@ -610,125 +615,85 @@ class DocumentsTab(QWidget):
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='#6366f1'))
             self._list_btn.setStyleSheet(_inactive)
             self._list_btn.setIcon(qta.icon('fa5s.list', color='white'))
-            if self._doc_tree.topLevelItemCount() == 0:
-                self._load_tree_level()
+            if not self._tree_model.is_initialized():
+                self._tree_model.load_root()
 
     def _refresh_current_view(self) -> None:
         """Refresh whichever view is currently active."""
         if self._view_mode == "tree":
-            self._doc_tree.clear()
-            self._load_tree_level()
+            self._tree_model.refresh()
         else:
             self.load_documents()
 
     # ------------------------------------------------------------------
-    # Tree view
+    # Tree view signals
     # ------------------------------------------------------------------
 
-    def _load_tree_level(self, parent_path: str = "", parent_item: QTreeWidgetItem = None) -> None:
-        """Fetch one level of the document tree from the API."""
-        if not self.api_client.is_api_available():
-            self.status_label.setText("API not available")
-            self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
-            return
+    def _on_tree_loading(self, parent_path: str) -> None:
         self.status_label.setText("Loading tree...")
         self.status_label.setStyleSheet("color: #6366f1; font-style: italic;")
 
-        worker = TreeWorker(self.api_client, parent_path=parent_path)
-        worker.finished.connect(
-            lambda ok, data, pp: self._tree_level_loaded(ok, data, pp, parent_item)
-        )
-        self._tree_workers.append(worker)
-        worker.start()
-
-    def _tree_level_loaded(self, success, data, parent_path, parent_item) -> None:
-        """Handle tree level load completion."""
-        if not success:
-            self.status_label.setText(f"Tree load failed: {data}")
-            self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
-            return
-
-        children = data.get("children", [])
-
-        # Remove placeholder if present
-        if parent_item and parent_item.childCount() == 1:
-            placeholder = parent_item.child(0)
-            if placeholder.data(0, Qt.UserRole) == "__placeholder__":
-                parent_item.removeChild(placeholder)
-
-        for child in children:
-            item = QTreeWidgetItem()
-            name = child.get("name", "")
-            node_type = child.get("type", "")
-
-            # Skip truly empty-name entries (shouldn't happen after backend fix)
-            if not name:
-                continue
-
-            item.setText(0, name)
-
-            if node_type == "folder":
-                item.setIcon(0, qta.icon('fa5s.folder', color='#f59e0b'))
-                doc_count = child.get("document_count", 0)
-                item.setText(1, "Folder")
-                item.setText(2, str(doc_count))
-                item.setData(0, Qt.UserRole, child.get("path", ""))
-                item.setData(0, Qt.UserRole + 1, "folder")
-                # Add placeholder child so the expand arrow appears
-                ph = QTreeWidgetItem(["Loading..."])
-                ph.setData(0, Qt.UserRole, "__placeholder__")
-                item.addChild(ph)
-            else:
-                item.setIcon(0, qta.icon('fa5s.file-alt', color='#6366f1'))
-                item.setText(1, "File")
-                chunk_count = child.get("chunk_count", 0)
-                item.setText(2, str(chunk_count))
-                indexed_at = child.get("indexed_at", "")
-                if indexed_at:
-                    try:
-                        dt = datetime.fromisoformat(indexed_at.replace('Z', '+00:00'))
-                        indexed_at = dt.strftime('%Y-%m-%d %H:%M')
-                    except Exception:
-                        pass
-                item.setText(3, indexed_at)
-                item.setData(0, Qt.UserRole, child.get("path", ""))
-                item.setData(0, Qt.UserRole + 1, "file")
-                item.setData(0, Qt.UserRole + 2, child.get("document_id", ""))
-
-            if parent_item:
-                parent_item.addChild(item)
-            else:
-                self._doc_tree.addTopLevelItem(item)
-
-        total_folders = data.get("total_folders", 0)
-        total_files = data.get("total_files", 0)
-        total = data.get("total", len(children))
+    def _on_tree_loaded(self, parent_path: str, child_count: int) -> None:
         if parent_path:
-            self.status_label.setText(
-                f"{parent_path}: {total_folders} folders, {total_files} files"
-            )
+            self.status_label.setText(f"{parent_path}: {child_count} items")
         else:
-            self.status_label.setText(
-                f"Indexed documents: {total_folders} drive(s), {total_files} file(s) at root"
-            )
+            self.status_label.setText(f"Document tree loaded ({child_count} top-level items)")
         self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
 
-    def _on_tree_item_expanded(self, item: QTreeWidgetItem) -> None:
-        """Lazy-load children when a folder is expanded."""
-        if item.data(0, Qt.UserRole + 1) != "folder":
-            return
-        # If only child is the placeholder, load real children
-        if item.childCount() == 1 and item.child(0).data(0, Qt.UserRole) == "__placeholder__":
-            folder_path = item.data(0, Qt.UserRole)
-            self._load_tree_level(parent_path=folder_path, parent_item=item)
+    def _on_tree_load_failed(self, error: str) -> None:
+        self.status_label.setText(f"Tree load failed: {error}")
+        self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
 
-    def _on_tree_item_double_clicked(self, item: QTreeWidgetItem, column: int) -> None:
+    def _on_tree_item_double_clicked(self, index) -> None:
         """Open a file when double-clicked in tree view."""
-        if item.data(0, Qt.UserRole + 1) != "file":
+        node = self._tree_model.node_for_index(index)
+        if node.node_type != "file":
             return
-        path = item.data(0, Qt.UserRole)
-        if path:
+        if node.path:
             if self.source_manager:
-                self.source_manager.open_path(path)
+                self.source_manager.open_path(node.path)
             else:
-                self.open_source_path(path)
+                self.open_source_path(node.path)
+
+    def _show_tree_context_menu(self, pos) -> None:
+        """Context menu for tree view items."""
+        if not self.source_manager:
+            return
+        index = self._doc_tree.indexAt(pos)
+        if not index.isValid():
+            return
+        node = self._tree_model.node_for_index(index)
+        if node.node_type != "file" or not node.path:
+            return
+
+        source_uri = node.path
+        menu = QMenu(self)
+        open_action = menu.addAction("Open")
+        open_with_action = menu.addAction("Open with…")
+        show_in_folder_action = menu.addAction("Show in Folder")
+        copy_path_action = menu.addAction("Copy Path")
+
+        entry = self.source_manager.find_entry(source_uri)
+        queued = entry.queued if entry else False
+        queue_label = "Unqueue from Reindex" if queued else "Queue for Reindex"
+        queue_action = menu.addAction(queue_label)
+        reindex_action = menu.addAction("Reindex Now")
+        remove_action = menu.addAction("Remove from Recent")
+
+        action = menu.exec(self._doc_tree.viewport().mapToGlobal(pos))
+        if action is None:
+            return
+        if action == open_action:
+            self.source_manager.open_path(source_uri)
+        elif action == open_with_action:
+            self.source_manager.open_path(source_uri, mode="open_with")
+        elif action == show_in_folder_action:
+            self.source_manager.open_path(source_uri, mode="show_in_folder", auto_queue=False)
+        elif action == copy_path_action:
+            self.source_manager.open_path(source_uri, mode="copy_path", auto_queue=False)
+        elif action == queue_action:
+            self.source_manager.queue_entry(source_uri, not queued)
+        elif action == reindex_action:
+            self.source_manager.trigger_reindex_path(source_uri)
+        elif action == remove_action:
+            self.source_manager.remove_entry(source_uri)

@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.7] - 2026-02-19
+
+### Added
+- **Hierarchical Document Browser**: Tree view in Documents tab with lazy-loaded folder navigation, aggregated document counts, and path-based search.
+- **Windows native file dialogs on WSL**: File/folder picker dialogs now invoke Windows native dialogs via PowerShell when running under WSL, replacing broken Qt non-native dialogs.
+- **WSL path resolution**: Source open manager resolves WSL paths (`/mnt/c/...`) to Windows paths and vice versa for seamless file opening.
+
+### Fixed
+- **Linux paths in document tree**: Paths starting with `/` (e.g. `/home/...`) no longer create an empty-name recursive folder; they now appear as proper root-level entries.
+- **Database connection handling**: All 14 modules using raw DB connections now use `get_connection_raw()` wrapper that properly returns connections to the pool.
+- **Route ordering**: `/documents/tree` endpoint registered before `/documents/{id}` to prevent path parameter capture.
+- **Folder index dialog layout**: Reduced spacing, margins, and minimum heights so buttons and patterns area are fully visible without scrolling.
+- **Recent activity tab**: Paths use middle-ellipsis for long text; row height ensures action icons are fully visible.
+- **Watched folders timezone**: "Last Scanned" column now displays local time with timezone abbreviation instead of raw UTC.
+- **Upload tab start directory**: File and folder dialogs open to a sensible default directory instead of root.
+- **Migration test paths**: Replaced hardcoded absolute paths with `Path(__file__)`-relative paths.
+
 ## [2.4.6] - 2026-02-18
 
 ### Added

@@ -369,7 +369,7 @@ Implementation sequencing (recommended):
 - [x] Backend collector via existing `/api/v1/activity` endpoint (no external service needed)
 - [x] Events: app.started, daily_active, search.completed, upload.completed, tab.opened, feature.used, error.occurred, milestones (first_search, first_upload)
 - [x] Settings tab: analytics toggle + event log viewer with View/Clear buttons
-- [ ] "What we collect" page on website with example JSON payload
+- [x] "What we collect" section on website with example JSON payload
 - [x] No PII, no document content, no file names, no search queries — verified by tests
 - [x] Local JSONL audit log with rotation (`analytics_log.jsonl`)
 - [x] 16 unit tests (`tests/test_analytics.py`)

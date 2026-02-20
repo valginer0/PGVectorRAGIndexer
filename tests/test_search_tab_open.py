@@ -64,7 +64,9 @@ def qt_app():
 
 @pytest.fixture
 def search_tab(qt_app):
-    return SearchTab(_DummyApiClient())
+    tab = SearchTab(_DummyApiClient())
+    tab.load_document_types()
+    return tab
 
 
 @pytest.fixture

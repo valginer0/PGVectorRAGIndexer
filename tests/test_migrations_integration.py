@@ -122,6 +122,18 @@ def _get_current_revision(db_url: str) -> str:
         engine.dispose()
 
 
+def _get_head_revision() -> str:
+    """Return the latest Alembic head revision from the migration scripts."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    project_root = Path(__file__).parent.parent.resolve()
+    cfg = Config(str(project_root / "alembic.ini"))
+    cfg.set_main_option("script_location", str(project_root / "alembic"))
+    script = ScriptDirectory.from_config(cfg)
+    return script.get_current_head()
+
+
 class TestBaselineMigration:
     """Test baseline migration (001) on a fresh database."""
 
@@ -230,7 +242,7 @@ class TestMigrationIdempotency:
         _run_alembic_upgrade(db_url, "head")
 
         rev = _get_current_revision(db_url)
-        assert rev == "012"
+        assert rev == _get_head_revision()
 
     def test_upgrade_after_manual_schema(self, db_url, pg_connection):
         """Simulate a v2.4 database that already has init-db.sql applied.
@@ -265,7 +277,7 @@ class TestMigrationIdempotency:
         _run_alembic_upgrade(db_url, "head")
 
         rev = _get_current_revision(db_url)
-        assert rev == "012"
+        assert rev == _get_head_revision()
 
 
 class TestDataPreservation:
@@ -396,7 +408,7 @@ class TestDowngrade:
         _run_alembic_upgrade(db_url, "head")
 
         rev = _get_current_revision(db_url)
-        assert rev == "012"
+        assert rev == _get_head_revision()
 
 
 class TestRunMigrationsIntegration:

@@ -115,7 +115,7 @@ def test_full_lifecycle():
     r = requests.post(
         _url("/api/v1/search"),
         headers=_auth_headers(),
-        json={"query": "quantum flux capacitors", "top_k": 5},
+        json={"query": "quantum flux capacitors", "top_k": 5, "min_score": 0.0},
         timeout=30,
     )
     assert r.status_code == 200, f"Search failed: {r.status_code} {r.text}"

@@ -69,7 +69,7 @@ class TestActivityLogNewFields:
         from activity_log import log_activity
 
         mock_cur = MagicMock()
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         entry_id = log_activity(
             "scan.complete",
@@ -99,7 +99,7 @@ class TestActivityLogNewFields:
         from activity_log import log_activity
 
         mock_cur = MagicMock()
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         entry_id = log_activity("index_start")
 
@@ -124,7 +124,7 @@ class TestActivityLogNewFields:
 
         mock_cur = MagicMock()
         mock_cur.fetchall.return_value = []
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         get_recent(root_id="abc-123")
 
@@ -139,7 +139,7 @@ class TestActivityLogNewFields:
 
         mock_cur = MagicMock()
         mock_cur.fetchall.return_value = []
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         get_recent(run_id="run-456")
 
@@ -166,7 +166,7 @@ class TestCreateRole:
             "analyst", "Data analyst role",
             ["documents.read", "health.view"], False, ts,
         )
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = create_role(
             name="analyst",
@@ -194,7 +194,7 @@ class TestCreateRole:
 
         mock_cur = MagicMock()
         mock_cur.execute.side_effect = Exception("duplicate key value violates unique constraint")
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         with pytest.raises(ValueError, match="already exists"):
             create_role(name="admin")
@@ -212,7 +212,7 @@ class TestUpdateRole:
         mock_cur.fetchone.return_value = (
             "researcher", "Updated desc", ["documents.read"], False, ts,
         )
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = update_role(name="researcher", description="Updated desc")
 
@@ -227,7 +227,7 @@ class TestUpdateRole:
         mock_cur.fetchone.return_value = (
             "sre", "Ops role", ["documents.read", "health.view"], False, ts,
         )
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = update_role(name="sre", permissions=["documents.read", "health.view"])
         assert "health.view" in result["permissions"]
@@ -238,7 +238,7 @@ class TestUpdateRole:
 
         mock_cur = MagicMock()
         mock_cur.fetchone.return_value = None
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = update_role(name="nonexistent", description="x")
         assert result is None
@@ -259,7 +259,7 @@ class TestDeleteRole:
         mock_cur = MagicMock()
         mock_cur.fetchone.return_value = (False,)  # not system
         mock_cur.rowcount = 1
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         assert delete_role("analyst") is True
 
@@ -269,7 +269,7 @@ class TestDeleteRole:
 
         mock_cur = MagicMock()
         mock_cur.fetchone.return_value = (True,)  # system role
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         with pytest.raises(ValueError, match="Cannot delete system role"):
             delete_role("admin")
@@ -280,7 +280,7 @@ class TestDeleteRole:
 
         mock_cur = MagicMock()
         mock_cur.fetchone.return_value = None
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         assert delete_role("nonexistent") is False
 

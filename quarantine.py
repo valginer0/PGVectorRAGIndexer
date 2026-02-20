@@ -22,9 +22,13 @@ DEFAULT_RETENTION_DAYS = 30
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    return get_db_manager().get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 def get_retention_days() -> int:
@@ -53,25 +57,23 @@ def quarantine_chunks(source_uri: str, reason: str = "source_file_missing") -> i
         Number of chunks quarantined.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE document_chunks
-            SET quarantined_at = now(),
-                quarantine_reason = %s
-            WHERE source_uri = %s
-              AND quarantined_at IS NULL
-            """,
-            (reason, source_uri),
-        )
-        count = cur.rowcount
-        conn.commit()
-        cur.close()
-        conn.close()
-        if count > 0:
-            logger.info("Quarantined %d chunks for %s: %s", count, source_uri, reason)
-        return count
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE document_chunks
+                SET quarantined_at = now(),
+                    quarantine_reason = %s
+                WHERE source_uri = %s
+                  AND quarantined_at IS NULL
+                """,
+                (reason, source_uri),
+            )
+            count = cur.rowcount
+            conn.commit()
+            if count > 0:
+                logger.info("Quarantined %d chunks for %s: %s", count, source_uri, reason)
+            return count
     except Exception as e:
         logger.warning("Failed to quarantine chunks for %s: %s", source_uri, e)
         return 0
@@ -86,25 +88,23 @@ def restore_chunks(source_uri: str) -> int:
         Number of chunks restored.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE document_chunks
-            SET quarantined_at = NULL,
-                quarantine_reason = NULL
-            WHERE source_uri = %s
-              AND quarantined_at IS NOT NULL
-            """,
-            (source_uri,),
-        )
-        count = cur.rowcount
-        conn.commit()
-        cur.close()
-        conn.close()
-        if count > 0:
-            logger.info("Restored %d quarantined chunks for %s", count, source_uri)
-        return count
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE document_chunks
+                SET quarantined_at = NULL,
+                    quarantine_reason = NULL
+                WHERE source_uri = %s
+                  AND quarantined_at IS NOT NULL
+                """,
+                (source_uri,),
+            )
+            count = cur.rowcount
+            conn.commit()
+            if count > 0:
+                logger.info("Restored %d quarantined chunks for %s", count, source_uri)
+            return count
     except Exception as e:
         logger.warning("Failed to restore quarantined chunks for %s: %s", source_uri, e)
         return 0
@@ -120,34 +120,32 @@ def list_quarantined(
     quarantined_at (earliest), and quarantine_reason.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT source_uri,
-                   COUNT(*) AS chunk_count,
-                   MIN(quarantined_at) AS quarantined_at,
-                   MIN(quarantine_reason) AS quarantine_reason
-            FROM document_chunks
-            WHERE quarantined_at IS NOT NULL
-            GROUP BY source_uri
-            ORDER BY MIN(quarantined_at) ASC
-            LIMIT %s OFFSET %s
-            """,
-            (limit, offset),
-        )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [
-            {
-                "source_uri": r[0],
-                "chunk_count": r[1],
-                "quarantined_at": r[2].isoformat() if r[2] else None,
-                "quarantine_reason": r[3],
-            }
-            for r in rows
-        ]
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT source_uri,
+                       COUNT(*) AS chunk_count,
+                       MIN(quarantined_at) AS quarantined_at,
+                       MIN(quarantine_reason) AS quarantine_reason
+                FROM document_chunks
+                WHERE quarantined_at IS NOT NULL
+                GROUP BY source_uri
+                ORDER BY MIN(quarantined_at) ASC
+                LIMIT %s OFFSET %s
+                """,
+                (limit, offset),
+            )
+            rows = cur.fetchall()
+            return [
+                {
+                    "source_uri": r[0],
+                    "chunk_count": r[1],
+                    "quarantined_at": r[2].isoformat() if r[2] else None,
+                    "quarantine_reason": r[3],
+                }
+                for r in rows
+            ]
     except Exception as e:
         logger.warning("Failed to list quarantined documents: %s", e)
         return []
@@ -164,25 +162,23 @@ def purge_expired(retention_days: Optional[int] = None) -> int:
     """
     days = retention_days if retention_days is not None else get_retention_days()
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            DELETE FROM document_chunks
-            WHERE quarantined_at IS NOT NULL
-              AND quarantined_at < now() - interval '%s days'
-            """,
-            (days,),
-        )
-        count = cur.rowcount
-        conn.commit()
-        cur.close()
-        conn.close()
-        if count > 0:
-            logger.info(
-                "Purged %d chunks quarantined > %d days", count, days,
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                DELETE FROM document_chunks
+                WHERE quarantined_at IS NOT NULL
+                  AND quarantined_at < now() - interval '%s days'
+                """,
+                (days,),
             )
-        return count
+            count = cur.rowcount
+            conn.commit()
+            if count > 0:
+                logger.info(
+                    "Purged %d chunks quarantined > %d days", count, days,
+                )
+            return count
     except Exception as e:
         logger.warning("Failed to purge expired quarantined chunks: %s", e)
         return 0
@@ -195,27 +191,25 @@ def get_quarantine_stats() -> Dict[str, Any]:
         Dict with total_documents, total_chunks, oldest_quarantine_at.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT COUNT(DISTINCT source_uri) AS documents,
-                   COUNT(*) AS chunks,
-                   MIN(quarantined_at) AS oldest
-            FROM document_chunks
-            WHERE quarantined_at IS NOT NULL
-            """
-        )
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        if row:
-            return {
-                "total_documents": row[0],
-                "total_chunks": row[1],
-                "oldest_quarantine_at": row[2].isoformat() if row[2] else None,
-            }
-        return {"total_documents": 0, "total_chunks": 0, "oldest_quarantine_at": None}
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT COUNT(DISTINCT source_uri) AS documents,
+                       COUNT(*) AS chunks,
+                       MIN(quarantined_at) AS oldest
+                FROM document_chunks
+                WHERE quarantined_at IS NOT NULL
+                """
+            )
+            row = cur.fetchone()
+            if row:
+                return {
+                    "total_documents": row[0],
+                    "total_chunks": row[1],
+                    "oldest_quarantine_at": row[2].isoformat() if row[2] else None,
+                }
+            return {"total_documents": 0, "total_chunks": 0, "oldest_quarantine_at": None}
     except Exception as e:
         logger.warning("Failed to get quarantine stats: %s", e)
         return {"total_documents": 0, "total_chunks": 0, "oldest_quarantine_at": None}

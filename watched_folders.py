@@ -20,9 +20,13 @@ logger = logging.getLogger(__name__)
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    return get_db_manager().get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 # ---------------------------------------------------------------------------
@@ -123,75 +127,73 @@ def add_folder(
         executor_id = None  # Server scope: no executor
 
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
 
-        # Use different conflict targets based on scope.
-        # The partial unique indexes mean we can't use a single ON CONFLICT.
-        # Instead, check for conflict manually and upsert.
-        if execution_scope == "client":
-            conflict_check = """
-                SELECT id FROM watched_folders
-                WHERE executor_id = %s
-                  AND normalized_folder_path = %s
-                  AND execution_scope = 'client'
-            """
-            cur.execute(conflict_check, (executor_id, norm_path))
-        else:
-            conflict_check = """
-                SELECT id FROM watched_folders
-                WHERE normalized_folder_path = %s
-                  AND execution_scope = 'server'
-            """
-            cur.execute(conflict_check, (norm_path,))
-
-        existing = cur.fetchone()
-
-        if existing:
-            # Update existing row
-            existing_id = str(existing[0])
-            cur.execute(
+            # Use different conflict targets based on scope.
+            # The partial unique indexes mean we can't use a single ON CONFLICT.
+            # Instead, check for conflict manually and upsert.
+            if execution_scope == "client":
+                conflict_check = """
+                    SELECT id FROM watched_folders
+                    WHERE executor_id = %s
+                      AND normalized_folder_path = %s
+                      AND execution_scope = 'client'
                 """
-                UPDATE watched_folders SET
-                    folder_path = %s,
-                    schedule_cron = %s,
-                    client_id = %s,
-                    enabled = %s,
-                    metadata = %s::jsonb,
-                    normalized_folder_path = %s,
-                    paused = %s,
-                    max_concurrency = %s,
-                    updated_at = now()
-                WHERE id = %s
-                RETURNING {cols}
-                """.format(cols=", ".join(_COLUMNS)),
-                (folder_path, schedule_cron, client_id, enabled,
-                 json.dumps(metadata or {}), norm_path,
-                 paused, max_concurrency, existing_id),
-            )
-        else:
-            # Insert new row
-            cur.execute(
+                cur.execute(conflict_check, (executor_id, norm_path))
+            else:
+                conflict_check = """
+                    SELECT id FROM watched_folders
+                    WHERE normalized_folder_path = %s
+                      AND execution_scope = 'server'
                 """
-                INSERT INTO watched_folders
-                    (folder_path, schedule_cron, client_id, enabled, metadata,
-                     execution_scope, executor_id, normalized_folder_path,
-                     paused, max_concurrency)
-                VALUES (%s, %s, %s, %s, %s::jsonb,
-                        %s, %s, %s, %s, %s)
-                RETURNING {cols}
-                """.format(cols=", ".join(_COLUMNS)),
-                (folder_path, schedule_cron, client_id, enabled,
-                 json.dumps(metadata or {}),
-                 execution_scope, executor_id, norm_path,
-                 paused, max_concurrency),
-            )
+                cur.execute(conflict_check, (norm_path,))
 
-        row = cur.fetchone()
-        conn.commit()
-        cur.close()
-        conn.close()
-        return _row_to_dict(row) if row else None
+            existing = cur.fetchone()
+
+            if existing:
+                # Update existing row
+                existing_id = str(existing[0])
+                cur.execute(
+                    """
+                    UPDATE watched_folders SET
+                        folder_path = %s,
+                        schedule_cron = %s,
+                        client_id = %s,
+                        enabled = %s,
+                        metadata = %s::jsonb,
+                        normalized_folder_path = %s,
+                        paused = %s,
+                        max_concurrency = %s,
+                        updated_at = now()
+                    WHERE id = %s
+                    RETURNING {cols}
+                    """.format(cols=", ".join(_COLUMNS)),
+                    (folder_path, schedule_cron, client_id, enabled,
+                     json.dumps(metadata or {}), norm_path,
+                     paused, max_concurrency, existing_id),
+                )
+            else:
+                # Insert new row
+                cur.execute(
+                    """
+                    INSERT INTO watched_folders
+                        (folder_path, schedule_cron, client_id, enabled, metadata,
+                         execution_scope, executor_id, normalized_folder_path,
+                         paused, max_concurrency)
+                    VALUES (%s, %s, %s, %s, %s::jsonb,
+                            %s, %s, %s, %s, %s)
+                    RETURNING {cols}
+                    """.format(cols=", ".join(_COLUMNS)),
+                    (folder_path, schedule_cron, client_id, enabled,
+                     json.dumps(metadata or {}),
+                     execution_scope, executor_id, norm_path,
+                     paused, max_concurrency),
+                )
+
+            row = cur.fetchone()
+            conn.commit()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.warning("Failed to add watched folder %s: %s", folder_path, e)
         return None
@@ -200,14 +202,12 @@ def add_folder(
 def remove_folder(folder_id: str) -> bool:
     """Remove a watched folder by ID. Returns True on success."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM watched_folders WHERE id = %s", (folder_id,))
-        deleted = cur.rowcount > 0
-        conn.commit()
-        cur.close()
-        conn.close()
-        return deleted
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM watched_folders WHERE id = %s", (folder_id,))
+            deleted = cur.rowcount > 0
+            conn.commit()
+            return deleted
     except Exception as e:
         logger.warning("Failed to remove watched folder %s: %s", folder_id, e)
         return False
@@ -246,19 +246,17 @@ def update_folder(
     params.append(folder_id)
 
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE watched_folders SET {sets} WHERE id = %s RETURNING {cols}".format(
-                sets=", ".join(sets), cols=", ".join(_COLUMNS)
-            ),
-            params,
-        )
-        row = cur.fetchone()
-        conn.commit()
-        cur.close()
-        conn.close()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE watched_folders SET {sets} WHERE id = %s RETURNING {cols}".format(
+                    sets=", ".join(sets), cols=", ".join(_COLUMNS)
+                ),
+                params,
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.warning("Failed to update watched folder %s: %s", folder_id, e)
         return None
@@ -267,18 +265,16 @@ def update_folder(
 def get_folder(folder_id: str) -> Optional[Dict[str, Any]]:
     """Get a single watched folder by ID."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT {cols} FROM watched_folders WHERE id = %s".format(
-                cols=", ".join(_COLUMNS)
-            ),
-            (folder_id,),
-        )
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT {cols} FROM watched_folders WHERE id = %s".format(
+                    cols=", ".join(_COLUMNS)
+                ),
+                (folder_id,),
+            )
+            row = cur.fetchone()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.warning("Failed to get watched folder %s: %s", folder_id, e)
         return None
@@ -287,18 +283,16 @@ def get_folder(folder_id: str) -> Optional[Dict[str, Any]]:
 def get_folder_by_root_id(root_id: str) -> Optional[Dict[str, Any]]:
     """Get a single watched folder by root_id."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT {cols} FROM watched_folders WHERE root_id = %s".format(
-                cols=", ".join(_COLUMNS)
-            ),
-            (root_id,),
-        )
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT {cols} FROM watched_folders WHERE root_id = %s".format(
+                    cols=", ".join(_COLUMNS)
+                ),
+                (root_id,),
+            )
+            row = cur.fetchone()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.warning("Failed to get watched folder by root_id %s: %s", root_id, e)
         return None
@@ -318,31 +312,29 @@ def list_folders(
         executor_id: Filter by executor (client-scope roots).
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        conditions = []
-        params: list = []
-        if enabled_only:
-            conditions.append("enabled = true")
-        if execution_scope is not None:
-            conditions.append("execution_scope = %s")
-            params.append(execution_scope)
-        if executor_id is not None:
-            conditions.append("executor_id = %s")
-            params.append(executor_id)
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            conditions = []
+            params: list = []
+            if enabled_only:
+                conditions.append("enabled = true")
+            if execution_scope is not None:
+                conditions.append("execution_scope = %s")
+                params.append(execution_scope)
+            if executor_id is not None:
+                conditions.append("executor_id = %s")
+                params.append(executor_id)
 
-        sql = "SELECT {cols} FROM watched_folders".format(
-            cols=", ".join(_COLUMNS)
-        )
-        if conditions:
-            sql += " WHERE " + " AND ".join(conditions)
-        sql += " ORDER BY created_at"
+            sql = "SELECT {cols} FROM watched_folders".format(
+                cols=", ".join(_COLUMNS)
+            )
+            if conditions:
+                sql += " WHERE " + " AND ".join(conditions)
+            sql += " ORDER BY created_at"
 
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [_row_to_dict(r) for r in rows]
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            return [_row_to_dict(r) for r in rows]
     except Exception as e:
         logger.warning("Failed to list watched folders: %s", e)
         return []
@@ -351,20 +343,18 @@ def list_folders(
 def mark_scanned(folder_id: str, run_id: Optional[str] = None) -> bool:
     """Update last_scanned_at (and optionally last_run_id) after a scan."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            UPDATE watched_folders
-            SET last_scanned_at = now(), last_run_id = %s, updated_at = now()
-            WHERE id = %s
-            """,
-            (run_id, folder_id),
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                UPDATE watched_folders
+                SET last_scanned_at = now(), last_run_id = %s, updated_at = now()
+                WHERE id = %s
+                """,
+                (run_id, folder_id),
+            )
+            conn.commit()
+            return True
     except Exception as e:
         logger.warning("Failed to mark folder %s as scanned: %s", folder_id, e)
         return False
@@ -413,18 +403,16 @@ def update_scan_watermarks(
     sets.append("updated_at = now()")
 
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE watched_folders SET {sets} WHERE id = %s".format(
-                sets=", ".join(sets)
-            ),
-            (folder_id,),
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE watched_folders SET {sets} WHERE id = %s".format(
+                    sets=", ".join(sets)
+                ),
+                (folder_id,),
+            )
+            conn.commit()
+            return True
     except Exception as e:
         logger.warning(
             "Failed to update scan watermarks for %s: %s", folder_id, e
@@ -455,81 +443,73 @@ def transition_scope(
         return {"ok": False, "error": "executor_id is required for client scope"}
 
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
 
-        # Get current folder
-        cur.execute(
-            "SELECT {cols} FROM watched_folders WHERE id = %s FOR UPDATE".format(
-                cols=", ".join(_COLUMNS)
-            ),
-            (folder_id,),
-        )
-        row = cur.fetchone()
-        if not row:
-            cur.close()
-            conn.close()
-            return {"ok": False, "error": "Folder not found"}
+            # Get current folder
+            cur.execute(
+                "SELECT {cols} FROM watched_folders WHERE id = %s FOR UPDATE".format(
+                    cols=", ".join(_COLUMNS)
+                ),
+                (folder_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                return {"ok": False, "error": "Folder not found"}
 
-        folder = _row_to_dict(row)
+            folder = _row_to_dict(row)
 
-        if folder["execution_scope"] == target_scope:
-            cur.close()
-            conn.close()
-            return {"ok": False, "error": f"Already in {target_scope} scope"}
+            if folder["execution_scope"] == target_scope:
+                return {"ok": False, "error": f"Already in {target_scope} scope"}
 
-        norm_path = folder["normalized_folder_path"]
+            norm_path = folder["normalized_folder_path"]
 
-        # Preflight conflict check
-        if target_scope == "client":
+            # Preflight conflict check
+            if target_scope == "client":
+                cur.execute(
+                    """
+                    SELECT id FROM watched_folders
+                    WHERE executor_id = %s
+                      AND normalized_folder_path = %s
+                      AND execution_scope = 'client'
+                      AND id != %s
+                    """,
+                    (executor_id, norm_path, folder_id),
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT id FROM watched_folders
+                    WHERE normalized_folder_path = %s
+                      AND execution_scope = 'server'
+                      AND id != %s
+                    """,
+                    (norm_path, folder_id),
+                )
+
+            conflict = cur.fetchone()
+            if conflict:
+                return {
+                    "ok": False,
+                    "error": f"Conflict: path already exists in {target_scope} scope",
+                }
+
+            # Perform transition
+            new_executor = executor_id if target_scope == "client" else None
             cur.execute(
                 """
-                SELECT id FROM watched_folders
-                WHERE executor_id = %s
-                  AND normalized_folder_path = %s
-                  AND execution_scope = 'client'
-                  AND id != %s
-                """,
-                (executor_id, norm_path, folder_id),
+                UPDATE watched_folders SET
+                    execution_scope = %s,
+                    executor_id = %s,
+                    updated_at = now()
+                WHERE id = %s
+                RETURNING {cols}
+                """.format(cols=", ".join(_COLUMNS)),
+                (target_scope, new_executor, folder_id),
             )
-        else:
-            cur.execute(
-                """
-                SELECT id FROM watched_folders
-                WHERE normalized_folder_path = %s
-                  AND execution_scope = 'server'
-                  AND id != %s
-                """,
-                (norm_path, folder_id),
-            )
-
-        conflict = cur.fetchone()
-        if conflict:
-            cur.close()
-            conn.close()
-            return {
-                "ok": False,
-                "error": f"Conflict: path already exists in {target_scope} scope",
-            }
-
-        # Perform transition
-        new_executor = executor_id if target_scope == "client" else None
-        cur.execute(
-            """
-            UPDATE watched_folders SET
-                execution_scope = %s,
-                executor_id = %s,
-                updated_at = now()
-            WHERE id = %s
-            RETURNING {cols}
-            """.format(cols=", ".join(_COLUMNS)),
-            (target_scope, new_executor, folder_id),
-        )
-        updated = cur.fetchone()
-        conn.commit()
-        cur.close()
-        conn.close()
-        return {"ok": True, "folder": _row_to_dict(updated) if updated else folder}
+            updated = cur.fetchone()
+            conn.commit()
+            return {"ok": True, "folder": _row_to_dict(updated) if updated else folder}
     except Exception as e:
         logger.warning("Failed to transition scope for %s: %s", folder_id, e)
         return {"ok": False, "error": str(e)}
@@ -667,16 +647,14 @@ def _dry_run_scan(folder_path: str) -> Dict[str, Any]:
     # Check for previously indexed files that are now missing
     would_quarantine = []
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        prefix = folder_path.replace("\\", "/").rstrip("/") + "/"
-        cur.execute(
-            "SELECT DISTINCT source_uri FROM document_chunks WHERE source_uri LIKE %s",
-            (prefix + "%",),
-        )
-        indexed_uris = {row[0] for row in cur.fetchall()}
-        cur.close()
-        conn.close()
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            prefix = folder_path.replace("\\", "/").rstrip("/") + "/"
+            cur.execute(
+                "SELECT DISTINCT source_uri FROM document_chunks WHERE source_uri LIKE %s",
+                (prefix + "%",),
+            )
+            indexed_uris = {row[0] for row in cur.fetchall()}
 
         current_files = {f.replace("\\", "/") for f in would_index}
         for uri in indexed_uris:
@@ -721,17 +699,15 @@ def _quarantine_missing_sources(folder_path: str) -> None:
     import os
 
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        prefix = folder_path.replace("\\", "/").rstrip("/") + "/"
-        cur.execute(
-            "SELECT DISTINCT source_uri, (quarantined_at IS NOT NULL) AS is_quarantined "
-            "FROM document_chunks WHERE source_uri LIKE %s",
-            (prefix + "%",),
-        )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            prefix = folder_path.replace("\\", "/").rstrip("/") + "/"
+            cur.execute(
+                "SELECT DISTINCT source_uri, (quarantined_at IS NOT NULL) AS is_quarantined "
+                "FROM document_chunks WHERE source_uri LIKE %s",
+                (prefix + "%",),
+            )
+            rows = cur.fetchall()
 
         from quarantine import quarantine_chunks, restore_chunks
 

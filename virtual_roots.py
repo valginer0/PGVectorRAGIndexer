@@ -17,9 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    return get_db_manager().get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 _COLUMNS = ("id", "name", "client_id", "local_path", "created_at", "updated_at")
@@ -53,24 +57,22 @@ def add_root(
     Returns the created/updated row as a dict, or None on failure.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO virtual_roots (name, client_id, local_path)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (name, client_id) DO UPDATE SET
-                local_path = EXCLUDED.local_path,
-                updated_at = now()
-            RETURNING {cols}
-            """.format(cols=", ".join(_COLUMNS)),
-            (name, client_id, local_path),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        cur.close()
-        conn.close()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO virtual_roots (name, client_id, local_path)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (name, client_id) DO UPDATE SET
+                    local_path = EXCLUDED.local_path,
+                    updated_at = now()
+                RETURNING {cols}
+                """.format(cols=", ".join(_COLUMNS)),
+                (name, client_id, local_path),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.warning("Failed to add virtual root %s: %s", name, e)
         return None
@@ -79,14 +81,12 @@ def add_root(
 def remove_root(root_id: str) -> bool:
     """Remove a virtual root by ID. Returns True on success."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM virtual_roots WHERE id = %s", (root_id,))
-        deleted = cur.rowcount > 0
-        conn.commit()
-        cur.close()
-        conn.close()
-        return deleted
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM virtual_roots WHERE id = %s", (root_id,))
+            deleted = cur.rowcount > 0
+            conn.commit()
+            return deleted
     except Exception as e:
         logger.warning("Failed to remove virtual root %s: %s", root_id, e)
         return False
@@ -95,17 +95,15 @@ def remove_root(root_id: str) -> bool:
 def remove_root_by_name(name: str, client_id: str) -> bool:
     """Remove a virtual root by (name, client_id). Returns True on success."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "DELETE FROM virtual_roots WHERE name = %s AND client_id = %s",
-            (name, client_id),
-        )
-        deleted = cur.rowcount > 0
-        conn.commit()
-        cur.close()
-        conn.close()
-        return deleted
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM virtual_roots WHERE name = %s AND client_id = %s",
+                (name, client_id),
+            )
+            deleted = cur.rowcount > 0
+            conn.commit()
+            return deleted
     except Exception as e:
         logger.warning("Failed to remove virtual root %s/%s: %s", name, client_id, e)
         return False
@@ -114,18 +112,16 @@ def remove_root_by_name(name: str, client_id: str) -> bool:
 def get_root(root_id: str) -> Optional[Dict[str, Any]]:
     """Get a single virtual root by ID."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT {cols} FROM virtual_roots WHERE id = %s".format(
-                cols=", ".join(_COLUMNS)
-            ),
-            (root_id,),
-        )
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT {cols} FROM virtual_roots WHERE id = %s".format(
+                    cols=", ".join(_COLUMNS)
+                ),
+                (root_id,),
+            )
+            row = cur.fetchone()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.warning("Failed to get virtual root %s: %s", root_id, e)
         return None
@@ -134,19 +130,17 @@ def get_root(root_id: str) -> Optional[Dict[str, Any]]:
 def list_roots(client_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """List virtual roots, optionally filtered by client_id."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        sql = "SELECT {cols} FROM virtual_roots".format(cols=", ".join(_COLUMNS))
-        params = []
-        if client_id:
-            sql += " WHERE client_id = %s"
-            params.append(client_id)
-        sql += " ORDER BY name, client_id"
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [_row_to_dict(r) for r in rows]
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            sql = "SELECT {cols} FROM virtual_roots".format(cols=", ".join(_COLUMNS))
+            params = []
+            if client_id:
+                sql += " WHERE client_id = %s"
+                params.append(client_id)
+            sql += " ORDER BY name, client_id"
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            return [_row_to_dict(r) for r in rows]
     except Exception as e:
         logger.warning("Failed to list virtual roots: %s", e)
         return []
@@ -155,13 +149,11 @@ def list_roots(client_id: Optional[str] = None) -> List[Dict[str, Any]]:
 def list_root_names() -> List[str]:
     """List distinct virtual root names (across all clients)."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT DISTINCT name FROM virtual_roots ORDER BY name")
-        names = [row[0] for row in cur.fetchall()]
-        cur.close()
-        conn.close()
-        return names
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT DISTINCT name FROM virtual_roots ORDER BY name")
+            names = [row[0] for row in cur.fetchall()]
+            return names
     except Exception as e:
         logger.warning("Failed to list virtual root names: %s", e)
         return []
@@ -174,28 +166,26 @@ def get_mappings_for_root(name: str) -> List[Dict[str, Any]]:
     Useful for the details panel showing all client mappings.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT vr.{cols}, c.display_name, c.os_type
-            FROM virtual_roots vr
-            LEFT JOIN clients c ON c.id = vr.client_id
-            WHERE vr.name = %s
-            ORDER BY c.display_name
-            """.format(cols=", vr.".join(_COLUMNS)),
-            (name,),
-        )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        result = []
-        for row in rows:
-            d = _row_to_dict(row[:len(_COLUMNS)])
-            d["client_display_name"] = row[len(_COLUMNS)]
-            d["client_os_type"] = row[len(_COLUMNS) + 1]
-            result.append(d)
-        return result
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT vr.{cols}, c.display_name, c.os_type
+                FROM virtual_roots vr
+                LEFT JOIN clients c ON c.id = vr.client_id
+                WHERE vr.name = %s
+                ORDER BY c.display_name
+                """.format(cols=", vr.".join(_COLUMNS)),
+                (name,),
+            )
+            rows = cur.fetchall()
+            result = []
+            for row in rows:
+                d = _row_to_dict(row[:len(_COLUMNS)])
+                d["client_display_name"] = row[len(_COLUMNS)]
+                d["client_os_type"] = row[len(_COLUMNS) + 1]
+                result.append(d)
+            return result
     except Exception as e:
         logger.warning("Failed to get mappings for root %s: %s", name, e)
         return []
@@ -221,18 +211,16 @@ def resolve_path(virtual_path: str, client_id: str) -> Optional[str]:
     remainder = parts[1] if len(parts) > 1 else ""
 
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT local_path FROM virtual_roots WHERE name = %s AND client_id = %s",
-            (root_name, client_id),
-        )
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        if row:
-            return os.path.join(row[0], remainder) if remainder else row[0]
-        return None
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT local_path FROM virtual_roots WHERE name = %s AND client_id = %s",
+                (root_name, client_id),
+            )
+            row = cur.fetchone()
+            if row:
+                return os.path.join(row[0], remainder) if remainder else row[0]
+            return None
     except Exception as e:
         logger.warning("Failed to resolve path %s for client %s: %s",
                        virtual_path, client_id, e)

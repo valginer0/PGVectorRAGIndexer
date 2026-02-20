@@ -194,7 +194,7 @@ class TestAcquireLockDualKey:
                 "indexing", "root-1", "/file.txt",
             ),
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = acquire_lock(
             source_uri="/data/file.txt",
@@ -223,7 +223,7 @@ class TestAcquireLockDualKey:
                 "indexing", None, None,
             ),
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = acquire_lock(
             source_uri="/data/file.txt",
@@ -250,7 +250,7 @@ class TestCheckLockDualKey:
             datetime.now(timezone.utc),
             "indexing", "root-1", "/file.txt",
         )
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = check_lock(
             source_uri="/data/file.txt",
@@ -267,7 +267,7 @@ class TestCheckLockDualKey:
 
         mock_cur = MagicMock()
         mock_cur.fetchone.return_value = None
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = check_lock(source_uri="/data/file.txt")
         assert result is None
@@ -282,7 +282,7 @@ class TestReleaseLockDualKey:
 
         mock_cur = MagicMock()
         mock_cur.rowcount = 1
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = release_lock(
             source_uri="/data/file.txt",
@@ -309,7 +309,7 @@ class TestBulkSetCanonicalKeys:
             (2, "/data/docs/sub/notes.txt"),
         ]
         mock_cur.rowcount = 1
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         count = bulk_set_canonical_keys(
             root_id="root-1",
@@ -328,7 +328,7 @@ class TestBulkSetCanonicalKeys:
 
         mock_cur = MagicMock()
         mock_cur.fetchall.return_value = []
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         count = bulk_set_canonical_keys(
             root_id="root-1",
@@ -351,7 +351,7 @@ class TestFindByCanonicalKey:
             (1, "doc-1", "/data/docs/readme.md", "server:r1:/readme.md"),
             (2, "doc-1", "/data/docs/readme.md", "server:r1:/readme.md"),
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         results = find_by_canonical_key("server:r1:/readme.md")
         assert len(results) == 2
@@ -363,7 +363,7 @@ class TestFindByCanonicalKey:
 
         mock_cur = MagicMock()
         mock_cur.fetchall.return_value = []
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         results = find_by_canonical_key("server:r1:/nonexistent.md")
         assert results == []

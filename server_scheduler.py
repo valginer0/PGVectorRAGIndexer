@@ -122,15 +122,13 @@ class ServerScheduler:
         """Attempt to acquire the advisory lock. Non-blocking."""
         try:
             from database import get_db_manager
-            conn = get_db_manager().get_connection_raw()
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT pg_try_advisory_lock(%s)", (SERVER_SCHEDULER_LOCK_ID,)
-            )
-            result = cur.fetchone()[0]
-            cur.close()
-            conn.close()
-            return bool(result)
+            with get_db_manager().get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT pg_try_advisory_lock(%s)", (SERVER_SCHEDULER_LOCK_ID,)
+                )
+                result = cur.fetchone()[0]
+                return bool(result)
         except Exception as e:
             logger.debug("Failed to acquire advisory lock: %s", e)
             return False
@@ -139,13 +137,11 @@ class ServerScheduler:
         """Release the advisory lock."""
         try:
             from database import get_db_manager
-            conn = get_db_manager().get_connection_raw()
-            cur = conn.cursor()
-            cur.execute(
-                "SELECT pg_advisory_unlock(%s)", (SERVER_SCHEDULER_LOCK_ID,)
-            )
-            cur.close()
-            conn.close()
+            with get_db_manager().get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT pg_advisory_unlock(%s)", (SERVER_SCHEDULER_LOCK_ID,)
+                )
             self._lease_held = False
             logger.debug("Released advisory lock")
         except Exception as e:

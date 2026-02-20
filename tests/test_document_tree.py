@@ -68,7 +68,7 @@ class TestGetTreeChildren:
             ("images/photo.jpg", "doc-3", 1, now, now),
             ("readme.md", "doc-4", 1, now, now),
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from document_tree import get_tree_children
         result = get_tree_children("")
@@ -90,7 +90,7 @@ class TestGetTreeChildren:
             ("docs/report.pdf", "doc-1", 3, now, now),
             ("docs/sub/deep.txt", "doc-5", 1, now, now),
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from document_tree import get_tree_children
         result = get_tree_children("docs")
@@ -112,7 +112,7 @@ class TestGetTreeChildren:
             ("b.txt", "d2", 1, now, now),
             ("c.txt", "d3", 1, now, now),
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from document_tree import get_tree_children
         result = get_tree_children("", limit=2, offset=0)
@@ -156,7 +156,7 @@ class TestSearchTree:
         mock_cur.fetchall.return_value = [
             ("docs/report.pdf", "doc-1", 3, now),
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from document_tree import search_tree
         results = search_tree("report")

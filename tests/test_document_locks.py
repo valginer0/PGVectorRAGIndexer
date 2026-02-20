@@ -148,7 +148,7 @@ class TestLockConflict:
             None,  # no existing lock
             (lock_id, "/test.pdf", "client-1", now, expires, "indexing"),  # INSERT RETURNING
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from document_locks import acquire_lock
         result = acquire_lock("/test.pdf", "client-1")
@@ -169,7 +169,7 @@ class TestLockConflict:
             (lock_id, "/test.pdf", "client-1", now, expires, "indexing"),  # existing
             (lock_id, "/test.pdf", "client-1", now, expires, "indexing"),  # UPDATE RETURNING
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from document_locks import acquire_lock
         result = acquire_lock("/test.pdf", "client-1")
@@ -188,7 +188,7 @@ class TestLockConflict:
         mock_cur.fetchone.side_effect = [
             (lock_id, "/test.pdf", "client-A", now, expires, "indexing"),  # existing
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from document_locks import acquire_lock
         result = acquire_lock("/test.pdf", "client-B")

@@ -17,9 +17,13 @@ DEFAULT_TTL_MINUTES = 10
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    return get_db_manager().get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 _COLUMNS = ("id", "source_uri", "client_id", "locked_at", "expires_at", "lock_reason",
@@ -87,75 +91,70 @@ def acquire_lock(
         or 'ok': False with 'error' and 'holder' on conflict.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
 
-        where, params = _build_lock_where(source_uri, root_id, relative_path)
+            where, params = _build_lock_where(source_uri, root_id, relative_path)
 
-        # First, clean up expired locks
-        cur.execute(
-            f"DELETE FROM document_locks WHERE ({where}) AND expires_at < now()",
-            params,
-        )
+            # First, clean up expired locks
+            cur.execute(
+                f"DELETE FROM document_locks WHERE ({where}) AND expires_at < now()",
+                params,
+            )
 
-        # Check if there's an active lock
-        cur.execute(
-            "SELECT {cols} FROM document_locks WHERE {where}".format(
-                cols=", ".join(_COLUMNS), where=where
-            ),
-            params,
-        )
-        existing = cur.fetchone()
+            # Check if there's an active lock
+            cur.execute(
+                "SELECT {cols} FROM document_locks WHERE {where}".format(
+                    cols=", ".join(_COLUMNS), where=where
+                ),
+                params,
+            )
+            existing = cur.fetchone()
 
-        if existing:
-            existing_dict = _row_to_dict(existing)
-            if existing_dict["client_id"] == client_id:
-                # Same client — extend the lock
-                cur.execute(
-                    """
-                    UPDATE document_locks
-                    SET expires_at = now() + interval '%s minutes',
-                        locked_at = now(),
-                        lock_reason = %s
-                    WHERE id = %s
-                    RETURNING {cols}
-                    """.format(cols=", ".join(_COLUMNS)),
-                    (ttl_minutes, lock_reason, existing_dict["id"]),
-                )
-                row = cur.fetchone()
-                conn.commit()
-                cur.close()
-                conn.close()
-                return {"ok": True, "lock": _row_to_dict(row), "extended": True}
-            else:
-                # Different client holds the lock
-                conn.close()
-                return {
-                    "ok": False,
-                    "error": (
-                        f"Document is being indexed by client '{existing_dict['client_id']}' "
-                        f"(lock expires at {existing_dict['expires_at']})"
-                    ),
-                    "holder": existing_dict,
-                }
+            if existing:
+                existing_dict = _row_to_dict(existing)
+                if existing_dict["client_id"] == client_id:
+                    # Same client — extend the lock
+                    cur.execute(
+                        """
+                        UPDATE document_locks
+                        SET expires_at = now() + interval '%s minutes',
+                            locked_at = now(),
+                            lock_reason = %s
+                        WHERE id = %s
+                        RETURNING {cols}
+                        """.format(cols=", ".join(_COLUMNS)),
+                        (ttl_minutes, lock_reason, existing_dict["id"]),
+                    )
+                    row = cur.fetchone()
+                    conn.commit()
+                    return {"ok": True, "lock": _row_to_dict(row), "extended": True}
+                else:
+                    # Different client holds the lock
+                    return {
+                        "ok": False,
+                        "error": (
+                            f"Document is being indexed by client '{existing_dict['client_id']}' "
+                            f"(lock expires at {existing_dict['expires_at']})"
+                        ),
+                        "holder": existing_dict,
+                    }
 
-        # No active lock — create one
-        lock_id = str(uuid.uuid4())
-        cur.execute(
-            """
-            INSERT INTO document_locks
-                (id, source_uri, client_id, expires_at, lock_reason, root_id, relative_path)
-            VALUES (%s, %s, %s, now() + interval '%s minutes', %s, %s, %s)
-            RETURNING {cols}
-            """.format(cols=", ".join(_COLUMNS)),
-            (lock_id, source_uri, client_id, ttl_minutes, lock_reason,
-             root_id, relative_path),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        cur.close()
-        conn.close()
-        return {"ok": True, "lock": _row_to_dict(row), "extended": False}
+            # No active lock — create one
+            lock_id = str(uuid.uuid4())
+            cur.execute(
+                """
+                INSERT INTO document_locks
+                    (id, source_uri, client_id, expires_at, lock_reason, root_id, relative_path)
+                VALUES (%s, %s, %s, now() + interval '%s minutes', %s, %s, %s)
+                RETURNING {cols}
+                """.format(cols=", ".join(_COLUMNS)),
+                (lock_id, source_uri, client_id, ttl_minutes, lock_reason,
+                 root_id, relative_path),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return {"ok": True, "lock": _row_to_dict(row), "extended": False}
 
     except Exception as e:
         logger.warning("Failed to acquire lock for '%s': %s", source_uri, e)
@@ -177,18 +176,16 @@ def release_lock(
         True if the lock was released, False otherwise.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        where, params = _build_lock_where(source_uri, root_id, relative_path)
-        cur.execute(
-            f"DELETE FROM document_locks WHERE ({where}) AND client_id = %s",
-            params + (client_id,),
-        )
-        deleted = cur.rowcount > 0
-        conn.commit()
-        cur.close()
-        conn.close()
-        return deleted
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            where, params = _build_lock_where(source_uri, root_id, relative_path)
+            cur.execute(
+                f"DELETE FROM document_locks WHERE ({where}) AND client_id = %s",
+                params + (client_id,),
+            )
+            deleted = cur.rowcount > 0
+            conn.commit()
+            return deleted
     except Exception as e:
         logger.warning("Failed to release lock for '%s': %s", source_uri, e)
         return False
@@ -201,17 +198,15 @@ def force_release_lock(source_uri: str) -> bool:
         True if a lock was removed, False otherwise.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "DELETE FROM document_locks WHERE source_uri = %s",
-            (source_uri,),
-        )
-        deleted = cur.rowcount > 0
-        conn.commit()
-        cur.close()
-        conn.close()
-        return deleted
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM document_locks WHERE source_uri = %s",
+                (source_uri,),
+            )
+            deleted = cur.rowcount > 0
+            conn.commit()
+            return deleted
     except Exception as e:
         logger.warning("Failed to force-release lock for '%s': %s", source_uri, e)
         return False
@@ -235,19 +230,17 @@ def check_lock(
         Lock info dict if locked (and not expired), None otherwise.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        where, params = _build_lock_where(source_uri, root_id, relative_path)
-        cur.execute(
-            "SELECT {cols} FROM document_locks WHERE ({where}) AND expires_at > now()".format(
-                cols=", ".join(_COLUMNS), where=where
-            ),
-            params,
-        )
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            where, params = _build_lock_where(source_uri, root_id, relative_path)
+            cur.execute(
+                "SELECT {cols} FROM document_locks WHERE ({where}) AND expires_at > now()".format(
+                    cols=", ".join(_COLUMNS), where=where
+                ),
+                params,
+            )
+            row = cur.fetchone()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.warning("Failed to check lock for '%s': %s", source_uri, e)
         return None
@@ -263,21 +256,19 @@ def list_locks(client_id: Optional[str] = None) -> List[Dict[str, Any]]:
         List of lock dicts.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        sql = "SELECT {cols} FROM document_locks WHERE expires_at > now()".format(
-            cols=", ".join(_COLUMNS)
-        )
-        params: list = []
-        if client_id:
-            sql += " AND client_id = %s"
-            params.append(client_id)
-        sql += " ORDER BY locked_at DESC"
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [_row_to_dict(r) for r in rows]
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            sql = "SELECT {cols} FROM document_locks WHERE expires_at > now()".format(
+                cols=", ".join(_COLUMNS)
+            )
+            params: list = []
+            if client_id:
+                sql += " AND client_id = %s"
+                params.append(client_id)
+            sql += " ORDER BY locked_at DESC"
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            return [_row_to_dict(r) for r in rows]
     except Exception as e:
         logger.warning("Failed to list locks: %s", e)
         return []
@@ -295,16 +286,14 @@ def cleanup_expired_locks() -> int:
         Number of expired locks removed.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute("DELETE FROM document_locks WHERE expires_at < now()")
-        deleted = cur.rowcount
-        conn.commit()
-        cur.close()
-        conn.close()
-        if deleted > 0:
-            logger.info("Cleaned up %d expired document locks", deleted)
-        return deleted
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM document_locks WHERE expires_at < now()")
+            deleted = cur.rowcount
+            conn.commit()
+            if deleted > 0:
+                logger.info("Cleaned up %d expired document locks", deleted)
+            return deleted
     except Exception as e:
         logger.warning("Failed to cleanup expired locks: %s", e)
         return 0

@@ -31,7 +31,7 @@ class TestQuarantineChunks:
 
         mock_cur = MagicMock()
         mock_cur.rowcount = 3
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         count = quarantine_chunks("/data/docs/readme.md", "source_file_missing")
 
@@ -47,7 +47,7 @@ class TestQuarantineChunks:
 
         mock_cur = MagicMock()
         mock_cur.rowcount = 0
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         count = quarantine_chunks("/data/docs/already.md")
         assert count == 0
@@ -62,7 +62,7 @@ class TestRestoreChunks:
 
         mock_cur = MagicMock()
         mock_cur.rowcount = 2
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         count = restore_chunks("/data/docs/readme.md")
 
@@ -76,7 +76,7 @@ class TestRestoreChunks:
 
         mock_cur = MagicMock()
         mock_cur.rowcount = 0
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         count = restore_chunks("/data/docs/not_quarantined.md")
         assert count == 0
@@ -91,7 +91,7 @@ class TestQuarantineRoundTrip:
 
         mock_cur = MagicMock()
         mock_cur.rowcount = 5
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         quarantined = quarantine_chunks("/data/docs/file.md")
         assert quarantined == 5
@@ -109,7 +109,7 @@ class TestPurgeExpired:
 
         mock_cur = MagicMock()
         mock_cur.rowcount = 10
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         count = purge_expired(retention_days=30)
 
@@ -123,7 +123,7 @@ class TestPurgeExpired:
 
         mock_cur = MagicMock()
         mock_cur.rowcount = 0
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         count = purge_expired(retention_days=7)
 
@@ -152,7 +152,7 @@ class TestQuarantineStats:
         mock_cur = MagicMock()
         ts = datetime(2025, 1, 1, tzinfo=timezone.utc)
         mock_cur.fetchone.return_value = (5, 25, ts)
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         stats = get_quarantine_stats()
 
@@ -166,7 +166,7 @@ class TestQuarantineStats:
 
         mock_cur = MagicMock()
         mock_cur.fetchone.return_value = (0, 0, None)
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         stats = get_quarantine_stats()
 
@@ -188,7 +188,7 @@ class TestListQuarantined:
             ("/data/file1.md", 3, ts, "source_file_missing"),
             ("/data/file2.md", 1, ts, "source_file_missing"),
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         results = list_quarantined(limit=10, offset=0)
 
@@ -202,7 +202,7 @@ class TestListQuarantined:
 
         mock_cur = MagicMock()
         mock_cur.fetchall.return_value = []
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         results = list_quarantined()
         assert results == []
@@ -222,7 +222,7 @@ class TestDryRunScan:
 
         mock_cur = MagicMock()
         mock_cur.fetchall.return_value = []  # No indexed files
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = scan_folder("/data/docs", dry_run=True)
 
@@ -242,7 +242,7 @@ class TestDryRunScan:
         mock_cur.fetchall.return_value = [
             ("/data/docs/deleted.md",),
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         result = scan_folder("/data/docs", dry_run=True)
 
@@ -275,7 +275,7 @@ class TestQuarantineMissingSources:
         mock_cur.fetchall.return_value = [
             ("/data/docs/missing.md", False),  # Not already quarantined
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
         mock_isfile.return_value = False  # File doesn't exist
 
         with patch("quarantine.quarantine_chunks") as mock_q:
@@ -291,7 +291,7 @@ class TestQuarantineMissingSources:
         mock_cur.fetchall.return_value = [
             ("/data/docs/back.md", True),  # Already quarantined
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
         mock_isfile.return_value = True  # File reappeared
 
         with patch("quarantine.restore_chunks") as mock_r:
@@ -307,7 +307,7 @@ class TestQuarantineMissingSources:
         mock_cur.fetchall.return_value = [
             ("/data/docs/ok.md", False),  # Not quarantined, file exists
         ]
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
         mock_isfile.return_value = True
 
         with patch("quarantine.quarantine_chunks") as mock_q:

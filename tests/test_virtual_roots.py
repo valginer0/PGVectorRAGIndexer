@@ -146,7 +146,7 @@ class TestResolvePath:
     def test_resolves_simple_path(self, mock_conn):
         mock_cur = MagicMock()
         mock_cur.fetchone.return_value = ("/mnt/finance",)
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from virtual_roots import resolve_path
         result = resolve_path("FinanceDocs/reports/q1.pdf", "client-1")
@@ -158,7 +158,7 @@ class TestResolvePath:
     def test_resolves_root_only(self, mock_conn):
         mock_cur = MagicMock()
         mock_cur.fetchone.return_value = ("/mnt/finance",)
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from virtual_roots import resolve_path
         result = resolve_path("FinanceDocs", "client-1")
@@ -168,7 +168,7 @@ class TestResolvePath:
     def test_returns_none_for_unmapped_root(self, mock_conn):
         mock_cur = MagicMock()
         mock_cur.fetchone.return_value = None
-        mock_conn.return_value.cursor.return_value = mock_cur
+        mock_conn.return_value.__enter__.return_value.cursor.return_value = mock_cur
 
         from virtual_roots import resolve_path
         assert resolve_path("Unknown/file.txt", "client-1") is None

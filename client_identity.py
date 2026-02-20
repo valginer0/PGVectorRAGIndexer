@@ -16,9 +16,13 @@ logger = logging.getLogger(__name__)
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    return get_db_manager().get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 # ---------------------------------------------------------------------------
@@ -40,29 +44,27 @@ def register_client(
     Returns the client row as a dict, or None on failure.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO clients (id, display_name, os_type, app_version, last_seen_at)
-            VALUES (%s, %s, %s, %s, now())
-            ON CONFLICT (id) DO UPDATE SET
-                display_name = EXCLUDED.display_name,
-                os_type = EXCLUDED.os_type,
-                app_version = EXCLUDED.app_version,
-                last_seen_at = now()
-            RETURNING id, display_name, os_type, app_version,
-                      last_seen_at, created_at
-            """,
-            (client_id, display_name, os_type, app_version),
-        )
-        row = cur.fetchone()
-        conn.commit()
-        cur.close()
-        conn.close()
-        if row:
-            return _row_to_dict(row)
-        return None
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO clients (id, display_name, os_type, app_version, last_seen_at)
+                VALUES (%s, %s, %s, %s, now())
+                ON CONFLICT (id) DO UPDATE SET
+                    display_name = EXCLUDED.display_name,
+                    os_type = EXCLUDED.os_type,
+                    app_version = EXCLUDED.app_version,
+                    last_seen_at = now()
+                RETURNING id, display_name, os_type, app_version,
+                          last_seen_at, created_at
+                """,
+                (client_id, display_name, os_type, app_version),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            if row:
+                return _row_to_dict(row)
+            return None
     except Exception as e:
         logger.warning("Failed to register client %s: %s", client_id, e)
         return None
@@ -74,22 +76,20 @@ def heartbeat(client_id: str, app_version: Optional[str] = None) -> bool:
     Returns True on success, False on failure.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        if app_version:
-            cur.execute(
-                "UPDATE clients SET last_seen_at = now(), app_version = %s WHERE id = %s",
-                (app_version, client_id),
-            )
-        else:
-            cur.execute(
-                "UPDATE clients SET last_seen_at = now() WHERE id = %s",
-                (client_id,),
-            )
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            if app_version:
+                cur.execute(
+                    "UPDATE clients SET last_seen_at = now(), app_version = %s WHERE id = %s",
+                    (app_version, client_id),
+                )
+            else:
+                cur.execute(
+                    "UPDATE clients SET last_seen_at = now() WHERE id = %s",
+                    (client_id,),
+                )
+            conn.commit()
+            return True
     except Exception as e:
         logger.warning("Failed to heartbeat client %s: %s", client_id, e)
         return False
@@ -98,17 +98,15 @@ def heartbeat(client_id: str, app_version: Optional[str] = None) -> bool:
 def get_client(client_id: str) -> Optional[Dict[str, Any]]:
     """Get a single client by ID."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, display_name, os_type, app_version, last_seen_at, created_at "
-            "FROM clients WHERE id = %s",
-            (client_id,),
-        )
-        row = cur.fetchone()
-        cur.close()
-        conn.close()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, display_name, os_type, app_version, last_seen_at, created_at "
+                "FROM clients WHERE id = %s",
+                (client_id,),
+            )
+            row = cur.fetchone()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.warning("Failed to get client %s: %s", client_id, e)
         return None
@@ -117,16 +115,14 @@ def get_client(client_id: str) -> Optional[Dict[str, Any]]:
 def list_clients() -> List[Dict[str, Any]]:
     """List all registered clients, most recently seen first."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT id, display_name, os_type, app_version, last_seen_at, created_at "
-            "FROM clients ORDER BY last_seen_at DESC"
-        )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [_row_to_dict(r) for r in rows]
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT id, display_name, os_type, app_version, last_seen_at, created_at "
+                "FROM clients ORDER BY last_seen_at DESC"
+            )
+            rows = cur.fetchall()
+            return [_row_to_dict(r) for r in rows]
     except Exception as e:
         logger.warning("Failed to list clients: %s", e)
         return []

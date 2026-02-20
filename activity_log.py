@@ -17,9 +17,13 @@ logger = logging.getLogger(__name__)
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    return get_db_manager().get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 _COLUMNS = ("id", "ts", "client_id", "user_id", "action", "details",
@@ -71,22 +75,20 @@ def log_activity(
     """
     entry_id = str(uuid.uuid4())
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            INSERT INTO activity_log
-                (id, client_id, user_id, action, details,
-                 executor_scope, executor_id, root_id, run_id)
-            VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
-            """,
-            (entry_id, client_id, user_id, action, json.dumps(details or {}),
-             executor_scope, executor_id, root_id, run_id),
-        )
-        conn.commit()
-        cur.close()
-        conn.close()
-        return entry_id
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT INTO activity_log
+                    (id, client_id, user_id, action, details,
+                     executor_scope, executor_id, root_id, run_id)
+                VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+                """,
+                (entry_id, client_id, user_id, action, json.dumps(details or {}),
+                 executor_scope, executor_id, root_id, run_id),
+            )
+            conn.commit()
+            return entry_id
     except Exception as e:
         logger.warning("Failed to log activity '%s': %s", action, e)
         return None
@@ -119,32 +121,30 @@ def get_recent(
         List of activity dicts, newest first.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        sql = "SELECT {cols} FROM activity_log".format(cols=", ".join(_COLUMNS))
-        conditions = []
-        params: list = []
-        if client_id:
-            conditions.append("client_id = %s")
-            params.append(client_id)
-        if action:
-            conditions.append("action = %s")
-            params.append(action)
-        if root_id:
-            conditions.append("root_id = %s")
-            params.append(root_id)
-        if run_id:
-            conditions.append("run_id = %s")
-            params.append(run_id)
-        if conditions:
-            sql += " WHERE " + " AND ".join(conditions)
-        sql += " ORDER BY ts DESC LIMIT %s OFFSET %s"
-        params.extend([limit, offset])
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [_row_to_dict(r) for r in rows]
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            sql = "SELECT {cols} FROM activity_log".format(cols=", ".join(_COLUMNS))
+            conditions = []
+            params: list = []
+            if client_id:
+                conditions.append("client_id = %s")
+                params.append(client_id)
+            if action:
+                conditions.append("action = %s")
+                params.append(action)
+            if root_id:
+                conditions.append("root_id = %s")
+                params.append(root_id)
+            if run_id:
+                conditions.append("run_id = %s")
+                params.append(run_id)
+            if conditions:
+                sql += " WHERE " + " AND ".join(conditions)
+            sql += " ORDER BY ts DESC LIMIT %s OFFSET %s"
+            params.extend([limit, offset])
+            cur.execute(sql, params)
+            rows = cur.fetchall()
+            return [_row_to_dict(r) for r in rows]
     except Exception as e:
         logger.warning("Failed to query activity log: %s", e)
         return []
@@ -156,24 +156,22 @@ def get_activity_count(
 ) -> int:
     """Get total count of activity log entries (for pagination)."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        sql = "SELECT COUNT(*) FROM activity_log"
-        conditions = []
-        params: list = []
-        if client_id:
-            conditions.append("client_id = %s")
-            params.append(client_id)
-        if action:
-            conditions.append("action = %s")
-            params.append(action)
-        if conditions:
-            sql += " WHERE " + " AND ".join(conditions)
-        cur.execute(sql, params)
-        count = cur.fetchone()[0]
-        cur.close()
-        conn.close()
-        return count
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            sql = "SELECT COUNT(*) FROM activity_log"
+            conditions = []
+            params: list = []
+            if client_id:
+                conditions.append("client_id = %s")
+                params.append(client_id)
+            if action:
+                conditions.append("action = %s")
+                params.append(action)
+            if conditions:
+                sql += " WHERE " + " AND ".join(conditions)
+            cur.execute(sql, params)
+            count = cur.fetchone()[0]
+            return count
     except Exception as e:
         logger.warning("Failed to count activity log: %s", e)
         return 0
@@ -182,13 +180,11 @@ def get_activity_count(
 def get_action_types() -> List[str]:
     """Get distinct action types in the log."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT DISTINCT action FROM activity_log ORDER BY action")
-        types = [row[0] for row in cur.fetchall()]
-        cur.close()
-        conn.close()
-        return types
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT DISTINCT action FROM activity_log ORDER BY action")
+            types = [row[0] for row in cur.fetchall()]
+            return types
     except Exception as e:
         logger.warning("Failed to get action types: %s", e)
         return []
@@ -237,18 +233,16 @@ def apply_retention(days: int) -> int:
         Number of entries deleted.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "DELETE FROM activity_log WHERE ts < now() - interval '%s days'",
-            (days,),
-        )
-        deleted = cur.rowcount
-        conn.commit()
-        cur.close()
-        conn.close()
-        logger.info("Retention: deleted %d activity log entries older than %d days", deleted, days)
-        return deleted
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "DELETE FROM activity_log WHERE ts < now() - interval '%s days'",
+                (days,),
+            )
+            deleted = cur.rowcount
+            conn.commit()
+            logger.info("Retention: deleted %d activity log entries older than %d days", deleted, days)
+            return deleted
     except Exception as e:
         logger.warning("Failed to apply retention: %s", e)
         return 0

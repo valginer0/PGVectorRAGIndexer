@@ -21,9 +21,13 @@ logger = logging.getLogger(__name__)
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    return get_db_manager().get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 # ---------------------------------------------------------------------------
@@ -116,17 +120,15 @@ def _normalize_relative(path: str) -> str:
 def set_canonical_key(chunk_id: int, canonical_key: str) -> bool:
     """Set the canonical_source_key for a single document chunk."""
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            "UPDATE document_chunks SET canonical_source_key = %s WHERE chunk_id = %s",
-            (canonical_key, chunk_id),
-        )
-        updated = cur.rowcount
-        conn.commit()
-        cur.close()
-        conn.close()
-        return updated > 0
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE document_chunks SET canonical_source_key = %s WHERE chunk_id = %s",
+                (canonical_key, chunk_id),
+            )
+            updated = cur.rowcount
+            conn.commit()
+            return updated > 0
     except Exception as e:
         logger.warning("Failed to set canonical key for chunk %s: %s", chunk_id, e)
         return False
@@ -153,47 +155,43 @@ def bulk_set_canonical_keys(
         Number of chunks updated.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
 
-        # Normalize the root for prefix matching
-        root_prefix = folder_path.replace("\\", "/").rstrip("/") + "/"
+            # Normalize the root for prefix matching
+            root_prefix = folder_path.replace("\\", "/").rstrip("/") + "/"
 
-        # Find chunks under this root without a canonical key
-        cur.execute(
-            """
-            SELECT chunk_id, source_uri
-            FROM document_chunks
-            WHERE source_uri LIKE %s
-              AND canonical_source_key IS NULL
-            """,
-            (root_prefix + "%",),
-        )
-        rows = cur.fetchall()
-
-        if not rows:
-            cur.close()
-            conn.close()
-            return 0
-
-        updated = 0
-        for chunk_id, source_uri in rows:
-            rel = extract_relative_path(folder_path, source_uri)
-            key = build_canonical_key(scope, identity, rel)
+            # Find chunks under this root without a canonical key
             cur.execute(
-                "UPDATE document_chunks SET canonical_source_key = %s WHERE chunk_id = %s",
-                (key, chunk_id),
+                """
+                SELECT chunk_id, source_uri
+                FROM document_chunks
+                WHERE source_uri LIKE %s
+                  AND canonical_source_key IS NULL
+                """,
+                (root_prefix + "%",),
             )
-            updated += cur.rowcount
+            rows = cur.fetchall()
 
-        conn.commit()
-        cur.close()
-        conn.close()
-        logger.info(
-            "Backfilled %d canonical keys for root %s (%s)",
-            updated, root_id, folder_path,
-        )
-        return updated
+            if not rows:
+                return 0
+
+            updated = 0
+            for chunk_id, source_uri in rows:
+                rel = extract_relative_path(folder_path, source_uri)
+                key = build_canonical_key(scope, identity, rel)
+                cur.execute(
+                    "UPDATE document_chunks SET canonical_source_key = %s WHERE chunk_id = %s",
+                    (key, chunk_id),
+                )
+                updated += cur.rowcount
+
+            conn.commit()
+            logger.info(
+                "Backfilled %d canonical keys for root %s (%s)",
+                updated, root_id, folder_path,
+            )
+            return updated
 
     except Exception as e:
         logger.warning(
@@ -209,29 +207,27 @@ def find_by_canonical_key(key: str) -> List[Dict[str, Any]]:
         List of dicts with chunk_id, source_uri, document_id, canonical_source_key.
     """
     try:
-        conn = _get_db_connection()
-        cur = conn.cursor()
-        cur.execute(
-            """
-            SELECT chunk_id, document_id, source_uri, canonical_source_key
-            FROM document_chunks
-            WHERE canonical_source_key = %s
-            ORDER BY chunk_index
-            """,
-            (key,),
-        )
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        return [
-            {
-                "chunk_id": r[0],
-                "document_id": r[1],
-                "source_uri": r[2],
-                "canonical_source_key": r[3],
-            }
-            for r in rows
-        ]
+        with _get_db_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                SELECT chunk_id, document_id, source_uri, canonical_source_key
+                FROM document_chunks
+                WHERE canonical_source_key = %s
+                ORDER BY chunk_index
+                """,
+                (key,),
+            )
+            rows = cur.fetchall()
+            return [
+                {
+                    "chunk_id": r[0],
+                    "document_id": r[1],
+                    "source_uri": r[2],
+                    "canonical_source_key": r[3],
+                }
+                for r in rows
+            ]
     except Exception as e:
         logger.warning("Failed to find chunks by canonical key %s: %s", key, e)
         return []

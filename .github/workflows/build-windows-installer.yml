@@ -88,7 +88,7 @@ jobs:
         pattern = rf"(## \[{re.escape(version)}\].*?)(?=\n## \[)"
         match = re.search(pattern, content, re.DOTALL)
         notes = match.group(1).strip() if match else f"Release v{version}"
-        with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+        with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
             out.write(f"notes<<EOF\n{notes}\nEOF\n")
 
     - name: Upload MSI to Release

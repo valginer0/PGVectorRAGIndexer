@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.5.0] - 2026-02-20
+
+### Changed
+- **Connection pool hardening**: All 14 database modules now use context-managed connections (`with get_connection() as conn:`). Eliminates the fragile manual `conn.close()` pattern entirely — connections are guaranteed to return to the pool even on exceptions or early returns. This resolves a class of production bugs where missed close paths would silently exhaust the connection pool under load.
+
+### Fixed
+- **DB connection leaks in users.py, document_visibility.py, saml_auth.py**: 21 functions leaked pool connections on every call (no `close()` at all). Every user lookup, document access check, and SSO session operation was leaking.
+- **Windows installer CI**: Fixed UTF-8 encoding for CHANGELOG read/write on Windows (cp1252 default), and corrected MSI asset path in release upload step.
+
+---
+
 ## [2.4.8] - 2026-02-20
 
 ### Added

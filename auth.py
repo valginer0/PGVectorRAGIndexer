@@ -148,9 +148,13 @@ def is_auth_required(request: Request) -> bool:
 
 
 def _get_db_connection():
-    """Get a raw database connection for key operations."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    return get_db_manager().get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 def lookup_api_key(key_hash: str) -> Optional[dict]:
@@ -159,31 +163,31 @@ def lookup_api_key(key_hash: str) -> Optional[dict]:
     Returns key record dict if found and active, None otherwise.
     """
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT id, name, key_prefix, created_at, last_used_at,
-                   revoked_at, expires_at
-            FROM api_keys
-            WHERE key_hash = %s
-              AND (revoked_at IS NULL OR revoked_at > NOW() - INTERVAL '%s hours')
-              AND (expires_at IS NULL OR expires_at > NOW())
-            """,
-            (key_hash, GRACE_PERIOD_HOURS),
-        )
-        row = cursor.fetchone()
-        if row:
-            return {
-                "id": row[0],
-                "name": row[1],
-                "key_prefix": row[2],
-                "created_at": row[3],
-                "last_used_at": row[4],
-                "revoked_at": row[5],
-                "expires_at": row[6],
-            }
-        return None
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, name, key_prefix, created_at, last_used_at,
+                       revoked_at, expires_at
+                FROM api_keys
+                WHERE key_hash = %s
+                  AND (revoked_at IS NULL OR revoked_at > NOW() - INTERVAL '%s hours')
+                  AND (expires_at IS NULL OR expires_at > NOW())
+                """,
+                (key_hash, GRACE_PERIOD_HOURS),
+            )
+            row = cursor.fetchone()
+            if row:
+                return {
+                    "id": row[0],
+                    "name": row[1],
+                    "key_prefix": row[2],
+                    "created_at": row[3],
+                    "last_used_at": row[4],
+                    "revoked_at": row[5],
+                    "expires_at": row[6],
+                }
+            return None
     except Exception as e:
         logger.error("Failed to look up API key: %s", e)
         return None
@@ -192,13 +196,13 @@ def lookup_api_key(key_hash: str) -> Optional[dict]:
 def update_last_used(key_id: int) -> None:
     """Update the last_used_at timestamp for a key."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE api_keys SET last_used_at = NOW() WHERE id = %s",
-            (key_id,),
-        )
-        conn.commit()
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE api_keys SET last_used_at = NOW() WHERE id = %s",
+                (key_id,),
+            )
+            conn.commit()
     except Exception as e:
         logger.debug("Failed to update last_used_at: %s", e)
 
@@ -215,18 +219,18 @@ def create_api_key_record(name: str) -> dict:
     full_key, key_hash = generate_api_key()
     prefix = get_key_prefix(full_key)
 
-    conn = _get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        INSERT INTO api_keys (name, key_hash, key_prefix)
-        VALUES (%s, %s, %s)
-        RETURNING id, created_at
-        """,
-        (name, key_hash, prefix),
-    )
-    row = cursor.fetchone()
-    conn.commit()
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO api_keys (name, key_hash, key_prefix)
+            VALUES (%s, %s, %s)
+            RETURNING id, created_at
+            """,
+            (name, key_hash, prefix),
+        )
+        row = cursor.fetchone()
+        conn.commit()
 
     return {
         "key": full_key,  # Show ONCE
@@ -239,17 +243,17 @@ def create_api_key_record(name: str) -> dict:
 
 def list_api_keys() -> list[dict]:
     """List all API keys (never returns the hash or full key)."""
-    conn = _get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        """
-        SELECT id, name, key_prefix, created_at, last_used_at,
-               revoked_at, expires_at
-        FROM api_keys
-        ORDER BY created_at DESC
-        """
-    )
-    rows = cursor.fetchall()
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, name, key_prefix, created_at, last_used_at,
+                   revoked_at, expires_at
+            FROM api_keys
+            ORDER BY created_at DESC
+            """
+        )
+        rows = cursor.fetchall()
     return [
         {
             "id": row[0],
@@ -270,14 +274,14 @@ def revoke_api_key(key_id: int) -> bool:
 
     Returns True if a key was revoked.
     """
-    conn = _get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE api_keys SET revoked_at = NOW() WHERE id = %s AND revoked_at IS NULL",
-        (key_id,),
-    )
-    conn.commit()
-    return cursor.rowcount > 0
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE api_keys SET revoked_at = NOW() WHERE id = %s AND revoked_at IS NULL",
+            (key_id,),
+        )
+        conn.commit()
+        return cursor.rowcount > 0
 
 
 def rotate_api_key(key_id: int) -> Optional[dict]:
@@ -287,39 +291,39 @@ def rotate_api_key(key_id: int) -> Optional[dict]:
 
     Returns new key info dict, or None if key_id not found.
     """
-    conn = _get_db_connection()
-    cursor = conn.cursor()
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
 
-    # Get existing key info
-    cursor.execute(
-        "SELECT name FROM api_keys WHERE id = %s AND revoked_at IS NULL",
-        (key_id,),
-    )
-    row = cursor.fetchone()
-    if not row:
-        return None
+        # Get existing key info
+        cursor.execute(
+            "SELECT name FROM api_keys WHERE id = %s AND revoked_at IS NULL",
+            (key_id,),
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
 
-    name = row[0]
+        name = row[0]
 
-    # Revoke old key (with grace period — lookup_api_key checks revoked_at + grace)
-    cursor.execute(
-        "UPDATE api_keys SET revoked_at = NOW() WHERE id = %s",
-        (key_id,),
-    )
+        # Revoke old key (with grace period — lookup_api_key checks revoked_at + grace)
+        cursor.execute(
+            "UPDATE api_keys SET revoked_at = NOW() WHERE id = %s",
+            (key_id,),
+        )
 
-    # Create new key
-    full_key, key_hash = generate_api_key()
-    prefix = get_key_prefix(full_key)
-    cursor.execute(
-        """
-        INSERT INTO api_keys (name, key_hash, key_prefix)
-        VALUES (%s, %s, %s)
-        RETURNING id, created_at
-        """,
-        (f"{name} (rotated)", key_hash, prefix),
-    )
-    new_row = cursor.fetchone()
-    conn.commit()
+        # Create new key
+        full_key, key_hash = generate_api_key()
+        prefix = get_key_prefix(full_key)
+        cursor.execute(
+            """
+            INSERT INTO api_keys (name, key_hash, key_prefix)
+            VALUES (%s, %s, %s)
+            RETURNING id, created_at
+            """,
+            (f"{name} (rotated)", key_hash, prefix),
+        )
+        new_row = cursor.fetchone()
+        conn.commit()
 
     return {
         "key": full_key,  # Show ONCE

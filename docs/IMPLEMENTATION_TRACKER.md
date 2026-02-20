@@ -302,7 +302,7 @@ Implementation sequencing (recommended):
 - [x] API endpoints: `GET /documents/tree`, `GET /documents/tree/stats`, `GET /documents/tree/search`
 - [x] Desktop client API methods: get_document_tree, get_document_tree_stats, search_document_tree
 - [x] Tests: 14 tests (normalize_path, tree building with mocked DB, stats, search, endpoints)
-- [x] Desktop UI: tree view in Documents tab with lazy-loaded folder expansion, aggregated doc counts, and path search
+- [x] Desktop UI: `QTreeView` + `QAbstractItemModel` with `canFetchMore()`/`fetchMore()` lazy-loading (`document_tree_model.py`)
 - [x] WSL support: Windows native file dialogs via PowerShell, WSL path resolution for file opening
 - [x] Linux path handling: paths starting with `/` appear as proper root-level entries (no empty-name folder)
 

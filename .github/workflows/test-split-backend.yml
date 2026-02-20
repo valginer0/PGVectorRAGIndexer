@@ -56,6 +56,19 @@ jobs:
       run: |
         set -euo pipefail
 
+        # ── Run database migrations ────────────────────────────────
+        echo "::group::Run database migrations"
+        python -c "
+        import sys
+        sys.path.insert(0, '.')
+        from alembic.config import Config
+        from alembic import command
+        cfg = Config('alembic.ini')
+        command.upgrade(cfg, 'head')
+        print('Migrations complete')
+        "
+        echo "::endgroup::"
+
         # ── Bootstrap API key ───────────────────────────────────────
         echo "::group::Bootstrap API key"
         API_KEY=$(python -c "
@@ -128,4 +141,5 @@ jobs:
       with:
         name: server-log
         path: server.log
+        if-no-files-found: ignore
         retention-days: 7

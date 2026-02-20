@@ -14,6 +14,7 @@ import hashlib
 import hmac
 import ipaddress
 import logging
+import os
 import secrets
 import time
 from datetime import datetime, timezone
@@ -124,11 +125,17 @@ def is_auth_required(request: Request) -> bool:
     are still protected.
 
     When API_REQUIRE_AUTH is not set, auth is NOT required (local mode default).
+
+    Set API_AUTH_FORCE_ALL=true (CI/testing only) to disable the loopback
+    exemption and require auth for ALL requests including localhost.
     """
     from config import get_config
     config = get_config()
     if not getattr(config.api, 'require_auth', False):
         return False
+    # CI/testing: force auth on all requests including loopback
+    if os.environ.get("API_AUTH_FORCE_ALL", "").lower() in ("1", "true", "yes"):
+        return True
     # Auth is enabled — but exempt loopback requests (local desktop app)
     if is_loopback_request(request):
         return False

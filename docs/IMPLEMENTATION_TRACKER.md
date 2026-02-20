@@ -363,6 +363,17 @@ Implementation sequencing (recommended):
   - [x] SSO/SAML integration (Okta) — see #16 Phase 2
   - [x] RBAC with admin/user roles — see #16 Phase 1
 
+### ✅ #2b Split-Backend E2E CI Testing
+- **Effort**: ~4-6h | **Edition**: Both | **Dependencies**: #2, #0
+- [x] `API_AUTH_FORCE_ALL` env var in `auth.py` — CI/testing-only flag that disables the loopback exemption so localhost requests require real API key auth. **Not for production use.**
+- [x] GitHub Actions workflow `test-split-backend.yml` — spins up PostgreSQL (pgvector/pgvector:pg16), bootstraps API key, starts uvicorn, runs E2E tests
+  - Triggers: push to main, pull requests to main, manual dispatch
+  - `timeout-minutes: 15`, `set -euo pipefail`, process death detection, health guard
+  - Uploads `server.log` as artifact on failure
+- [x] `tests/test_e2e_split_backend.py` — single `test_full_lifecycle()` covering: health check, version validation, auth enforcement (401 without/with bad key), document upload, search, delete, deletion verification
+- [x] 2 new auth unit tests: `test_loopback_exempt_by_default`, `test_force_all_overrides_loopback`
+- [x] Shared `tests/helpers.py` with `get_alembic_head()` — replaces hardcoded revision strings in `test_auth_integration.py` and `test_license_integration.py`
+
 ### ✅ #14 Usage Analytics
 - **Effort**: ~6-10h | **Edition**: Both (opt-in) | **Dependencies**: #4 (optional)
 - [x] Opt-in dialog (off by default, clear one-sentence explanation) — `analytics_consent_dialog.py`

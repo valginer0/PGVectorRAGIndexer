@@ -191,6 +191,24 @@ class TestAuthRequired:
         request = self._make_request(host="::1")
         assert is_auth_required(request) is False
 
+    @patch.dict(os.environ, {"API_REQUIRE_AUTH": "true"}, clear=False)
+    @patch("config.get_config")
+    def test_loopback_exempt_by_default(self, mock_config):
+        """Without API_AUTH_FORCE_ALL, loopback requests are exempt."""
+        mock_config.return_value.api.require_auth = True
+        # Ensure FORCE_ALL is not set
+        os.environ.pop("API_AUTH_FORCE_ALL", None)
+        request = self._make_request(host="127.0.0.1")
+        assert is_auth_required(request) is False
+
+    @patch.dict(os.environ, {"API_AUTH_FORCE_ALL": "true"}, clear=False)
+    @patch("config.get_config")
+    def test_force_all_overrides_loopback(self, mock_config):
+        """API_AUTH_FORCE_ALL=true disables loopback exemption."""
+        mock_config.return_value.api.require_auth = True
+        request = self._make_request(host="127.0.0.1")
+        assert is_auth_required(request) is True
+
 
 # ---------------------------------------------------------------------------
 # FastAPI dependency

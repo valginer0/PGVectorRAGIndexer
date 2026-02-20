@@ -17,6 +17,8 @@ import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from tests.helpers import get_alembic_head
+
 try:
     from testcontainers.postgres import PostgresContainer
     from sqlalchemy import create_engine, text
@@ -187,14 +189,14 @@ class TestMigrationChain:
                 ))
                 assert result.scalar() is True, f"Table {table_name} not found"
 
-    def test_alembic_version_is_017(self, migrated_db):
-        """Alembic version table shows revision 017."""
+    def test_alembic_version_is_head(self, migrated_db):
+        """Alembic version table shows current head revision."""
         with _engine.connect() as conn:
             result = conn.execute(text(
                 "SELECT version_num FROM alembic_version"
             ))
             version = result.scalar()
-        assert version == "017"
+        assert version == get_alembic_head()
 
 
 # ===========================================================================

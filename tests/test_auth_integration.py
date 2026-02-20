@@ -21,6 +21,8 @@ import psycopg2
 # Ensure project root is on the path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from tests.helpers import get_alembic_head
+
 testcontainers_postgres = pytest.importorskip(
     "testcontainers.postgres",
     reason="testcontainers is required for auth integration tests",
@@ -140,11 +142,11 @@ class TestApiKeysMigration:
                 ("test2", "hash_abc123", "pgv_sk_def2"),
             )
 
-    def test_revision_is_017(self, db_url, pg_connection):
-        """After full migration, head revision is 017."""
+    def test_revision_is_head(self, db_url, pg_connection):
+        """After full migration, head revision matches Alembic scripts."""
         _run_alembic_upgrade(db_url, "head")
         rev = _get_current_revision(db_url)
-        assert rev == "017"
+        assert rev == get_alembic_head()
 
 
 # ---------------------------------------------------------------------------

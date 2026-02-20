@@ -1,0 +1,131 @@
+name: Split-Backend E2E Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  e2e-split-backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: rag_vector_db
+          POSTGRES_USER: rag_user
+          POSTGRES_PASSWORD: rag_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U rag_user -d rag_vector_db"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.10"
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest requests
+
+    - name: Bootstrap API key, start server, run E2E tests
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: rag_vector_db
+        DB_USER: rag_user
+        DB_PASSWORD: rag_password
+        API_HOST: 127.0.0.1
+        API_PORT: 9000
+        API_REQUIRE_AUTH: "true"
+        API_AUTH_FORCE_ALL: "true"
+      run: |
+        set -euo pipefail
+
+        # ── Bootstrap API key ───────────────────────────────────────
+        echo "::group::Bootstrap API key"
+        API_KEY=$(python -c "
+        import sys, os
+        sys.path.insert(0, '.')
+        os.environ.setdefault('DB_HOST', 'localhost')
+        from auth import create_api_key_record
+        record = create_api_key_record('e2e-test')
+        print(record['key'])
+        ")
+        echo "API key created (prefix: ${API_KEY:0:12}...)"
+        echo "::endgroup::"
+
+        # ── Start API server ────────────────────────────────────────
+        echo "::group::Start API server"
+        nohup python -m uvicorn api:app \
+          --host 127.0.0.1 \
+          --port 9000 \
+          --log-level info \
+          > server.log 2>&1 &
+        SERVER_PID=$!
+        echo "Server started (PID: $SERVER_PID)"
+        echo "::endgroup::"
+
+        # Cleanup on exit
+        trap "echo 'Stopping server (PID: $SERVER_PID)...'; kill $SERVER_PID 2>/dev/null || true" EXIT
+
+        # ── Wait for healthy ────────────────────────────────────────
+        echo "::group::Wait for server health"
+        HEALTHY=false
+        for i in $(seq 1 60); do
+          # Check if server process died
+          if ! kill -0 $SERVER_PID 2>/dev/null; then
+            echo "ERROR: Server process died!"
+            echo "=== server.log ==="
+            cat server.log
+            exit 1
+          fi
+
+          STATUS=$(curl -s http://127.0.0.1:9000/health | python -c "import sys,json; print(json.load(sys.stdin).get('status',''))" 2>/dev/null || echo "")
+          if [ "$STATUS" = "healthy" ]; then
+            HEALTHY=true
+            echo "Server healthy after $((i * 2))s"
+            break
+          fi
+          echo "Waiting... ($i/60, status=$STATUS)"
+          sleep 2
+        done
+
+        # Post-loop guard: fail if health was never reached
+        if [ "$HEALTHY" != "true" ]; then
+          echo "ERROR: Server did not become healthy within 120s"
+          echo "=== server.log ==="
+          cat server.log
+          exit 1
+        fi
+        echo "::endgroup::"
+
+        # ── Run E2E tests ───────────────────────────────────────────
+        echo "::group::Run E2E tests"
+        E2E_API_KEY="$API_KEY" E2E_BASE_URL="http://127.0.0.1:9000" \
+          python -m pytest tests/test_e2e_split_backend.py -v --tb=short
+        echo "::endgroup::"
+
+        echo "All E2E tests passed!"
+
+    - name: Upload server log on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: server-log
+        path: server.log
+        retention-days: 7

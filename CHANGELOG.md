@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.8] - 2026-02-20
+
+### Added
+- **Opt-in anonymous usage analytics** (#14): Local JSONL audit log, first-run consent dialog, Settings toggle with event log viewer. No PII, no document content — verified by tests.
+- **Split-backend E2E CI testing**: GitHub Actions workflow (`test-split-backend.yml`) with real PostgreSQL, API key authentication, and full upload→search→delete lifecycle validation.
+- **`API_AUTH_FORCE_ALL` env var**: CI/testing-only flag that disables loopback auth exemption so E2E tests can verify real API key enforcement.
+- **Windows CI workflow**: Unit tests (916+ tests) and MSI install/verify/uninstall on Windows runners.
+- **Auto-generated release notes**: CI workflow creates GitHub releases from CHANGELOG entries.
+- **Lazy-loading document tree**: QAbstractItemModel replaces QTreeWidget for scalable hierarchical browsing.
+- **"What We Collect" website section**: Analytics transparency page with example JSON payload and privacy guarantees.
+
+### Fixed
+- **DB connection leak in auth.py**: `lookup_api_key()` and `update_last_used()` leaked pool connections on every authenticated request, exhausting the pool after ~5 requests. Switched to context-managed connections.
+- **Pre-existing test failures**: Dynamic Alembic head revision (shared `tests/helpers.py`), search tab combo box initialization, migration path assertions.
+- **Windows CI compatibility**: PowerShell vs bash shell handling, path normalization cross-platform exclusions.
+
 ## [2.4.7] - 2026-02-19
 
 ### Added

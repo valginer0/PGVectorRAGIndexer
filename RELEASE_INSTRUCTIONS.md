@@ -2,90 +2,90 @@
 
 > **Audience:** Project maintainer only. Not relevant for end users.
 
-## Quick Release
+## Release Process (CI-based)
 
-To create a new release, simply run:
+### 1. Run Tests
 
 ```bash
-./release.sh patch  # or: minor, major, or explicit version like 2.0.3
+source venv/bin/activate
+python -m pytest tests/ --ignore=tests/test_slow* --ignore=tests/test_search_tab_open.py \
+  --ignore=tests/test_upload_endpoint.py --ignore=tests/test_web_ui.py \
+  --ignore=tests/test_web_ui_integration.py -q
 ```
 
-This will:
-1. ✅ Check you're on main branch with no uncommitted changes
-2. ✅ Pull latest changes
-3. ✅ Bump version number (patch/minor/major)
-4. ✅ Run all tests
-5. ✅ **Build Docker image locally** (~15 minutes)
-6. ✅ **Push image to GHCR** (with version tag and `:latest`)
-7. ✅ Update VERSION file
-8. ✅ Create git tag
-9. ✅ Push to GitHub (with `[skip ci]` to avoid duplicate build)
+### 2. Bump Version
 
-**Note:** This builds the Docker image locally and pushes it directly to GHCR, skipping GitHub Actions (~20 minutes faster).
+Update all version references (single source of truth is `VERSION` file):
+
+```bash
+echo "X.Y.Z" > VERSION
+```
+
+Also update:
+- `CHANGELOG.md` — add new version section
+- Website `index.html` — hero badge (line ~72), footer (line ~1201), download links (lines ~165, ~187, ~202)
+- Website `package.json` — version field
+
+### 3. Commit, Tag, and Push
+
+```bash
+git add VERSION CHANGELOG.md
+git commit -m "chore: bump version to vX.Y.Z"
+git tag vX.Y.Z
+git push origin main --tags
+```
+
+This triggers 5 CI workflows:
+- **Docker Build and Publish** — builds and pushes Docker image to GHCR
+- **Build Windows Installer** — builds unsigned `.msi` via PyInstaller + WiX
+- **Build Base Image** — builds tagged Docker base image
+- **Verify Installers** — validates installer scripts
+- **macOS Compatibility Check** — validates macOS support
+
+### 4. Sign the Windows Installer
+
+After CI completes, download the unsigned MSI and sign it:
+
+```bash
+# Download from CI artifacts
+gh run download <run-id> --name PGVectorRAGIndexer.msi \
+  --dir /mnt/c/Users/v_ale/Desktop/ToSign/PGVectorRAGIndexer-unsigned
+```
+
+Sign with the code-signing certificate:
+```powershell
+PS C:\Users\v_ale\Desktop\ToSign> .\signtool.exe sign `
+  /sha1 c72170b0d48e4ea6a3a64739795f2952a0aac06d `
+  /tr http://time.certum.pl /td sha256 /fd sha256 `
+  /d "PGVectorRAGIndexer" `
+  PGVectorRAGIndexer-unsigned\PGVectorRAGIndexer.msi
+```
+
+### 5. Upload Signed MSI to Release
+
+```bash
+gh release upload vX.Y.Z /mnt/c/Users/v_ale/Desktop/ToSign/PGVectorRAGIndexer-unsigned/PGVectorRAGIndexer.msi \
+  --clobber
+```
+
+### 6. Push Website Updates
+
+```bash
+cd /path/to/PGVectorRAGIndexerWebsite
+git add index.html package.json
+git commit -m "chore: bump version to vX.Y.Z, update download links"
+git push origin main
+```
 
 ## Prerequisites
 
-Before releasing, ensure you're logged into GitHub Container Registry:
+Ensure you're logged into GitHub Container Registry:
 
 ```bash
 # Login to GHCR (one-time setup)
 docker login ghcr.io -u valginer0
 # Enter your GitHub Personal Access Token when prompted
 ```
-
-## Manual Release Process
-
-If you prefer to do it manually:
-
-### 1. Run Tests
-
-```bash
-source venv/bin/activate
-pytest tests/ -v
-```
-
-### 2. Build Docker Image
-
-```bash
-docker compose -f docker-compose.dev.yml build app
-```
-
-### 3. Tag Docker Image
-
-```bash
-# Replace 2.0.3 with your version
-docker tag pgvectorragindexer:dev ghcr.io/valginer0/pgvectorragindexer:2.0.3
-docker tag pgvectorragindexer:dev ghcr.io/valginer0/pgvectorragindexer:latest
-```
-
-**Why two tags?**
-- `:2.0.3` - Specific version (immutable, users can pin to this)
-- `:latest` - Always points to newest version (auto-updates)
-
-### 4. Push to GHCR
-
-```bash
-docker push ghcr.io/valginer0/pgvectorragindexer:2.0.3
-docker push ghcr.io/valginer0/pgvectorragindexer:latest
-```
-
-### 5. Update Version and Tag
-
-```bash
-echo "2.0.3" > VERSION
-git add VERSION
-git commit -m "chore: Bump version to v2.0.3 [skip ci]"
-git tag -a v2.0.3 -m "Release v2.0.3"
-```
-
-### 6. Push to GitHub
-
-```bash
-git push origin main
-git push origin v2.0.3
-```
-
-**Note:** The `[skip ci]` in the commit message prevents GitHub Actions from rebuilding the Docker image (since we already built and pushed it).
 
 ## Development Workflow
 

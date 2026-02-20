@@ -363,14 +363,16 @@ Implementation sequencing (recommended):
   - [x] SSO/SAML integration (Okta) — see #16 Phase 2
   - [x] RBAC with admin/user roles — see #16 Phase 1
 
-### ⬜ #14 Usage Analytics
+### ✅ #14 Usage Analytics
 - **Effort**: ~6-10h | **Edition**: Both (opt-in) | **Dependencies**: #4 (optional)
-- [ ] Opt-in dialog (off by default, clear one-sentence explanation)
-- [ ] Self-hosted collector (PostHog self-hosted or custom endpoint)
-- [ ] Events: install, first index, first search, daily active, errors, feature usage, OS/version
-- [ ] Settings tab: log of every event that would be sent
+- [x] Opt-in dialog (off by default, clear one-sentence explanation) — `analytics_consent_dialog.py`
+- [x] Backend collector via existing `/api/v1/activity` endpoint (no external service needed)
+- [x] Events: app.started, daily_active, search.completed, upload.completed, tab.opened, feature.used, error.occurred, milestones (first_search, first_upload)
+- [x] Settings tab: analytics toggle + event log viewer with View/Clear buttons
 - [ ] "What we collect" page on website with example JSON payload
-- [ ] No PII, no document content, no file names, no search queries
+- [x] No PII, no document content, no file names, no search queries — verified by tests
+- [x] Local JSONL audit log with rotation (`analytics_log.jsonl`)
+- [x] 16 unit tests (`tests/test_analytics.py`)
 
 ### ✅ #16 Enterprise Foundations
 - **Effort**: ~15-25h | **Edition**: Team (enterprise tier) | **Dependencies**: #0, #8
@@ -477,4 +479,4 @@ Implementation sequencing (recommended):
 
 ---
 
-Last updated: 2026-02-19
+Last updated: 2026-02-20

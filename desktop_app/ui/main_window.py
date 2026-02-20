@@ -27,6 +27,7 @@ from .watched_folders_tab import WatchedFoldersTab
 from .source_open_manager import SourceOpenManager
 from ..utils.docker_manager import DockerManager
 from ..utils.api_client import APIClient
+from ..utils.analytics import AnalyticsClient
 
 logger = logging.getLogger(__name__)
 
@@ -68,13 +69,21 @@ class MainWindow(QMainWindow):
             api_key=get_api_key() if self._remote_mode else None,
         )
         self.source_manager = SourceOpenManager(self.api_client, parent=self, project_root=self.project_path)
-        
+
+        # Usage analytics (#14) — opt-in, off by default
+        from version import __version__
+        self._analytics = AnalyticsClient(app_version=__version__)
+        self._analytics.set_api_client(self.api_client)
+
         # Track if initial data load has occurred
         self.initial_load_done = False
-        
+
         # Setup UI
         self.setup_ui()
-        
+
+        # Show analytics consent dialog on first run
+        self._maybe_show_analytics_consent()
+
         # Check Docker and API status
         QTimer.singleShot(500, self.check_initial_status)
     
@@ -137,6 +146,9 @@ class MainWindow(QMainWindow):
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready")
+
+        # Wire analytics signals (#14)
+        self._wire_analytics_signals()
 
     def create_docker_status_bar(self, parent_layout):
         """Create the Docker status indicator bar."""
@@ -526,7 +538,11 @@ class MainWindow(QMainWindow):
 
         # Register client identity (#8)
         self._register_client()
-        
+
+        # Analytics: track app started + daily active
+        self._analytics.track_app_started()
+        self._analytics.track_daily_active()
+
         # Load data for tabs
         try:
             # Documents Tab
@@ -560,3 +576,31 @@ class MainWindow(QMainWindow):
             logger.info("Initial data load complete")
         except Exception as e:
             logger.error(f"Error during initial data load: {e}")
+
+    # ------------------------------------------------------------------
+    # Analytics (#14)
+    # ------------------------------------------------------------------
+
+    def _maybe_show_analytics_consent(self):
+        """Show the opt-in analytics dialog on first launch."""
+        from desktop_app.utils import app_config
+        if app_config.get("analytics_consent_shown"):
+            return  # already asked
+
+        from .analytics_consent_dialog import AnalyticsConsentDialog
+        dialog = AnalyticsConsentDialog(self)
+        dialog.exec()
+
+        self._analytics.set_enabled(dialog.user_accepted)
+        app_config.set("analytics_consent_shown", True)
+
+        # Sync checkbox in Settings tab if it exists
+        if hasattr(self, "settings_tab") and hasattr(self.settings_tab, "_analytics_checkbox"):
+            self.settings_tab._analytics_checkbox.setChecked(dialog.user_accepted)
+
+    def _wire_analytics_signals(self):
+        """Connect existing signals to analytics tracking."""
+        # Tab changes
+        self.tabs.currentChanged.connect(
+            lambda idx: self._analytics.track_tab_opened(self.tabs.tabText(idx))
+        )

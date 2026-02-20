@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QGroupBox, QTextEdit, QMessageBox, QGridLayout, QFileDialog,
-    QLineEdit, QRadioButton, QButtonGroup, QScrollArea,
+    QLineEdit, QRadioButton, QButtonGroup, QScrollArea, QCheckBox,
 )
 import qtawesome as qta
 from PySide6.QtCore import QThread, Signal, QSize, Qt
@@ -100,6 +100,9 @@ class SettingsTab(QWidget):
 
         # Backend connection settings (#1)
         self._build_backend_panel(layout)
+
+        # Usage analytics (#14)
+        self._build_analytics_panel(layout)
 
         # Docker controls
         self._docker_group = QGroupBox("Docker Container Management")
@@ -224,6 +227,115 @@ class SettingsTab(QWidget):
 
         # Set initial visibility
         self._on_backend_mode_changed()
+
+    # ------------------------------------------------------------------
+    # Analytics panel (#14)
+    # ------------------------------------------------------------------
+
+    def _build_analytics_panel(self, parent_layout):
+        """Build the Usage Analytics settings group box."""
+        from desktop_app.utils.analytics import AnalyticsClient
+
+        _compact_gb = "QGroupBox { margin-top: 0.8em; padding-top: 8px; }"
+        group = QGroupBox("Usage Analytics")
+        group.setStyleSheet(_compact_gb)
+        vbox = QVBoxLayout(group)
+        vbox.setSpacing(8)
+
+        # Toggle
+        self._analytics_checkbox = QCheckBox(
+            "Help improve PGVectorRAGIndexer by sharing anonymous usage data"
+        )
+        from desktop_app.utils import app_config
+        self._analytics_checkbox.setChecked(app_config.get("analytics_enabled", False))
+        self._analytics_checkbox.toggled.connect(self._on_analytics_toggled)
+        vbox.addWidget(self._analytics_checkbox)
+
+        desc = QLabel(
+            "We collect only event types, counts, and OS version. "
+            "No document content, file names, or search queries."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
+        vbox.addWidget(desc)
+
+        # Event log viewer
+        btn_row = QHBoxLayout()
+        show_log_btn = QPushButton("View Event Log")
+        show_log_btn.setIcon(qta.icon("fa5s.list", color="white"))
+        show_log_btn.clicked.connect(self._show_analytics_log)
+        btn_row.addWidget(show_log_btn)
+
+        clear_log_btn = QPushButton("Clear Log")
+        clear_log_btn.setIcon(qta.icon("fa5s.eraser", color="white"))
+        clear_log_btn.clicked.connect(self._clear_analytics_log)
+        btn_row.addWidget(clear_log_btn)
+
+        btn_row.addStretch()
+        vbox.addLayout(btn_row)
+
+        self._analytics_log_text = QTextEdit()
+        self._analytics_log_text.setReadOnly(True)
+        self._analytics_log_text.setMaximumHeight(160)
+        self._analytics_log_text.setPlaceholderText(
+            "Click 'View Event Log' to see recorded events..."
+        )
+        self._analytics_log_text.setVisible(False)
+        vbox.addWidget(self._analytics_log_text)
+
+        parent_layout.addWidget(group)
+
+    def _on_analytics_toggled(self, checked: bool):
+        """Handle analytics toggle change."""
+        main_win = self.parent()
+        if main_win and hasattr(main_win, "_analytics"):
+            main_win._analytics.set_enabled(checked)
+        else:
+            from desktop_app.utils import app_config
+            app_config.set("analytics_enabled", checked)
+
+    def _show_analytics_log(self):
+        """Show the local analytics event log."""
+        self._analytics_log_text.setVisible(True)
+        main_win = self.parent()
+        analytics = getattr(main_win, "_analytics", None) if main_win else None
+
+        if analytics:
+            events = analytics.get_event_log(limit=100)
+        else:
+            from desktop_app.utils.analytics import AnalyticsClient
+            tmp = AnalyticsClient()
+            events = tmp.get_event_log(limit=100)
+
+        if not events:
+            self._analytics_log_text.setPlainText("No events recorded yet.")
+            return
+
+        import json
+        lines = []
+        for ev in reversed(events):
+            ts = ev.get("ts", "")[:19]
+            name = ev.get("event", "?")
+            props = ev.get("properties", {})
+            prop_str = f"  {json.dumps(props)}" if props else ""
+            lines.append(f"[{ts}] {name}{prop_str}")
+        self._analytics_log_text.setPlainText("\n".join(lines))
+
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(50, lambda: self._scroll.ensureWidgetVisible(self._analytics_log_text))
+
+    def _clear_analytics_log(self):
+        """Clear the local analytics event log."""
+        main_win = self.parent()
+        analytics = getattr(main_win, "_analytics", None) if main_win else None
+        if analytics:
+            analytics.clear_event_log()
+        else:
+            from desktop_app.utils.analytics import _log_path
+            path = _log_path()
+            if path.exists():
+                path.unlink()
+        self._analytics_log_text.setPlainText("Log cleared.")
 
     def _on_backend_mode_changed(self):
         """Show/hide controls based on selected backend mode."""

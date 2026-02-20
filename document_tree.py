@@ -96,6 +96,15 @@ def get_tree_children(
             else:
                 relative = norm_uri
 
+            # Handle absolute Linux paths: /home/... → treat "/" as a root folder
+            # so the first split component isn't an empty string.
+            if not parent and relative.startswith("/"):
+                relative = relative.lstrip("/")
+                # Reconstruct with "/" prefix for folder_path below
+                _linux_root = True
+            else:
+                _linux_root = False
+
             parts = relative.split("/")
 
             if len(parts) == 1:
@@ -112,7 +121,13 @@ def get_tree_children(
             else:
                 # Child is inside a subfolder
                 folder_name = parts[0]
-                folder_path = parent + "/" + folder_name if parent else folder_name
+                if _linux_root:
+                    # Use "/" prefix so expanding this folder fetches the right children
+                    folder_path = "/" + folder_name
+                elif parent:
+                    folder_path = parent + "/" + folder_name
+                else:
+                    folder_path = folder_name
 
                 if folder_name not in folders:
                     folders[folder_name] = {

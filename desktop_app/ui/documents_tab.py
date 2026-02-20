@@ -661,9 +661,11 @@ class DocumentsTab(QWidget):
             name = child.get("name", "")
             node_type = child.get("type", "")
 
-            # Show empty-name root folders as "(other)" for relative-path docs
-            display_name = name if name else "(other documents)"
-            item.setText(0, display_name)
+            # Skip truly empty-name entries (shouldn't happen after backend fix)
+            if not name:
+                continue
+
+            item.setText(0, name)
 
             if node_type == "folder":
                 item.setIcon(0, qta.icon('fa5s.folder', color='#f59e0b'))

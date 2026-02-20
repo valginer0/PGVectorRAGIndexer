@@ -202,12 +202,14 @@ class WatchedFoldersTab(QWidget):
             )
             self._table.setItem(row, 2, item)
 
-            # Last scanned
+            # Last scanned (convert UTC → local time)
             last = folder.get("last_scanned_at")
             if last:
                 try:
                     dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
-                    display_time = dt.strftime("%Y-%m-%d %H:%M")
+                    local_dt = dt.astimezone()  # convert to local timezone
+                    tz_name = local_dt.strftime("%Z")  # e.g. "EST", "PST"
+                    display_time = local_dt.strftime(f"%Y-%m-%d %H:%M {tz_name}")
                 except Exception:
                     display_time = last[:16] if len(last) > 16 else last
             else:

@@ -661,11 +661,9 @@ class DocumentsTab(QWidget):
             name = child.get("name", "")
             node_type = child.get("type", "")
 
-            # Skip empty-name folders (artifacts from relative paths)
-            if not name and node_type == "folder" and not parent_item:
-                continue
-
-            item.setText(0, name or "(root)")
+            # Show empty-name root folders as "(other)" for relative-path docs
+            display_name = name if name else "(other documents)"
+            item.setText(0, display_name)
 
             if node_type == "folder":
                 item.setIcon(0, qta.icon('fa5s.folder', color='#f59e0b'))
@@ -709,7 +707,7 @@ class DocumentsTab(QWidget):
             )
         else:
             self.status_label.setText(
-                f"Root: {total_folders} folders, {total_files} files ({total} total)"
+                f"Indexed documents: {total_folders} drive(s), {total_files} file(s) at root"
             )
         self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
 

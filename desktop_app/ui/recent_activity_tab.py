@@ -107,6 +107,8 @@ class RecentActivityTab(QWidget):
         self.table.setSelectionBehavior(QTableWidget.SelectRows)
         self.table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.table.setHorizontalScrollMode(QTableWidget.ScrollPerPixel)
+        self.table.verticalHeader().setDefaultSectionSize(38)
+        self.table.verticalHeader().setVisible(False)
         self.table.viewport().setCursor(Qt.PointingHandCursor)
         table_layout.addWidget(self.table)
         

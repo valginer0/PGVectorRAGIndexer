@@ -54,8 +54,8 @@ class FolderIndexDialog(QDialog):
         
         self.setWindowTitle("Folder Indexing")
         self.setMinimumWidth(600)
-        self.setMinimumHeight(500)
-        self.resize(650, 550)
+        self.setMinimumHeight(400)
+        self.resize(650, 480)
         
         # Copy parent's stylesheet if available
         if parent:
@@ -143,94 +143,88 @@ class FolderIndexDialog(QDialog):
     def setup_ui(self):
         """Setup the dialog UI."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
-        layout.setContentsMargins(20, 20, 20, 20)
-        
+        layout.setSpacing(8)
+        layout.setContentsMargins(16, 16, 16, 16)
+
         # Header with folder path
         header = QLabel(f"<b>Folder:</b> {self.folder}")
         header.setWordWrap(True)
-        header.setMinimumHeight(40)
         layout.addWidget(header)
-        
+
         # File statistics
         self.stats_label = QLabel()
-        self.stats_label.setMinimumHeight(50)
         layout.addWidget(self.stats_label)
-        
+
         # Separator
         separator = QFrame()
         separator.setFrameShape(QFrame.HLine)
         separator.setFrameShadow(QFrame.Sunken)
-        separator.setMinimumHeight(2)
         layout.addWidget(separator)
-        
+
         # Toggle button for exclusion patterns
         toggle_text = "▶  Exclusion Patterns (click to expand)"
         self.toggle_btn = QPushButton(toggle_text)
-        self.toggle_btn.setMinimumHeight(50)
+        self.toggle_btn.setMinimumHeight(36)
         self.toggle_btn.setCursor(Qt.PointingHandCursor)
         self.toggle_btn.clicked.connect(self.toggle_exclusion_section)
         layout.addWidget(self.toggle_btn)
-        
+
         # Ignore file indicator (shown when .pgvector-ignore is loaded)
         self.ignore_file_label = QLabel()
-        self.ignore_file_label.setMinimumHeight(30)
         self.ignore_file_label.setVisible(False)
         layout.addWidget(self.ignore_file_label)
         
         # Exclusion content container (hidden by default)
         self.exclusion_content = QWidget()
         exclusion_layout = QVBoxLayout(self.exclusion_content)
-        exclusion_layout.setContentsMargins(0, 15, 0, 0)
-        exclusion_layout.setSpacing(12)
-        
+        exclusion_layout.setContentsMargins(0, 8, 0, 0)
+        exclusion_layout.setSpacing(6)
+
         # Buttons row
         btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(10)
-        
+        btn_layout.setSpacing(8)
+
         load_defaults_btn = QPushButton("Load Common Patterns")
         load_defaults_btn.setIcon(qta.icon('fa5s.magic', color='white'))
-        load_defaults_btn.setMinimumHeight(40)
-        load_defaults_btn.setMinimumWidth(180)
+        load_defaults_btn.setMinimumHeight(32)
         load_defaults_btn.clicked.connect(self.load_default_patterns)
         load_defaults_btn.setToolTip(
             "Load common patterns to exclude:\n"
             "node_modules, .git, __pycache__, venv, build, etc."
         )
         btn_layout.addWidget(load_defaults_btn)
-        
+
         clear_btn = QPushButton("Clear")
         clear_btn.setIcon(qta.icon('fa5s.eraser', color='#9ca3af'))
-        clear_btn.setMinimumHeight(40)
-        clear_btn.setMinimumWidth(100)
+        clear_btn.setMinimumHeight(32)
         clear_btn.clicked.connect(self.clear_patterns)
         btn_layout.addWidget(clear_btn)
-        
+
         btn_layout.addStretch()
         exclusion_layout.addLayout(btn_layout)
-        
+
         # Info label
         info_label = QLabel(
             "Enter patterns to exclude (one per line). Examples:\n"
             "  • **/folder/** — exclude folder anywhere in the tree\n"
             "  • *.log — exclude all .log files"
         )
-        info_label.setMinimumHeight(60)
+        info_label.setStyleSheet("color: #9ca3af; font-size: 11px;")
         exclusion_layout.addWidget(info_label)
-        
+
         # Patterns text edit
         self.patterns_edit = QTextEdit()
         self.patterns_edit.setPlaceholderText(
             "Enter patterns here, one per line...\n\n"
             "Or click 'Load Common Patterns' to start with defaults."
         )
-        self.patterns_edit.setMinimumHeight(120)
+        self.patterns_edit.setMinimumHeight(80)
+        self.patterns_edit.setMaximumHeight(150)
         self.patterns_edit.textChanged.connect(self.on_patterns_changed)
         exclusion_layout.addWidget(self.patterns_edit)
-        
+
         # Exclusion result label
         self.exclusion_result_label = QLabel("")
-        self.exclusion_result_label.setMinimumHeight(30)
         exclusion_layout.addWidget(self.exclusion_result_label)
         
         self.exclusion_content.setVisible(False)
@@ -248,33 +242,33 @@ class FolderIndexDialog(QDialog):
         
         # Spacer
         layout.addStretch()
-        
+
         # File count summary (prominent)
         self.summary_label = QLabel()
         self.summary_label.setAlignment(Qt.AlignCenter)
-        self.summary_label.setMinimumHeight(60)
+        self.summary_label.setMinimumHeight(36)
         layout.addWidget(self.summary_label)
-        
+
         # Dialog buttons
         button_layout = QHBoxLayout()
-        button_layout.setSpacing(15)
-        
+        button_layout.setSpacing(12)
+
         cancel_btn = QPushButton("Cancel")
-        cancel_btn.setMinimumHeight(50)
-        cancel_btn.setMinimumWidth(130)
+        cancel_btn.setMinimumHeight(40)
+        cancel_btn.setMinimumWidth(100)
         cancel_btn.clicked.connect(self.reject)
         button_layout.addWidget(cancel_btn)
-        
+
         button_layout.addStretch()
-        
+
         self.index_btn = QPushButton("Index Files")
         self.index_btn.setIcon(qta.icon('fa5s.cloud-upload-alt', color='white'))
         self.index_btn.setProperty("class", "primary")
-        self.index_btn.setMinimumHeight(50)
-        self.index_btn.setMinimumWidth(200)
+        self.index_btn.setMinimumHeight(40)
+        self.index_btn.setMinimumWidth(180)
         self.index_btn.clicked.connect(self.accept)
         button_layout.addWidget(self.index_btn)
-        
+
         layout.addLayout(button_layout)
     
     def toggle_exclusion_section(self):
@@ -284,11 +278,10 @@ class FolderIndexDialog(QDialog):
         
         if self.exclusion_expanded:
             self.toggle_btn.setText("▼  Exclusion Patterns (click to collapse)")
-            # Resize dialog to fit content
-            self.resize(650, 750)
+            self.resize(650, 680)
         else:
             self.toggle_btn.setText("▶  Exclusion Patterns (click to expand)")
-            self.resize(650, 550)
+            self.resize(650, 480)
             # When collapsed, reset to all files
             self.filtered_files = self.all_files.copy()
             self.update_summary_label()

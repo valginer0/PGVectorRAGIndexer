@@ -31,10 +31,13 @@ VALID_VISIBILITIES = {VISIBILITY_SHARED, VISIBILITY_PRIVATE}
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    db = get_db_manager()
-    return db.get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 # ---------------------------------------------------------------------------
@@ -101,14 +104,14 @@ def set_document_owner(document_id: str, owner_id: str) -> int:
         Number of chunks updated.
     """
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE document_chunks SET owner_id = %s WHERE document_id = %s",
-            (owner_id, document_id),
-        )
-        conn.commit()
-        return cursor.rowcount
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE document_chunks SET owner_id = %s WHERE document_id = %s",
+                (owner_id, document_id),
+            )
+            conn.commit()
+            return cursor.rowcount
     except Exception as e:
         logger.error("Failed to set document owner: %s", e)
         return 0
@@ -129,14 +132,14 @@ def set_document_visibility(document_id: str, visibility: str) -> int:
         return -1
 
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE document_chunks SET visibility = %s WHERE document_id = %s",
-            (visibility, document_id),
-        )
-        conn.commit()
-        return cursor.rowcount
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE document_chunks SET visibility = %s WHERE document_id = %s",
+                (visibility, document_id),
+            )
+            conn.commit()
+            return cursor.rowcount
     except Exception as e:
         logger.error("Failed to set document visibility: %s", e)
         return 0
@@ -155,14 +158,14 @@ def set_document_owner_and_visibility(
         return -1
 
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE document_chunks SET owner_id = %s, visibility = %s WHERE document_id = %s",
-            (owner_id, visibility, document_id),
-        )
-        conn.commit()
-        return cursor.rowcount
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE document_chunks SET owner_id = %s, visibility = %s WHERE document_id = %s",
+                (owner_id, visibility, document_id),
+            )
+            conn.commit()
+            return cursor.rowcount
     except Exception as e:
         logger.error("Failed to set document owner and visibility: %s", e)
         return 0
@@ -175,29 +178,29 @@ def get_document_visibility(document_id: str) -> Optional[Dict[str, Any]]:
         Dict with owner_id, visibility, chunk_count, or None if not found.
     """
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT
-                (array_agg(owner_id))[1] as owner_id,
-                (array_agg(visibility))[1] as visibility,
-                COUNT(*) as chunk_count
-            FROM document_chunks
-            WHERE document_id = %s
-            GROUP BY document_id
-            """,
-            (document_id,),
-        )
-        row = cursor.fetchone()
-        if not row:
-            return None
-        return {
-            "document_id": document_id,
-            "owner_id": row[0],
-            "visibility": row[1],
-            "chunk_count": row[2],
-        }
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    (array_agg(owner_id))[1] as owner_id,
+                    (array_agg(visibility))[1] as visibility,
+                    COUNT(*) as chunk_count
+                FROM document_chunks
+                WHERE document_id = %s
+                GROUP BY document_id
+                """,
+                (document_id,),
+            )
+            row = cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "document_id": document_id,
+                "owner_id": row[0],
+                "visibility": row[1],
+                "chunk_count": row[2],
+            }
     except Exception as e:
         logger.error("Failed to get document visibility: %s", e)
         return None
@@ -221,47 +224,47 @@ def list_user_documents(
         List of document dicts.
     """
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
 
-        where = "WHERE owner_id = %s"
-        params: list = [user_id]
+            where = "WHERE owner_id = %s"
+            params: list = [user_id]
 
-        if visibility and visibility in VALID_VISIBILITIES:
-            where += " AND visibility = %s"
-            params.append(visibility)
+            if visibility and visibility in VALID_VISIBILITIES:
+                where += " AND visibility = %s"
+                params.append(visibility)
 
-        params.extend([limit, offset])
+            params.extend([limit, offset])
 
-        cursor.execute(
-            f"""
-            SELECT
-                document_id,
-                source_uri,
-                COUNT(*) as chunk_count,
-                MIN(indexed_at) as indexed_at,
-                MAX(updated_at) as last_updated,
-                (array_agg(visibility))[1] as visibility
-            FROM document_chunks
-            {where}
-            GROUP BY document_id, source_uri
-            ORDER BY MAX(updated_at) DESC
-            LIMIT %s OFFSET %s
-            """,
-            params,
-        )
-        rows = cursor.fetchall()
-        return [
-            {
-                "document_id": r[0],
-                "source_uri": r[1],
-                "chunk_count": r[2],
-                "indexed_at": r[3].isoformat() if r[3] and hasattr(r[3], "isoformat") else r[3],
-                "last_updated": r[4].isoformat() if r[4] and hasattr(r[4], "isoformat") else r[4],
-                "visibility": r[5],
-            }
-            for r in rows
-        ]
+            cursor.execute(
+                f"""
+                SELECT
+                    document_id,
+                    source_uri,
+                    COUNT(*) as chunk_count,
+                    MIN(indexed_at) as indexed_at,
+                    MAX(updated_at) as last_updated,
+                    (array_agg(visibility))[1] as visibility
+                FROM document_chunks
+                {where}
+                GROUP BY document_id, source_uri
+                ORDER BY MAX(updated_at) DESC
+                LIMIT %s OFFSET %s
+                """,
+                params,
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "document_id": r[0],
+                    "source_uri": r[1],
+                    "chunk_count": r[2],
+                    "indexed_at": r[3].isoformat() if r[3] and hasattr(r[3], "isoformat") else r[3],
+                    "last_updated": r[4].isoformat() if r[4] and hasattr(r[4], "isoformat") else r[4],
+                    "visibility": r[5],
+                }
+                for r in rows
+            ]
     except Exception as e:
         logger.error("Failed to list user documents: %s", e)
         return []
@@ -279,14 +282,14 @@ def bulk_set_visibility(document_ids: List[str], visibility: str) -> int:
         return 0
 
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE document_chunks SET visibility = %s WHERE document_id = ANY(%s)",
-            (visibility, document_ids),
-        )
-        conn.commit()
-        return cursor.rowcount
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE document_chunks SET visibility = %s WHERE document_id = ANY(%s)",
+                (visibility, document_ids),
+            )
+            conn.commit()
+            return cursor.rowcount
     except Exception as e:
         logger.error("Failed to bulk set visibility: %s", e)
         return 0
@@ -299,14 +302,14 @@ def transfer_ownership(document_id: str, new_owner_id: str) -> int:
         Number of chunks updated.
     """
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE document_chunks SET owner_id = %s WHERE document_id = %s",
-            (new_owner_id, document_id),
-        )
-        conn.commit()
-        return cursor.rowcount
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE document_chunks SET owner_id = %s WHERE document_id = %s",
+                (new_owner_id, document_id),
+            )
+            conn.commit()
+            return cursor.rowcount
     except Exception as e:
         logger.error("Failed to transfer ownership: %s", e)
         return 0

@@ -45,9 +45,13 @@ _COLUMNS = (
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    return get_db_manager().get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 def _row_to_dict(row) -> Dict[str, Any]:
@@ -86,21 +90,21 @@ def create_user(
         return None
 
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            INSERT INTO users (email, display_name, role, auth_provider, api_key_id, client_id)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id, email, display_name, role, auth_provider,
-                      api_key_id, client_id, created_at, updated_at,
-                      last_login_at, is_active
-            """,
-            (email, display_name, role, auth_provider, api_key_id, client_id),
-        )
-        row = cursor.fetchone()
-        conn.commit()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO users (email, display_name, role, auth_provider, api_key_id, client_id)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, email, display_name, role, auth_provider,
+                          api_key_id, client_id, created_at, updated_at,
+                          last_login_at, is_active
+                """,
+                (email, display_name, role, auth_provider, api_key_id, client_id),
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.error("Failed to create user: %s", e)
         return None
@@ -109,14 +113,14 @@ def create_user(
 def get_user(user_id: str) -> Optional[Dict[str, Any]]:
     """Get a user by ID."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM users WHERE id = %s",
-            (user_id,),
-        )
-        row = cursor.fetchone()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM users WHERE id = %s",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.error("Failed to get user %s: %s", user_id, e)
         return None
@@ -125,14 +129,14 @@ def get_user(user_id: str) -> Optional[Dict[str, Any]]:
 def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
     """Get a user by email address."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM users WHERE email = %s",
-            (email,),
-        )
-        row = cursor.fetchone()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM users WHERE email = %s",
+                (email,),
+            )
+            row = cursor.fetchone()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.error("Failed to get user by email %s: %s", email, e)
         return None
@@ -141,14 +145,14 @@ def get_user_by_email(email: str) -> Optional[Dict[str, Any]]:
 def get_user_by_api_key(api_key_id: int) -> Optional[Dict[str, Any]]:
     """Get a user linked to a specific API key."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT * FROM users WHERE api_key_id = %s AND is_active = true",
-            (api_key_id,),
-        )
-        row = cursor.fetchone()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM users WHERE api_key_id = %s AND is_active = true",
+                (api_key_id,),
+            )
+            row = cursor.fetchone()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.error("Failed to get user by api_key_id %s: %s", api_key_id, e)
         return None
@@ -161,22 +165,22 @@ def list_users(
 ) -> List[Dict[str, Any]]:
     """List users, optionally filtered by role and active status."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        conditions = []
-        params: list = []
-        if role:
-            conditions.append("role = %s")
-            params.append(role)
-        if active_only:
-            conditions.append("is_active = true")
-        where = " AND ".join(conditions)
-        sql = "SELECT * FROM users"
-        if where:
-            sql += f" WHERE {where}"
-        sql += " ORDER BY created_at DESC"
-        cursor.execute(sql, params)
-        return [_row_to_dict(row) for row in cursor.fetchall()]
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            conditions = []
+            params: list = []
+            if role:
+                conditions.append("role = %s")
+                params.append(role)
+            if active_only:
+                conditions.append("is_active = true")
+            where = " AND ".join(conditions)
+            sql = "SELECT * FROM users"
+            if where:
+                sql += f" WHERE {where}"
+            sql += " ORDER BY created_at DESC"
+            cursor.execute(sql, params)
+            return [_row_to_dict(row) for row in cursor.fetchall()]
     except Exception as e:
         logger.error("Failed to list users: %s", e)
         return []
@@ -216,17 +220,17 @@ def update_user(
     params.append(user_id)
 
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            f"UPDATE users SET {', '.join(sets)} WHERE id = %s "
-            "RETURNING id, email, display_name, role, auth_provider, "
-            "api_key_id, client_id, created_at, updated_at, last_login_at, is_active",
-            params,
-        )
-        row = cursor.fetchone()
-        conn.commit()
-        return _row_to_dict(row) if row else None
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"UPDATE users SET {', '.join(sets)} WHERE id = %s "
+                "RETURNING id, email, display_name, role, auth_provider, "
+                "api_key_id, client_id, created_at, updated_at, last_login_at, is_active",
+                params,
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            return _row_to_dict(row) if row else None
     except Exception as e:
         logger.error("Failed to update user %s: %s", user_id, e)
         return None
@@ -235,11 +239,11 @@ def update_user(
 def delete_user(user_id: str) -> bool:
     """Delete a user (hard delete)."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
-        conn.commit()
-        return cursor.rowcount > 0
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
     except Exception as e:
         logger.error("Failed to delete user %s: %s", user_id, e)
         return False
@@ -264,13 +268,13 @@ def is_admin(user_id: str) -> bool:
 def record_login(user_id: str) -> None:
     """Update last_login_at for a user."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE users SET last_login_at = now(), updated_at = now() WHERE id = %s",
-            (user_id,),
-        )
-        conn.commit()
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE users SET last_login_at = now(), updated_at = now() WHERE id = %s",
+                (user_id,),
+            )
+            conn.commit()
     except Exception as e:
         logger.error("Failed to record login for user %s: %s", user_id, e)
 
@@ -283,14 +287,14 @@ def change_role(user_id: str, new_role: str) -> Optional[Dict[str, Any]]:
 def count_admins() -> int:
     """Count the number of active admin users."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT COUNT(*) FROM users WHERE role = %s AND is_active = true",
-            (ROLE_ADMIN,),
-        )
-        row = cursor.fetchone()
-        return row[0] if row else 0
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM users WHERE role = %s AND is_active = true",
+                (ROLE_ADMIN,),
+            )
+            row = cursor.fetchone()
+            return row[0] if row else 0
     except Exception as e:
         logger.error("Failed to count admins: %s", e)
         return 0

@@ -314,10 +314,13 @@ def process_slo(request_dict: dict) -> dict:
 
 
 def _get_db_connection():
-    """Get a database connection from the global DB manager."""
+    """Get a pooled database connection as a context manager.
+
+    Always use with ``with _get_db_connection() as conn:`` to ensure
+    the connection is returned to the pool after use.
+    """
     from database import get_db_manager
-    db = get_db_manager()
-    return db.get_connection_raw()
+    return get_db_manager().get_connection()
 
 
 def create_session(
@@ -333,25 +336,25 @@ def create_session(
         Session dict or None on failure.
     """
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        expires_at = datetime.now(timezone.utc) + timedelta(hours=SAML_SESSION_LIFETIME_HOURS)
-        cursor.execute(
-            """
-            INSERT INTO saml_sessions (user_id, session_index, name_id, name_id_format,
-                                       idp_entity_id, expires_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            RETURNING id, user_id, session_index, name_id, name_id_format,
-                      idp_entity_id, created_at, expires_at, is_active
-            """,
-            (user_id, session_index, name_id, name_id_format,
-             idp_entity_id or SAML_IDP_ENTITY_ID, expires_at),
-        )
-        row = cursor.fetchone()
-        conn.commit()
-        if row:
-            return _session_row_to_dict(row)
-        return None
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            expires_at = datetime.now(timezone.utc) + timedelta(hours=SAML_SESSION_LIFETIME_HOURS)
+            cursor.execute(
+                """
+                INSERT INTO saml_sessions (user_id, session_index, name_id, name_id_format,
+                                           idp_entity_id, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, user_id, session_index, name_id, name_id_format,
+                          idp_entity_id, created_at, expires_at, is_active
+                """,
+                (user_id, session_index, name_id, name_id_format,
+                 idp_entity_id or SAML_IDP_ENTITY_ID, expires_at),
+            )
+            row = cursor.fetchone()
+            conn.commit()
+            if row:
+                return _session_row_to_dict(row)
+            return None
     except Exception as e:
         logger.error("Failed to create SAML session: %s", e)
         return None
@@ -360,21 +363,21 @@ def create_session(
 def get_session(session_id: str) -> Optional[dict]:
     """Get a SAML session by ID, only if active and not expired."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            """
-            SELECT id, user_id, session_index, name_id, name_id_format,
-                   idp_entity_id, created_at, expires_at, is_active
-            FROM saml_sessions
-            WHERE id = %s AND is_active = true AND expires_at > now()
-            """,
-            (session_id,),
-        )
-        row = cursor.fetchone()
-        if row:
-            return _session_row_to_dict(row)
-        return None
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, user_id, session_index, name_id, name_id_format,
+                       idp_entity_id, created_at, expires_at, is_active
+                FROM saml_sessions
+                WHERE id = %s AND is_active = true AND expires_at > now()
+                """,
+                (session_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return _session_row_to_dict(row)
+            return None
     except Exception as e:
         logger.error("Failed to get SAML session: %s", e)
         return None
@@ -383,14 +386,14 @@ def get_session(session_id: str) -> Optional[dict]:
 def expire_session(session_id: str) -> bool:
     """Mark a SAML session as inactive."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE saml_sessions SET is_active = false WHERE id = %s",
-            (session_id,),
-        )
-        conn.commit()
-        return cursor.rowcount > 0
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE saml_sessions SET is_active = false WHERE id = %s",
+                (session_id,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
     except Exception as e:
         logger.error("Failed to expire SAML session: %s", e)
         return False
@@ -399,14 +402,14 @@ def expire_session(session_id: str) -> bool:
 def expire_user_sessions(user_id: str) -> int:
     """Expire all active sessions for a user. Returns count of expired sessions."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE saml_sessions SET is_active = false WHERE user_id = %s AND is_active = true",
-            (user_id,),
-        )
-        conn.commit()
-        return cursor.rowcount
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE saml_sessions SET is_active = false WHERE user_id = %s AND is_active = true",
+                (user_id,),
+            )
+            conn.commit()
+            return cursor.rowcount
     except Exception as e:
         logger.error("Failed to expire user sessions: %s", e)
         return 0
@@ -415,13 +418,13 @@ def expire_user_sessions(user_id: str) -> int:
 def cleanup_expired_sessions() -> int:
     """Remove expired sessions from the database. Returns count deleted."""
     try:
-        conn = _get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "DELETE FROM saml_sessions WHERE expires_at < now() OR is_active = false"
-        )
-        conn.commit()
-        return cursor.rowcount
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM saml_sessions WHERE expires_at < now() OR is_active = false"
+            )
+            conn.commit()
+            return cursor.rowcount
     except Exception as e:
         logger.error("Failed to cleanup expired sessions: %s", e)
         return 0

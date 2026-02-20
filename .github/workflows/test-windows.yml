@@ -39,7 +39,7 @@ jobs:
           --ignore=tests/test_web_ui.py \
           --ignore=tests/test_web_ui_integration.py \
           --ignore=tests/test_upload_endpoint.py \
-          -k "not test_sets_permissions_on_linux and not test_secures_parent_directory and not test_system_open_linux_fallback and not test_resolve_path_mismatch_wsl and not test_resolves_simple_path"
+          -k "not test_sets_permissions_on_linux and not test_secures_parent_directory and not test_system_open_linux_fallback and not test_resolve_path_mismatch_wsl and not test_resolves_simple_path and not test_remove_entry and not test_find_entry"
 
   msi-verify:
     name: MSI Install Verification

@@ -83,7 +83,7 @@ jobs:
       run: |
         import re, os
         version = os.environ["GITHUB_REF"].replace("refs/tags/v", "")
-        with open("CHANGELOG.md") as f:
+        with open("CHANGELOG.md", encoding="utf-8") as f:
             content = f.read()
         pattern = rf"(## \[{re.escape(version)}\].*?)(?=\n## \[)"
         match = re.search(pattern, content, re.DOTALL)

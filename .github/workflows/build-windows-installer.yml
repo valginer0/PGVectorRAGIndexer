@@ -96,6 +96,6 @@ jobs:
       uses: softprops/action-gh-release@v1
       with:
         body: ${{ steps.notes.outputs.notes }}
-        files: windows_installer/dist/PGVectorRAGIndexer.msi
+        files: dist/PGVectorRAGIndexer.msi
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

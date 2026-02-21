@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.1] - 2026-02-21
+
+### Fixed
+- **Search & Documents**: Resolved a 500 Internal Server Error on the `/documents` endpoint caused by SQL column/alias ambiguity when sorting by `indexed_at`.
+- **API Hardening**: Improved error logging with full tracebacks for unhandled exceptions in modular routers.
+
 ## [2.6.0] - 2026-02-21
 
 ### Added

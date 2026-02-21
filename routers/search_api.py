@@ -131,10 +131,10 @@ async def list_documents(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to list documents: {e}")
+        logger.error(f"Failed to list documents: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list documents: {str(e)}"
+            detail=f"Internal Server Error: {str(e)}"
         )
 
 

@@ -440,11 +440,11 @@ class DocumentRepository:
             List of document metadata dictionaries or tuple(items, total)
         """
         allowed_sorts = {
-            "indexed_at": "indexed_at",
-            "last_updated": "last_updated",
+            "indexed_at": "MIN(indexed_at)",
+            "last_updated": "MAX(updated_at)",
             "source_uri": "source_uri",
-            "document_type": "document_type",
-            "chunk_count": "chunk_count",
+            "document_type": "(array_agg(metadata->>'type'))[1]",
+            "chunk_count": "COUNT(*)",
             "document_id": "document_id",
         }
 
@@ -498,7 +498,7 @@ class DocumentRepository:
             source_uri,
             COUNT(*) as chunk_count,
             MIN(indexed_at) as indexed_at,
-            MAX(indexed_at) as last_updated,
+            MAX(updated_at) as last_updated,
             (array_agg(metadata->>'type'))[1] as document_type
         FROM document_chunks
         {prefix_clause}
@@ -516,7 +516,7 @@ class DocumentRepository:
 
         total_query = f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {prefix_clause}"
         with self.db.get_cursor() as cursor:
-            cursor.execute(total_query, prefix_params)
+            cursor.execute(total_query, tuple(prefix_params))
             total = cursor.fetchone()[0]
 
         return results, total

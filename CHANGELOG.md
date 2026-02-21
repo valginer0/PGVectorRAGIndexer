@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.7] - 2026-02-21
+
+### Fixed
+- **Docker Packaging**: Removed stale `connectors/` reference that blocked Docker builds.
+- **CI/CD**: Fixed `test_api_client.py` regression on macOS caused by missing health check mock data.
+
 ## [2.6.6] - 2026-02-21
 
 ### Fixed

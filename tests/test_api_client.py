@@ -13,6 +13,7 @@ def test_is_api_available_success(api_client):
     """Test API availability check returns True on 200 OK."""
     with patch("requests.get") as mock_get:
         mock_get.return_value.status_code = 200
+        mock_get.return_value.json.return_value = {"status": "healthy"}
         assert api_client.is_api_available() is True
         mock_get.assert_called_with("http://test-api/health", timeout=5, headers={})
 

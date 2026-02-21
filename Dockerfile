@@ -13,7 +13,6 @@ WORKDIR /app
 COPY *.py ./
 COPY init-db.sql ./
 COPY routers/ ./routers/
-COPY connectors/ ./connectors/
 
 # Copy migration infrastructure
 COPY alembic.ini ./

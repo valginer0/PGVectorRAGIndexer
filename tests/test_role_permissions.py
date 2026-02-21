@@ -169,7 +169,9 @@ class TestConfigLoading:
             old_config_file = role_permissions._CONFIG_FILE
             role_permissions._CONFIG_FILE = tmp_path
             role_permissions._role_config = None
-            config = role_permissions.load_role_config(force_reload=True)
+            # Mock DB load to return None so it falls back to the custom file
+            with patch('role_permissions._load_from_db', return_value=None):
+                config = role_permissions.load_role_config(force_reload=True)
             assert "viewer" in config
             assert "admin" in config
         finally:

@@ -4,7 +4,7 @@ Pytest configuration and fixtures for PGVectorRAGIndexer tests.
 
 import os
 import pytest
-from unittest.mock import Mock, MagicMock
+from unittest.mock import Mock, MagicMock, patch
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
@@ -20,9 +20,14 @@ os.environ['POSTGRES_PASSWORD'] = 'rag_password'
 
 @pytest.fixture(scope='session')
 def test_config():
-    """Provide test configuration."""
-    from config import AppConfig
-    return AppConfig.load()
+    """Provide test configuration with forced reload for test database."""
+    from config import reload_config
+    from database import close_db_manager
+    # Ensure environment variables are set before reload
+    os.environ['POSTGRES_DB'] = 'rag_vector_db_test'
+    close_db_manager()  # Reset any existing manager
+    config = reload_config()
+    return config
 
 
 @pytest.fixture(scope='session')
@@ -64,40 +69,32 @@ def setup_test_database(db_connection_params):
         cursor.close()
         conn.close()
         
-        # Connect to test database and create pgvector extension and schema
+        # Connect to test database and run migrations
         conn_params['dbname'] = test_db_name
-        conn = psycopg2.connect(**conn_params)
-        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        cursor = conn.cursor()
-        cursor.execute("CREATE EXTENSION IF NOT EXISTS vector")
         
-        # Create document_chunks table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS document_chunks (
-                chunk_id SERIAL PRIMARY KEY,
-                document_id VARCHAR(255) NOT NULL,
-                chunk_index INTEGER NOT NULL,
-                text_content TEXT NOT NULL,
-                embedding vector(384),
-                source_uri TEXT,
-                metadata JSONB,
-                indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                UNIQUE(document_id, chunk_index)
-            )
-        """)
+        # Ensure environment variables are set for migrations
+        os.environ['POSTGRES_DB'] = test_db_name
         
-        # Create index on embedding for similarity search
-        cursor.execute("""
-            CREATE INDEX IF NOT EXISTS idx_embedding 
-            ON document_chunks USING ivfflat (embedding vector_cosine_ops)
-            WITH (lists = 100)
-        """)
+        # Wipe database schema to ensure clean slate for migrations
+        wipe_conn = psycopg2.connect(**conn_params)
+        wipe_conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
+        with wipe_conn.cursor() as cur:
+            cur.execute("DROP SCHEMA IF EXISTS public CASCADE")
+            cur.execute("CREATE SCHEMA public")
+            cur.execute("GRANT ALL ON SCHEMA public TO public")
+            cur.execute("GRANT ALL ON SCHEMA public TO rag_user")
+        wipe_conn.close()
         
-        cursor.close()
-        conn.commit()
-        conn.close()
-        print(f"Initialized pgvector extension and schema in {test_db_name}")
+        from config import reload_config
+        from database import close_db_manager
+        close_db_manager() # Reset manager to use the new DB name
+        reload_config()  # Ensure config picks up the test DB
         
+        from migrate import run_migrations
+        success = run_migrations(auto_backup=False)
+        if not success:
+            pytest.fail(f"Could not run migrations on test database {test_db_name}")
+            
         yield test_db_name
         
         # Cleanup: Drop test database after all tests
@@ -131,6 +128,13 @@ def db_manager(setup_test_database):
         cursor.close()
     
     manager.close()
+
+
+@pytest.fixture(autouse=True)
+def auto_mock_embeddings(mock_embedding_service):
+    """Automatically mock embeddings for all tests to ensure speed and isolation."""
+    with patch('embeddings.get_embedding_service', return_value=mock_embedding_service):
+        yield mock_embedding_service
 
 
 @pytest.fixture

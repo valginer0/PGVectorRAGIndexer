@@ -14,8 +14,8 @@ class TestUploadAndIndex:
     """Tests for /upload-and-index endpoint."""
     
     @pytest.fixture
-    def client(self):
-        """Create test client."""
+    def client(self, db_manager):
+        """Create test client and ensure DB is initialized."""
         return TestClient(app)
     
     def test_upload_text_file(self, client):

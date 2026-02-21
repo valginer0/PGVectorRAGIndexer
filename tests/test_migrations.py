@@ -184,11 +184,12 @@ class TestRunMigrations:
             with patch('migrate._get_pending_migrations', return_value=['001']):
                 with patch('migrate._is_docker_mode', return_value=False):
                     with patch('migrate._check_recent_backup', return_value=False):
-                        with patch('alembic.command.upgrade'):
-                            with caplog.at_level(logging.WARNING):
+                        with patch('migrate.logger.warning') as mock_warn:
+                            with patch('alembic.command.upgrade'):
                                 result = run_migrations(auto_backup=True)
                                 assert result is True
-                                assert "No recent database backup" in caplog.text
+                                # Verify warning was called (first arg of at least one call contains the string)
+                                assert any("No recent database backup" in call.args[0] for call in mock_warn.call_args_list)
 
     def test_run_migrations_failure_returns_false(self):
         """Test run_migrations returns False on error."""

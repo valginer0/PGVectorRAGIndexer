@@ -471,6 +471,27 @@ Implementation sequencing (recommended):
 
 ---
 
+## Architecture & Refactoring
+
+### ✅ API Modularization (Verified)
+- **Effort**: ~12-16h | **Edition**: Both | **Dependencies**: #12
+- **Branch**: `refactor/api-modularization`
+- [x] Create `routers/` package for modular functional domains
+- [x] Migrate Identity, Users, Roles, and SAML logic to `identity_api.py`
+- [x] Migrate Scheduling and Watched Folders logic to `scheduling_api.py`
+- [x] Migrate Monitoring and Indexing Runs logic to `monitoring_api.py`
+- [x] Migrate Path Mapping and Virtual Roots logic to `path_mapping_api.py`
+- [x] Migrate Document Visibility and Ownership logic to `visibility_api.py`
+- [x] Migrate SCIM 2.0 Provisioning logic to `scim_api.py`
+- [x] Migrate Indexing and Document Locks logic to `indexing_api.py`
+- [x] Migrate Search and Retrieval logic to `search_api.py`
+- [x] Migrate Backups and Maintenance logic to `maintenance_api.py`
+- [x] Migrate core system/license/auth-heartbeat logic to `system_api.py`
+- [x] Refactor `api.py` to act as a lean orchestrator using `include_router`
+- [x] Clean up unused imports and monolithic route handlers in `api.py`
+
+---
+
 ## Lower Priority (Any Time)
 
 ### ✅ #5 Upload Tab UI Streamlining
@@ -490,4 +511,4 @@ Implementation sequencing (recommended):
 
 ---
 
-Last updated: 2026-02-20
+Last updated: 2026-02-21

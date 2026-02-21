@@ -803,7 +803,10 @@ PGVectorRAGIndexer/
 ├── document_processor.py  # Document loading & chunking
 ├── indexer_v2.py         # Indexing CLI
 ├── retriever_v2.py       # Search CLI
-├── api.py                # REST API
+├── api.py                # REST API (Orchestrator)
+├── api_models.py         # Pydantic models for API
+├── routers/              # Modular API router package
+├── services.py           # API service layer / factories
 ├── init-db.sql           # Database schema
 ├── requirements.txt      # Dependencies
 └── tests/                # Test suite
@@ -1028,8 +1031,8 @@ For issues and questions:
 
 
 
-**Version**: 2.0.0  
-**Last Updated**: 2024  
+**Version**: 2.4.3  
+**Last Updated**: 2026  
 **Status**: Production Ready ✅
 
 

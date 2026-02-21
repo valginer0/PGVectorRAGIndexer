@@ -5,6 +5,8 @@ on:
     paths:
       - 'Dockerfile.base'
       - 'requirements.txt'
+    tags-ignore:
+      - '**'
   workflow_dispatch:
 
 env:

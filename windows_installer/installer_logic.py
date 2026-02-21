@@ -1238,6 +1238,9 @@ class Installer:
         self._log("(This will only download new data if an update is available)", "info")
         
         success = self._run_command_stream("docker compose pull")
+        if success:
+            self._log("Images pulled. Applying updates...", "info")
+            success = self._run_command_stream("docker compose up -d")
 
         if success:
             self._log("Images checked/updated successfully", "success")

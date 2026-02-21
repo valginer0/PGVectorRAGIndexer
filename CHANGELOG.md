@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.0] - 2026-02-21
+
+### Added
+- **API Modularization & Functional Routers**: Refactored the monolithic `api.py` into a modular package architecture. Created dedicated routers in `routers/` for Identity, Indexing, Scheduling, Monitoring, Path Mapping, Visibility, SCIM, Search, Maintenance, and System domains.
+- **Centralized Model Registry**: Created `api_models.py` to unify Pydantic models across the API, improving type consistency and reducing import cycles.
+
+### Changed
+- **API Orchestration**: `api.py` now acts as a lean orchestrator using FastAPI's `include_router`, while maintaining full backward compatibility via functional route re-exports.
+- **Documentation Portability Audit**: Performed a comprehensive audit of all project documentation (task lists, walkthroughs, implementation plans) to remove absolute file links, ensuring 100% portability across different environments.
+- **Workspace Stabilization**: Performed a deep recursive purge of all `__pycache__` and stale test artifacts to achieve a pristine repository state.
+
+### Fixed
+- **API Regressions**: Resolved 500 errors in `/metadata/keys` endpoint and restored missing role management endpoints in the new modular structure.
+- **Flaky Migration Tests**: Fixed `caplog` assertion failures in `test_migrations.py` by properly mocking internal logging calls.
+- **Locking Route Paths**: Restored legacy route paths for document locks under `/documents/locks/*` to maintain client compatibility.
+
 ## [2.5.0] - 2026-02-20
 
 ### Changed

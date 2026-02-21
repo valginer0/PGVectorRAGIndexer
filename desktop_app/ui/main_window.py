@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
     QTabWidget, QStatusBar, QPushButton, QLabel,
     QMessageBox, QFileDialog, QProgressDialog
 )
-from PySide6.QtCore import Qt, QTimer, QThread, Signal, QSize
+from PySide6.QtCore import Qt, QTimer, QThread, Signal, QSize, Slot
 from PySide6.QtGui import QIcon
 
 import qtawesome as qta
@@ -28,6 +28,7 @@ from .source_open_manager import SourceOpenManager
 from ..utils.docker_manager import DockerManager
 from ..utils.api_client import APIClient
 from ..utils.analytics import AnalyticsClient
+from ..utils.health_worker import HealthCheckWorker
 
 logger = logging.getLogger(__name__)
 
@@ -69,6 +70,12 @@ class MainWindow(QMainWindow):
             base_url=get_backend_url(),
             api_key=get_api_key() if self._remote_mode else None,
         )
+        self.health_worker = HealthCheckWorker(
+            self.api_client, self.docker_manager, remote_mode=self._remote_mode
+        )
+        self.health_worker.status_updated.connect(self.on_health_status_updated)
+        self.health_worker.start()
+        self._prompted_start_containers = False
         self.source_manager = SourceOpenManager(self.api_client, parent=self, project_root=self.project_path)
 
         # Usage analytics (#14) — opt-in, off by default
@@ -359,100 +366,86 @@ class MainWindow(QMainWindow):
             logger.warning("Client registration failed (non-fatal): %s", e)
 
     def check_initial_status(self):
-        """Check Docker and API status on startup."""
-        if self._remote_mode:
-            # In remote mode, skip Docker entirely — just check API
-            self._update_remote_banner()
-            self.check_api_status()
-            return
-
-        self.check_docker_status()
-        
-        # If containers are not running, ask to start them
-        db_running, app_running = self.docker_manager.get_container_status()
-        if not (db_running and app_running):
-            reply = QMessageBox.question(
-                self,
-                "Start Containers?",
-                "Docker containers are not running. Would you like to start them?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
-            )
-            
-            if reply == QMessageBox.Yes:
-                self.start_docker()
+        """Replaced by background HealthCheckWorker. Status is now signal-driven."""
+        pass
     
-    def check_docker_status(self):
-        """Check and update Docker and API status."""
-        # Check Docker
-        if not self.docker_manager.is_docker_available():
-            self.docker_status_label.setText("Docker: Not Available")
-            self.docker_status_icon.setPixmap(qta.icon('fa5s.times-circle', color='#ef4444').pixmap(16, 16))
-            self.api_status_label.setText("API: Not Available")
-            self.api_status_icon.setPixmap(qta.icon('fa5s.times-circle', color='#ef4444').pixmap(16, 16))
-            self.docker_control_btn.setEnabled(False)
-            self.status_bar.showMessage("Docker is not available. Please install Docker Desktop.")
-            return
-        
-        # Check containers
-        db_running, app_running = self.docker_manager.get_container_status()
-        
-        if db_running and app_running:
+    @Slot(dict)
+    def on_health_status_updated(self, status: dict):
+        """Handle status updates from the background health worker."""
+        health = status.get("health", {})
+        db_running = status.get("db_running")
+        app_running = status.get("app_running")
+        api_status = health.get("status", "offline")
+
+        # Update Docker UI
+        if self._remote_mode or db_running is None:
+            self.docker_status_label.setText("Docker: N/A (Remote)")
+            self.docker_status_icon.setPixmap(qta.icon('fa5s.server', color='#94a3b8').pixmap(16, 16))
+            self.docker_control_btn.setVisible(False)
+        elif db_running:
             self.docker_status_label.setText("Docker: Running")
             self.docker_status_icon.setPixmap(qta.icon('fa5s.check-circle', color='#10b981').pixmap(16, 16))
             self.docker_control_btn.setText("Stop Containers")
             self.docker_control_btn.setIcon(qta.icon('fa5s.stop', color='white'))
             self.docker_control_btn.setProperty("class", "danger")
+            self.docker_control_btn.setVisible(True)
         else:
             self.docker_status_label.setText("Docker: Stopped")
             self.docker_status_icon.setPixmap(qta.icon('fa5s.stop-circle', color='#ef4444').pixmap(16, 16))
             self.docker_control_btn.setText("Start Containers")
             self.docker_control_btn.setIcon(qta.icon('fa5s.play', color='white'))
             self.docker_control_btn.setProperty("class", "primary")
-        
-        # Force style update
+            self.docker_control_btn.setVisible(True)
+
+            # Trigger "Start Containers?" prompt only once on initial startup check
+            if not self._prompted_start_containers and not self._remote_mode:
+                self._prompted_start_containers = True
+                reply = QMessageBox.question(
+                    self,
+                    "Start Containers?",
+                    "Docker containers are not running. Would you like to start them?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+                if reply == QMessageBox.Yes:
+                    self.start_docker()
+
+        # Force style update (for button hover/color changes)
         self.docker_control_btn.style().unpolish(self.docker_control_btn)
         self.docker_control_btn.style().polish(self.docker_control_btn)
-        
-        # Check API
-        health = self.api_client.get_health()
-        status = health.get("status")
-        
-        if status == "healthy":
+
+        # Update API Status
+        if api_status == "healthy":
             self.api_status_label.setText("API: Ready")
             self.api_status_icon.setPixmap(qta.icon('fa5s.check-circle', color='#10b981').pixmap(16, 16))
-            self.status_bar.showMessage("Ready - All systems operational")
+            if self._remote_mode:
+                self.status_bar.showMessage("Ready — connected to remote server")
+            else:
+                self.status_bar.showMessage("Ready - All systems operational")
             
-            # Trigger initial load if not done
             if not self.initial_load_done:
                 self.on_api_ready()
-        elif status == "initializing":
+        elif api_status == "initializing":
             self.api_status_label.setText("API: Loading...")
             self.api_status_icon.setPixmap(qta.icon('fa5s.hourglass-half', color='#f59e0b').pixmap(16, 16))
             self.status_bar.showMessage("Backend is loading models/migrations. Please wait...")
-            # Poll again until ready
-            QTimer.singleShot(2000, self.check_docker_status)
         else:
             self.api_status_label.setText("API: Not Available")
             self.api_status_icon.setPixmap(qta.icon('fa5s.times-circle', color='#ef4444').pixmap(16, 16))
-            if db_running and app_running:
-                # This could happen if the port is bound but the app is rebooting or crashing
+            if self._remote_mode:
+                self.status_bar.showMessage("Remote server not reachable. Check Settings.")
+            elif db_running and app_running:
                 self.status_bar.showMessage("Containers running but API not responding. Please wait...")
-                # Poll again until ready
-                QTimer.singleShot(2000, self.check_docker_status)
             else:
                 self.status_bar.showMessage("API not available. Please start containers.")
-    
+
+    def check_docker_status(self):
+        """Manual status refresh trigger (no-op, delegated to worker)."""
+        pass
+
     def check_api_status(self):
-        """Check API availability (used in remote mode where Docker is irrelevant)."""
-        if self.api_client.is_api_available():
-            self.status_bar.showMessage("Ready — connected to remote server")
-            if not self.initial_load_done:
-                self.on_api_ready()
-        else:
-            self.status_bar.showMessage("Remote server not reachable. Check Settings.")
-            # Retry after a delay
-            QTimer.singleShot(5000, self.check_api_status)
+        """Manual status refresh trigger (no-op, delegated to worker)."""
+        pass
 
     def toggle_docker(self):
         """Toggle Docker containers on/off."""
@@ -651,3 +644,10 @@ class MainWindow(QMainWindow):
         self.tabs.currentChanged.connect(
             lambda idx: self._analytics.track_tab_opened(self.tabs.tabText(idx))
         )
+
+    def closeEvent(self, event):
+        """Clean up background threads on close."""
+        if hasattr(self, 'health_worker'):
+            self.health_worker.stop()
+            self.health_worker.wait()
+        event.accept()

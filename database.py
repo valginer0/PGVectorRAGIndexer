@@ -96,6 +96,8 @@ class DatabaseManager:
                 dbname=self.config.name,
                 user=self.config.user,
                 password=self.config.password,
+                connect_timeout=self.config.connect_timeout,
+                options=f"-c statement_timeout={self.config.statement_timeout * 1000}"
             )
             if self.config.sslmode:
                 conn_kwargs['sslmode'] = self.config.sslmode

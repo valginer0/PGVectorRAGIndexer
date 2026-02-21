@@ -29,6 +29,10 @@ class DatabaseConfig(BaseSettings):
     pool_timeout: int = Field(default=30, description='Pool timeout in seconds')
     pool_recycle: int = Field(default=3600, description='Connection recycle time in seconds')
     
+    # Timeout settings
+    connect_timeout: int = Field(default=10, description='Database connection timeout in seconds')
+    statement_timeout: int = Field(default=30, description='Query statement timeout in seconds')
+    
     @property
     def connection_string(self) -> str:
         """Generate PostgreSQL connection string."""

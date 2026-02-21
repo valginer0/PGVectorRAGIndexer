@@ -2,6 +2,7 @@
 System, Health, and Version information routes for PGVectorRAGIndexer.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -87,7 +88,7 @@ async def health_check():
         )
     try:
         db_manager = get_db_manager()
-        db_health = db_manager.health_check()
+        db_health = await asyncio.to_thread(db_manager.health_check)
         
         embedding_service = get_embedding_service()
         model_info = embedding_service.get_model_info()

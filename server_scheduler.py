@@ -93,6 +93,21 @@ class ServerScheduler:
 
     async def _scheduler_loop(self) -> None:
         """Main scheduler loop: acquire lease, poll, scan, purge."""
+        import services
+
+        # Wait for backend initialization
+        while not services.init_complete:
+            if services.init_error:
+                logger.error(
+                    "Services initialization failed: %s. Stopping scheduler.",
+                    services.init_error,
+                )
+                self._running = False
+                return
+            await asyncio.sleep(2)  # Check every 2 seconds during init
+            if not self._running:
+                return
+
         while self._running:
             try:
                 if not self._lease_held:
@@ -118,44 +133,50 @@ class ServerScheduler:
 
             await asyncio.sleep(POLL_INTERVAL)
 
+    def _sync_try_acquire_lease(self) -> bool:
+        """Synchronous part of lease acquisition."""
+        from database import get_db_manager
+        with get_db_manager().get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT pg_try_advisory_lock(%s)", (SERVER_SCHEDULER_LOCK_ID,)
+            )
+            result = cur.fetchone()[0]
+            return bool(result)
+
     async def _try_acquire_lease(self) -> bool:
         """Attempt to acquire the advisory lock. Non-blocking."""
         try:
-            from database import get_db_manager
-            with get_db_manager().get_connection() as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT pg_try_advisory_lock(%s)", (SERVER_SCHEDULER_LOCK_ID,)
-                )
-                result = cur.fetchone()[0]
-                return bool(result)
+            return await asyncio.to_thread(self._sync_try_acquire_lease)
         except Exception as e:
             logger.debug("Failed to acquire advisory lock: %s", e)
             return False
 
+    def _sync_release_lease(self) -> None:
+        """Synchronous part of lease release."""
+        from database import get_db_manager
+        with get_db_manager().get_connection() as conn:
+            cur = conn.cursor()
+            cur.execute(
+                "SELECT pg_advisory_unlock(%s)", (SERVER_SCHEDULER_LOCK_ID,)
+            )
+        logger.debug("Released advisory lock")
+
     async def _release_lease(self) -> None:
-        """Release the advisory lock."""
+        """Release the advisory lock. Non-blocking."""
         try:
-            from database import get_db_manager
-            with get_db_manager().get_connection() as conn:
-                cur = conn.cursor()
-                cur.execute(
-                    "SELECT pg_advisory_unlock(%s)", (SERVER_SCHEDULER_LOCK_ID,)
-                )
+            await asyncio.to_thread(self._sync_release_lease)
             self._lease_held = False
-            logger.debug("Released advisory lock")
         except Exception as e:
             logger.debug("Failed to release advisory lock: %s", e)
 
     async def _run_pending_scans(self) -> None:
         """Find due server-scope roots and scan them."""
-        from watched_folders import (
-            list_folders,
-            mark_scanned,
-            update_scan_watermarks,
-        )
+        from watched_folders import list_folders
 
-        folders = list_folders(
+        # Offload list_folders to thread
+        folders = await asyncio.to_thread(
+            list_folders,
             enabled_only=True,
             execution_scope="server",
         )
@@ -253,8 +274,8 @@ class ServerScheduler:
             folder_id, folder_path,
         )
 
-        # Mark scan started
-        update_scan_watermarks(folder_id, started=True)
+        # 1. Update watermarks (started = True)
+        await asyncio.to_thread(update_scan_watermarks, folder_id, started=True)
         self._active_scans += 1
 
         try:
@@ -262,18 +283,21 @@ class ServerScheduler:
                 scan_folder, folder_path, None, folder.get("root_id"),
             )
 
-            # Update watermarks based on result
+            # Update watermarks based on result (Offload to thread)
             scan_status = result.get("status", "failed")
-            update_scan_watermarks(
+            await asyncio.to_thread(
+                update_scan_watermarks,
                 folder_id,
                 completed=True,
                 success=(scan_status in ("success", "partial")),
                 error=(scan_status == "failed"),
             )
 
-            # Update legacy last_scanned_at
+            # Update legacy last_scanned_at (Offload to thread)
             if result.get("run_id"):
-                mark_scanned(folder_id, run_id=result["run_id"])
+                await asyncio.to_thread(
+                    mark_scanned, folder_id, run_id=result["run_id"]
+                )
 
             logger.info(
                 "Server scheduler: scan complete for %s — %s "
@@ -288,7 +312,9 @@ class ServerScheduler:
             logger.error(
                 "Server scheduler: scan failed for %s: %s", folder_id, e
             )
-            update_scan_watermarks(folder_id, completed=True, error=True)
+            await asyncio.to_thread(
+                update_scan_watermarks, folder_id, completed=True, error=True
+            )
             return {"status": "failed", "error": str(e)}
         finally:
             self._active_scans -= 1
@@ -315,7 +341,7 @@ class ServerScheduler:
         """
         from watched_folders import get_folder_by_root_id
 
-        folder = get_folder_by_root_id(root_id)
+        folder = await asyncio.to_thread(get_folder_by_root_id, root_id)
         if not folder:
             return {"ok": False, "error": "Root not found"}
         if folder.get("execution_scope") != "server":

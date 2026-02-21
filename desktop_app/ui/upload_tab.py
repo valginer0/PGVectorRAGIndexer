@@ -309,11 +309,21 @@ class UploadTab(QWidget):
             QMessageBox.warning(self, "No Files", "Please select file(s) first.")
             return
         
-        if not self.api_client.is_api_available():
+        health = self.api_client.get_health()
+        if health.get("status") == "initializing":
+            QMessageBox.information(
+                self,
+                "Backend Initializing",
+                "The backend is currently loading AI models and migrations.\n\n"
+                "Please wait a few moments for the status bar to show 'Ready' before uploading."
+            )
+            return
+            
+        if health.get("status") == "unreachable":
             QMessageBox.critical(
                 self,
                 "API Not Available",
-                "The API is not available. Please make sure Docker containers are running."
+                "The API is not reachable. Please make sure Docker containers are running."
             )
             return
         

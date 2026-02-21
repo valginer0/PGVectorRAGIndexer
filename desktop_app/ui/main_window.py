@@ -415,7 +415,10 @@ class MainWindow(QMainWindow):
         self.docker_control_btn.style().polish(self.docker_control_btn)
         
         # Check API
-        if self.api_client.is_api_available():
+        health = self.api_client.get_health()
+        status = health.get("status")
+        
+        if status == "healthy":
             self.api_status_label.setText("API: Ready")
             self.api_status_icon.setPixmap(qta.icon('fa5s.check-circle', color='#10b981').pixmap(16, 16))
             self.status_bar.showMessage("Ready - All systems operational")
@@ -423,11 +426,18 @@ class MainWindow(QMainWindow):
             # Trigger initial load if not done
             if not self.initial_load_done:
                 self.on_api_ready()
+        elif status == "initializing":
+            self.api_status_label.setText("API: Loading...")
+            self.api_status_icon.setPixmap(qta.icon('fa5s.hourglass-half', color='#f59e0b').pixmap(16, 16))
+            self.status_bar.showMessage("Backend is loading models/migrations. Please wait...")
+            # Poll again until ready
+            QTimer.singleShot(2000, self.check_docker_status)
         else:
             self.api_status_label.setText("API: Not Available")
             self.api_status_icon.setPixmap(qta.icon('fa5s.times-circle', color='#ef4444').pixmap(16, 16))
             if db_running and app_running:
-                self.status_bar.showMessage("Containers running but API not ready. Please wait...")
+                # This could happen if the port is bound but the app is rebooting or crashing
+                self.status_bar.showMessage("Containers running but API not responding. Please wait...")
                 # Poll again until ready
                 QTimer.singleShot(2000, self.check_docker_status)
             else:

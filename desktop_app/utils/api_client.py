@@ -38,17 +38,30 @@ class APIClient:
             headers["X-API-Key"] = self._api_key
         return headers
     
-    def is_api_available(self) -> bool:
-        """Check if the API is available."""
+    def get_health(self) -> Dict[str, Any]:
+        """Get the full health status of the API.
+        
+        Returns:
+            Dict containing status, database health, etc. 
+            Returns {"status": "unreachable"} if connection fails.
+        """
         try:
             response = requests.get(
                 f"{self.base_url}/health",
                 headers=self._headers,
                 timeout=5
             )
-            return response.status_code == 200
-        except requests.RequestException:
-            return False
+            data = response.json()
+            # If the server is still initializing, system_api returns 200 with status="initializing"
+            return data
+        except Exception as e:
+            logger.debug(f"Health check failed: {e}")
+            return {"status": "unreachable", "error": str(e)}
+
+    def is_api_available(self) -> bool:
+        """Check if the API is available (responding 200)."""
+        health = self.get_health()
+        return health.get("status") in ("healthy", "initializing")
 
     def check_version_compatibility(self) -> Tuple[bool, str]:
         """Check if this client version is compatible with the server.

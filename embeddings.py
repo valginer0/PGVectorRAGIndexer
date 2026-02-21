@@ -39,6 +39,8 @@ class EmbeddingService:
     def __init__(self):
         """Initialize embedding service."""
         self.config = get_config().embedding
+        import threading
+        self._lock = threading.Lock()
         self._model: Optional[SentenceTransformer] = None
         self._cache_enabled = get_config().cache_embeddings
         self._embedding_cache = {}
@@ -47,7 +49,9 @@ class EmbeddingService:
     def model(self) -> SentenceTransformer:
         """Lazy load and return the embedding model."""
         if self._model is None:
-            self._load_model()
+            with self._lock:
+                if self._model is None:
+                    self._load_model()
         return self._model
     
     def _load_model(self) -> None:

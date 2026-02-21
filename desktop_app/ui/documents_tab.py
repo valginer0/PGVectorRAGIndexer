@@ -200,11 +200,17 @@ class DocumentsTab(QWidget):
         
         if self.is_loading:
             return
-        if not self.api_client.is_api_available():
+        health = self.api_client.get_health()
+        if health.get("status") == "initializing":
+            self.status_label.setText("Backend is initializing models. Please wait...")
+            self.status_label.setStyleSheet("color: #f59e0b; font-style: italic;")
+            return
+            
+        if health.get("status") == "unreachable":
             QMessageBox.critical(
                 self,
                 "API Not Available",
-                "The API is not available. Please make sure Docker containers are running."
+                "The API is not reachable. Please make sure Docker containers are running."
             )
             return
         

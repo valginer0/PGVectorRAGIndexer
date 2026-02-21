@@ -100,22 +100,18 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Starting PGVectorRAGIndexer API...")
 
+    import threading
+    def deferred_startup():
+        _run_startup()
+
+    init_thread = threading.Thread(target=deferred_startup, daemon=True)
+    init_thread.start()
+    
     demo_mode = os.environ.get("DEMO_MODE", "").strip() == "1"
     if demo_mode:
-        # In demo mode, defer heavy init to a background thread so the
-        # server binds the port immediately and passes health checks on
-        # resource-constrained hosts (e.g. Render free tier, 0.1 CPU).
-        import threading
-        def deferred_startup():
-            _run_startup()
-            services.init_complete = True
-        
-        init_thread = threading.Thread(target=deferred_startup, daemon=True)
-        init_thread.start()
-        logger.info("Demo mode: deferring initialization to background thread")
+        logger.info("Demo mode: deferred initialization to background thread")
     else:
-        _run_startup()
-        services.init_complete = True
+        logger.info("Deferred initialization to background thread (preventing lifespan block)")
 
     # Start server scheduler if enabled (#6b)
     _server_scheduler = None

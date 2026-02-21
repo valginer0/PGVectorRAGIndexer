@@ -5,9 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.6.3] - 2026-02-21
+## [2.6.5] - 2026-02-21
 
-- **Fixed**: MSI installer now correctly restarts Docker containers (`docker compose up -d`) after pulling new images, ensuring backend updates are applied immediately.
+### Fixed
+- **API Not Responding Hang**: Eliminated synchronous database and health check operations on the main event loop during application startup and scheduler cycles.
+- **Improved UI Stability**: Offloaded all API and Docker status checks to background worker threads.
+- **Deterministic Verification**: Added comprehensive regression suite with zero-latency, event-synchronized liveness tests for the scheduler's initialization guard.
+
+## [2.6.4] - 2026-02-21
+
+### Changed
+- Version bump only (Hollow release, see 2.6.5 for actual fixes).
+
+## [2.6.3] - 2026-02-21
 
 ## [2.6.2] - 2026-02-21
 

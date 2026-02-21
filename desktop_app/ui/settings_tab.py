@@ -116,6 +116,13 @@ class SettingsTab(QWidget):
         restart_btn.setMinimumHeight(40)
         restart_btn.setStyleSheet("background-color: #f59e0b; border: 1px solid #f59e0b;") # Warning color
         docker_layout.addWidget(restart_btn)
+
+        update_backend_btn = QPushButton("Update Backend (Pull Latest)")
+        update_backend_btn.setIcon(qta.icon('fa5s.download', color='white'))
+        update_backend_btn.clicked.connect(self.update_backend)
+        update_backend_btn.setMinimumHeight(40)
+        update_backend_btn.setStyleSheet("background-color: #3b82f6; border: 1px solid #3b82f6;") # Info/Blue color
+        docker_layout.addWidget(update_backend_btn)
         
         logs_btn = QPushButton("View Application Logs")
         logs_btn.setIcon(qta.icon('fa5s.file-alt', color='white'))
@@ -679,6 +686,34 @@ class SettingsTab(QWidget):
                     self.parent().check_docker_status()
             else:
                 QMessageBox.critical(self, "Error", message)
+
+    def update_backend(self):
+        """Force pull latest images and restart containers."""
+        reply = QMessageBox.question(
+            self,
+            "Update Backend?",
+            "This will check for backend updates (docker pull) and restart containers.\n\n"
+            "If an update is available, it will be downloaded. Existing data will be preserved.\n\n"
+            "Proceed?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            # Show a processing dialog or change button state? 
+            # For now, let's just run it and show the result.
+            self.setCursor(Qt.WaitCursor)
+            try:
+                success, message = self.docker_manager.start_containers(force_pull=True)
+                if success:
+                    QMessageBox.information(self, "Success", "Backend updated and restarted successfully.")
+                    # Refresh parent status
+                    if self.parent() and hasattr(self.parent(), 'check_docker_status'):
+                        self.parent().check_docker_status()
+                else:
+                    QMessageBox.critical(self, "Update Failed", message)
+            finally:
+                self.restoreOverrideCursor()
     
     def view_logs(self):
         """View container logs."""

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.2] - 2026-02-21
+
+### Added
+- **Backend Update Prompt**: The desktop app now detects if the backend containers are outdated and offers a one-click "Update Backend" restart.
+- **Manual Backend Pull**: Added a "Update Backend (Pull Latest)" button to the Settings tab to manually refresh Docker images.
+- **Docker Image Pull Verification**: New `DockerManager.pull_images()` and enhanced `start_containers()` to support forced image refreshes.
+
+### Fixed
+- **Installer Logic**: Fixed a bug where the MSI installer would skip Docker image pulls if the `:latest` tag already existed locally, preventing automatic backend updates.
+- **Backend Version Sync**: Unified version checking between GUI and Docker-based backends.
+
 ## [2.6.1] - 2026-02-21
 
 ### Fixed

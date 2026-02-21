@@ -37,13 +37,14 @@ class DockerStartWorker(QThread):
     
     finished = Signal(bool, str)  # success, message
     
-    def __init__(self, docker_manager):
+    def __init__(self, docker_manager, force_pull=False):
         super().__init__()
         self.docker_manager = docker_manager
+        self.force_pull = force_pull
     
     def run(self):
         """Start containers."""
-        success, message = self.docker_manager.start_containers()
+        success, message = self.docker_manager.start_containers(force_pull=self.force_pull)
         self.finished.emit(success, message)
 
 
@@ -453,24 +454,50 @@ class MainWindow(QMainWindow):
             self.start_docker()
     
     def start_docker(self):
-        """Start Docker containers."""
-        self.status_bar.showMessage("Starting Docker containers...")
+        """Start Docker containers (standard)."""
+        self._start_docker_internal(force_pull=False)
+    
+    def start_docker_with_pull(self):
+        """Start Docker containers with a forced pull (update)."""
+        self._start_docker_internal(force_pull=True)
+
+    def _start_docker_internal(self, force_pull=False):
+        """Internal helper for starting Docker containers."""
+        msg = "Starting Docker containers..."
+        if force_pull:
+            msg = "Checking for updates and starting containers..."
+        
+        self.status_bar.showMessage(msg)
         self.docker_control_btn.setEnabled(False)
         
         # Create progress dialog
+        progress_msg = (
+            "Starting Docker containers...\n\n"
+            "This may take up to 90 seconds.\n"
+            "Please wait while the database and application initialize.\n\n"
+            "The window will remain responsive."
+        )
+        if force_pull:
+            progress_msg = (
+                "Checking for updates and starting containers...\n\n"
+                "We are checking the registry for new backend versions.\n"
+                "If an update is found, it will be downloaded automatically.\n\n"
+                "This may take a few minutes depending on your internet speed."
+            )
+
         self.progress_dialog = QProgressDialog(
-            "Starting Docker containers...\n\nThis may take up to 90 seconds.\nPlease wait while the database and application initialize.\n\nThe window will remain responsive.",
+            progress_msg,
             None,  # No cancel button
             0, 0,  # Indeterminate progress
             self
         )
-        self.progress_dialog.setWindowTitle("Starting Containers")
+        self.progress_dialog.setWindowTitle("Building Backend" if force_pull else "Starting Containers")
         self.progress_dialog.setMinimumDuration(0)
         self.progress_dialog.setWindowModality(Qt.WindowModal)
         self.progress_dialog.show()
         
         # Start worker thread
-        self.docker_start_worker = DockerStartWorker(self.docker_manager)
+        self.docker_start_worker = DockerStartWorker(self.docker_manager, force_pull=force_pull)
         self.docker_start_worker.finished.connect(self.docker_start_finished)
         self.docker_start_worker.start()
     
@@ -524,11 +551,21 @@ class MainWindow(QMainWindow):
         # Check version compatibility
         compatible, version_msg = self.api_client.check_version_compatibility()
         if not compatible:
-            QMessageBox.warning(
-                self,
-                "Version Mismatch",
-                version_msg,
-            )
+            if "update the server" in version_msg.lower() and not self._remote_mode:
+                # Local mode mismatch — offer to update
+                reply = QMessageBox.question(
+                    self,
+                    "Backend Update Available",
+                    f"{version_msg}\n\nWould you like to try updating the backend containers now? (Requires restart)",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
+                )
+                if reply == QMessageBox.Yes:
+                    self.start_docker_with_pull()
+                    return # Stop initialization, we are restarting
+            else:
+                # Remote or client-too-old mismatch — just warn
+                QMessageBox.warning(self, "Version Mismatch", version_msg)
         
         # Update license expiry banner
         self._update_license_banner()

@@ -1225,40 +1225,34 @@ class Installer:
     # =========================================================================
 
     def _step_pull_images(self) -> bool:
-        """Pull Docker images only if not already present locally."""
+        """Pull Docker images to ensure they are up to date."""
         step = self.steps[6]
-        self._update_progress(step, "Checking Docker images...")
+        self._update_progress(step, "Updating Docker images...")
 
         os.chdir(self.INSTALL_DIR)
 
-        # Check if both required images already exist locally
-        app_ok, app_out = self._run_command("docker images -q ghcr.io/valginer0/pgvectorragindexer:latest")
-        db_ok, db_out = self._run_command("docker images -q pgvector/pgvector:pg16")
-
-        app_exists = app_ok and app_out.strip()
-        db_exists = db_ok and db_out.strip()
-
-        if app_exists and db_exists:
-            self._log("All Docker images already present locally", "success")
-            self._log("Skipping download (re-run with 'docker compose pull' to update)", "info")
-            return True
-
-        # At least one image is missing — pull everything
-        if not app_exists:
-            self._log("App image not found locally. Downloading...", "info")
-        if not db_exists:
-            self._log("Database image not found locally. Downloading...", "info")
-
-        self._log("Running 'docker compose pull' (this may take a few minutes)...", "info")
+        # We always run 'docker compose pull' now. 
+        # Docker's internal logic will handle skipping if the digest matches, 
+        # so this is efficient while ensuring we never skip a version update.
+        self._log("Running 'docker compose pull' to ensure backend is up to date...", "info")
+        self._log("(This will only download new data if an update is available)", "info")
+        
         success = self._run_command_stream("docker compose pull")
 
         if success:
-            self._log("Images pulled successfully", "success")
+            self._log("Images checked/updated successfully", "success")
             return True
         else:
-            self._log("Warning: Pull command reported issues (offline?)", "warning")
-            self._log("Attempting to proceed with existing images...", "info")
-            return True  # Non-fatal, app will try to run anyway
+            # Check if we at least have local images as a fallback
+            app_ok, app_out = self._run_command("docker images -q ghcr.io/valginer0/pgvectorragindexer:latest")
+            db_ok, db_out = self._run_command("docker images -q pgvector/pgvector:pg16")
+            
+            if app_ok and app_out.strip() and db_ok and db_out.strip():
+                self._log("Pull failed (offline?), but local images found. Proceeding...", "warning")
+                return True
+            
+            self._log("Error: Could not pull images and no local images found.", "error")
+            return False
 
     # =========================================================================
     # Step 8: Finalize

@@ -234,10 +234,44 @@ class DockerManager:
         
         return False, "Could not find Rancher Desktop or Docker Desktop executable."
 
-    def start_containers(self) -> Tuple[bool, str]:
+    def pull_images(self) -> Tuple[bool, str]:
+        """
+        Pull latest Docker images from the registry.
+        
+        Returns:
+            Tuple of (success, message)
+        """
+        try:
+            logger.info("Pulling latest Docker images...")
+            result = subprocess.run(
+                ["docker", "compose", "pull"],
+                cwd=str(self.project_path),
+                capture_output=True,
+                text=True,
+                timeout=300
+            )
+            
+            if result.returncode == 0:
+                logger.info("Images pulled successfully")
+                return True, "Docker images updated successfully."
+            else:
+                error_msg = result.stderr or "Unknown error"
+                logger.error(f"Failed to pull images: {error_msg}")
+                return False, f"Failed to pull images: {error_msg}"
+                
+        except subprocess.TimeoutExpired:
+            return False, "Timeout pulling images"
+        except Exception as e:
+            logger.error(f"Error pulling images: {e}")
+            return False, str(e)
+
+    def start_containers(self, force_pull: bool = False) -> Tuple[bool, str]:
         """
         Start Docker containers using docker-compose.
         
+        Args:
+            force_pull: If True, run 'docker compose pull' before starting.
+            
         Returns:
             Tuple of (success, message)
         """
@@ -272,17 +306,28 @@ class DockerManager:
                 else:
                     return False, daemon_error
 
+            # Optional: Pull latest images
+            if force_pull:
+                logger.info("Forcing image pull before start...")
+                pull_success, pull_msg = self.pull_images()
+                if not pull_success:
+                    logger.warning(f"Forced pull failed: {pull_msg}. Attempting to start with local images.")
+
             # Check if containers are already running
             db_running, app_running = self.get_container_status()
-            if db_running and app_running:
+            if db_running and app_running and not force_pull:
                 logger.info("Containers are already running")
                 return True, "Containers are already running and healthy!"
             
             logger.info("Starting Docker containers...")
             
-            # Use docker compose directly (works on Windows with Docker Desktop/Rancher Desktop)
+            # If force_pull, we should recreate them to pick up new images
+            cmd = ["docker", "compose", "up", "-d"]
+            if force_pull:
+                cmd.append("--force-recreate")
+            
             result = subprocess.run(
-                ["docker", "compose", "up", "-d"],
+                cmd,
                 cwd=str(self.project_path),
                 capture_output=True,
                 text=True,

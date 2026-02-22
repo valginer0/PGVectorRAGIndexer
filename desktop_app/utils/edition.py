@@ -14,7 +14,7 @@ from license import Edition, LicenseInfo, get_current_license
 logger = logging.getLogger(__name__)
 
 # URL for the pricing / upgrade page
-PRICING_URL = "https://ragvault.net/pricing"
+PRICING_URL = "https://ragvault.net/#pricing"
 
 # Map of Team-only features to their descriptions.
 # Used by GatedFeatureWidget and is_feature_available().

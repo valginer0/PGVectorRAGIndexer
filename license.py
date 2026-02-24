@@ -283,7 +283,9 @@ def validate_license_key(key_string: str, signing_secret: str) -> LicenseInfo:
 
     Args:
         key_string: The JWT license key string.
-        signing_secret: HMAC-SHA256 signing secret for verification.
+        signing_secret: Verification key — either an HMAC-SHA256 secret string
+            or an RSA public key PEM. Should be pre-resolved by load_license();
+            this function never reads os.environ directly.
 
     Returns:
         LicenseInfo with the validated license details.
@@ -319,12 +321,13 @@ def validate_license_key(key_string: str, signing_secret: str) -> LicenseInfo:
             options={"require": list(REQUIRED_CLAIMS)},
         )
     except jwt.ExpiredSignatureError:
-        # Try decoding without expiry check to get the details
+        # Try decoding without expiry check to extract org name for a better message.
+        # Use allowed_algorithms (not hardcoded HS256) so RS256 tokens also work.
         try:
             payload = jwt.decode(
                 key_string.strip(),
                 signing_secret,
-                algorithms=["HS256"],
+                algorithms=allowed_algorithms,
                 options={"verify_exp": False},
             )
             raise LicenseExpiredError(
@@ -375,16 +378,32 @@ def load_license(
     This function never raises — it always returns a LicenseInfo.
     On any error, it returns Community edition with a warning.
 
+    Key resolution priority (all env reads happen here, not in validate_license_key):
+      1. LICENSE_PUBLIC_KEY env set → RS256 only (server operator override)
+      2. LICENSE_SIGNING_SECRET env set → HS256 + RS256 (backward compat)
+      3. Neither set → PUBLIC_KEY_DEFAULT hardcoded PEM → RS256 only (desktop clients)
+
     Args:
-        signing_secret: HMAC signing secret. If None, reads from env.
+        signing_secret: Override the resolved key directly (used in tests). If None,
+            the priority logic above applies.
         key_path: Override the license file path. If None, uses platform default.
 
     Returns:
         LicenseInfo with edition and details.
     """
-    # Resolve signing secret
+    # Resolve signing secret via three-tier priority
     if signing_secret is None:
-        signing_secret = os.environ.get(LICENSE_SECRET_ENV, "")
+        public_key_env = os.environ.get("LICENSE_PUBLIC_KEY", "")
+        hmac_secret_env = os.environ.get(LICENSE_SECRET_ENV, "")
+        if public_key_env:
+            # Tier 1: explicit public key override (server operators, key rotation)
+            signing_secret = public_key_env
+        elif hmac_secret_env:
+            # Tier 2: legacy HMAC secret present — pass through for backward compat
+            signing_secret = hmac_secret_env
+        else:
+            # Tier 3: no env config — use embedded public key (desktop clients)
+            signing_secret = ""
 
     # Resolve key file path
     if key_path is None:

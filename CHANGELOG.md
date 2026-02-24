@@ -7,8 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [2.6.9] - 2026-02-24
 - Added: Asymmetric Licensing (RS256) support for configuration-free desktop activation (no environment variables required).
+- Added: `LICENSE_PUBLIC_KEY` environment variable support for server operators who need to override the embedded public key (e.g., for key rotation without redeployment).
 - Improved: License validation module now supports built-in fallback public key.
 - Fixed: Resolved activation persistence issues across application restarts.
+- Fixed: Expired RS256 license key now correctly reports the organisation name in the error message (was silently using HS256 fallback path).
+- **Breaking**: HS256-signed license keys are no longer accepted by default. Set `LICENSE_SIGNING_SECRET` explicitly to retain HS256 backward compatibility. This only affects deployments that issued HS256 keys prior to v2.6.9; all keys issued since v2.6.9 are RS256 and are unaffected.
 
 ## [2.6.8] - 2026-02-22
 - Fixed: "Upgrade to Team" button in desktop app now correctly jumps to the pricing section on the website.

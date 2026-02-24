@@ -48,6 +48,7 @@ sqlalchemy>=2.0.0
 
 # License key validation
 PyJWT>=2.8.0
+cryptography>=41.0.0
 
 # SSO/SAML (enterprise, optional — requires xmlsec1 system package)
 python3-saml>=1.16.0

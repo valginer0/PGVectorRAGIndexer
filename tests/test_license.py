@@ -234,8 +234,10 @@ class TestValidateLicenseKey:
             validate_license_key("   ", TEST_SECRET)
 
     def test_no_secret_raises(self):
+        """HS256 key without secret fails (RS256 is default)."""
         key = _make_key()
-        with pytest.raises(LicenseError, match="signing secret"):
+        # When no secret is provided, it defaults to RS256 which rejects HS256 keys
+        with pytest.raises(LicenseInvalidError, match="not allowed"):
             validate_license_key(key, "")
 
     def test_invalid_edition_raises(self):
@@ -316,12 +318,12 @@ class TestLoadLicense:
         assert "empty" in info.warning.lower()
 
     def test_no_secret_returns_community_with_warning(self, tmp_path):
-        """Key file exists but no signing secret → Community with warning."""
+        """Key file exists but no signing secret → Community with warning (HS256 key mismatch)."""
         key_file = tmp_path / "license.key"
         key_file.write_text(_make_key())
         info = load_license(signing_secret="", key_path=key_file)
         assert info.edition == Edition.COMMUNITY
-        assert "LICENSE_SIGNING_SECRET" in info.warning
+        assert "not allowed" in info.warning  # Algorithm mismatch because RS256 is default
 
     def test_secret_from_env(self, tmp_path):
         """Signing secret read from environment variable."""

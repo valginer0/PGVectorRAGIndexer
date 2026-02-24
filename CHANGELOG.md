@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.11] - 2026-02-24
+
+### Fixed
+- **KeyRotation**: RSA key pair rotated — the private key from Phase 8 was never persisted or deployed to Vercel, rendering license signing non-functional. A fresh RSA-2048 key pair has been generated; the new public key is embedded in `license.py`, and the private key must be set in Vercel as `LICENSE_PRIVATE_KEY`.
+
+> **Operator action required**: Set `LICENSE_PRIVATE_KEY` in Vercel (see `.env.example`). Any license key issued before this release will no longer validate; affected customers should have new keys re-issued.
+
 ## [2.6.10] - 2026-02-24
 
 ### Fixed

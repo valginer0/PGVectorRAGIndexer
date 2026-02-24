@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.10] - 2026-02-24
+
+### Fixed
+- **Security**: RS256 algorithm isolation — when `LICENSE_PUBLIC_KEY` is set, `HS256` is now strictly rejected. Previously, any non-empty signing secret (including PEM public keys) allowed both HS256 and RS256, breaking the intended security model.
+- **UX**: Expired RS256 license key now correctly reports the organisation name in the error message (was falling through to generic "License key has expired").
+
+### Added
+- `LICENSE_PUBLIC_KEY` environment variable for server operators who need to override the embedded public key (e.g., for key rotation without redeployment). Desktop clients are unaffected — the public key remains embedded in `license.py`.
+
+### Breaking
+- HS256-signed license keys are no longer accepted without `LICENSE_SIGNING_SECRET` being explicitly set. Set `LICENSE_SIGNING_SECRET` to retain HS256 backward compatibility. All keys issued since v2.6.9 are RS256 and are unaffected.
+
 ## [2.6.9] - 2026-02-24
 - Added: Asymmetric Licensing (RS256) support for configuration-free desktop activation (no environment variables required).
 - Added: `LICENSE_PUBLIC_KEY` environment variable support for server operators who need to override the embedded public key (e.g., for key rotation without redeployment).

@@ -38,15 +38,17 @@ def generate_license_key(
     org_name: str = "",
     seats: int = 1,
     days: int = 90,
+    algorithm: str = "HS256",
 ) -> str:
     """Generate a signed JWT license key.
 
     Args:
-        signing_secret: HMAC-SHA256 signing secret.
+        signing_secret: HMAC-SHA256 signing secret (for HS256) or private key (for RS256).
         edition: Edition string ("team" or "community").
         org_name: Organization name.
         seats: Number of licensed seats.
         days: Days until expiry.
+        algorithm: JWT signing algorithm ("HS256" or "RS256").
 
     Returns:
         Encoded JWT string.
@@ -61,7 +63,7 @@ def generate_license_key(
         "jti": str(uuid.uuid4()),
     }
 
-    return jwt.encode(payload, signing_secret, algorithm="HS256")
+    return jwt.encode(payload, signing_secret, algorithm=algorithm)
 
 
 def main():
@@ -88,7 +90,7 @@ Examples:
     parser.add_argument(
         "--secret",
         default=os.environ.get("LICENSE_SIGNING_SECRET", ""),
-        help="HMAC-SHA256 signing secret (or set LICENSE_SIGNING_SECRET env var)",
+        help="HMAC-SHA256 signing secret or private key for RS256 (or set LICENSE_SIGNING_SECRET env var)",
     )
     parser.add_argument(
         "--edition",
@@ -124,29 +126,59 @@ Examples:
         "-o",
         help="Write key to file instead of stdout",
     )
+    parser.add_argument(
+        "--algorithm",
+        default="HS256",
+        choices=["HS256", "RS256"],
+        help="JWT signing algorithm (default: HS256)",
+    )
 
     args = parser.parse_args()
 
-    if not args.secret:
+    secret = args.secret
+    if args.algorithm == "RS256" and not secret:
+        # Try to read from private_key.pem if it exists and secret is not set
+        if os.path.exists("private_key.pem"):
+            with open("private_key.pem", "r") as f:
+                secret = f.read()
+            print("Using private_key.pem for RS256 signing", file=sys.stderr)
+
+    if not secret:
         print(
             "ERROR: No signing secret provided. Use --secret or set "
-            "LICENSE_SIGNING_SECRET environment variable.",
+            "LICENSE_SIGNING_SECRET environment variable. "
+            "For RS256, you can also place 'private_key.pem' in the current directory.",
             file=sys.stderr,
         )
         sys.exit(1)
 
     # Generate the key
     token = generate_license_key(
-        signing_secret=args.secret,
+        signing_secret=secret,
         edition=args.edition,
         org_name=args.org,
         seats=args.seats,
         days=args.days,
+        algorithm=args.algorithm,
     )
 
     if args.output_json:
         # Decode to show metadata
-        payload = jwt.decode(token, args.secret, algorithms=["HS256"])
+        # For RS256, decoding requires the public key. If secret is a private key,
+        # we can't decode with it directly. For simplicity, we'll assume the secret
+        # provided is sufficient for decoding if it's HS256, or if it's a public key
+        # for RS256 (which is not how we generate it).
+        # A more robust solution would require a separate public key argument for decoding.
+        # For now, we'll just use the provided secret for decoding, which works for HS256
+        # and if the secret happens to be the public key for RS256.
+        # If the secret is a private key for RS256, this decode will fail unless
+        # the public key is also provided or inferred.
+        try:
+            payload = jwt.decode(token, secret, algorithms=[args.algorithm])
+        except Exception as e:
+            print(f"Warning: Could not decode token for JSON output: {e}", file=sys.stderr)
+            payload = {"error": "Could not decode token with provided secret/key for display."}
+
         output = {
             "token": token,
             "payload": payload,

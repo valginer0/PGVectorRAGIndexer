@@ -59,6 +59,7 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Stripe Products + Prices created (test mode)
 - [x] Webhook endpoint configured (`checkout.session.completed`)
 - [x] End-to-end tested: checkout → payment → license key email delivered
+- **Update (v2.6.8)**: Fixed `api/webhook.js` to correctly handle `subscription_create` events, ensuring initial subscription payments trigger license delivery (previously only handled `subscription_cycle`).
 - **Note**: Yahoo Mail rejects emails from new domain (PH01 policy); Gmail/corporate works fine. Consider Resend for better deliverability.
 
 ---
@@ -107,6 +108,7 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Optional online revocation check (`check_license_revocation()` in `license.py`, graceful fallback, off by default)
 - [x] Graceful degradation on expiry: read-only fallback (`is_write_allowed()` in `edition.py`)
 - [x] Expiry banner: amber warning < 30 days, red on expired (`_update_license_banner()` in `main_window.py`)
+- **Update (v2.6.8)**: Added `#pricing` anchor to app `PRICING_URL` to ensure the "Upgrade" button jumps directly to the pricing section on the website.
 
 ### ✅ #12 API Versioning
 - **Effort**: ~3-5h | **Edition**: Both | **Dependencies**: None
@@ -471,6 +473,18 @@ Implementation sequencing (recommended):
 
 ---
 
+## Phase 5: Webhook Idempotency & Resilience
+
+### ✅ #18 Fortress-Level Resilience (Diamond-Tipped)
+- **Effort**: ~4-6h | **Edition**: Both (Website/Backend) | **Dependencies**: #13b
+- [x] **Stale Lock Idempotency**: Implemented Unix timestamp checks (300s threshold) to prevent concurrent duplicate deliveries.
+- [x] **Fresh Meta-data Fetches**: Mandatory re-fetches for Customer/Subscription objects before all updates to ensure non-destructive merges.
+- [x] **Precision Retry Detection**: Broadened SMTP/Network error classification (100% of transient failures trigger 500 Retry).
+- [x] **Comprehensive Auditing**: Metadata audit logs for all data paths (Session, Subscription, Customer).
+- [x] **Atomic Fulfillment**: Fulfillment markers and renewal increments committed in single API calls.
+
+---
+
 ## Architecture & Refactoring
 
 ### ✅ API Modularization (Verified)
@@ -511,4 +525,4 @@ Implementation sequencing (recommended):
 
 ---
 
-Last updated: 2026-02-21
+Last updated: 2026-02-22

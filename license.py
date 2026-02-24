@@ -22,6 +22,12 @@ from pathlib import Path
 from typing import Optional
 
 try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+try:
     import jwt  # PyJWT
 except ImportError:
     jwt = None  # Graceful fallback — Community edition if PyJWT not installed
@@ -38,6 +44,18 @@ LICENSE_REVOCATION_URL_ENV = "LICENSE_REVOCATION_URL"
 
 # Default license key file name
 LICENSE_FILENAME = "license.key"
+
+# Default Public Key for RS256 verification (Desktop Distribution)
+# This allows distributed clients to validate licenses without a private secret.
+PUBLIC_KEY_DEFAULT = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA2FR5Io7iT6V5x3hHaaou
+xGv0Bn1lBq5X4JDMKOfcBoMski5G+rTk2WSkCJBCEVISGT/mbEcLFHz+kbLyCnKj
+NiEj+fEF2vjsFTvYRXADVlQkIowDFXFiPjNXDyMPwuzWDzA4yXK5H0AnPGKXekbS
+GUO5sDGO886GYxBDadHZ0pLpdn+6L3lMdMS5htwffThk6oUSW/rohsLrhLEgJj0L
+s7BSMkOZmgaCWDwXwn0BUDfKrpvQ5xKOLDT4cGIQEYZsAIcOiZp+B5idSxJsv9bv
+VNyaBqR7K+sSBuwJ/yHENFC9OuBrvaGjQyDRQmVn3Tz7O16y8Cc+YquDe4TzjtDm
+0QIDAQAB
+-----END PUBLIC KEY-----"""
 
 
 # ---------------------------------------------------------------------------
@@ -283,15 +301,21 @@ def validate_license_key(key_string: str, signing_secret: str) -> LicenseInfo:
     if not key_string or not key_string.strip():
         raise LicenseInvalidError("License key is empty")
 
+    # If signing_secret is not provided or empty, we use the embedded public key
+    # and assume RS256. This is the mode for distributed desktop apps.
     if not signing_secret:
-        raise LicenseError("No signing secret configured")
+        signing_secret = PUBLIC_KEY_DEFAULT
+        allowed_algorithms = ["RS256"]
+    else:
+        # If a secret is provided via environment, we support both for backward compat
+        allowed_algorithms = ["HS256", "RS256"]
 
     try:
         # Decode and verify the JWT
         payload = jwt.decode(
             key_string.strip(),
             signing_secret,
-            algorithms=["HS256"],
+            algorithms=allowed_algorithms,
             options={"require": list(REQUIRED_CLAIMS)},
         )
     except jwt.ExpiredSignatureError:
@@ -390,16 +414,8 @@ def load_license(
         logger.warning("License key file at %s is empty", key_path)
         return LicenseInfo(warning="License key file is empty")
 
-    # No signing secret configured
-    if not signing_secret:
-        logger.warning(
-            "License key found but %s is not set — cannot validate. "
-            "Running as Community Edition.",
-            LICENSE_SECRET_ENV,
-        )
-        return LicenseInfo(
-            warning=f"License key found but {LICENSE_SECRET_ENV} is not set"
-        )
+    # Optional validation with signing secret or fallback to public key
+    # If signing_secret is None, validate_license_key will use PUBLIC_KEY_DEFAULT.
 
     # Validate
     try:

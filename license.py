@@ -19,7 +19,7 @@ import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 try:
     from dotenv import load_dotenv
@@ -278,7 +278,11 @@ def check_license_revocation(
 REQUIRED_CLAIMS = {"edition", "org", "exp"}
 
 
-def validate_license_key(key_string: str, signing_secret: str) -> LicenseInfo:
+def validate_license_key(
+    key_string: str,
+    signing_secret: str,
+    allowed_algorithms: Optional[List[str]] = None,
+) -> LicenseInfo:
     """Validate a license key string and return LicenseInfo.
 
     Args:
@@ -286,6 +290,11 @@ def validate_license_key(key_string: str, signing_secret: str) -> LicenseInfo:
         signing_secret: Verification key — either an HMAC-SHA256 secret string
             or an RSA public key PEM. Should be pre-resolved by load_license();
             this function never reads os.environ directly.
+        allowed_algorithms: Explicit list of JWT algorithms to accept. When None,
+            the function falls back to legacy auto-detection (empty secret → RS256
+            only; non-empty → HS256+RS256). Callers should always pass this
+            explicitly — the auto-detection path is kept only for backward compat
+            with direct callers of validate_license_key().
 
     Returns:
         LicenseInfo with the validated license details.
@@ -303,14 +312,19 @@ def validate_license_key(key_string: str, signing_secret: str) -> LicenseInfo:
     if not key_string or not key_string.strip():
         raise LicenseInvalidError("License key is empty")
 
-    # If signing_secret is not provided or empty, we use the embedded public key
-    # and assume RS256. This is the mode for distributed desktop apps.
-    if not signing_secret:
-        signing_secret = PUBLIC_KEY_DEFAULT
-        allowed_algorithms = ["RS256"]
+    if allowed_algorithms is not None:
+        # Caller (load_license) has explicitly determined the correct algorithm
+        # set based on which key source was used. Trust it.
+        if not signing_secret:
+            signing_secret = PUBLIC_KEY_DEFAULT
     else:
-        # If a secret is provided via environment, we support both for backward compat
-        allowed_algorithms = ["HS256", "RS256"]
+        # Legacy fallback: infer algorithm from whether a secret was supplied.
+        # This path is kept for backward compat with direct callers only.
+        if not signing_secret:
+            signing_secret = PUBLIC_KEY_DEFAULT
+            allowed_algorithms = ["RS256"]
+        else:
+            allowed_algorithms = ["HS256", "RS256"]
 
     try:
         # Decode and verify the JWT
@@ -391,19 +405,26 @@ def load_license(
     Returns:
         LicenseInfo with edition and details.
     """
-    # Resolve signing secret via three-tier priority
+    # Resolve signing secret and algorithm set via three-tier priority
     if signing_secret is None:
         public_key_env = os.environ.get("LICENSE_PUBLIC_KEY", "")
         hmac_secret_env = os.environ.get(LICENSE_SECRET_ENV, "")
         if public_key_env:
             # Tier 1: explicit public key override (server operators, key rotation)
+            # RS256 ONLY — a public key must never allow HS256 verification
             signing_secret = public_key_env
+            resolved_algorithms: Optional[List[str]] = ["RS256"]
         elif hmac_secret_env:
-            # Tier 2: legacy HMAC secret present — pass through for backward compat
+            # Tier 2: legacy HMAC secret — allow both for transition compatibility
             signing_secret = hmac_secret_env
+            resolved_algorithms = ["HS256", "RS256"]
         else:
-            # Tier 3: no env config — use embedded public key (desktop clients)
+            # Tier 3: no env config — embedded public key, RS256 only (desktop clients)
             signing_secret = ""
+            resolved_algorithms = ["RS256"]
+    else:
+        # Caller passed signing_secret directly (e.g., in tests); use legacy inference
+        resolved_algorithms = None
 
     # Resolve key file path
     if key_path is None:
@@ -438,7 +459,7 @@ def load_license(
 
     # Validate
     try:
-        license_info = validate_license_key(key_string, signing_secret)
+        license_info = validate_license_key(key_string, signing_secret, resolved_algorithms)
 
         # Check expiry (should already be caught by PyJWT, but double-check)
         if license_info.is_expired:

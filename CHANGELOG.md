@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.9] - 2026-02-24
+- Added: Asymmetric Licensing (RS256) support for configuration-free desktop activation (no environment variables required).
+- Improved: License validation module now supports built-in fallback public key.
+- Fixed: Resolved activation persistence issues across application restarts.
+
 ## [2.6.8] - 2026-02-22
 - Fixed: "Upgrade to Team" button in desktop app now correctly jumps to the pricing section on the website.
 

@@ -579,14 +579,56 @@ class SettingsTab(QWidget):
             logging.getLogger(__name__).info("License warning: %s", info["warning_text"])
 
     def _enter_license_key(self):
-        """Let the user browse for a .key file and install it."""
-        from .shared import pick_open_file
-        file_path = pick_open_file(
-            self,
-            "Select License Key File",
-            "License Key Files (*.key);;All Files (*)",
+        """Let the user paste a license JWT or browse for a .key file and install it."""
+        from PySide6.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel,
+            QPlainTextEdit, QPushButton, QDialogButtonBox
         )
-        if not file_path:
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Enter License Key")
+        dlg.setMinimumWidth(520)
+        layout = QVBoxLayout(dlg)
+
+        layout.addWidget(QLabel("Paste your license key (JWT) from the email:"))
+        text_edit = QPlainTextEdit()
+        text_edit.setPlaceholderText("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...")
+        text_edit.setFixedHeight(100)
+        layout.addWidget(text_edit)
+
+        # File-picker fallback
+        file_row = QHBoxLayout()
+        file_label = QLabel("Or browse for a .key file:")
+        browse_btn = QPushButton("Browse…")
+        file_row.addWidget(file_label)
+        file_row.addWidget(browse_btn)
+        file_row.addStretch()
+        layout.addLayout(file_row)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        layout.addWidget(buttons)
+
+        # When browsing, load the file content into the text box
+        def _browse():
+            from .shared import pick_open_file
+            fp = pick_open_file(self, "Select License Key File", "License Key Files (*.key);;All Files (*)")
+            if fp:
+                try:
+                    text_edit.setPlainText(open(fp, encoding="utf-8").read().strip())
+                except Exception as ex:
+                    text_edit.setPlainText("")
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.warning(self, "Read Error", str(ex))
+
+        browse_btn.clicked.connect(_browse)
+        buttons.accepted.connect(dlg.accept)
+        buttons.rejected.connect(dlg.reject)
+
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        key_string = text_edit.toPlainText().strip()
+        if not key_string:
             return
 
         try:
@@ -595,9 +637,8 @@ class SettingsTab(QWidget):
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest_file = dest_dir / "license.key"
 
-            # Copy the key file
-            import shutil
-            shutil.copy2(file_path, dest_file)
+            # Write the pasted/loaded key to the license file
+            dest_file.write_text(key_string, encoding="utf-8")
 
             # Secure file permissions
             from license import secure_license_file
@@ -620,6 +661,7 @@ class SettingsTab(QWidget):
                 "License Error",
                 f"Failed to install license key:\n{e}",
             )
+
 
     def _open_pricing(self):
         """Open the pricing page."""

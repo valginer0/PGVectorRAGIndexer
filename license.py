@@ -440,7 +440,7 @@ def load_license(
 
     # Read the key file
     try:
-        key_string = key_path.read_text(encoding="utf-8").strip()
+        key_string = "".join(key_path.read_text(encoding="utf-8").split())  # strip all whitespace incl. email word-wrap
     except (OSError, IOError) as e:
         logger.warning("Could not read license key at %s: %s", key_path, e)
         return LicenseInfo(

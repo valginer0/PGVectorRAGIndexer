@@ -627,7 +627,8 @@ class SettingsTab(QWidget):
         if dlg.exec() != QDialog.Accepted:
             return
 
-        key_string = text_edit.toPlainText().strip()
+        # Strip ALL whitespace (email clients may word-wrap long JWT tokens, inserting newlines)
+        key_string = ''.join(text_edit.toPlainText().split())
         if not key_string:
             return
 

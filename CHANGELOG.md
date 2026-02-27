@@ -5,7 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.14] - 2026-02-26
+
+### Fixed
+- **License key validation**: Email clients (Gmail, Outlook) word-wrap long JWT tokens when displaying them, inserting embedded newlines that break `jwt.decode`. The "Enter License Key" dialog and `load_license()` now strip all whitespace before validation/storage.
+
 ## [2.6.13] - 2026-02-26
+
 
 ### Fixed
 - **License key entry**: "Enter License Key" dialog now shows a paste-text field for the JWT token received by email. Previously only offered a file picker, which led to the key not being saved. A "Browse…" button is retained for users who prefer a `.key` file.

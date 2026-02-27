@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.12] - 2026-02-26
+
+### Fixed
+- **Subscription licensing**: License email now delivered immediately on `checkout.session.completed` (Stripe fires `invoice.paid` with no subscription ID for initial checkout invoices, making deferral unreliable). Renewals continue to use `invoice.paid`.
+
 ## [2.6.11] - 2026-02-24
 
 ### Fixed

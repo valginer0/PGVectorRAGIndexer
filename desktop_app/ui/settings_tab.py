@@ -692,6 +692,9 @@ class SettingsTab(QWidget):
                         logging.getLogger(__name__).error("CRITICAL: Failed to restore license backup: %s", r_err)
                 
                 if rollback_success:
+                    from license import reset_license
+                    reset_license()
+                    self._refresh_license_panel()
                     QMessageBox.critical(
                         self,
                         "License Installation Failed",

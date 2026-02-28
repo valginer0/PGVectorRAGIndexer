@@ -502,6 +502,13 @@ class SettingsTab(QWidget):
         self._seats_label = QLabel("--")
         grid.addWidget(self._seats_label, 3, 1)
 
+        # Row 4 — Warning (initially hidden)
+        self._warning_label = QLabel("")
+        self._warning_label.setWordWrap(True)
+        self._warning_label.setStyleSheet("color: #f87171; font-style: italic; font-weight: 600; padding: 4px; background-color: rgba(248, 113, 113, 0.1); border-radius: 4px;")
+        self._warning_label.setVisible(False)
+        grid.addWidget(self._warning_label, 4, 0, 1, 2)
+
         # Buttons row
         btn_layout = QHBoxLayout()
 
@@ -576,7 +583,10 @@ class SettingsTab(QWidget):
 
         # Warning text (e.g., expiry warning, invalid key)
         if info["warning_text"]:
-            logging.getLogger(__name__).info("License warning: %s", info["warning_text"])
+            self._warning_label.setText(info["warning_text"])
+            self._warning_label.setVisible(True)
+        else:
+            self._warning_label.setVisible(False)
 
     def _enter_license_key(self):
         """Let the user paste a license JWT or browse for a .key file and install it."""

@@ -534,6 +534,14 @@ def load_license(
         return LicenseInfo(warning=str(e))
 
     except LicenseInvalidError as e:
+        # Diagnostic logging for troubleshooting
+        try:
+            # Try to decode without verification to see what's inside
+            header = jwt.get_unverified_header(key_string)
+            payload = jwt.decode(key_string, options={"verify_signature": False})
+            logger.info("DIAGNOSTIC - Failed license details: Header=%s, Payload=%s", header, payload)
+        except Exception:
+            pass
         logger.warning("Invalid license key: %s", e)
         return LicenseInfo(warning=str(e))
 

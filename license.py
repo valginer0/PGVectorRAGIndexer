@@ -354,6 +354,25 @@ def validate_license_key(
     except jwt.DecodeError:
         raise LicenseInvalidError("License key is malformed (not a valid JWT)")
     except jwt.InvalidTokenError as e:
+        # Detect null-valued required claims (e.g. exp: null) which PyJWT
+        # reports as "missing" even though the key is technically present.
+        try:
+            raw = jwt.decode(
+                key_string.strip(),
+                signing_secret,
+                algorithms=allowed_algorithms,
+                options={"verify_exp": False, "verify_signature": False},
+            )
+            null_claims = [c for c in REQUIRED_CLAIMS if c in raw and raw[c] is None]
+            if null_claims:
+                raise LicenseInvalidError(
+                    f"License key has null value for required claim(s): {', '.join(sorted(null_claims))}. "
+                    "The key may have been generated incorrectly."
+                )
+        except LicenseInvalidError:
+            raise
+        except Exception:
+            pass  # fall through to generic message
         raise LicenseInvalidError(f"License key is invalid: {e}")
 
     # Validate required fields

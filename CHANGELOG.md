@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.15] - 2026-02-27
+
+### Fixed
+- **License validation (defensive)**: Added explicit checks for `null` values in required JWT claims (like `exp`). This prevents confusing errors if a license key is manually edited or malformed before storage.
+
 ## [2.6.14] - 2026-02-26
 
 ### Fixed

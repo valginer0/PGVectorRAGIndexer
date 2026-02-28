@@ -644,14 +644,15 @@ class SettingsTab(QWidget):
 
         try:
             # 1. Validate in-memory first (CRITICAL: prevents overwriting good key with bad)
-            from license import validate_license_key, LicenseInvalidError, resolve_verification_context
+            from license import validate_license_key, LicenseError, resolve_verification_context
             
             try:
                 # This ensures the key is syntactically valid and signed before we touch disk
                 # Resolve signing_secret + algorithms the same way load_license does
                 signing_secret, algorithms = resolve_verification_context()
                 validate_license_key(key_string, signing_secret, algorithms)
-            except LicenseInvalidError as le:
+            except LicenseError as le:
+                # Catching base LicenseError handles both LicenseInvalidError and LicenseExpiredError
                 QMessageBox.critical(
                     self,
                     "Invalid License Key",
@@ -666,6 +667,7 @@ class SettingsTab(QWidget):
             dest_file = dest_dir / "license.key"
             
             # 3. Create backup of existing key if it exists
+            backup_file = None
             if dest_file.exists():
                 backup_file = dest_file.with_suffix(".key.bak")
                 try:
@@ -674,8 +676,19 @@ class SettingsTab(QWidget):
                 except Exception as b_err:
                     logging.getLogger(__name__).warning("Could not create license backup: %s", b_err)
 
-            # 4. Write new key
-            dest_file.write_text(key_string, encoding="utf-8")
+            # 4. Write new key (with rollback)
+            try:
+                dest_file.write_text(key_string, encoding="utf-8")
+            except Exception as write_err:
+                # ROLLBACK: if write fails, try to restore the backup
+                if backup_file and backup_file.exists():
+                    try:
+                        import shutil
+                        shutil.copy2(backup_file, dest_file)
+                        logging.getLogger(__name__).info("Restored license from backup after write failure.")
+                    except Exception as r_err:
+                        logging.getLogger(__name__).error("CRITICAL: Failed to restore license backup: %s", r_err)
+                raise write_err
             
             from license import secure_license_file
             secure_license_file(dest_file)

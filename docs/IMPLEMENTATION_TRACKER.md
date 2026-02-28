@@ -527,6 +527,15 @@ Implementation sequencing (recommended):
 
 Last updated: 2026-02-27
 
+### ✅ v2.6.17 - License Safety & Protection
+- **Effort**: ~4-h | **Edition**: Both | **Dependencies**: None
+- **Branch**: `main`
+- [x] Implement "validate-before-write" logic in `settings_tab.py`
+- [x] Add automatic `license.key.bak` backup mechanism
+- [x] Fix diagnostic `jwt.decode` syntax error in `license.py`
+- [x] Verified fix with Team license purchase and activation
+- [x] Release and tag v2.6.17
+
 ### ✅ #16 v2.6.15 - Defensive License Check
 - **Effort**: ~1h | **Edition**: Both | **Dependencies**: None
 - **Branch**: `main`

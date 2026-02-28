@@ -1,4 +1,4 @@
-# Deployment Guide - PGVectorRAGIndexer v2.6
+# Deployment Guide - PGVectorRAGIndexer v2.6.15
 
 > **📌 Note:** For quick Docker-only deployment (recommended for most users), see:
 > - **Linux/WSL Setup**: [QUICK_START.md](QUICK_START.md)

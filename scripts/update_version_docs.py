@@ -17,23 +17,28 @@ import sys
 DOC_PATTERNS = [
     ("README.md", [
         # Main title: # PGVectorRAGIndexer v2.4
-        (r'^# PGVectorRAGIndexer v[\d.]+', '# PGVectorRAGIndexer v{major_minor}'),
+        (r'^# PGVectorRAGIndexer v[\d.]+', '# PGVectorRAGIndexer v{full}'),
         # What's New section: ## 🋹 What's New in v2.4
-        (r"^## 🋹 What's New in v[\d.]+", "## 🋹 What's New in v{major_minor}"),
+        (r"^## 🋹 What's New in v[\d.]+", "## 🋹 What's New in v{full}"),
         # Latest Features: ### 🆕 Latest Features (v2.4)
-        (r'^### 🆕 Latest Features \(v[\d.]+\)', '### 🆕 Latest Features (v{major_minor})'),
+        (r'^### 🆕 Latest Features \(v[\d.]+\)', '### 🆕 Latest Features (v{full})'),
     ]),
     ("QUICK_START.md", [
         # Main title: # Quick Start Guide - PGVectorRAGIndexer v2.4
         (r'^# Quick Start Guide - PGVectorRAGIndexer v[\d.]+', 
-         '# Quick Start Guide - PGVectorRAGIndexer v{major_minor}'),
+         '# Quick Start Guide - PGVectorRAGIndexer v{full}'),
         # What's New: ## 🆕 What's New in v2.4
-        (r"^## 🆕 What's New in v[\d.]+", "## 🆕 What's New in v{major_minor}"),
+        (r"^## 🆕 What's New in v[\d.]+", "## 🆕 What's New in v{full}"),
     ]),
     ("DEPLOYMENT.md", [
         # Main title: # Deployment Guide - PGVectorRAGIndexer v2.2
         (r'^# Deployment Guide - PGVectorRAGIndexer v[\d.]+',
-         '# Deployment Guide - PGVectorRAGIndexer v{major_minor}'),
+         '# Deployment Guide - PGVectorRAGIndexer v{full}'),
+    ]),
+    ("USAGE_GUIDE.md", [
+        # Main title: # PGVectorRAGIndexer Usage Guide - v2.2
+        (r'^# PGVectorRAGIndexer Usage Guide - v[\d.]+',
+         '# PGVectorRAGIndexer Usage Guide - v{full}'),
     ]),
 ]
 

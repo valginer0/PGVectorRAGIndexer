@@ -525,4 +525,13 @@ Implementation sequencing (recommended):
 
 ---
 
-Last updated: 2026-02-22
+Last updated: 2026-02-27
+
+### ✅ #16 v2.6.15 - Defensive License Check
+- **Effort**: ~1h | **Edition**: Both | **Dependencies**: None
+- **Branch**: `main`
+- [x] Restore valid license key from backup
+- [x] Add defensive null-claim check in validate_license_key
+- [x] Clean up debug instrumentation in installed files
+- [x] Cleanup leftover diagnostic/test scripts
+- [x] Release and tag v2.6.15

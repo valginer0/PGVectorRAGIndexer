@@ -1,4 +1,4 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.6
+# Quick Start Guide - PGVectorRAGIndexer v2.6.15
 
 Get up and running in 5 minutes!
 > 🔒 **Network safety tip**
@@ -6,7 +6,7 @@ Get up and running in 5 minutes!
 > This helps prevent other users on the same network from accessing local services.
 > For home or private networks, this is not a concern.
 
-## 🆕 What's New in v2.6
+## 🆕 What's New in v2.6.15
 
 - **Windows Installer Parity**: Full feature parity with legacy PowerShell scripts
   - Auto-installs Rancher Desktop if Docker is missing

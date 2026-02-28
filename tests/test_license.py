@@ -43,6 +43,7 @@ from license import (
     reset_license,
     is_team_edition,
     check_license_revocation,
+    resolve_verification_context,
 )
 
 # Test signing secret (NOT a real secret)
@@ -261,6 +262,13 @@ class TestValidateLicenseKey:
         # kid takes precedence since it's checked first in the payload
         assert info.key_id == "custom-kid"
 
+    def test_validate_license_key_with_explicit_context_regression(self):
+        """Regression test for the TypeError fixed after refactor."""
+        key = _make_key()
+        # This call previously failed if any argument was missing or if signature changed
+        info = validate_license_key(key, TEST_SECRET, allowed_algorithms=["HS256"])
+        assert info.is_team
+
 
 # ===========================================================================
 # Test: load_license
@@ -348,6 +356,46 @@ class TestLoadLicense:
         info = load_license(signing_secret=TEST_SECRET, key_path=key_file)
         assert info.edition == Edition.TEAM
         assert not info.warning
+
+
+# ===========================================================================
+# Test: resolve_verification_context
+# ===========================================================================
+
+
+class TestResolveVerificationContext:
+    def test_default_context(self):
+        """Default: RS256 only, empty secret."""
+        with patch.dict(os.environ, {}, clear=True):
+            secret, algs = resolve_verification_context()
+            assert secret == ""
+            assert algs == ["RS256"]
+
+    def test_public_key_override_tier_1(self):
+        """Tier 1: LICENSE_PUBLIC_KEY takes precedence."""
+        custom_pub = "-----BEGIN PUBLIC KEY-----\nABC\n-----END PUBLIC KEY-----"
+        with patch.dict(os.environ, {
+            "LICENSE_PUBLIC_KEY": custom_pub,
+            "LICENSE_SIGNING_SECRET": "should-be-ignored"
+        }):
+            secret, algs = resolve_verification_context()
+            assert secret == custom_pub
+            assert algs == ["RS256"]
+
+    def test_hmac_secret_tier_2(self):
+        """Tier 2: LICENSE_SIGNING_SECRET allows transition (HS256+RS256)."""
+        with patch.dict(os.environ, {
+            "LICENSE_SIGNING_SECRET": "my-hmac-secret"
+        }, clear=True):
+            secret, algs = resolve_verification_context()
+            assert secret == "my-hmac-secret"
+            assert algs == ["HS256", "RS256"]
+
+    def test_manual_override(self):
+        """Manual override via argument skips env and returns legacy marker (None algs)."""
+        secret, algs = resolve_verification_context("manual-secret")
+        assert secret == "manual-secret"
+        assert algs is None
 
 
 # ===========================================================================

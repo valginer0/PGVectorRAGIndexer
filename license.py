@@ -405,6 +405,40 @@ def validate_license_key(
 # ---------------------------------------------------------------------------
 
 
+def resolve_verification_context(
+    signing_secret: Optional[str] = None,
+) -> tuple[str, Optional[List[str]]]:
+    """Resolve the signing secret and allowed algorithms based on environment.
+
+    Key resolution priority:
+      1. LICENSE_PUBLIC_KEY env set → RS256 only (server operator override)
+      2. LICENSE_SIGNING_SECRET env set → HS256 + RS256 (backward compat)
+      3. Neither set → PUBLIC_KEY_DEFAULT hardcoded PEM → RS256 only (desktop clients)
+
+    Args:
+        signing_secret: Optional override. If provided, returns (secret, None)
+            to trigger legacy inference in validate_license_key.
+
+    Returns:
+        tuple of (signing_secret, allowed_algorithms)
+    """
+    if signing_secret is not None:
+        return signing_secret, None
+
+    public_key_env = os.environ.get("LICENSE_PUBLIC_KEY", "")
+    hmac_secret_env = os.environ.get(LICENSE_SECRET_ENV, "")
+
+    if public_key_env:
+        # Tier 1: explicit public key override (RS256 ONLY)
+        return public_key_env, ["RS256"]
+    elif hmac_secret_env:
+        # Tier 2: legacy HMAC secret (HS256 + RS256)
+        return hmac_secret_env, ["HS256", "RS256"]
+    else:
+        # Tier 3: default (RS256 ONLY)
+        return "", ["RS256"]
+
+
 def load_license(
     signing_secret: Optional[str] = None,
     key_path: Optional[Path] = None,
@@ -428,25 +462,7 @@ def load_license(
         LicenseInfo with edition and details.
     """
     # Resolve signing secret and algorithm set via three-tier priority
-    if signing_secret is None:
-        public_key_env = os.environ.get("LICENSE_PUBLIC_KEY", "")
-        hmac_secret_env = os.environ.get(LICENSE_SECRET_ENV, "")
-        if public_key_env:
-            # Tier 1: explicit public key override (server operators, key rotation)
-            # RS256 ONLY — a public key must never allow HS256 verification
-            signing_secret = public_key_env
-            resolved_algorithms: Optional[List[str]] = ["RS256"]
-        elif hmac_secret_env:
-            # Tier 2: legacy HMAC secret — allow both for transition compatibility
-            signing_secret = hmac_secret_env
-            resolved_algorithms = ["HS256", "RS256"]
-        else:
-            # Tier 3: no env config — embedded public key, RS256 only (desktop clients)
-            signing_secret = ""
-            resolved_algorithms = ["RS256"]
-    else:
-        # Caller passed signing_secret directly (e.g., in tests); use legacy inference
-        resolved_algorithms = None
+    signing_secret, resolved_algorithms = resolve_verification_context(signing_secret)
 
     # Resolve key file path
     if key_path is None:

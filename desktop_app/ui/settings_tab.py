@@ -643,45 +643,54 @@ class SettingsTab(QWidget):
             return
 
         try:
+            # 1. Validate in-memory first (CRITICAL: prevents overwriting good key with bad)
+            from license import validate_license_key, LicenseInvalidError
+            
+            try:
+                # This ensures the key is syntactically valid and signed before we touch disk
+                validate_license_key(key_string)
+            except LicenseInvalidError as le:
+                QMessageBox.critical(
+                    self,
+                    "Invalid License Key",
+                    f"The provided license key is invalid and will not be saved:\n\n{str(le)}"
+                )
+                return
+
+            # 2. Key is valid, prepare to write
             from license import get_license_dir
             dest_dir = get_license_dir()
             dest_dir.mkdir(parents=True, exist_ok=True)
             dest_file = dest_dir / "license.key"
+            
+            # 3. Create backup of existing key if it exists
+            if dest_file.exists():
+                backup_file = dest_file.with_suffix(".key.bak")
+                try:
+                    import shutil
+                    shutil.copy2(dest_file, backup_file)
+                except Exception as b_err:
+                    print(f"Warning: Could not create license backup: {b_err}")
 
-            # Write the pasted/loaded key to the license file
+            # 4. Write new key
             dest_file.write_text(key_string, encoding="utf-8")
-
-            # Secure file permissions
+            
             from license import secure_license_file
             secure_license_file(dest_file)
 
-            # Reload license
+            # 5. Reload license
             from license import reset_license, get_current_license
             reset_license()
             info = get_current_license()
             self._refresh_license_panel()
 
-            if info.warning:
-                QMessageBox.warning(
-                    self,
-                    "License Warning",
-                    f"License key was saved but validation failed:\n\n{info.warning}\n\n"
-                    "Please check your license key or contact support."
-                )
-            else:
-                QMessageBox.information(
-                    self,
-                    "License Installed",
-                    f"License key installed successfully to:\n{dest_file}\n\n"
-                    f"Edition: {info.edition.value.title()}\n"
-                    f"Organization: {info.org_name}\n\n"
-                    "Restart the application for full effect.",
-                )
-        except Exception as e:
-            QMessageBox.critical(
+            QMessageBox.information(
                 self,
-                "License Error",
-                f"Failed to install license key:\n{e}",
+                "License Activated",
+                f"License key successfully validated and installed to:\n{dest_file}\n\n"
+                f"Edition: {info.edition.value.title()}\n"
+                f"Organization: {info.org_name}\n\n"
+                "The application has been updated with your new license.",
             )
 
 

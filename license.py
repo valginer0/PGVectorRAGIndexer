@@ -357,8 +357,11 @@ def validate_license_key(
         # Diagnostic: Try to extract as much as possible even on error
         try:
             # Decode without verification to see the actual content for debugging
+            # Pass key="" and specify algorithms to satisfy PyJWT's signature
             raw = jwt.decode(
                 key_string.strip(),
+                key="",
+                algorithms=["HS256", "RS256"],
                 options={"verify_signature": False, "verify_exp": False},
             )
             

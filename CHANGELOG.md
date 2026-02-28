@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.17] - 2026-02-28
+
+### Fixed
+- **License Protection**: Implemented "validate-before-write" logic. Paste/entry of an invalid license key no longer destroys existing valid credentials.
+- **Auto-Backup**: The application now creates `license.key.bak` before any successful license update.
+- **Diagnostic Fix**: Fixed `jwt.decode` syntax error in `license.py` that caused diagnostic failures on Windows.
+
+## [2.6.16] - 2026-02-27
+
+### Fixed
+- **Build**: Version bump to trigger production MSI build for licensing safety modules.
+
 ## [2.6.15] - 2026-02-27
 
 ### Fixed

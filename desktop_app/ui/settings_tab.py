@@ -681,13 +681,24 @@ class SettingsTab(QWidget):
                 dest_file.write_text(key_string, encoding="utf-8")
             except Exception as write_err:
                 # ROLLBACK: if write fails, try to restore the backup
+                rollback_success = False
                 if backup_file and backup_file.exists():
                     try:
                         import shutil
                         shutil.copy2(backup_file, dest_file)
                         logging.getLogger(__name__).info("Restored license from backup after write failure.")
+                        rollback_success = True
                     except Exception as r_err:
                         logging.getLogger(__name__).error("CRITICAL: Failed to restore license backup: %s", r_err)
+                
+                if rollback_success:
+                    QMessageBox.critical(
+                        self,
+                        "License Installation Failed",
+                        f"An error occurred while saving the new license key:\n{write_err}\n\n"
+                        "Your previous license has been successfully restored from backup."
+                    )
+                    return
                 raise write_err
             
             from license import secure_license_file

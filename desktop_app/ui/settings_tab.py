@@ -656,16 +656,27 @@ class SettingsTab(QWidget):
             secure_license_file(dest_file)
 
             # Reload license
-            from license import reset_license
+            from license import reset_license, get_current_license
             reset_license()
+            info = get_current_license()
             self._refresh_license_panel()
 
-            QMessageBox.information(
-                self,
-                "License Installed",
-                f"License key installed to:\n{dest_file}\n\n"
-                "Restart the application for full effect.",
-            )
+            if info.warning:
+                QMessageBox.warning(
+                    self,
+                    "License Warning",
+                    f"License key was saved but validation failed:\n\n{info.warning}\n\n"
+                    "Please check your license key or contact support."
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "License Installed",
+                    f"License key installed successfully to:\n{dest_file}\n\n"
+                    f"Edition: {info.edition.value.title()}\n"
+                    f"Organization: {info.org_name}\n\n"
+                    "Restart the application for full effect.",
+                )
         except Exception as e:
             QMessageBox.critical(
                 self,

@@ -98,16 +98,16 @@ def _make_expired_key(secret=TEST_SECRET) -> str:
 
 
 class TestEdition:
-    def test_community_value(self):
-        assert Edition.COMMUNITY.value == "community"
-
-    def test_team_value(self):
-        assert Edition.TEAM.value == "team"
-
-    def test_string_enum(self):
-        """Edition is a string enum for easy serialization."""
+    def test_edition_values(self):
+        """Values must be lower case for consistency."""
         assert Edition.COMMUNITY == "community"
         assert Edition.TEAM == "team"
+        assert Edition.ORGANIZATION == "organization"
+
+    def test_edition_members(self):
+        """Must have exactly three editions."""
+        assert len(Edition) == 3
+        assert list(Edition) == [Edition.COMMUNITY, Edition.TEAM, Edition.ORGANIZATION]
 
 
 # ===========================================================================
@@ -140,6 +140,19 @@ class TestLicenseInfo:
         assert not info.is_expired
         assert info.days_until_expiry > 0
 
+    def test_organization_license(self):
+        info = LicenseInfo(
+            edition=Edition.ORGANIZATION,
+            org_name="Acme Corp",
+            seats=100,
+            expiry_timestamp=time.time() + 86400 * 30,
+        )
+        assert info.is_team  # Organization is also considered a "team" edition
+        assert info.org_name == "Acme Corp"
+        assert info.seats == 100
+        assert not info.is_expired
+        assert info.days_until_expiry > 0
+
     def test_expired_license(self):
         info = LicenseInfo(
             edition=Edition.TEAM,
@@ -151,38 +164,36 @@ class TestLicenseInfo:
     def test_no_expiry(self):
         info = LicenseInfo()
         assert not info.is_expired
-        assert info.days_until_expiry == 999
+        assert info.days_until_expiry is None
 
-    def test_to_dict(self):
+    def test_to_dict_safe(self):
+        """Should NOT include secret, but should include core license fields."""
         info = LicenseInfo(
-            edition=Edition.TEAM,
-            org_name="Acme",
-            seats=5,
-            expiry_timestamp=time.time() + 86400,
+            Edition.TEAM,
+            org_name="Testing Inc",
+            seats=10,
+            expiry_timestamp=time.time() + 30 * 86400 + 60,
+            key_id="key-123"
         )
         d = info.to_dict()
         assert d["edition"] == "team"
-        assert d["org_name"] == "Acme"
-        assert d["seats"] == 5
-        assert "days_until_expiry" in d
-        assert "warning" not in d  # No warning
+        assert d["org_name"] == "Testing Inc"
+        assert d["seats"] == 10
+        assert 29 <= d["days_until_expiry"] <= 30
+        assert d["key_id"] == "key-123"
+        assert d["expired"] is False
+        assert "warning" not in d
+        assert "secret" not in d
 
-    def test_to_dict_with_warning(self):
-        info = LicenseInfo(warning="Test warning")
+    def test_to_dict_warning(self):
+        """Should include warning only if non-empty."""
+        info = LicenseInfo(Edition.TEAM, warning="Warning 123")
         d = info.to_dict()
-        assert d["warning"] == "Test warning"
+        assert d["warning"] == "Warning 123"
 
-    def test_to_dict_includes_key_id(self):
-        """to_dict() must include key_id for API consumers."""
-        info = LicenseInfo(
-            edition=Edition.TEAM,
-            org_name="Acme",
-            seats=5,
-            key_id="kid-abc-123",
-            expiry_timestamp=time.time() + 86400,
-        )
-        d = info.to_dict()
-        assert d["key_id"] == "kid-abc-123"
+        info2 = LicenseInfo(Edition.TEAM, warning="")
+        d2 = info2.to_dict()
+        assert "warning" not in d2
 
     def test_to_dict_empty_key_id(self):
         """Default LicenseInfo has empty key_id."""

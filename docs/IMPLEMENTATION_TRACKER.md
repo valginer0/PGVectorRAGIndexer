@@ -86,8 +86,8 @@ These have zero dependencies on each other and should start simultaneously.
 - [x] Test: 32 unit + 7 integration tests (key gen, hash, verify, lifecycle)
 - [x] Quickstart docs for reverse proxy setup (`docs/REVERSE_PROXY_GUIDE.md`)
 
-### ✅ #17 License Key Validation (Backend ✅, UI ✅, Polish ✅)
-- **Effort**: ~6-8h | **Edition**: Both (this IS the edition gate) | **Dependencies**: #11 ✅
+### ✅ #17 License Key Validation (Backend ✅, UI ✅, Polish ✅, Semantic ✅)
+- **Effort**: ~10-12h | **Edition**: Both (this IS the edition gate) | **Dependencies**: #11 ✅
 - **Branch**: `feature/roadmap-v4`
 - [x] Create `license.py` module — Edition enum, LicenseInfo dataclass, JWT validation
 - [x] JWT signing/validation (HMAC-SHA256): edition, org, seats, expiry
@@ -525,7 +525,16 @@ Implementation sequencing (recommended):
 
 ---
 
-Last updated: 2026-02-27
+Last updated: 2026-02-28
+
+### ✅ v2.6.18 - Phase-1 Licensing Finalization (Option B)
+- **Effort**: ~4h | **Edition**: Both | **Dependencies**: None
+- **Branch**: `main`
+- [x] Adopt Semantic Option B for expiry handling (Optional[int])
+- [x] Authoritative server-side coercion for seats and expiry
+- [x] Consistent UI rendering (dash-everywhere for missing data)
+- [x] Comprehensive test coverage for semantic responses
+- [x] Release and tag v2.6.18
 
 ### ✅ v2.6.17 - License Safety & Protection
 - **Effort**: ~4-h | **Edition**: Both | **Dependencies**: None

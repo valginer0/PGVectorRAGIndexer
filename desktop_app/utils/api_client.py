@@ -808,6 +808,24 @@ class APIClient:
         return response.json()
 
     # ------------------------------------------------------------------
+    # Licensing
+    # ------------------------------------------------------------------
+
+    def get_license_info(self) -> Dict[str, Any]:
+        """Get license information from the server.
+        
+        Returns:
+            Dict with edition, org_name, seats, days_until_expiry, expired, key_id, warning.
+        """
+        response = requests.get(
+            f"{self.base_url}/license",
+            headers=self._headers,
+            timeout=10,
+        )
+        response.raise_for_status()
+        return response.json()
+
+    # ------------------------------------------------------------------
     # Activity Log (#10)
     # ------------------------------------------------------------------
 

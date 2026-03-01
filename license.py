@@ -67,6 +67,7 @@ class Edition(str, enum.Enum):
     """Product edition, determined by license key."""
     COMMUNITY = "community"
     TEAM = "team"
+    ORGANIZATION = "organization"
 
 
 # ---------------------------------------------------------------------------
@@ -108,8 +109,8 @@ class LicenseInfo:
 
     @property
     def is_team(self) -> bool:
-        """Check if this is a Team edition license."""
-        return self.edition == Edition.TEAM
+        """Check if this is a Team or Organization edition license."""
+        return self.edition in (Edition.TEAM, Edition.ORGANIZATION)
 
     @property
     def is_expired(self) -> bool:
@@ -119,10 +120,10 @@ class LicenseInfo:
         return time.time() > self.expiry_timestamp
 
     @property
-    def days_until_expiry(self) -> int:
-        """Days remaining until license expires. Negative if already expired."""
+    def days_until_expiry(self) -> Optional[int]:
+        """Days remaining until license expires. None if no expiry (Community)."""
         if self.expiry_timestamp <= 0:
-            return 999  # No expiry
+            return None
         remaining = self.expiry_timestamp - time.time()
         return int(remaining / 86400)
 
@@ -131,8 +132,9 @@ class LicenseInfo:
         result = {
             "edition": self.edition.value,
             "org_name": self.org_name,
-            "seats": self.seats,
-            "days_until_expiry": self.days_until_expiry,
+            "seats": int(self.seats or 0),
+            "days_until_expiry": int(self.days_until_expiry) if self.days_until_expiry is not None else None,
+            "expired": self.is_expired,
             "key_id": self.key_id,
         }
         if self.warning:
@@ -510,12 +512,13 @@ def load_license(
                         f"Renew at https://ragvault.net/pricing"
             )
 
+        days_remaining_str = f"{license_info.days_until_expiry} days remaining" if license_info.days_until_expiry is not None else "no expiry"
         logger.info(
-            "License validated: %s Edition for '%s' (%d seats, %d days remaining)",
+            "License validated: %s Edition for '%s' (%d seats, %s)",
             license_info.edition.value.title(),
             license_info.org_name,
             license_info.seats,
-            license_info.days_until_expiry,
+            days_remaining_str,
         )
 
         # Optional online revocation check
@@ -534,7 +537,8 @@ def load_license(
                 )
 
         # Warn if expiring soon (< 14 days)
-        if 0 < license_info.days_until_expiry <= 14:
+        days_rem = license_info.days_until_expiry
+        if days_rem is not None and 0 < days_rem <= 14:
             return LicenseInfo(
                 edition=license_info.edition,
                 org_name=license_info.org_name,
@@ -542,7 +546,7 @@ def load_license(
                 expiry_timestamp=license_info.expiry_timestamp,
                 issued_at=license_info.issued_at,
                 key_id=license_info.key_id,
-                warning=f"License expires in {license_info.days_until_expiry} days. "
+                warning=f"License expires in {days_rem} days. "
                         f"Renew at https://ragvault.net/pricing",
             )
 
@@ -605,5 +609,5 @@ def reset_license() -> None:
 
 
 def is_team_edition() -> bool:
-    """Convenience check: is the current edition Team?"""
+    """Convenience check: is the current edition Team or Organization?"""
     return get_current_license().is_team

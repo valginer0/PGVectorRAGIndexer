@@ -49,29 +49,58 @@ def is_feature_available(feature_name: str) -> bool:
         return True  # Not gated → always available
 
     license_info = get_current_license()
-    return license_info.edition == Edition.TEAM
+    return license_info.is_team
 
 
-def get_edition_display() -> dict:
+def get_edition_display(data: Optional[dict] = None) -> dict:
     """Get edition information formatted for the UI.
 
+    If data is provided, it is used instead of the local license.
     Returns a dict with keys:
         edition_label, is_team, org_name, seats, days_left,
         expiry_warning, warning_text
     """
-    info = get_current_license()
+    if data:
+        # Server mode
+        is_paid = data.get("edition") in ("team", "organization")
+        edition_name = data.get("edition", "community").title()
+        prefix = "Server Edition: "
+        org_name = data.get("org_name", "")
+        # Defensive coercion - trust server types but guard against malformed data
+        try:
+            seats = int(data.get("seats", 0))
+        except (ValueError, TypeError):
+            seats = 0
+            
+        days_val = data.get("days_until_expiry")
+        try:
+            days_left = int(days_val) if days_val is not None else None
+        except (ValueError, TypeError):
+            days_left = None
+            
+        warning = data.get("warning", "")
+    else:
+        # Local mode
+        info = get_current_license()
+        is_paid = info.is_team
+        edition_name = info.edition.value.title()
+        prefix = ""
+        org_name = info.org_name or ""
+        seats = info.seats
+        days_left = info.days_until_expiry
+        warning = info.warning or ""
 
     result = {
-        "edition_label": info.edition.value.title() + " Edition",
-        "is_team": info.is_team,
-        "org_name": info.org_name or "",
-        "seats": info.seats,
-        "days_left": info.days_until_expiry,
+        "edition_label": f"{prefix}{edition_name} Edition",
+        "is_team": is_paid,
+        "org_name": org_name,
+        "seats": seats,
+        "days_left": days_left,
         "expiry_warning": False,
-        "warning_text": info.warning or "",
+        "warning_text": warning,
     }
 
-    if info.is_team and 0 < info.days_until_expiry <= 30:
+    if is_paid and days_left is not None and 0 < days_left <= 30:
         result["expiry_warning"] = True
 
     return result

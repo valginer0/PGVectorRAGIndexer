@@ -536,9 +536,25 @@ class SettingsTab(QWidget):
 
     def _refresh_license_panel(self):
         """Update the license panel with current license info."""
+        remote_data = None
+        server_error = False
+
+        # Try to fetch from server if in Remote Mode
+        if self._radio_remote.isChecked():
+            if self.api_client and self.api_client.is_api_available():
+                try:
+                    # remote_data will be a dict from LicenseInfo.to_dict()
+                    remote_data = self.api_client.get_license_info()
+                except Exception as e:
+                    logging.getLogger(__name__).debug("Failed to fetch license from server: %s", e)
+                    server_error = True
+            else:
+                # API is down but we are in remote mode -> treat as server error
+                server_error = True
+
         try:
             from desktop_app.utils.edition import get_edition_display
-            info = get_edition_display()
+            info = get_edition_display(remote_data)
         except Exception as e:
             logging.getLogger(__name__).debug("Could not load license info: %s", e)
             self._edition_badge.setText("Community Edition")
@@ -551,11 +567,11 @@ class SettingsTab(QWidget):
 
         # Edition badge
         if info["is_team"]:
-            self._edition_badge.setText("Team Edition ✓")
+            self._edition_badge.setText(info["edition_label"] + " ✓")
             self._edition_badge.setStyleSheet(f"font-weight: 600; color: {Theme.SUCCESS};")
             self._upgrade_btn.setVisible(False)
         else:
-            self._edition_badge.setText("Community Edition")
+            self._edition_badge.setText(info["edition_label"])
             self._edition_badge.setStyleSheet(f"font-weight: 600; color: {Theme.TEXT_SECONDARY};")
             self._upgrade_btn.setVisible(True)
 
@@ -563,7 +579,7 @@ class SettingsTab(QWidget):
         self._org_label.setText(info["org_name"] if info["org_name"] else "—")
 
         # Expiry
-        if info["is_team"]:
+        if info["is_team"] and info["days_left"] is not None:
             days = info["days_left"]
             if info["expiry_warning"]:
                 self._expiry_label.setText(f"{days} days remaining")
@@ -574,6 +590,7 @@ class SettingsTab(QWidget):
         else:
             self._expiry_label.setText("—")
             self._expiry_label.setStyleSheet("")
+        self._expiry_label.setVisible(True)
 
         # Seats
         if info["is_team"] and info["seats"] > 0:
@@ -582,8 +599,15 @@ class SettingsTab(QWidget):
             self._seats_label.setText("—")
 
         # Warning text (e.g., expiry warning, invalid key)
-        if info["warning_text"]:
-            self._warning_label.setText(info["warning_text"])
+        warning_text = info["warning_text"]
+        if server_error:
+            if warning_text:
+                warning_text += " | Server Edition: Unavailable — using local"
+            else:
+                warning_text = "Server Edition: Unavailable — using local"
+
+        if warning_text:
+            self._warning_label.setText(warning_text)
             self._warning_label.setVisible(True)
         else:
             self._warning_label.setVisible(False)

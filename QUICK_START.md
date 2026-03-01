@@ -8,7 +8,7 @@ Get up and running in 5 minutes!
 
 ## 🆕 What's New in v2.6.18
 
-- **Phase-1 Licensing Finalization**: Semantic expiry handling (null for no expiry), authoritative server-side coercion, and unified dash-placeholder UI for layout stability.
+- **Phase-1 Licensing Finalization**: Semantic expiry handling (`null` in API for no expiry), authoritative server-side coercion, and unified dash-placeholder UI for layout stability.
 - **Enhanced Comparison Safety**: Fixed potential TypeErrors by explicitly checking for None in license expiry calculations.
 
 ## ⚡ Desktop App Installation (Recommended)

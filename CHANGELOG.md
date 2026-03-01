@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Phase-1 Licensing Finalization (Option B)**:
-  - **Semantic Expiry**: `days_until_expiry` now returns `null` (None) for licenses without an expiry (e.g., Community edition or perpetual licenses).
+  - **Semantic Expiry**: `days_until_expiry` now returns `null` in API responses for licenses without an expiry (e.g., Community edition), replacing magic numbers like `999`.
   - **Authoritative Coercion**: The server is now the primary authority for ensuring numeric types in API responses; client-side coercion is a defensive fallback.
   - **Unified UX Policy**: The Settings UI consistently displays a dash (`—`) for missing expiry data, ensuring grid stability.
   - **Internal Robustness**: Updated all internal comparison sites (logging, near-expiry warnings) to safely handle `Optional[int]` values, preventing potential `TypeError`.

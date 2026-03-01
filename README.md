@@ -72,12 +72,11 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ### 🆕 Latest Features (v2.6.18)
 
-- **✅ Windows Installer Parity**: Full feature parity with legacy PowerShell scripts
-  - Rancher Desktop auto-installation via winget if Docker is missing
-  - Automatic runtime start with `rdctl start --container-engine moby`
-  - Reboot & resume logic via Scheduled Tasks for seamless installation
-  - Docker image pre-pulling during setup
-- **✅ Self-Healing Installer**: Detects timeouts and offers system reboot to fix stuck Docker daemons
+- **✅ Phase-1 Licensing Finalization (Option B)**:
+  - **Semantic Expiry**: `days_until_expiry` now returns `null` (None) for licenses without an expiry (e.g., Community edition or perpetual licenses).
+  - **Authoritative Coercion**: The server is now the primary authority for ensuring numeric types in API responses; client-side coercion is a defensive fallback.
+  - **Unified UX Policy**: The Settings UI consistently displays a dash (`—`) for missing expiry data, ensuring grid stability.
+  - **Internal Robustness**: Updated all internal comparison sites (logging, near-expiry warnings) to safely handle `Optional[int]` values, preventing potential `TypeError`.
 
 ### Previous Releases (v2.3)
 

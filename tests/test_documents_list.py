@@ -148,7 +148,7 @@ class TestDocumentsList:
             },
         )
         assert resp.status_code == 400
-        assert "sort_by" in resp.json()["detail"].lower()
+        assert "sort_by" in resp.json()["message"].lower()
 
     def test_openapi_has_documents_and_metadata_values(self, client, db_manager):
         r = client.get("/openapi.json")

@@ -17,6 +17,10 @@ os.environ['POSTGRES_DB'] = 'rag_vector_db_test'  # Separate test database
 os.environ['POSTGRES_USER'] = 'rag_user'
 os.environ['POSTGRES_PASSWORD'] = 'rag_password'
 
+# Disable auth for all tests by default
+os.environ.pop('API_AUTH_FORCE_ALL', None)
+os.environ['API_REQUIRE_AUTH'] = 'false'
+
 
 @pytest.fixture(scope='session')
 def test_config():

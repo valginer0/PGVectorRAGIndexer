@@ -69,7 +69,26 @@ async def license_info():
     return get_current_license().to_dict()
 
 
-@system_app_router.get("/health", response_model=HealthResponse, responses={503: {"model": APIErrorResponse}})
+@system_app_router.get(
+    "/health", 
+    response_model=HealthResponse, 
+    responses={
+        500: {
+            "model": APIErrorResponse,
+            "description": "Service initialization failed",
+            "content": {
+                "application/json": {
+                    "example": {
+                        "error_code": "SYS_1004",
+                        "message": "Initialization failed: Database connection refused",
+                        "details": {"context": "startup"}
+                    }
+                }
+            }
+        },
+        503: {"model": APIErrorResponse, "description": "Service unavailable"}
+    }
+)
 async def health_check():
     """Check API and database health."""
     from services import init_complete, init_error # Re-import to ensure latest value

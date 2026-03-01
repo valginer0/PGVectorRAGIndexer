@@ -6,6 +6,7 @@ import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from auth import require_api_key, require_admin, require_permission
+from api_models import APIErrorResponse
 
 logger = logging.getLogger(__name__)
 
@@ -109,7 +110,7 @@ async def rotate_key(key_id: int):
 # Client Identity
 # ---------------------------------------------------------------------------
 
-@identity_router.post("/clients/register", dependencies=[Depends(require_api_key)])
+@identity_router.post("/clients/register", dependencies=[Depends(require_api_key)], responses={401: {"model": APIErrorResponse}})
 async def register_client_endpoint(request: Request):
     """Register or update a client identity."""
     from client_identity import register_client

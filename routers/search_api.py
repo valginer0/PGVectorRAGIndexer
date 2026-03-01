@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from api_models import (
     SearchRequest, SearchResponse, SearchResultModel,
     DocumentInfo, DocumentListResponse, BulkDeleteRequest,
-    ExportRequest, RestoreRequest
+    ExportRequest, RestoreRequest, APIErrorResponse
 )
 from services import get_indexer, get_retriever
 from auth import require_api_key
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 search_router = APIRouter(tags=["Search & Documents"])
 
 
-@search_router.post("/search", response_model=SearchResponse, dependencies=[Depends(require_api_key)])
+@search_router.post("/search", response_model=SearchResponse, dependencies=[Depends(require_api_key)], responses={401: {"model": APIErrorResponse}})
 async def search_documents(request: SearchRequest):
     """Search for relevant documents."""
     try:
@@ -75,7 +75,7 @@ async def search_documents(request: SearchRequest):
         )
 
 
-@search_router.get("/documents", response_model=DocumentListResponse, tags=["Documents"], dependencies=[Depends(require_api_key)])
+@search_router.get("/documents", response_model=DocumentListResponse, tags=["Documents"], dependencies=[Depends(require_api_key)], responses={401: {"model": APIErrorResponse}})
 async def list_documents(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
@@ -231,9 +231,10 @@ async def get_document(document_id: str):
         doc = repo.get_document_by_id(document_id)
         
         if not doc:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Document not found: {document_id}"
+            from errors import raise_api_error, ErrorCode
+            raise_api_error(
+                ErrorCode.DOCUMENT_NOT_FOUND,
+                message=f"Document not found: {document_id}"
             )
         
         return DocumentInfo(
@@ -261,9 +262,10 @@ async def delete_document(document_id: str):
     try:
         idx = get_indexer()
         if not idx.delete_document(document_id):
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Document not found: {document_id}"
+            from errors import raise_api_error, ErrorCode
+            raise_api_error(
+                ErrorCode.DOCUMENT_NOT_FOUND,
+                message=f"Document not found: {document_id}"
             )
         return {"status": "success", "message": f"Document deleted: {document_id}"}
     except HTTPException:

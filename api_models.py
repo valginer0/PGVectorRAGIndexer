@@ -137,3 +137,14 @@ class RetentionRunRequest(BaseModel):
     quarantine_days: Optional[int] = Field(default=None, ge=1)
     indexing_runs_days: Optional[int] = Field(default=None, ge=1)
     cleanup_saml_sessions: bool = Field(default=True)
+
+
+class APIErrorResponse(BaseModel):
+    """Standardized error response for all API failures."""
+    error_code: str = Field(..., description="Unique machine-readable error identifier", example="LIC_3002")
+    message: str = Field(..., description="Human-readable error description", example="Your license has expired.")
+    details: Optional[Dict[str, Any]] = Field(
+        default=None, 
+        description="Additional context or validation errors",
+        example={"expiry_date": "2023-12-31"}
+    )

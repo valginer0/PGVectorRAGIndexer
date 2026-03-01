@@ -173,6 +173,7 @@ async def upload_and_index(
     except HTTPException:
         raise
     except EncryptedPDFError as e:
+        from errors import raise_api_error, ErrorCode
         # Return 403 with specific error type for encrypted PDFs
         source = custom_source_uri or file.filename
         logger.warning(f"Encrypted PDF detected: {source}")
@@ -186,15 +187,14 @@ async def upload_and_index(
         
         complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
                      errors=[{"source_uri": source, "error": "encrypted_pdf"}])
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={
-                "error_type": "encrypted_pdf",
-                "message": str(e),
-                "source_uri": source
-            }
+        
+        raise_api_error(
+            ErrorCode.ENCRYPTED_PDF,
+            message=str(e),
+            details={"source_uri": source}
         )
     except (UnsupportedFormatError, DocumentProcessingError) as e:
+        from errors import raise_api_error, ErrorCode
         error_message = str(e) if str(e) else ""
         
         # Check if this is an OCR mode "only" skip (not an error, just skipped)
@@ -213,27 +213,31 @@ async def upload_and_index(
         complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
                      errors=[{"source_uri": source, "error": error_message}])
         logger.error(f"Upload and index failed: {e}")
-        detail_message = error_message
+        
         if (
             file.filename
             and file.filename.lower().endswith(".doc")
-            and "convert" not in detail_message.lower()
+            and "convert" not in error_message.lower()
         ):
-            detail_message = (
+            error_message = (
                 "Legacy .doc format is not supported automatically. "
                 "Please install LibreOffice/soffice for conversion or convert the document to .docx."
             )
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=detail_message
+        
+        raise_api_error(
+            ErrorCode.UNSUPPORTED_FORMAT if isinstance(e, UnsupportedFormatError) else ErrorCode.DOCUMENT_PROCESSING_FAILED,
+            message=error_message,
+            details={"source_uri": source}
         )
     except Exception as e:
+        from errors import raise_api_error, ErrorCode
         complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
                      errors=[{"source_uri": source, "error": str(e)}])
         logger.error(f"Upload and index failed: {e}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Upload and index failed: {str(e)}"
+        raise_api_error(
+            ErrorCode.DOCUMENT_PROCESSING_FAILED,
+            message=f"Upload and index failed: {str(e)}",
+            details={"source_uri": source}
         )
     finally:
         # Clean up temporary file

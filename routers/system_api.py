@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from version import __version__
 from api_models import (
     API_VERSION, MIN_CLIENT_VERSION, MAX_CLIENT_VERSION,
-    HealthResponse, StatsResponse
+    HealthResponse, StatsResponse, APIErrorResponse
 )
 from services import get_indexer, init_complete, init_error
 from database import get_db_manager
@@ -69,16 +69,17 @@ async def license_info():
     return get_current_license().to_dict()
 
 
-@system_app_router.get("/health", response_model=HealthResponse)
+@system_app_router.get("/health", response_model=HealthResponse, responses={503: {"model": APIErrorResponse}})
 async def health_check():
     """Check API and database health."""
     from services import init_complete, init_error # Re-import to ensure latest value
     
     if not init_complete:
+        from errors import raise_api_error, ErrorCode
         if init_error:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail=f"Initialization failed: {init_error}"
+            raise_api_error(
+                ErrorCode.SERVICE_INITIALIZING, 
+                message=f"Initialization failed: {init_error}"
             )
         return HealthResponse(
             status="initializing",

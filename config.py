@@ -14,7 +14,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class DatabaseConfig(BaseSettings):
     """Database connection and pool configuration."""
     
-    model_config = SettingsConfigDict(env_prefix='DB_', case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_prefix='DB_', 
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore'
+    )
     
     host: str = Field(default='localhost', description='Database host')
     port: int = Field(default=5432, description='Database port')
@@ -191,7 +197,13 @@ class OCRConfig(BaseSettings):
 class APIConfig(BaseSettings):
     """API server configuration."""
     
-    model_config = SettingsConfigDict(env_prefix='API_', case_sensitive=False)
+    model_config = SettingsConfigDict(
+        env_prefix='API_', 
+        env_file='.env',
+        env_file_encoding='utf-8',
+        case_sensitive=False,
+        extra='ignore'
+    )
     
     host: str = Field(default='127.0.0.1', description='API host (set to 0.0.0.0 for network access)')
     port: int = Field(default=8000, description='API port')

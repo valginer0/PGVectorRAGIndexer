@@ -324,15 +324,43 @@ app.include_router(v1_router)  # backward compat: old unversioned paths
 
 
 # Error handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    """Handle FastAPI/Starlette HTTPExceptions by flattening structured details."""
+    detail = exc.detail
+    error_code = "GENERIC_HTTP_ERROR"
+    message = str(detail)
+    details = None
+    
+    if isinstance(detail, dict):
+        error_code = detail.get("error_code", error_code)
+        message = detail.get("message", message)
+        details = detail.get("details")
+    
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error_code": error_code,
+            "message": message,
+            "details": details
+        }
+    )
+
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    """Global exception handler."""
+    """Catch-all for truly unhandled exceptions."""
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
+    from errors import ErrorCode
+    
+    # Map to centralized Internal Server Error
+    err = ErrorCode.INTERNAL_SERVER_ERROR
     return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        status_code=err.status_code,
         content={
-            "detail": "Internal server error",
-            "error": str(exc)
+            "error_code": err.code,
+            "message": err.message,
+            "details": {"exception": str(exc)}
         }
     )
 

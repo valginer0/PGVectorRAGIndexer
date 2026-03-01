@@ -355,28 +355,23 @@ async def require_api_key(
         return None
 
     if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="API key required. Include X-API-Key header.",
-            headers={"WWW-Authenticate": "ApiKey"},
+        from errors import raise_api_error, ErrorCode
+        raise_api_error(
+            ErrorCode.UNAUTHORIZED,
+            message="API key required. Include X-API-Key header.",
+            details={"headers_required": ["X-API-Key"]}
         )
 
     if not api_key.startswith(KEY_PREFIX):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid API key format.",
-            headers={"WWW-Authenticate": "ApiKey"},
-        )
+        from errors import raise_api_error, ErrorCode
+        raise_api_error(ErrorCode.INVALID_API_KEY, message="Invalid API key format.")
 
     key_hash = hash_api_key(api_key)
     key_record = lookup_api_key(key_hash)
 
     if not key_record:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or revoked API key.",
-            headers={"WWW-Authenticate": "ApiKey"},
-        )
+        from errors import raise_api_error, ErrorCode
+        raise_api_error(ErrorCode.INVALID_API_KEY, message="Invalid or revoked API key.")
 
     # Update last used (fire-and-forget, don't block the request)
     update_last_used(key_record["id"])
@@ -434,9 +429,11 @@ def require_permission(permission: str):
             if user and _has_perm(user.get("role", ""), permission):
                 return key_record
 
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Permission '{permission}' required.",
+            from errors import raise_api_error, ErrorCode
+            raise_api_error(
+                ErrorCode.FORBIDDEN,
+                message=f"Permission '{permission}' required.",
+                details={"required_permission": permission}
             )
         except HTTPException:
             raise
@@ -448,9 +445,12 @@ def require_permission(permission: str):
                 logger.warning("Users table not found — allowing access (bootstrap): %s", e)
                 return key_record
             logger.error("Permission check failed — denying access: %s", e)
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Permission check unavailable. Please try again later.",
+            
+            from errors import raise_api_error, ErrorCode
+            raise_api_error(
+                ErrorCode.DATABASE_CONNECTION_ERROR,
+                message="Permission check unavailable. Please try again later.",
+                details={"exception": str(e)}
             )
 
     return _check_permission

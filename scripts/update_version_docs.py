@@ -12,33 +12,38 @@ import os
 import re
 import sys
 
-# Files to update and their patterns
-# Format: (file_path, [(pattern, replacement_template), ...])
-DOC_PATTERNS = [
+# Default document patterns in the main repository
+MAIN_DOC_PATTERNS = [
     ("README.md", [
-        # Main title: # PGVectorRAGIndexer v2.4
         (r'^# PGVectorRAGIndexer v[\d.]+', '# PGVectorRAGIndexer v{full}'),
-        # What's New section: ## 🋹 What's New in v2.4
         (r"^## 🋹 What's New in v[\d.]+", "## 🋹 What's New in v{full}"),
-        # Latest Features: ### 🆕 Latest Features (v2.4)
         (r'^### 🆕 Latest Features \(v[\d.]+\)', '### 🆕 Latest Features (v{full})'),
     ]),
     ("QUICK_START.md", [
-        # Main title: # Quick Start Guide - PGVectorRAGIndexer v2.4
         (r'^# Quick Start Guide - PGVectorRAGIndexer v[\d.]+', 
          '# Quick Start Guide - PGVectorRAGIndexer v{full}'),
-        # What's New: ## 🆕 What's New in v2.4
         (r"^## 🆕 What's New in v[\d.]+", "## 🆕 What's New in v{full}"),
     ]),
     ("DEPLOYMENT.md", [
-        # Main title: # Deployment Guide - PGVectorRAGIndexer v2.2
         (r'^# Deployment Guide - PGVectorRAGIndexer v[\d.]+',
          '# Deployment Guide - PGVectorRAGIndexer v{full}'),
     ]),
     ("USAGE_GUIDE.md", [
-        # Main title: # PGVectorRAGIndexer Usage Guide - v2.2
         (r'^# PGVectorRAGIndexer Usage Guide - v[\d.]+',
          '# PGVectorRAGIndexer Usage Guide - v{full}'),
+    ]),
+]
+
+# Patterns for the website repository
+WEBSITE_PATTERNS = [
+    ("package.json", [
+        (r'"version": "[\d.]+"', '"version": "{full}"'),
+    ]),
+    ("index.html", [
+        (r'<span>Production Ready · v[\d.]+</span>', '<span>Production Ready · v{full}</span>'),
+        (r'releases/download/v[\d.]+/PGVectorRAGIndexer\.msi', 'releases/download/v{full}/PGVectorRAGIndexer.msi'),
+        (r'releases/download/v[\d.]+/install\.command', 'releases/download/v{full}/install.command'),
+        (r'releases/download/v[\d.]+/install-linux\.sh', 'releases/download/v{full}/install-linux.sh'),
     ]),
 ]
 
@@ -66,9 +71,9 @@ def parse_version(version):
     }
 
 
-def update_file(file_path, patterns, version_info, dry_run=False):
+def update_file(file_path, patterns, version_info, base_dir, dry_run=False):
     """Update version references in a file."""
-    full_path = os.path.join(os.path.dirname(__file__), '..', file_path)
+    full_path = os.path.join(base_dir, file_path)
     
     if not os.path.exists(full_path):
         print(f"  ⚠ File not found: {file_path}")
@@ -112,13 +117,27 @@ def main():
     version_info = parse_version(version)
     
     print(f"Updating documentation to version {version}...")
-    print(f"  (using v{version_info['major_minor']} in doc headers)\n")
     
-    # Update each file
+    # Directories
+    main_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+    website_dir = os.path.abspath(os.path.join(main_dir, '..', 'PGVectorRAGIndexerWebsite'))
+    
     updated_count = 0
-    for file_path, patterns in DOC_PATTERNS:
-        if update_file(file_path, patterns, version_info, dry_run):
+    
+    # 1. Update main repo docs
+    print(f"\n[Main Repository: {main_dir}]")
+    for file_path, patterns in MAIN_DOC_PATTERNS:
+        if update_file(file_path, patterns, version_info, main_dir, dry_run):
             updated_count += 1
+            
+    # 2. Update website repo if it exists
+    print(f"\n[Website Repository: {website_dir}]")
+    if os.path.exists(website_dir):
+        for file_path, patterns in WEBSITE_PATTERNS:
+            if update_file(file_path, patterns, version_info, website_dir, dry_run):
+                updated_count += 1
+    else:
+        print("  ⚠ Website directory not found at sibling path. Skipping.")
     
     print(f"\n{'Would update' if dry_run else 'Updated'} {updated_count} file(s)")
     

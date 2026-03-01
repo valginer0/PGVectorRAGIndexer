@@ -78,7 +78,22 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
   - **Unified UX Policy**: The Settings UI consistently displays a dash (`—`) for missing expiry data, ensuring grid stability.
   - **Internal Robustness**: Updated all internal comparison sites (logging, near-expiry warnings) to safely handle `Optional[int]` values, preventing potential `TypeError`.
 
-### Previous Releases (v2.3)
+### Recent Milestones (v2.6)
+
+- **✅ Windows Installer Parity**: Full feature parity with legacy PowerShell scripts, including auto-installation of Rancher/Docker environments.
+- **✅ API Modularization**: Refactored monolithic backend into a scalable, domain-driven package architecture.
+- **✅ Asymmetric Licensing (RS256)**: Zero-config desktop activation using embedded public keys.
+- **✅ Installer Self-Healing**: Automated detection and recovery from stuck Docker daemons and system reboots.
+
+### Architecture & Scale (v2.4 - v2.5)
+
+- **✅ Hierarchical Document Tree**: Scalable, lazy-loaded tree view replacing the legacy list for 100k+ document navigation.
+- **✅ Privacy-First Analytics**: Opt-in anonymous usage tracking with a local audit log and transparency dashboard.
+- **✅ Split-Backend Testing**: E2E validation suite for multi-server production deployments.
+- **✅ WSL Native Dialogs**: Seamless integration of Windows native file pickers when running under WSL/Linux.
+- **✅ Database Hardening**: Context-managed connection pooling across all 14 backend modules to eliminate leaks.
+
+### Intelligence & Integration (v2.1 - v2.3)
 
 - **✅ MCP Server**: AI agents (Claude CLI, Claude Desktop, Cursor) can connect directly to your local database
   - Uses `stdio` transport — zero network exposure, no open ports
@@ -93,8 +108,6 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 - **✅ Incremental Indexing**: Smart content change detection using `xxHash`. Skips unchanged files, saving bandwidth and processing time.
 - **✅ Wildcard Search**: Document type filter now supports `*` for "All Types".
 - **✅ Dynamic UI**: Upload tab automatically fetches available document types from the database.
-
-### Previous Releases (v2.1)
 
 - **✅ Document Type System**: Organize documents with custom types (policy, resume, report, etc.)
 - **✅ Bulk Delete with Preview**: Safely delete multiple documents with preview before action

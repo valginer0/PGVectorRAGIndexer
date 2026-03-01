@@ -78,7 +78,7 @@ async def health_check():
         from errors import raise_api_error, ErrorCode
         if init_error:
             raise_api_error(
-                ErrorCode.SERVICE_INITIALIZING, 
+                ErrorCode.SERVICE_INITIALIZATION_FAILED, 
                 message=f"Initialization failed: {init_error}"
             )
         return HealthResponse(

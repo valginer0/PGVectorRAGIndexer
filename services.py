@@ -51,3 +51,10 @@ def reset_services():
     global indexer, retriever
     indexer = None
     retriever = None
+
+
+def set_init_failed(error_msg: str):
+    """Force an initialization failure state (primarily for testing)."""
+    global init_complete, init_error
+    init_complete = False
+    init_error = error_msg

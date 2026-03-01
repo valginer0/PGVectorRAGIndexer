@@ -11,6 +11,7 @@ class ErrorCode(Enum):
     INTERNAL_SERVER_ERROR = ("SYS_1001", status.HTTP_500_INTERNAL_SERVER_ERROR, "An unexpected internal server error occurred.")
     NOT_IMPLEMENTED = ("SYS_1002", status.HTTP_501_NOT_IMPLEMENTED, "This feature is not yet implemented.")
     SERVICE_INITIALIZING = ("SYS_1003", status.HTTP_503_SERVICE_UNAVAILABLE, "Server is still initializing. Please try again in a moment.")
+    SERVICE_INITIALIZATION_FAILED = ("SYS_1004", status.HTTP_500_INTERNAL_SERVER_ERROR, "Server failed to initialize properly.")
     
     # Auth & Security (2xxx)
     UNAUTHORIZED = ("AUTH_2001", status.HTTP_401_UNAUTHORIZED, "Authentication required.")

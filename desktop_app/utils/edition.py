@@ -11,6 +11,9 @@ from typing import Optional
 
 from license import Edition, LicenseInfo, get_current_license
 
+from license_utils import compute_days_until_expiry
+from desktop_app.utils.license_dto import LicenseDisplayDTO
+
 logger = logging.getLogger(__name__)
 
 # URL for the pricing / upgrade page
@@ -52,13 +55,11 @@ def is_feature_available(feature_name: str) -> bool:
     return license_info.is_team
 
 
-def get_edition_display(data: Optional[dict] = None) -> dict:
+def get_edition_display(data: Optional[dict] = None) -> LicenseDisplayDTO:
     """Get edition information formatted for the UI.
 
     If data is provided, it is used instead of the local license.
-    Returns a dict with keys:
-        edition_label, is_team, org_name, seats, days_left,
-        expiry_warning, warning_text
+    Returns a LicenseDisplayDTO.
     """
     if data:
         # Server mode
@@ -72,6 +73,7 @@ def get_edition_display(data: Optional[dict] = None) -> dict:
         except (ValueError, TypeError):
             seats = 0
             
+        # TRUST SERVER - do not recompute from timestamps
         days_val = data.get("days_until_expiry")
         try:
             days_left = int(days_val) if days_val is not None else None
@@ -87,23 +89,23 @@ def get_edition_display(data: Optional[dict] = None) -> dict:
         prefix = ""
         org_name = info.org_name or ""
         seats = info.seats
-        days_left = info.days_until_expiry
+        # Local computation using license_utils
+        days_left = compute_days_until_expiry(info.expiry_timestamp)
         warning = info.warning or ""
 
-    result = {
-        "edition_label": f"{prefix}{edition_name} Edition",
-        "is_team": is_paid,
-        "org_name": org_name,
-        "seats": seats,
-        "days_left": days_left,
-        "expiry_warning": False,
-        "warning_text": warning,
-    }
-
+    expiry_warning = False
     if is_paid and days_left is not None and 0 < days_left <= 30:
-        result["expiry_warning"] = True
+        expiry_warning = True
 
-    return result
+    return LicenseDisplayDTO(
+        edition_label=f"{prefix}{edition_name} Edition",
+        is_team=is_paid,
+        org_name=org_name,
+        seats=seats,
+        days_left=days_left,
+        expiry_warning=expiry_warning,
+        warning_text=warning,
+    )
 
 
 def is_write_allowed() -> bool:

@@ -45,6 +45,7 @@ from license import (
     check_license_revocation,
     resolve_verification_context,
 )
+from license_utils import is_expired, compute_days_until_expiry
 
 # Test signing secret (NOT a real secret)
 TEST_SECRET = "test-secret-for-unit-tests-only"
@@ -137,8 +138,8 @@ class TestLicenseInfo:
         assert info.is_team
         assert info.org_name == "Acme Corp"
         assert info.seats == 10
-        assert not info.is_expired
-        assert info.days_until_expiry > 0
+        assert not is_expired(info.expiry_timestamp)
+        assert compute_days_until_expiry(info.expiry_timestamp) > 0
 
     def test_organization_license(self):
         info = LicenseInfo(
@@ -150,21 +151,21 @@ class TestLicenseInfo:
         assert info.is_team  # Organization is also considered a "team" edition
         assert info.org_name == "Acme Corp"
         assert info.seats == 100
-        assert not info.is_expired
-        assert info.days_until_expiry > 0
+        assert not is_expired(info.expiry_timestamp)
+        assert compute_days_until_expiry(info.expiry_timestamp) > 0
 
     def test_expired_license(self):
         info = LicenseInfo(
             edition=Edition.TEAM,
             expiry_timestamp=time.time() - 100,
         )
-        assert info.is_expired
-        assert info.days_until_expiry <= 0
+        assert is_expired(info.expiry_timestamp)
+        assert compute_days_until_expiry(info.expiry_timestamp) <= 0
 
     def test_no_expiry(self):
         info = LicenseInfo()
-        assert not info.is_expired
-        assert info.days_until_expiry is None
+        assert not is_expired(info.expiry_timestamp)
+        assert compute_days_until_expiry(info.expiry_timestamp) is None
 
     def test_to_dict_safe(self):
         """Should NOT include secret, but should include core license fields."""
@@ -215,7 +216,7 @@ class TestValidateLicenseKey:
         assert info.org_name == "Acme Corp"
         assert info.seats == 10
         assert info.is_team
-        assert not info.is_expired
+        assert not is_expired(info.expiry_timestamp)
 
     def test_valid_community_key(self):
         key = _make_key(edition="community", org="Solo Dev")
@@ -675,7 +676,8 @@ class TestShortExpiryKeys:
         key = _make_key(days=90)
         info = validate_license_key(key, TEST_SECRET)
         assert info.edition == Edition.TEAM
-        assert 85 <= info.days_until_expiry <= 91  # Allow for clock drift
+        days_left = compute_days_until_expiry(info.expiry_timestamp)
+        assert 85 <= days_left <= 91  # Allow for clock drift
 
     def test_90_day_key_no_near_expiry_warning(self, tmp_path):
         """A fresh 90-day key should NOT trigger the 14-day expiry warning."""
@@ -689,11 +691,12 @@ class TestShortExpiryKeys:
         """Edge case: 89-day key validates fine."""
         key = _make_key(days=89)
         info = validate_license_key(key, TEST_SECRET)
-        assert not info.is_expired
+        assert not is_expired(info.expiry_timestamp)
 
     def test_1_day_key_validates(self):
         """Minimum viable key: 1 day."""
         key = _make_key(days=1)
         info = validate_license_key(key, TEST_SECRET)
         assert info.edition == Edition.TEAM
-        assert 0 <= info.days_until_expiry <= 1
+        days_left = compute_days_until_expiry(info.expiry_timestamp)
+        assert 0 <= days_left <= 1

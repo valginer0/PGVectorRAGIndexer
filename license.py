@@ -32,6 +32,8 @@ try:
 except ImportError:
     jwt = None  # Graceful fallback — Community edition if PyJWT not installed
 
+from license_utils import compute_days_until_expiry, is_expired
+
 logger = logging.getLogger(__name__)
 
 # Environment variable for the HMAC signing secret
@@ -112,29 +114,15 @@ class LicenseInfo:
         """Check if this is a Team or Organization edition license."""
         return self.edition in (Edition.TEAM, Edition.ORGANIZATION)
 
-    @property
-    def is_expired(self) -> bool:
-        """Check if the license has expired."""
-        if self.expiry_timestamp <= 0:
-            return False  # No expiry = never expires (Community)
-        return time.time() > self.expiry_timestamp
-
-    @property
-    def days_until_expiry(self) -> Optional[int]:
-        """Days remaining until license expires. None if no expiry (Community)."""
-        if self.expiry_timestamp <= 0:
-            return None
-        remaining = self.expiry_timestamp - time.time()
-        return int(remaining / 86400)
-
     def to_dict(self) -> dict:
         """Convert to a safe dict for API responses (no secrets)."""
+        days_left = compute_days_until_expiry(self.expiry_timestamp)
         result = {
             "edition": self.edition.value,
             "org_name": self.org_name,
             "seats": int(self.seats or 0),
-            "days_until_expiry": int(self.days_until_expiry) if self.days_until_expiry is not None else None,
-            "expired": self.is_expired,
+            "days_until_expiry": days_left,
+            "expired": is_expired(self.expiry_timestamp),
             "key_id": self.key_id,
         }
         if self.warning:
@@ -502,7 +490,7 @@ def load_license(
         license_info = validate_license_key(key_string, signing_secret, resolved_algorithms)
 
         # Check expiry (should already be caught by PyJWT, but double-check)
-        if license_info.is_expired:
+        if is_expired(license_info.expiry_timestamp):
             logger.warning(
                 "License for '%s' has expired. Running as Community Edition.",
                 license_info.org_name,
@@ -512,7 +500,8 @@ def load_license(
                         f"Renew at https://ragvault.net/pricing"
             )
 
-        days_remaining_str = f"{license_info.days_until_expiry} days remaining" if license_info.days_until_expiry is not None else "no expiry"
+        days_left = compute_days_until_expiry(license_info.expiry_timestamp)
+        days_remaining_str = f"{days_left} days remaining" if days_left is not None else "no expiry"
         logger.info(
             "License validated: %s Edition for '%s' (%d seats, %s)",
             license_info.edition.value.title(),
@@ -537,7 +526,7 @@ def load_license(
                 )
 
         # Warn if expiring soon (< 14 days)
-        days_rem = license_info.days_until_expiry
+        days_rem = compute_days_until_expiry(license_info.expiry_timestamp)
         if days_rem is not None and 0 < days_rem <= 14:
             return LicenseInfo(
                 edition=license_info.edition,

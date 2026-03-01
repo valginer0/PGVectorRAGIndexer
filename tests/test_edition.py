@@ -143,46 +143,46 @@ class TestGetEditionDisplay:
     def test_community_display(self):
         _set_community()
         info = get_edition_display()
-        assert info["edition_label"] == "Community Edition"
-        assert info["is_team"] is False
-        assert info["org_name"] == ""
-        assert info["seats"] == 0
-        assert info["expiry_warning"] is False
+        assert info.edition_label == "Community Edition"
+        assert info.is_team is False
+        assert info.org_name == ""
+        assert info.seats == 0
+        assert info.expiry_warning is False
 
     def test_team_display(self):
         _set_team(org_name="Acme Corp", seats=25)
         info = get_edition_display()
-        assert info["edition_label"] == "Team Edition"
-        assert info["is_team"] is True
-        assert info["org_name"] == "Acme Corp"
-        assert info["seats"] == 25
-        assert info["expiry_warning"] is False
+        assert info.edition_label == "Team Edition"
+        assert info.is_team is True
+        assert info.org_name == "Acme Corp"
+        assert info.seats == 25
+        assert info.expiry_warning is False
 
     def test_team_expiry_warning_when_near(self):
         """Expiry warning when < 30 days remaining."""
         _set_team(expiry_timestamp=time.time() + 86400 * 15)
         info = get_edition_display()
-        assert info["is_team"] is True
-        assert info["expiry_warning"] is True
-        assert info["days_left"] <= 30
+        assert info.is_team is True
+        assert info.expiry_warning is True
+        assert info.days_left <= 30
 
     def test_team_no_expiry_warning_when_far(self):
         """No expiry warning when > 30 days remaining."""
         _set_team(expiry_timestamp=time.time() + 86400 * 90)
         info = get_edition_display()
-        assert info["expiry_warning"] is False
-        assert info["days_left"] > 30
+        assert info.expiry_warning is False
+        assert info.days_left > 30
 
     def test_warning_text_from_license(self):
         """Warning text is passed through from LicenseInfo."""
         set_current_license(LicenseInfo(warning="Test warning message"))
         info = get_edition_display()
-        assert info["warning_text"] == "Test warning message"
+        assert info.warning_text == "Test warning message"
 
     def test_no_warning_text_when_clean(self):
         _set_team()
         info = get_edition_display()
-        assert info["warning_text"] == ""
+        assert info.warning_text == ""
 
 
 # ===========================================================================

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.18] - 2026-02-28
+
+### Added
+- **Phase-1 Licensing Finalization (Option B)**:
+  - **Semantic Expiry**: `days_until_expiry` now returns `null` (None) for licenses without an expiry (e.g., Community edition or perpetual licenses).
+  - **Authoritative Coercion**: The server is now the primary authority for ensuring numeric types in API responses; client-side coercion is a defensive fallback.
+  - **Unified UX Policy**: The Settings UI consistently displays a dash (`—`) for missing expiry data, ensuring grid stability.
+  - **Internal Robustness**: Updated all internal comparison sites (logging, near-expiry warnings) to safely handle `Optional[int]` values, preventing potential `TypeError`.
+
 ## [2.6.17] - 2026-02-28
 
 ### Fixed

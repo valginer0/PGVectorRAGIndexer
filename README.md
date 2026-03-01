@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.6.17
+# PGVectorRAGIndexer v2.6.18
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -68,9 +68,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ---
 
-## 🋹 What's New in v2.6.17
+## 🋹 What's New in v2.6.18
 
-### 🆕 Latest Features (v2.6.17)
+### 🆕 Latest Features (v2.6.18)
 
 - **✅ Windows Installer Parity**: Full feature parity with legacy PowerShell scripts
   - Rancher Desktop auto-installation via winget if Docker is missing

@@ -179,14 +179,22 @@ class TestAuthRequired:
         request = self._make_request(host="192.168.1.100")
         assert is_auth_required(request) is True
 
+    @patch.dict(os.environ, {}, clear=False)
     @patch("config.get_config")
     def test_auth_enabled_loopback_exempt(self, mock_config):
+        # Ensure FORCE_ALL is not interfering
+        if "API_AUTH_FORCE_ALL" in os.environ:
+            del os.environ["API_AUTH_FORCE_ALL"]
         mock_config.return_value.api.require_auth = True
         request = self._make_request(host="127.0.0.1")
         assert is_auth_required(request) is False
 
+    @patch.dict(os.environ, {}, clear=False)
     @patch("config.get_config")
     def test_auth_enabled_ipv6_loopback_exempt(self, mock_config):
+        # Ensure FORCE_ALL is not interfering
+        if "API_AUTH_FORCE_ALL" in os.environ:
+            del os.environ["API_AUTH_FORCE_ALL"]
         mock_config.return_value.api.require_auth = True
         request = self._make_request(host="::1")
         assert is_auth_required(request) is False
@@ -241,7 +249,7 @@ class TestRequireApiKey:
         with pytest.raises(HTTPException) as exc_info:
             await require_api_key(request, None)
         assert exc_info.value.status_code == 401
-        assert "API key required" in exc_info.value.detail
+        assert "API key required" in exc_info.value.detail["message"]
 
     @pytest.mark.asyncio
     @patch("auth.is_auth_required", return_value=True)
@@ -251,7 +259,7 @@ class TestRequireApiKey:
         with pytest.raises(HTTPException) as exc_info:
             await require_api_key(request, "bad_key_no_prefix")
         assert exc_info.value.status_code == 401
-        assert "Invalid API key format" in exc_info.value.detail
+        assert "Invalid API key format" in exc_info.value.detail["message"]
 
     @pytest.mark.asyncio
     @patch("auth.update_last_used")
@@ -278,7 +286,7 @@ class TestRequireApiKey:
         with pytest.raises(HTTPException) as exc_info:
             await require_api_key(request, key)
         assert exc_info.value.status_code == 401
-        assert "Invalid or revoked" in exc_info.value.detail
+        assert "Invalid or revoked" in exc_info.value.detail["message"]
 
     @pytest.mark.asyncio
     @patch("auth.is_auth_required", return_value=False)

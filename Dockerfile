@@ -11,6 +11,7 @@ WORKDIR /app
 
 # Copy application code
 COPY *.py ./
+COPY VERSION ./
 COPY init-db.sql ./
 COPY routers/ ./routers/
 

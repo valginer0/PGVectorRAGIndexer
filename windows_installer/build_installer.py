@@ -55,6 +55,7 @@ def build():
         "--name", "PGVectorRAGIndexer-Setup",  # Output name
         "--clean",                             # Clean cache
         "--noconfirm",                         # Overwrite without asking
+        "--add-data", f"{script_dir.parent}/VERSION;.", # Include version file
         # Add icon if available
         # "--icon", "icon.ico",
         str(main_script)

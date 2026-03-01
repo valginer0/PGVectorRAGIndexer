@@ -527,9 +527,12 @@ Implementation sequencing (recommended):
 
 Last updated: 2026-02-28
 
-### ✅ v2.6.18 - Phase-1 Licensing Finalization (Option B)
-- **Effort**: ~4h | **Edition**: Both | **Dependencies**: None
+### ✅ v2.6.18 - Phase-1 Licensing & Distribution Fixes
+- **Effort**: ~5h | **Edition**: Both | **Dependencies**: None
 - **Branch**: `main`
+- [x] **Phase 0: Distribution Versioning**
+    - [x] Bundle `VERSION` in Docker image (`COPY VERSION ./`)
+    - [x] Bundle `VERSION` in MSI installer (`--add-data` in PyInstaller)
 - [x] Adopt Semantic Option B for expiry handling (Optional[int])
 - [x] Authoritative server-side coercion for seats and expiry
 - [x] Consistent UI rendering (dash-everywhere for missing data)

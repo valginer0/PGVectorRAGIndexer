@@ -1,7 +1,4 @@
-"""
-License utility functions for expiry and validation logic.
-"""
-
+import math
 import time
 from typing import Optional
 
@@ -15,6 +12,7 @@ def compute_days_until_expiry(expiry_timestamp: float, now: float = None) -> Opt
 
     Returns:
         The number of full days remaining, or None if the license never expires.
+        Expired licenses return a negative value (e.g., -1 for anything < 0).
     """
     if expiry_timestamp <= 0:
         return None  # Community/Never expires
@@ -23,7 +21,7 @@ def compute_days_until_expiry(expiry_timestamp: float, now: float = None) -> Opt
         now = time.time()
 
     remaining = expiry_timestamp - now
-    return int(remaining / 86400)
+    return math.floor(remaining / 86400)
 
 
 def is_expired(expiry_timestamp: float, now: float = None) -> bool:

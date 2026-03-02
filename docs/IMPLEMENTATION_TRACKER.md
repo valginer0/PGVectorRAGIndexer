@@ -525,7 +525,23 @@ Implementation sequencing (recommended):
 
 ---
 
-Last updated: 2026-02-28
+Last updated: 2026-03-01
+
+### ✅ v2.6.20 - Phase-B: Licensing Refactor & Data Integrity
+- **Effort**: ~6h | **Edition**: Both | **Dependencies**: None
+- **Branch**: `main`
+- [x] Refactor `LicenseInfo` to pure data model (extracted logic to `license_utils.py`)
+- [x] Implement robust rounding with `math.floor()` for sub-second boundaries
+- [x] Standardize UI with `LicenseDisplayDTO`
+- [x] Prioritize server-side `days_until_expiry` in remote mode for clock drift safety
+- [x] Comprehensive test coverage (1065/1065 tests PASS)
+
+### ✅ v2.6.19 - Phase-A: Structured Error Registry
+- **Effort**: ~5h | **Edition**: Both | **Dependencies**: None
+- **Branch**: `main`
+- [x] Centralized `ErrorRegistry` (Enum of ErrorCodes)
+- [x] Standardized API Contract for error responses
+- [x] Hierarchical diagnostic data in structured errors
 
 ### ✅ v2.6.18 - Phase-1 Licensing & Distribution Fixes
 - **Effort**: ~5h | **Edition**: Both | **Dependencies**: None

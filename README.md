@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.6.18
+# PGVectorRAGIndexer v2.6.20
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -68,15 +68,21 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ---
 
-## 🋹 What's New in v2.6.18
+## 🋹 What's New in v2.6.20
 
-### 🆕 Latest Features (v2.6.18)
+### 🆕 Latest Features (v2.6.20)
 
-- **✅ Phase-1 Licensing Finalization (Option B)**:
-  - **Semantic Expiry**: The `days_until_expiry` field now returns `null` (JSON) in API responses for licenses without an expiry (e.g., Community edition), which the UI renders as a stable dash (`—`).
-  - **Authoritative Coercion**: The server is now the primary authority for ensuring numeric types in API responses; client-side coercion is a defensive fallback.
-  - **Unified UX Policy**: The Settings UI consistently displays a dash (`—`) for missing expiry data, ensuring grid stability.
-  - **Internal Robustness**: Updated all internal comparison sites (logging, near-expiry warnings) to safely handle `Optional[int]` values, preventing potential `TypeError`.
+- **✅ Phase-B: Licensing Refactor & Data Integrity**:
+  - **Pure Data Model**: Refactored `LicenseInfo` to a pure data model, moving all calculation logic to a dedicated `license_utils.py` module.
+  - **Standardized UI DTO**: Introduced `LicenseDisplayDTO` to decouple the UI from core licensing logic.
+  - **Robust Expiry Handling**: Switched to `math.floor()` for precise day calculations, ensuring reliable status reporting even for sub-second expiry boundaries.
+  - **Server-Side Trust**: The desktop UI now prioritizes server-calculated expiry data in remote mode, eliminating clock-drift issues.
+
+- **✅ Phase-A: Structured Error Registry (v2.6.19)**:
+  - **Centralized Errors**: Introduced a system-wide `ErrorRegistry` for consistent error codes and user-facing messages.
+  - **API Contract Hardening**: Standardized all API error responses with machine-readable codes and hierarchical diagnostic data.
+
+### Recent Milestones (v2.6.18)
 
 ### Recent Milestones (v2.6)
 

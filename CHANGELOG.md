@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.6.20] - 2026-03-01
+
+### Changed
+- **Licensing Refactor**: Purified `LicenseInfo` model by extracting calculation logic into `license_utils.py`.
+- **UI DTO**: Introduced `LicenseDisplayDTO` to decouple desktop UI from core licensing logic.
+- **Robust Calculations**: Switched to `math.floor()` for expiry day calculations, ensuring reliable results for sub-second boundaries.
+- **Remote Consistency**: Desktop UI now trusts server-provided `days_until_expiry` in remote mode to avoid clock-drift issues.
+
+### Fixed
+- **CI Stability**: Fixed macOS race condition in `test_api_initialization.py` by mocking background startup.
+
+## [2.6.19] - 2026-03-01
+
+### Added
+- **Structured Error Registry**: Centralized `ErrorRegistry` for consistent error codes and user messages.
+- **API Contract**: Standardized machine-readable error responses across all backend modules.
+
 ## [2.6.18] - 2026-02-28
 
 ### Added

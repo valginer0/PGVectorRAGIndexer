@@ -1,0 +1,132 @@
+import logging
+import shutil
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Optional
+
+from license import (
+    LicenseInfo,
+    LicenseError,
+    get_current_license,
+    get_license_dir,
+    reset_license,
+    resolve_verification_context,
+    secure_license_file,
+    validate_license_key,
+)
+from desktop_app.utils.edition import get_edition_display, open_pricing_page
+
+logger = logging.getLogger(__name__)
+
+@dataclass
+class LicenseServiceError(Exception):
+    """Domain error representing a failure during a license operation."""
+    message: str
+    is_network_error: bool = False
+    is_invalid_key_error: bool = False
+
+class LicenseService:
+    """
+    Service layer facade for license operations.
+    Encapsulates core `license.py` operations and raw API/filesystem interactions,
+    catching low-level exceptions and returning structured `LicenseServiceError` dataclasses.
+    """
+
+    def __init__(self, api_client=None):
+        self.api_client = api_client
+
+    def fetch_license_info(self) -> dict:
+        """
+        Fetches license information, checking the remote server if an API client is available.
+        Returns a dictionary suitable for LicenseLoadData.info.
+        """
+        remote_data = None
+        
+        # Try to fetch from server if remote mode is active (indicated by api_client having a base_url)
+        # Note: In the future, this might explicitly check backend_mode, but relying on api_client
+        # readiness is usually sufficient for the service layer.
+        if self.api_client and self.api_client.is_api_available():
+            try:
+                # remote_data will be a dict from LicenseInfo.to_dict()
+                remote_data = self.api_client.get_license_info()
+            except Exception as e:
+                logger.debug("Failed to fetch license from server: %s", e)
+                # We do NOT raise here. Falling back to local/community is expected.
+                # The controller handles `server_error` flagging.
+
+        try:
+            return get_edition_display(remote_data)
+        except Exception as e:
+            logger.debug("Could not load license info: %s", e)
+            raise LicenseServiceError(f"Failed to load local license details: {e}")
+
+    def install_license(self, key_string: str) -> None:
+        """
+        Validates, backs up the old key, and writes a new license key to disk.
+        
+        Raises:
+            LicenseServiceError: If validation, disk I/O, or backup fails.
+        """
+        if not key_string:
+            raise LicenseServiceError("No license key provided.", is_invalid_key_error=True)
+            
+        try:
+            # 1. Validate in-memory first
+            signing_secret, algorithms = resolve_verification_context()
+            validate_license_key(key_string, signing_secret, algorithms)
+        except LicenseError as le:
+            raise LicenseServiceError(str(le), is_invalid_key_error=True)
+        except Exception as e:
+            raise LicenseServiceError(f"Unexpected validation error: {e}")
+
+        # 2. Key is valid, prepare to write
+        dest_dir = get_license_dir()
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_file = dest_dir / "license.key"
+        
+        # 3. Create backup of existing key if it exists
+        backup_file = None
+        if dest_file.exists():
+            backup_file = dest_file.with_suffix(".key.bak")
+            try:
+                shutil.copy2(dest_file, backup_file)
+            except Exception as b_err:
+                logger.warning("Could not create license backup: %s", b_err)
+
+        # 4. Write new key (with rollback)
+        try:
+            dest_file.write_text(key_string, encoding="utf-8")
+        except Exception as write_err:
+            # ROLLBACK
+            rollback_success = False
+            if backup_file and backup_file.exists():
+                try:
+                    shutil.copy2(backup_file, dest_file)
+                    logger.info("Restored license from backup after write failure.")
+                    rollback_success = True
+                except Exception as r_err:
+                    logger.error("CRITICAL: Failed to restore license backup: %s", r_err)
+            
+            if rollback_success:
+                reset_license()
+                raise LicenseServiceError(
+                    f"An error occurred while saving the new license key:\n{write_err}\n\n"
+                    "Your previous license has been successfully restored from backup."
+                )
+            raise LicenseServiceError(f"Critical write error saving license key: {write_err}")
+        
+        try:
+            secure_license_file(dest_file)
+        except Exception as e:
+            logger.warning(f"Could not secure license file permissions: {e}")
+
+        # 5. Reload license
+        reset_license()
+
+    def get_current_license_info(self) -> LicenseInfo:
+        """Gets the currently active loaded license object."""
+        return get_current_license()
+
+    def open_pricing(self) -> None:
+        """Opens the pricing webpage."""
+        open_pricing_page()

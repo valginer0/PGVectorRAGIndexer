@@ -12,8 +12,10 @@ from PySide6.QtWidgets import (
 )
 import qtawesome as qta
 from PySide6.QtCore import QThread, Signal, QSize, Qt
-from .workers import StatsWorker
-from .styles.theme import Theme
+from desktop_app.ui.styles.theme import Theme
+from desktop_app.ui.workers import StatsWorker
+from desktop_app.controllers.settings_controller import SettingsController
+from desktop_app.utils.controller_result import ControllerResult, UiAction, BackendSaveData
 
 # ... imports ...
 
@@ -27,6 +29,10 @@ class SettingsTab(QWidget):
         self.api_client = None
         if parent and hasattr(parent, 'api_client'):
             self.api_client = parent.api_client
+        
+        # Inject the new controller
+        self.controller = SettingsController(api_client=self.api_client)
+
         self.stats_worker = None
         self.setup_ui()
     
@@ -366,106 +372,80 @@ class SettingsTab(QWidget):
             if docker_bar:
                 docker_bar.setVisible(not is_remote)
 
+    def _handle_controller_result(self, result: ControllerResult, title: str):
+        """Central, dumb dispatcher for ControllerResult UI Actions."""
+        
+        # Contract 1: UiAction.NONE must be the sole action
+        if UiAction.NONE in result.ui_actions and len(result.ui_actions) > 1:
+            raise ValueError("UiAction.NONE must be the only action when present.")
+            
+        if UiAction.NONE in result.ui_actions:
+            return
+
+        # Explicitly map severity to Theme colors to prevent ambiguous styling rules
+        severity_color_map = {
+            "success": Theme.SUCCESS,
+            "error": Theme.ERROR,
+            "warning": Theme.WARNING,
+            "info": Theme.PRIMARY
+        }
+        color = severity_color_map.get(result.severity, Theme.PRIMARY)
+
+        # Execute explicitly in the provided list order, without deduplication
+        for action in result.ui_actions:
+            if action == UiAction.STATUS_LABEL:
+                status_text = ""
+                # Safely attempt to extract status_text from the data dictionary if dealing with BackendSaveData equivalents
+                if isinstance(result.data, dict) and "status_text" in result.data:
+                    status_text = result.data.get("status_text", "")
+                    
+                self._backend_status.setText(status_text)
+                self._backend_status.setStyleSheet(f"color: {color};")
+                # Special legacy quirk: if it's the Save Success it also had "font-style: italic"
+                if status_text == "Settings saved." and result.severity == "success":
+                   self._backend_status.setStyleSheet(f"color: {color}; font-style: italic;")
+                   
+            elif action == UiAction.MESSAGE_BOX_INFO:
+                QMessageBox.information(self, title, result.message)
+            elif action == UiAction.MESSAGE_BOX_WARNING:
+                QMessageBox.warning(self, title, result.message)
+            elif action == UiAction.MESSAGE_BOX_ERROR:
+                QMessageBox.critical(self, title, result.message)
+
+
     def _save_backend_settings(self):
-        """Persist backend settings and reconfigure the API client."""
-        from desktop_app.utils.app_config import (
-            set_backend_mode, set_backend_url, set_api_key,
-            BACKEND_MODE_LOCAL, BACKEND_MODE_REMOTE, DEFAULT_LOCAL_URL,
-        )
-
+        """Delegates save action to SettingsController and dispatches result."""
+        from desktop_app.utils.app_config import BACKEND_MODE_REMOTE, BACKEND_MODE_LOCAL
         mode = BACKEND_MODE_REMOTE if self._radio_remote.isChecked() else BACKEND_MODE_LOCAL
-        set_backend_mode(mode)
+        url = self._url_input.text().strip()
+        api_key = self._api_key_input.text().strip()
 
-        if mode == BACKEND_MODE_REMOTE:
-            url = self._url_input.text().strip()
-            if not url:
-                QMessageBox.warning(self, "Missing URL", "Please enter a backend URL.")
-                return
-            if not url.startswith(("http://", "https://")):
-                QMessageBox.warning(self, "Invalid URL",
-                                    "Backend URL must start with http:// or https://")
-                return
-            set_backend_url(url)
+        result = self.controller.save_backend_settings(mode, url, api_key)
+        
+        # Dispatch the dumb result
+        title_map = {
+            "success": "Backend Settings Saved",
+            "warning": "Validation Error",
+            "error": "Error"
+        }
+        self._handle_controller_result(result, title=title_map.get(result.severity, "Notice"))
 
-            api_key = self._api_key_input.text().strip()
-            if not api_key:
-                QMessageBox.warning(self, "Missing API Key",
-                                    "An API key is required for remote connections.")
-                return
-            set_api_key(api_key)
-        else:
-            url = DEFAULT_LOCAL_URL
-            set_api_key(None)
-
-        # Reconfigure the live API client
-        if self.api_client:
-            self.api_client.base_url = url.rstrip('/')
-            self.api_client.api_base = f"{self.api_client.base_url}/api/v1"
-            if mode == BACKEND_MODE_REMOTE:
-                self.api_client._api_key = self._api_key_input.text().strip()
-            else:
-                self.api_client._api_key = None
-
-        self._backend_status.setText("Settings saved.")
-        self._backend_status.setStyleSheet(f"color: {Theme.SUCCESS}; font-style: italic;")
-
-        QMessageBox.information(
-            self, "Backend Settings Saved",
-            f"Mode: {mode.title()}\nURL: {url}\n\n"
-            "The app will use these settings immediately.",
-        )
 
     def _test_connection(self):
-        """Test connectivity to the remote backend."""
-        url = self._url_input.text().strip()
-        if not url:
-            self._backend_status.setText("Enter a URL first.")
-            self._backend_status.setStyleSheet(f"color: {Theme.WARNING};")
-            return
-
-        if not url.startswith(("http://", "https://")):
-            self._backend_status.setText("URL must start with http:// or https://")
-            self._backend_status.setStyleSheet(f"color: {Theme.WARNING};")
-            return
-
+        """Delegates test action to SettingsController and dispatches result."""
+        self._test_conn_btn.setEnabled(False)
         self._backend_status.setText("Testing...")
         self._backend_status.setStyleSheet("color: #9ca3af;")
-        self._test_conn_btn.setEnabled(False)
-
-        import requests
+        # Allow GUI to repaint the "Testing..." notice briefly before blocking on the synchronous controller call
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
+        
+        url = self._url_input.text().strip()
+        api_key = self._api_key_input.text().strip()
+        
         try:
-            headers = {}
-            api_key = self._api_key_input.text().strip()
-            if api_key:
-                headers["Authorization"] = f"Bearer {api_key}"
-
-            resp = requests.get(
-                f"{url.rstrip('/')}/api/version",
-                headers=headers,
-                timeout=10,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                server_ver = data.get("server_version", "?")
-                self._backend_status.setText(
-                    f"Connected — server v{server_ver}"
-                )
-                self._backend_status.setStyleSheet(f"color: {Theme.SUCCESS};")
-            elif resp.status_code == 401:
-                self._backend_status.setText("Authentication failed — check API key.")
-                self._backend_status.setStyleSheet(f"color: {Theme.ERROR};")
-            else:
-                self._backend_status.setText(f"Server returned HTTP {resp.status_code}")
-                self._backend_status.setStyleSheet(f"color: {Theme.WARNING};")
-        except requests.ConnectionError:
-            self._backend_status.setText("Connection refused — is the server running?")
-            self._backend_status.setStyleSheet(f"color: {Theme.ERROR};")
-        except requests.Timeout:
-            self._backend_status.setText("Connection timed out.")
-            self._backend_status.setStyleSheet(f"color: {Theme.ERROR};")
-        except Exception as e:
-            self._backend_status.setText(f"Error: {e}")
-            self._backend_status.setStyleSheet(f"color: {Theme.ERROR};")
+            result = self.controller.test_connection(url, api_key)
+            self._handle_controller_result(result, title="")
         finally:
             self._test_conn_btn.setEnabled(True)
 
@@ -535,28 +515,15 @@ class SettingsTab(QWidget):
         self._refresh_license_panel()
 
     def _refresh_license_panel(self):
-        """Update the license panel with current license info."""
-        remote_data = None
-        server_error = False
-
-        # Try to fetch from server if in Remote Mode
-        if self._radio_remote.isChecked():
-            if self.api_client and self.api_client.is_api_available():
-                try:
-                    # remote_data will be a dict from LicenseInfo.to_dict()
-                    remote_data = self.api_client.get_license_info()
-                except Exception as e:
-                    logging.getLogger(__name__).debug("Failed to fetch license from server: %s", e)
-                    server_error = True
-            else:
-                # API is down but we are in remote mode -> treat as server error
-                server_error = True
-
-        try:
-            from desktop_app.utils.edition import get_edition_display
-            info = get_edition_display(remote_data)
-        except Exception as e:
-            logging.getLogger(__name__).debug("Could not load license info: %s", e)
+        """Update the license panel with current license info via Controller."""
+        result = self.controller.load_license_data()
+        self._handle_controller_result(result, title="")
+        
+        info = result.data.get("info", {})
+        server_error = result.data.get("server_error", False)
+        
+        if not info:
+            # Fallback (mimics old exception block behavior)
             self._edition_badge.setText("Community Edition")
             self._edition_badge.setStyleSheet(f"font-weight: 600; color: {Theme.TEXT_SECONDARY};")
             self._org_label.setText("—")
@@ -566,40 +533,41 @@ class SettingsTab(QWidget):
             return
 
         # Edition badge
-        if info["is_team"]:
-            self._edition_badge.setText(info["edition_label"] + " ✓")
+        if info.get("is_team"):
+            self._edition_badge.setText(info.get("edition_label", "") + " ✓")
             self._edition_badge.setStyleSheet(f"font-weight: 600; color: {Theme.SUCCESS};")
             self._upgrade_btn.setVisible(False)
         else:
-            self._edition_badge.setText(info["edition_label"])
+            self._edition_badge.setText(info.get("edition_label", ""))
             self._edition_badge.setStyleSheet(f"font-weight: 600; color: {Theme.TEXT_SECONDARY};")
             self._upgrade_btn.setVisible(True)
 
         # Org
-        self._org_label.setText(info["org_name"] if info["org_name"] else "—")
+        self._org_label.setText(info.get("org_name") if info.get("org_name") else "—")
 
         # Expiry
-        if info["is_team"] and info["days_left"] is not None:
-            days = info["days_left"]
-            if info["expiry_warning"]:
+        if info.get("is_team") and info.get("days_left") is not None:
+            days = info.get("days_left")
+            if info.get("expiry_warning"):
                 self._expiry_label.setText(f"{days} days remaining")
                 self._expiry_label.setStyleSheet(f"color: {Theme.WARNING}; font-weight: 600;")
             else:
                 self._expiry_label.setText(f"{days} days remaining")
                 self._expiry_label.setStyleSheet("")
+            self._expiry_label.setVisible(True)
         else:
             self._expiry_label.setText("—")
             self._expiry_label.setStyleSheet("")
-        self._expiry_label.setVisible(True)
+            self._expiry_label.setVisible(True)
 
         # Seats
-        if info["is_team"] and info["seats"] > 0:
-            self._seats_label.setText(f"Licensed for {info['seats']} seats")
+        if info.get("is_team") and info.get("seats", 0) > 0:
+            self._seats_label.setText(f"Licensed for {info.get('seats')} seats")
         else:
             self._seats_label.setText("—")
 
-        # Warning text (e.g., expiry warning, invalid key)
-        warning_text = info["warning_text"]
+        # Warning text
+        warning_text = info.get("warning_text", "")
         if server_error:
             if warning_text:
                 warning_text += " | Server Edition: Unavailable — using local"
@@ -663,106 +631,18 @@ class SettingsTab(QWidget):
 
         # Strip ALL whitespace (email clients may word-wrap long JWT tokens, inserting newlines)
         key_string = ''.join(text_edit.toPlainText().split())
-        if not key_string:
-            return
-
-        try:
-            # 1. Validate in-memory first (CRITICAL: prevents overwriting good key with bad)
-            from license import validate_license_key, LicenseError, resolve_verification_context
-            
-            try:
-                # This ensures the key is syntactically valid and signed before we touch disk
-                # Resolve signing_secret + algorithms the same way load_license does
-                signing_secret, algorithms = resolve_verification_context()
-                validate_license_key(key_string, signing_secret, algorithms)
-            except LicenseError as le:
-                # Catching base LicenseError handles both LicenseInvalidError and LicenseExpiredError
-                QMessageBox.critical(
-                    self,
-                    "Invalid License Key",
-                    f"The provided license key is invalid and will not be saved:\n\n{str(le)}"
-                )
-                return
-
-            # 2. Key is valid, prepare to write
-            from license import get_license_dir
-            dest_dir = get_license_dir()
-            dest_dir.mkdir(parents=True, exist_ok=True)
-            dest_file = dest_dir / "license.key"
-            
-            # 3. Create backup of existing key if it exists
-            backup_file = None
-            if dest_file.exists():
-                backup_file = dest_file.with_suffix(".key.bak")
-                try:
-                    import shutil
-                    shutil.copy2(dest_file, backup_file)
-                except Exception as b_err:
-                    logging.getLogger(__name__).warning("Could not create license backup: %s", b_err)
-
-            # 4. Write new key (with rollback)
-            try:
-                dest_file.write_text(key_string, encoding="utf-8")
-            except Exception as write_err:
-                # ROLLBACK: if write fails, try to restore the backup
-                rollback_success = False
-                if backup_file and backup_file.exists():
-                    try:
-                        import shutil
-                        shutil.copy2(backup_file, dest_file)
-                        logging.getLogger(__name__).info("Restored license from backup after write failure.")
-                        rollback_success = True
-                    except Exception as r_err:
-                        logging.getLogger(__name__).error("CRITICAL: Failed to restore license backup: %s", r_err)
-                
-                if rollback_success:
-                    from license import reset_license
-                    reset_license()
-                    self._refresh_license_panel()
-                    QMessageBox.critical(
-                        self,
-                        "License Installation Failed",
-                        f"An error occurred while saving the new license key:\n{write_err}\n\n"
-                        "Your previous license has been successfully restored from backup."
-                    )
-                    return
-                raise write_err
-            
-            from license import secure_license_file
-            secure_license_file(dest_file)
-
-            # 5. Reload license
-            from license import reset_license, get_current_license
-            reset_license()
-            info = get_current_license()
-            self._refresh_license_panel()
-
-            if info.warning:
-                # Valid but has a warning (e.g. expiring soon)
-                QMessageBox.warning(
-                    self,
-                    "License Activated with Warning",
-                    f"License key installed to:\n{dest_file}\n\n"
-                    f"Edition: {info.edition.value.title()}\n"
-                    f"Organization: {info.org_name}\n\n"
-                    f"⚠️ Warning: {info.warning}"
-                )
-            else:
-                QMessageBox.information(
-                    self,
-                    "License Activated",
-                    f"License key successfully validated and installed to:\n{dest_file}\n\n"
-                    f"Edition: {info.edition.value.title()}\n"
-                    f"Organization: {info.org_name}\n\n"
-                    "The application has been updated with your new license.",
-                )
-        except Exception as e:
-            logging.getLogger(__name__).error("Unexpected error during license installation: %s", e, exc_info=True)
-            QMessageBox.critical(
-                self,
-                "Installation Error",
-                f"An unexpected error occurred while saving the license:\n\n{str(e)}"
-            )
+        
+        result = self.controller.install_license(key_string)
+        
+        # 1. Dispatch the dumb action (to pop the success, warning, or error UI box)
+        if result.success:
+             self._handle_controller_result(result, title=f"License {result.severity.title()}")
+        else:
+             self._handle_controller_result(result, title="License Error")
+             
+        # 2. Re-render the panel visual state explicitly
+        if result.success:
+             self._refresh_license_panel()
 
 
     def _open_pricing(self):

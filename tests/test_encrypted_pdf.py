@@ -108,9 +108,9 @@ class TestEncryptedPDFAPI:
                 files={"file": ("test.pdf", b"%PDF-1.4 encrypted", "application/pdf")}
             )
             
-            assert response.status_code == 403
+            assert response.status_code == 400
             data = response.json()
-            assert data["detail"]["error_type"] == "encrypted_pdf"
+            assert data["error_code"] == "DOC_4004"
 
 
 class TestIndexerCLI:

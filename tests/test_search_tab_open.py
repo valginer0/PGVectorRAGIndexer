@@ -28,6 +28,9 @@ class _DummyApiClient:
             return ["report", "policy"]
         return []
 
+    def get_health(self):
+        return {"status": "ok"}
+
 
 class _StubManager:
     def __init__(self, queued: bool = False):

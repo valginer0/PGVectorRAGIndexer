@@ -20,6 +20,7 @@ def qapp():
 def mock_api_client():
     client = MagicMock()
     client.is_api_available.return_value = True
+    client.get_health.return_value = {"status": "ok"}
     client.get_metadata_keys.return_value = []
     client.get_metadata_values.return_value = []
     return client

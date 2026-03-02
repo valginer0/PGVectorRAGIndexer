@@ -1,3 +1,6 @@
+"""
+License utility functions for expiry and validation logic.
+"""
 import math
 import time
 from typing import Optional

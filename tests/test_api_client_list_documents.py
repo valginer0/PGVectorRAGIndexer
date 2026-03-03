@@ -31,11 +31,11 @@ def test_list_documents_accepts_plain_list(monkeypatch, api_client):
         }
     ]
 
-    def fake_get(url, params, timeout, **kwargs):
+    def fake_request(method, url, **kwargs):
         assert url.endswith("/documents")
         return DummyResponse(items)
 
-    monkeypatch.setattr("desktop_app.utils.api_client.requests.get", fake_get)
+    monkeypatch.setattr(api_client._base, "request", fake_request)
 
     result = api_client.list_documents(limit=25, offset=5, sort_by="indexed_at", sort_dir="desc")
 
@@ -62,10 +62,10 @@ def test_list_documents_accepts_legacy_documents_key(monkeypatch, api_client):
         "offset": 0,
     }
 
-    def fake_get(url, params, timeout, **kwargs):
+    def fake_request(method, url, **kwargs):
         return DummyResponse(legacy_payload)
 
-    monkeypatch.setattr("desktop_app.utils.api_client.requests.get", fake_get)
+    monkeypatch.setattr(api_client._base, "request", fake_request)
 
     result = api_client.list_documents(limit=10, offset=0, sort_by="indexed_at", sort_dir="desc")
 
@@ -94,10 +94,10 @@ def test_list_documents_passthrough_for_paginated_payload(monkeypatch, api_clien
         "sort": {"by": "indexed_at", "direction": "desc"},
     }
 
-    def fake_get(url, params, timeout, **kwargs):
+    def fake_request(method, url, **kwargs):
         return DummyResponse(paginated_payload)
 
-    monkeypatch.setattr("desktop_app.utils.api_client.requests.get", fake_get)
+    monkeypatch.setattr(api_client._base, "request", fake_request)
 
     result = api_client.list_documents(limit=25, offset=0, sort_by="indexed_at", sort_dir="desc")
 

@@ -3,6 +3,7 @@ from unittest.mock import patch, MagicMock
 from pathlib import Path
 
 from desktop_app.utils.license_service import LicenseService, LicenseServiceError
+from desktop_app.utils.license_dto import LicenseDisplayDTO
 from license import LicenseError
 
 class DummyAPIClient:
@@ -22,34 +23,59 @@ class DummyAPIClient:
 def test_fetch_license_info_no_api_client():
     service = LicenseService()
     with patch('desktop_app.utils.license_service.get_edition_display') as mock_display:
-        mock_display.return_value = {"edition": "community"}
+        mock_display.return_value = LicenseDisplayDTO(edition_label="Community", is_team=False, org_name="", seats=1, days_left=None, expiry_warning=False, warning_text="")
         
-        result = service.fetch_license_info()
-        assert result == {"edition": "community"}
+        result, server_error = service.fetch_license_info()
+        assert result.edition_label == "Community"
+        assert server_error is False
         mock_display.assert_called_once_with(None)
 
-def test_fetch_license_info_api_client_error():
+@patch('desktop_app.utils.app_config.get_backend_mode')
+def test_fetch_license_info_api_client_error(mock_mode):
+    from desktop_app.utils import app_config
+    mock_mode.return_value = app_config.BACKEND_MODE_REMOTE
     client = DummyAPIClient(throw_error=True)
     service = LicenseService(api_client=client)
     
     with patch('desktop_app.utils.license_service.get_edition_display') as mock_display:
-        mock_display.return_value = {"edition": "community"}
+        mock_display.return_value = LicenseDisplayDTO(edition_label="Community", is_team=False, org_name="", seats=1, days_left=None, expiry_warning=False, warning_text="")
         
         # Should catch the internal exception and still return local data
-        result = service.fetch_license_info()
-        assert result == {"edition": "community"}
+        result, server_error = service.fetch_license_info()
+        assert result.edition_label == "Community"
+        assert server_error is True
         mock_display.assert_called_once_with(None)
 
-def test_fetch_license_info_api_client_success():
+@patch('desktop_app.utils.app_config.get_backend_mode')
+def test_fetch_license_info_api_client_unavailable_remote_mode(mock_mode):
+    from desktop_app.utils import app_config
+    mock_mode.return_value = app_config.BACKEND_MODE_REMOTE
+    client = DummyAPIClient(available=False)
+    service = LicenseService(api_client=client)
+    
+    with patch('desktop_app.utils.license_service.get_edition_display') as mock_display:
+        mock_display.return_value = LicenseDisplayDTO(edition_label="Team Edition", is_team=True, org_name="", seats=1, days_left=None, expiry_warning=False, warning_text="")
+        
+        # Should register as a server error because we are in remote mode
+        result, server_error = service.fetch_license_info()
+        assert result.edition_label == "Team Edition"
+        assert server_error is True
+        mock_display.assert_called_once_with(None)
+
+@patch('desktop_app.utils.app_config.get_backend_mode')
+def test_fetch_license_info_api_client_success(mock_mode):
+    from desktop_app.utils import app_config
+    mock_mode.return_value = app_config.BACKEND_MODE_REMOTE
     remote_dict = {"edition": "team"}
     client = DummyAPIClient(return_data=remote_dict)
     service = LicenseService(api_client=client)
     
     with patch('desktop_app.utils.license_service.get_edition_display') as mock_display:
-        mock_display.return_value = {"edition_label": "Team Edition"}
+        mock_display.return_value = LicenseDisplayDTO(edition_label="Team Edition", is_team=True, org_name="Test", seats=5, days_left=None, expiry_warning=False, warning_text="")
         
-        result = service.fetch_license_info()
-        assert result == {"edition_label": "Team Edition"}
+        result, server_error = service.fetch_license_info()
+        assert result.edition_label == "Team Edition"
+        assert server_error is False
         mock_display.assert_called_once_with(remote_dict)
 
 def test_install_license_empty_key():

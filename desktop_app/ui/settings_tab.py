@@ -15,7 +15,7 @@ from PySide6.QtCore import QThread, Signal, QSize, Qt
 from desktop_app.ui.styles.theme import Theme
 from desktop_app.ui.workers import StatsWorker
 from desktop_app.controllers.settings_controller import SettingsController
-from desktop_app.utils.controller_result import ControllerResult, UiAction, BackendSaveData
+from desktop_app.utils.controller_result import ControllerResult, UiAction, BackendSaveData, MessageSeverity
 
 # ... imports ...
 
@@ -384,10 +384,10 @@ class SettingsTab(QWidget):
 
         # Explicitly map severity to Theme colors to prevent ambiguous styling rules
         severity_color_map = {
-            "success": Theme.SUCCESS,
-            "error": Theme.ERROR,
-            "warning": Theme.WARNING,
-            "info": Theme.PRIMARY
+            MessageSeverity.SUCCESS: Theme.SUCCESS,
+            MessageSeverity.ERROR: Theme.ERROR,
+            MessageSeverity.WARNING: Theme.WARNING,
+            MessageSeverity.INFO: Theme.PRIMARY
         }
         color = severity_color_map.get(result.severity, Theme.PRIMARY)
 
@@ -402,7 +402,7 @@ class SettingsTab(QWidget):
                 self._backend_status.setText(status_text)
                 self._backend_status.setStyleSheet(f"color: {color};")
                 # Special legacy quirk: if it's the Save Success it also had "font-style: italic"
-                if status_text == "Settings saved." and result.severity == "success":
+                if status_text == "Settings saved." and result.severity == MessageSeverity.SUCCESS:
                    self._backend_status.setStyleSheet(f"color: {color}; font-style: italic;")
                    
             elif action == UiAction.MESSAGE_BOX_INFO:
@@ -411,6 +411,8 @@ class SettingsTab(QWidget):
                 QMessageBox.warning(self, title, result.message)
             elif action == UiAction.MESSAGE_BOX_ERROR:
                 QMessageBox.critical(self, title, result.message)
+            else:
+                raise ValueError(f"Unhandled UiAction: {action}")
 
 
     def _save_backend_settings(self):
@@ -424,9 +426,9 @@ class SettingsTab(QWidget):
         
         # Dispatch the dumb result
         title_map = {
-            "success": "Backend Settings Saved",
-            "warning": "Validation Error",
-            "error": "Error"
+            MessageSeverity.SUCCESS: "Backend Settings Saved",
+            MessageSeverity.WARNING: "Validation Error",
+            MessageSeverity.ERROR: "Error"
         }
         self._handle_controller_result(result, title=title_map.get(result.severity, "Notice"))
 
@@ -519,8 +521,8 @@ class SettingsTab(QWidget):
         result = self.controller.load_license_data()
         self._handle_controller_result(result, title="")
         
-        info = result.data.get("info", {})
-        server_error = result.data.get("server_error", False)
+        info = result.data["info"]
+        server_error = result.data["server_error"]
         
         if not info:
             # Fallback (mimics old exception block behavior)
@@ -530,25 +532,30 @@ class SettingsTab(QWidget):
             self._expiry_label.setText("—")
             self._seats_label.setText("—")
             self._upgrade_btn.setVisible(True)
+            if server_error:
+                self._warning_label.setText("Server Edition: Unavailable — using local")
+                self._warning_label.setVisible(True)
+            else:
+                self._warning_label.setVisible(False)
             return
 
         # Edition badge
-        if info.get("is_team"):
-            self._edition_badge.setText(info.get("edition_label", "") + " ✓")
+        if info.is_team:
+            self._edition_badge.setText(info.edition_label + " ✓")
             self._edition_badge.setStyleSheet(f"font-weight: 600; color: {Theme.SUCCESS};")
             self._upgrade_btn.setVisible(False)
         else:
-            self._edition_badge.setText(info.get("edition_label", ""))
+            self._edition_badge.setText(info.edition_label)
             self._edition_badge.setStyleSheet(f"font-weight: 600; color: {Theme.TEXT_SECONDARY};")
             self._upgrade_btn.setVisible(True)
 
         # Org
-        self._org_label.setText(info.get("org_name") if info.get("org_name") else "—")
+        self._org_label.setText(info.org_name if info.org_name else "—")
 
         # Expiry
-        if info.get("is_team") and info.get("days_left") is not None:
-            days = info.get("days_left")
-            if info.get("expiry_warning"):
+        if info.is_team and info.days_left is not None:
+            days = info.days_left
+            if info.expiry_warning:
                 self._expiry_label.setText(f"{days} days remaining")
                 self._expiry_label.setStyleSheet(f"color: {Theme.WARNING}; font-weight: 600;")
             else:
@@ -561,13 +568,13 @@ class SettingsTab(QWidget):
             self._expiry_label.setVisible(True)
 
         # Seats
-        if info.get("is_team") and info.get("seats", 0) > 0:
-            self._seats_label.setText(f"Licensed for {info.get('seats')} seats")
+        if info.is_team and info.seats > 0:
+            self._seats_label.setText(f"Licensed for {info.seats} seats")
         else:
             self._seats_label.setText("—")
 
         # Warning text
-        warning_text = info.get("warning_text", "")
+        warning_text = info.warning_text
         if server_error:
             if warning_text:
                 warning_text += " | Server Edition: Unavailable — using local"
@@ -647,8 +654,7 @@ class SettingsTab(QWidget):
 
     def _open_pricing(self):
         """Open the pricing page."""
-        from desktop_app.utils.edition import open_pricing_page
-        open_pricing_page()
+        self.controller.license_service.open_pricing()
 
     def load_statistics(self):
         """Load database statistics."""

@@ -4,6 +4,7 @@ Tests for Web UI endpoints.
 
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import patch
 from api import app
 
 
@@ -46,9 +47,15 @@ class TestWebUI:
         assert data["name"] == "PGVectorRAGIndexer API"
     
     @pytest.mark.database
+    @patch('routers.system_api.init_complete', True)
+    @patch('routers.system_api.init_error', None)
+    @patch('services.init_complete', True)
+    @patch('services.init_error', None)
     def test_health_endpoint_still_works(self, client):
         """Test that health endpoint still works after UI changes."""
         response = client.get("/health")
+        if response.status_code != 200:
+            print(f"Health check failed with {response.status_code}: {response.text}")
         assert response.status_code == 200
         data = response.json()
         assert "status" in data

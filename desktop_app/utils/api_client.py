@@ -1,160 +1,129 @@
 """
 REST API client for communicating with the backend.
+This module now serves as a 100% backward-compatible Façade over the `api_client_core` packages.
 """
 
 import logging
 from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 
-import requests
 from desktop_app.utils.hashing import calculate_source_id
+from desktop_app.utils.api_client_core.base_client import BaseAPIClient
+from desktop_app.utils.api_client_core.system_client import SystemClient
+from desktop_app.utils.api_client_core.document_client import DocumentClient
+from desktop_app.utils.api_client_core.search_client import SearchClient
+from desktop_app.utils.api_client_core.metadata_client import MetadataClient
+from desktop_app.utils.api_client_core.indexing_client import IndexingClient
+from desktop_app.utils.api_client_core.user_client import UserClient
+from desktop_app.utils.api_client_core.activity_client import ActivityClient
+from desktop_app.utils.api_client_core.watched_folders_client import WatchedFoldersClient
+from desktop_app.utils.api_client_core.identity_client import IdentityClient
 from version import __version__ as CLIENT_VERSION
 
 logger = logging.getLogger(__name__)
 
+# Legacy exceptions kept here to allow `except APIClient.Error:` patterns if any exist,
+# but normally these should import from `errors.py`.
+# For Phase D migration, we rely on the concrete BaseAPIClient handling error mappings.
+
 
 class APIClient:
-    """Client for interacting with the PGVectorRAGIndexer REST API."""
+    """
+    Façade client for interacting with the PGVectorRAGIndexer REST API.
+    All underlying HTTP and state management is routed through `BaseAPIClient`.
+    Domain methods currently reside here but will systematically migrate to sub-modules.
+    """
     
-    def __init__(self, base_url: str = "http://localhost:8000", api_key: Optional[str] = None):
+    def __init__(self, base_url: str = "http://localhost:8000", api_key: Optional[str] = None, timeout: int = 7200):
         """
-        Initialize API client.
+        Initialize API client Façade.
         
         Args:
             base_url: Base URL of the API
             api_key: Optional API key for authenticated access (remote mode)
+            timeout: Default request timeout in seconds (default: 7200 for large OCR files)
         """
-        self.base_url = base_url.rstrip('/')
-        self.api_base = f"{self.base_url}/api/v1"  # Versioned endpoint prefix
-        self.timeout = 7200  # 2 hours for very large OCR files (200+ pages)
-        self._api_key = api_key
+        # Centralized HTTP configuration and state management
+        self._base = BaseAPIClient(base_url, api_key, timeout)
+        
+        # Domain Client Instantiations (Batch 1, 2, 3)
+        self._system = SystemClient(self._base)
+        self._document = DocumentClient(self._base)
+        self._search = SearchClient(self._base)
+        self._metadata = MetadataClient(self._base)
+        self._indexing = IndexingClient(self._base)
+        self._user = UserClient(self._base)
+        self._activity = ActivityClient(self._base)
+        self._watched_folders = WatchedFoldersClient(self._base)
+        self._identity = IdentityClient(self._base)
+        
+        # Deprecated: Server version is now managed by SystemClient but kept here temporarily
+        # if any legacy callers accessed `api_client._server_version` directly.
         self._server_version: Optional[str] = None
+        
+    @property
+    def base_url(self) -> str:
+        return self._base.base_url
+        
+    @base_url.setter
+    def base_url(self, value: str):
+        # BaseAPIClient.base_url setter automatically normalizes via rstrip('/') 
+        # and re-derives `api_base`.
+        self._base.base_url = value
+        
+    @property
+    def api_base(self) -> str:
+        return self._base.api_base
+
+    @api_base.setter
+    def api_base(self, value: str):
+        # Restored specifically to guarantee strict runtime compatibility 
+        # if legacy code overrides api_base directly without updating base_url.
+        self._base.api_base = value.rstrip('/') if value else value # type: ignore
+        
+    @property
+    def _api_key(self) -> Optional[str]:
+        return self._base.api_key
+        
+    @_api_key.setter
+    def _api_key(self, value: Optional[str]):
+        # BaseAPIClient.api_key enforces synchronization invariant: 
+        # immediately patches X-API-Key into self._base._session.headers.
+        self._base.api_key = value
 
     @property
-    def _headers(self) -> dict:
-        """Request headers, including API key if configured."""
-        headers = {}
-        if self._api_key:
-            headers["X-API-Key"] = self._api_key
-        return headers
-    
-    def get_health(self) -> Dict[str, Any]:
-        """Get the full health status of the API.
+    def timeout(self) -> int:
+        return self._base._timeout
         
-        Returns:
-            Dict containing status, database health, etc. 
-            Returns {"status": "unreachable"} if connection fails.
-        """
-        try:
-            response = requests.get(
-                f"{self.base_url}/health",
-                headers=self._headers,
-                timeout=5
-            )
-            data = response.json()
-            # If the server is still initializing, system_api returns 200 with status="initializing"
-            return data
-        except Exception as e:
-            logger.debug(f"Health check failed: {e}")
-            return {"status": "unreachable", "error": str(e)}
+    @timeout.setter
+    def timeout(self, value: int):
+        self._base._timeout = value
+
+    def close(self):
+        """Releases the underlying session connection pool."""
+        self._base.close()
+
+    def get_health(self) -> Dict[str, Any]:
+        """Get the full health status of the API."""
+        return self._system.get_health()
 
     def is_api_available(self) -> bool:
         """Check if the API is available (responding 200)."""
-        health = self.get_health()
-        return health.get("status") in ("healthy", "initializing")
+        return self._system.is_api_available()
 
     def check_version_compatibility(self) -> Tuple[bool, str]:
-        """Check if this client version is compatible with the server.
-
-        Returns:
-            Tuple of (compatible, message).
-            compatible is True if versions match, False if mismatch.
-            message is empty on success, or a human-readable warning.
-        """
-        try:
-            response = requests.get(
-                f"{self.base_url}/api/version",
-                headers=self._headers,
-                timeout=5,
-            )
-            if response.status_code != 200:
-                return True, ""  # Endpoint missing (old server) — assume OK
-
-            data = response.json()
-            self._server_version = data.get("server_version", "unknown")
-            min_ver = data.get("min_client_version", "0.0.0")
-            max_ver = data.get("max_client_version", "99.99.99")
-
-            from packaging.version import Version, InvalidVersion
-            try:
-                client_v = Version(CLIENT_VERSION)
-                min_v = Version(min_ver)
-                max_v = Version(max_ver)
-            except InvalidVersion:
-                return True, ""  # Can't parse — don't block
-
-            if client_v < min_v:
-                return False, (
-                    f"This client (v{CLIENT_VERSION}) is too old for the server "
-                    f"(v{self._server_version}). Minimum required: v{min_ver}. "
-                    f"Please update the desktop app."
-                )
-            if client_v > max_v:
-                return False, (
-                    f"This client (v{CLIENT_VERSION}) is newer than the server "
-                    f"(v{self._server_version}) supports. Maximum: v{max_ver}. "
-                    f"Please update the server."
-                )
-            return True, ""
-        except ImportError:
-            logger.debug("packaging not installed, skipping version check")
-            return True, ""
-        except requests.RequestException:
-            return True, ""  # Can't reach server — don't block
+        """Check if this client version is compatible with the server."""
+        compatible, msg = self._system.check_version_compatibility()
+        self._server_version = self._system._server_version  # Sync deprecated legacy property
+        return compatible, msg
 
     def check_document_exists(self, source_uri: str) -> bool:
-        """
-        Check if a document with the given source URI already exists.
-        
-        Args:
-            source_uri: Source URI to check
-            
-        Returns:
-            True if document exists, False otherwise
-        """
-        return self.get_document_metadata(source_uri) is not None
+        """Check if a document with the given source URI already exists."""
+        return self._document.check_document_exists(source_uri)
 
     def get_document_metadata(self, source_uri: str) -> Optional[Dict[str, Any]]:
-        """
-        Get metadata for a document by source URI.
-        
-        Args:
-            source_uri: Source URI to check
-            
-        Returns:
-            Document metadata dict if exists, None otherwise
-        """
-        try:
-            # Calculate deterministic ID locally (O(1))
-            document_id = calculate_source_id(source_uri)
-            
-            # Fetch document details directly
-            doc = self.get_document(document_id)
-            
-            # Return the full document response which includes 'metadata'
-            # The API returns dict with keys: document_id, source_uri, chunks_indexed, metadata, etc.
-            # But get_document returns the result from /documents/{id}.
-            # Let's verify what /documents/{id} returns.
-            # It usually returns { "document_id": ..., "metadata": ... }
-            return doc
-            
-        except requests.HTTPError as e:
-            if e.response.status_code == 404:
-                return None
-            raise
-        except Exception as e:
-            logger.error(f"Error checking document status: {e}")
-            return None
+        """Get metadata for a document by source URI."""
+        return self._document.get_document_metadata(source_uri)
     
     def upload_document(
         self,
@@ -164,46 +133,10 @@ class APIClient:
         document_type: Optional[str] = None,
         ocr_mode: Optional[str] = None
     ) -> Dict[str, Any]:
-        """
-        Upload and index a document.
-        
-        Args:
-            file_path: Path to the file to upload
-            custom_source_uri: Custom source URI (full path) to preserve
-            force_reindex: Whether to force reindexing if document exists
-            document_type: Optional document type/category (e.g., 'resume', 'policy', 'report')
-            ocr_mode: OCR mode ('auto', 'skip', 'only') - defaults to API config
-            
-        Returns:
-            Response data from the API
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        logger.info(f"Uploading document: {file_path} (type: {document_type}, ocr: {ocr_mode})")
-        
-        with open(file_path, 'rb') as f:
-            files = {'file': (file_path.name, f)}
-            data = {'force_reindex': str(force_reindex).lower()}
-            
-            if custom_source_uri:
-                data['custom_source_uri'] = custom_source_uri
-            
-            if document_type:
-                data['document_type'] = document_type
-            
-            if ocr_mode:
-                data['ocr_mode'] = ocr_mode
-            
-            response = requests.post(
-                f"{self.api_base}/upload-and-index",
-                files=files,
-                data=data,
-                headers=self._headers,
-                timeout=self.timeout
-            )
-            response.raise_for_status()
-            return response.json()
+        """Upload and index a document."""
+        return self._document.upload_document(
+            file_path, custom_source_uri, force_reindex, document_type, ocr_mode
+        )
     
     def search(
         self,
@@ -214,48 +147,15 @@ class APIClient:
         document_type: Optional[str] = None,
         filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
-        """
-        Search for documents.
-        
-        Args:
-            query: Search query
-            top_k: Number of results to return
-            min_score: Minimum similarity score
-            metric: Similarity metric to use
-            document_type: Optional filter by document type (deprecated, use filters)
-            filters: Optional filter dictionary
-            
-        Returns:
-            List of search results
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        logger.info(f"Searching for: {query} (filters: {filters or document_type})")
-        
-        payload = {
-            "query": query,
-            "top_k": top_k,
-            "min_score": min_score,
-            "metric": metric,
-            "use_hybrid": True  # Hybrid search with exact-match boost (optimized)
-        }
-        
-        # Add filters if specified
-        if filters:
-            payload["filters"] = filters
-        elif document_type:
-            # Backward compatibility
-            payload["filters"] = {"type": document_type}
-        
-        response = requests.post(
-            f"{self.api_base}/search",
-            json=payload,
-            headers=self._headers,
-            timeout=self.timeout
+        """Search for documents."""
+        return self._search.search(
+            query=query,
+            top_k=top_k,
+            min_score=min_score,
+            metric=metric,
+            document_type=document_type,
+            filters=filters
         )
-        response.raise_for_status()
-        return response.json()["results"]
     
     def list_documents(
         self,
@@ -267,324 +167,61 @@ class APIClient:
         source_prefix: str | None = None,
     ) -> Dict[str, Any]:
         """Retrieve documents with pagination metadata."""
-        params = {
-            "limit": limit,
-            "offset": offset,
-            "sort_by": sort_by,
-            "sort_dir": sort_dir,
-        }
-        if source_prefix:
-            params["source_prefix"] = source_prefix
-
-        response = requests.get(
-            f"{self.api_base}/documents",
-            params=params,
-            headers=self._headers,
-            timeout=self.timeout
+        return self._document.list_documents(
+            limit=limit, offset=offset, sort_by=sort_by, sort_dir=sort_dir, source_prefix=source_prefix
         )
-        response.raise_for_status()
-        data = response.json()
-
-        # Legacy support: plain list response
-        if isinstance(data, list):
-            return {
-                "items": data,
-                "total": len(data),
-                "limit": limit,
-                "offset": offset,
-                "sort": {
-                    "by": sort_by,
-                    "direction": sort_dir,
-                },
-                "_total_estimated": True,
-            }
-
-        if isinstance(data, dict):
-            # Modern payload already in paginated shape
-            if "items" in data:
-                normalized = dict(data)  # shallow copy to avoid mutating original
-                if normalized.get("total") is None:
-                    normalized["total"] = len(normalized.get("items", []))
-                    normalized["_total_estimated"] = True
-                else:
-                    normalized.setdefault("total", len(normalized.get("items", [])))
-                    normalized.setdefault("_total_estimated", False)
-                normalized.setdefault("limit", limit)
-                normalized.setdefault("offset", offset)
-                normalized.setdefault("sort", {"by": sort_by, "direction": sort_dir})
-                return normalized
-
-            # Backward compatibility for older keys ("documents")
-            if "documents" in data:
-                items = data.get("documents", [])
-                return {
-                    "items": items,
-                    "total": data.get("total", len(items)),
-                    "limit": data.get("limit", limit),
-                    "offset": data.get("offset", offset),
-                    "sort": data.get("sort", {"by": sort_by, "direction": sort_dir}),
-                    "_total_estimated": data.get("total") is None,
-                }
-
-        raise requests.RequestException("Unexpected response structure from /documents endpoint")
     
     def get_document(self, document_id: str) -> Dict[str, Any]:
-        """
-        Get a specific document by ID.
-        
-        Args:
-            document_id: Document ID
-            
-        Returns:
-            Document data
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        response = requests.get(
-            f"{self.api_base}/documents/{document_id}",
-            headers=self._headers,
-            timeout=self.timeout
-        )
-        response.raise_for_status()
-        return response.json()
+        """Get a specific document by ID."""
+        return self._document.get_document(document_id)
     
     def delete_document(self, document_id: str) -> Dict[str, Any]:
-        """
-        Delete a document.
-        
-        Args:
-            document_id: Document ID to delete
-            
-        Returns:
-            Response data
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        logger.info(f"Deleting document: {document_id}")
-        
-        response = requests.delete(
-            f"{self.api_base}/documents/{document_id}",
-            headers=self._headers,
-            timeout=self.timeout
-        )
-        response.raise_for_status()
-        return response.json()
+        """Delete a document."""
+        return self._document.delete_document(document_id)
     
     def get_statistics(self) -> Dict[str, Any]:
-        """
-        Get database statistics.
-        
-        Returns:
-            Statistics data
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        response = requests.get(
-            f"{self.api_base}/statistics",
-            headers=self._headers,
-            timeout=self.timeout
-        )
-        response.raise_for_status()
-        return response.json()
+        """Get database statistics."""
+        return self._system.get_statistics()
     
     def bulk_delete_preview(self, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Preview what documents would be deleted with given filters.
-        
-        Args:
-            filters: Filter criteria
-            
-        Returns:
-            Preview data with document count and samples
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        payload = {"filters": filters, "preview": True}
-        logger.info(f"bulk_delete_preview payload: {payload!r}")
-        response = requests.post(
-            f"{self.api_base}/documents/bulk-delete",
-            json=payload,
-            headers=self._headers,
-            timeout=self.timeout
-        )
-        response.raise_for_status()
-        return response.json()
+        """Preview what documents would be deleted with given filters."""
+        return self._document.bulk_delete_preview(filters)
     
     def bulk_delete(self, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Actually delete documents matching filters.
-        
-        Args:
-            filters: Filter criteria
-            
-        Returns:
-            Delete result with chunks_deleted count
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        payload = {"filters": filters, "preview": False}
-        logger.info(f"bulk_delete payload: {payload!r}")
-        response = requests.post(
-            f"{self.api_base}/documents/bulk-delete",
-            json=payload,
-            headers=self._headers,
-            timeout=self.timeout
-        )
-        response.raise_for_status()
-        return response.json()
+        """Actually delete documents matching filters."""
+        return self._document.bulk_delete(filters)
     
     def export_documents(self, filters: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Export documents matching filters as backup.
-        
-        Args:
-            filters: Filter criteria
-            
-        Returns:
-            Export data with backup_data
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        payload = {"filters": filters}
-        logger.info(f"export_documents payload: {payload!r}")
-        response = requests.post(
-            f"{self.api_base}/documents/export",
-            json=payload,
-            headers=self._headers,
-            timeout=self.timeout
-        )
-        response.raise_for_status()
-        return response.json()
+        """Export documents matching filters as backup."""
+        return self._document.export_documents(filters)
     
     def restore_documents(self, backup_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """
-        Restore documents from backup.
-        
-        Args:
-            backup_data: Backup data from export_documents
-            
-        Returns:
-            Restore result with chunks_restored count
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        response = requests.post(
-            f"{self.api_base}/documents/restore",
-            json={"backup_data": backup_data},
-            headers=self._headers,
-            timeout=self.timeout
-        )
-        response.raise_for_status()
-        return response.json()
+        """Restore documents from backup."""
+        return self._document.restore_documents(backup_data)
     
     def get_metadata_keys(self, pattern: Optional[str] = None) -> List[str]:
-        """
-        Get all unique metadata keys.
-        
-        Args:
-            pattern: Optional SQL LIKE pattern to filter keys
-            
-        Returns:
-            List of metadata keys
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        params = {}
-        if pattern:
-            params['pattern'] = pattern
-        
-        response = requests.get(
-            f"{self.api_base}/metadata/keys",
-            params=params,
-            headers=self._headers,
-            timeout=self.timeout
-        )
-        response.raise_for_status()
-        return response.json()
+        """Get all unique metadata keys."""
+        return self._metadata.get_metadata_keys(pattern=pattern)
     
     def get_metadata_values(self, key: str) -> List[str]:
-        """
-        Get all unique values for a metadata key.
-        
-        Args:
-            key: Metadata key to get values for
-            
-        Returns:
-            List of unique values
-            
-        Raises:
-            requests.RequestException: If the request fails
-        """
-        response = requests.get(
-            f"{self.api_base}/metadata/values",
-            params={"key": key},
-            headers=self._headers,
-            timeout=self.timeout
-        )
-        response.raise_for_status()
-        return response.json()
+        """Get all unique values for a metadata key."""
+        return self._metadata.get_metadata_values(key=key)
 
     # ------------------------------------------------------------------
     # Health Dashboard (#4)
     # ------------------------------------------------------------------
 
     def get_indexing_runs(self, limit: int = 20) -> Dict[str, Any]:
-        """Get recent indexing runs.
-
-        Args:
-            limit: Maximum number of runs to return (1-100).
-
-        Returns:
-            Dict with 'runs' list and 'count'.
-        """
-        response = requests.get(
-            f"{self.api_base}/indexing/runs",
-            params={"limit": limit},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        """Get recent indexing runs."""
+        return self._indexing.get_indexing_runs(limit=limit)
 
     def get_indexing_summary(self) -> Dict[str, Any]:
-        """Get aggregate indexing run statistics.
-
-        Returns:
-            Dict with total_runs, successful, failed, partial,
-            total_files_added, total_files_updated, last_run_at.
-        """
-        response = requests.get(
-            f"{self.api_base}/indexing/runs/summary",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        """Get aggregate indexing run statistics."""
+        return self._indexing.get_indexing_summary()
 
     def get_indexing_run_detail(self, run_id: str) -> Dict[str, Any]:
-        """Get details of a single indexing run.
-
-        Args:
-            run_id: UUID of the run.
-
-        Returns:
-            Dict with full run details including errors.
-        """
-        response = requests.get(
-            f"{self.api_base}/indexing/runs/{run_id}",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        """Get details of a single indexing run."""
+        return self._indexing.get_indexing_run_detail(run_id=run_id)
 
     # ------------------------------------------------------------------
     # Client Identity (#8)
@@ -597,55 +234,23 @@ class APIClient:
         os_type: str,
         app_version: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Register or update a client with the server.
-
-        Returns:
-            Dict with client info including last_seen_at.
-        """
-        response = requests.post(
-            f"{self.api_base}/clients/register",
-            json={
-                "client_id": client_id,
-                "display_name": display_name,
-                "os_type": os_type,
-                "app_version": app_version,
-            },
-            headers=self._headers,
-            timeout=self.timeout,
+        """Register or update a client with the server."""
+        return self._identity.register_client(
+            client_id=client_id,
+            display_name=display_name,
+            os_type=os_type,
+            app_version=app_version
         )
-        response.raise_for_status()
-        return response.json()
 
     def client_heartbeat(
         self, client_id: str, app_version: Optional[str] = None
     ) -> Dict[str, Any]:
-        """Send a heartbeat to update last_seen_at.
-
-        Returns:
-            Dict with {"ok": True/False}.
-        """
-        response = requests.post(
-            f"{self.api_base}/clients/heartbeat",
-            json={"client_id": client_id, "app_version": app_version},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        """Send a heartbeat to update last_seen_at."""
+        return self._identity.client_heartbeat(client_id=client_id, app_version=app_version)
 
     def list_clients(self) -> Dict[str, Any]:
-        """List all registered clients.
-
-        Returns:
-            Dict with 'clients' list and 'count'.
-        """
-        response = requests.get(
-            f"{self.api_base}/clients",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        """List all registered clients."""
+        return self._identity.list_clients()
 
     # ------------------------------------------------------------------
     # Watched Folders (#6)
@@ -653,14 +258,7 @@ class APIClient:
 
     def list_watched_folders(self, enabled_only: bool = False) -> Dict[str, Any]:
         """List watched folders."""
-        response = requests.get(
-            f"{self.api_base}/watched-folders",
-            params={"enabled_only": enabled_only},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._watched_folders.list_watched_folders(enabled_only=enabled_only)
 
     def add_watched_folder(
         self,
@@ -670,19 +268,12 @@ class APIClient:
         enabled: bool = True,
     ) -> Dict[str, Any]:
         """Add or update a watched folder."""
-        response = requests.post(
-            f"{self.api_base}/watched-folders",
-            json={
-                "folder_path": folder_path,
-                "schedule_cron": schedule_cron,
-                "client_id": client_id,
-                "enabled": enabled,
-            },
-            headers=self._headers,
-            timeout=self.timeout,
+        return self._watched_folders.add_watched_folder(
+            folder_path=folder_path,
+            schedule_cron=schedule_cron,
+            client_id=client_id,
+            enabled=enabled
         )
-        response.raise_for_status()
-        return response.json()
 
     def update_watched_folder(
         self,
@@ -691,45 +282,21 @@ class APIClient:
         schedule_cron: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Update a watched folder's settings."""
-        body: Dict[str, Any] = {}
-        if enabled is not None:
-            body["enabled"] = enabled
-        if schedule_cron is not None:
-            body["schedule_cron"] = schedule_cron
-        response = requests.put(
-            f"{self.api_base}/watched-folders/{folder_id}",
-            json=body,
-            headers=self._headers,
-            timeout=self.timeout,
+        return self._watched_folders.update_watched_folder(
+            folder_id=folder_id,
+            enabled=enabled,
+            schedule_cron=schedule_cron
         )
-        response.raise_for_status()
-        return response.json()
 
     def remove_watched_folder(self, folder_id: str) -> Dict[str, Any]:
         """Remove a watched folder."""
-        response = requests.delete(
-            f"{self.api_base}/watched-folders/{folder_id}",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._watched_folders.remove_watched_folder(folder_id=folder_id)
 
     def scan_watched_folder(
         self, folder_id: str, client_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """Trigger an immediate scan of a watched folder."""
-        body: Dict[str, Any] = {}
-        if client_id:
-            body["client_id"] = client_id
-        response = requests.post(
-            f"{self.api_base}/watched-folders/{folder_id}/scan",
-            json=body,
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._watched_folders.scan_watched_folder(folder_id=folder_id, client_id=client_id)
 
     # ------------------------------------------------------------------
     # Virtual Roots (#9)
@@ -739,91 +306,39 @@ class APIClient:
         self, client_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """List virtual roots, optionally filtered by client_id."""
-        params: Dict[str, Any] = {}
-        if client_id:
-            params["client_id"] = client_id
-        response = requests.get(
-            f"{self.api_base}/virtual-roots",
-            params=params,
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._watched_folders.list_virtual_roots(client_id=client_id)
 
     def list_virtual_root_names(self) -> Dict[str, Any]:
         """List distinct virtual root names."""
-        response = requests.get(
-            f"{self.api_base}/virtual-roots/names",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._watched_folders.list_virtual_root_names()
 
     def get_virtual_root_mappings(self, name: str) -> Dict[str, Any]:
         """Get all client mappings for a virtual root name."""
-        response = requests.get(
-            f"{self.api_base}/virtual-roots/{name}/mappings",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._watched_folders.get_virtual_root_mappings(name=name)
 
     def add_virtual_root(
         self, name: str, client_id: str, local_path: str
     ) -> Dict[str, Any]:
         """Add or update a virtual root mapping."""
-        response = requests.post(
-            f"{self.api_base}/virtual-roots",
-            json={"name": name, "client_id": client_id, "local_path": local_path},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._watched_folders.add_virtual_root(name=name, client_id=client_id, local_path=local_path)
 
     def remove_virtual_root(self, root_id: str) -> Dict[str, Any]:
         """Remove a virtual root by ID."""
-        response = requests.delete(
-            f"{self.api_base}/virtual-roots/{root_id}",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._watched_folders.remove_virtual_root(root_id=root_id)
 
     def resolve_virtual_path(
         self, virtual_path: str, client_id: str
     ) -> Dict[str, Any]:
         """Resolve a virtual path to a local path."""
-        response = requests.post(
-            f"{self.api_base}/virtual-roots/resolve",
-            json={"virtual_path": virtual_path, "client_id": client_id},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._watched_folders.resolve_virtual_path(virtual_path=virtual_path, client_id=client_id)
 
     # ------------------------------------------------------------------
     # Licensing
     # ------------------------------------------------------------------
 
     def get_license_info(self) -> Dict[str, Any]:
-        """Get license information from the server.
-        
-        Returns:
-            Dict with edition, org_name, seats, days_until_expiry, expired, key_id, warning.
-        """
-        response = requests.get(
-            f"{self.base_url}/license",
-            headers=self._headers,
-            timeout=10,
-        )
-        response.raise_for_status()
-        return response.json()
+        """Get license information from the server."""
+        return self._system.get_license_info()
 
     # ------------------------------------------------------------------
     # Activity Log (#10)
@@ -837,19 +352,7 @@ class APIClient:
         action: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Query recent activity log entries."""
-        params: Dict[str, Any] = {"limit": limit, "offset": offset}
-        if client_id:
-            params["client_id"] = client_id
-        if action:
-            params["action"] = action
-        response = requests.get(
-            f"{self.api_base}/activity",
-            params=params,
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._activity.get_activity_log(limit=limit, offset=offset, client_id=client_id, action=action)
 
     def post_activity(
         self,
@@ -859,29 +362,11 @@ class APIClient:
         details: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Record an activity log entry."""
-        response = requests.post(
-            f"{self.api_base}/activity",
-            json={
-                "action": action,
-                "client_id": client_id,
-                "user_id": user_id,
-                "details": details,
-            },
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._activity.post_activity(action=action, client_id=client_id, user_id=user_id, details=details)
 
     def get_activity_action_types(self) -> Dict[str, Any]:
         """Get distinct action types in the activity log."""
-        response = requests.get(
-            f"{self.api_base}/activity/actions",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._activity.get_activity_action_types()
 
     def export_activity_csv(
         self,
@@ -889,30 +374,11 @@ class APIClient:
         action: Optional[str] = None,
     ) -> str:
         """Export activity log as CSV string."""
-        params: Dict[str, Any] = {}
-        if client_id:
-            params["client_id"] = client_id
-        if action:
-            params["action"] = action
-        response = requests.get(
-            f"{self.api_base}/activity/export",
-            params=params,
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.text
+        return self._activity.export_activity_csv(client_id=client_id, action=action)
 
     def apply_activity_retention(self, days: int) -> Dict[str, Any]:
         """Apply retention policy — delete entries older than N days."""
-        response = requests.post(
-            f"{self.api_base}/activity/retention",
-            json={"days": days},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._activity.apply_activity_retention(days=days)
 
     # ------------------------------------------------------------------
     # Document Tree (#7)
@@ -925,37 +391,17 @@ class APIClient:
         offset: int = 0,
     ) -> Dict[str, Any]:
         """Get one level of the document tree under parent_path."""
-        response = requests.get(
-            f"{self.api_base}/documents/tree",
-            params={"parent_path": parent_path, "limit": limit, "offset": offset},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.get_document_tree(parent_path, limit, offset)
 
     def get_document_tree_stats(self) -> Dict[str, Any]:
         """Get overall document tree statistics."""
-        response = requests.get(
-            f"{self.api_base}/documents/tree/stats",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.get_document_tree_stats()
 
     def search_document_tree(
         self, query: str, limit: int = 50
     ) -> Dict[str, Any]:
         """Search for documents matching a path pattern."""
-        response = requests.get(
-            f"{self.api_base}/documents/tree/search",
-            params={"q": query, "limit": limit},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.search_document_tree(query, limit)
 
     # ------------------------------------------------------------------
     # Document Locks (#3 Multi-User, Phase 1)
@@ -969,80 +415,31 @@ class APIClient:
         lock_reason: str = "indexing",
     ) -> Dict[str, Any]:
         """Acquire a lock on a document for indexing."""
-        response = requests.post(
-            f"{self.api_base}/documents/locks/acquire",
-            json={
-                "source_uri": source_uri,
-                "client_id": client_id,
-                "ttl_minutes": ttl_minutes,
-                "lock_reason": lock_reason,
-            },
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.acquire_document_lock(source_uri, client_id, ttl_minutes, lock_reason)
 
     def release_document_lock(
         self, source_uri: str, client_id: str
     ) -> Dict[str, Any]:
         """Release a lock on a document."""
-        response = requests.post(
-            f"{self.api_base}/documents/locks/release",
-            json={"source_uri": source_uri, "client_id": client_id},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.release_document_lock(source_uri, client_id)
 
     def force_release_document_lock(self, source_uri: str) -> Dict[str, Any]:
         """Force-release a lock regardless of holder (admin)."""
-        response = requests.post(
-            f"{self.api_base}/documents/locks/force-release",
-            json={"source_uri": source_uri},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.force_release_document_lock(source_uri)
 
     def list_document_locks(
         self, client_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """List all active document locks."""
-        params: Dict[str, Any] = {}
-        if client_id:
-            params["client_id"] = client_id
-        response = requests.get(
-            f"{self.api_base}/documents/locks",
-            params=params,
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.list_document_locks(client_id)
 
     def check_document_lock(self, source_uri: str) -> Dict[str, Any]:
         """Check if a specific document is locked."""
-        response = requests.get(
-            f"{self.api_base}/documents/locks/check",
-            params={"source_uri": source_uri},
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.check_document_lock(source_uri)
 
     def cleanup_expired_locks(self) -> Dict[str, Any]:
         """Remove all expired locks."""
-        response = requests.post(
-            f"{self.api_base}/documents/locks/cleanup",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.cleanup_expired_locks()
 
     # ------------------------------------------------------------------
     # User Management (#16 Enterprise Foundations)
@@ -1050,27 +447,11 @@ class APIClient:
 
     def list_users(self, role: str = None, active_only: bool = True) -> dict:
         """List all users, optionally filtered by role."""
-        params = {"active_only": active_only}
-        if role:
-            params["role"] = role
-        response = requests.get(
-            f"{self.api_base}/users",
-            headers=self._headers,
-            params=params,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._user.list_users(role=role, active_only=active_only)
 
     def get_user(self, user_id: str) -> dict:
         """Get a user by ID."""
-        response = requests.get(
-            f"{self.api_base}/users/{user_id}",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._user.get_user(user_id=user_id)
 
     def create_user(
         self,
@@ -1082,55 +463,25 @@ class APIClient:
         client_id: str = None,
     ) -> dict:
         """Create a new user (admin only)."""
-        payload = {"role": role}
-        if email:
-            payload["email"] = email
-        if display_name:
-            payload["display_name"] = display_name
-        if api_key_id is not None:
-            payload["api_key_id"] = api_key_id
-        if client_id:
-            payload["client_id"] = client_id
-        response = requests.post(
-            f"{self.api_base}/users",
-            headers=self._headers,
-            json=payload,
-            timeout=self.timeout,
+        return self._user.create_user(
+            email=email,
+            display_name=display_name,
+            role=role,
+            api_key_id=api_key_id,
+            client_id=client_id,
         )
-        response.raise_for_status()
-        return response.json()
 
     def update_user(self, user_id: str, **kwargs) -> dict:
         """Update a user (admin only). Pass email, display_name, role, is_active."""
-        response = requests.put(
-            f"{self.api_base}/users/{user_id}",
-            headers=self._headers,
-            json=kwargs,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._user.update_user(user_id, **kwargs)
 
     def delete_user(self, user_id: str) -> dict:
         """Delete a user (admin only)."""
-        response = requests.delete(
-            f"{self.api_base}/users/{user_id}",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._user.delete_user(user_id=user_id)
 
     def change_user_role(self, user_id: str, role: str) -> dict:
         """Change a user's role (admin only)."""
-        response = requests.post(
-            f"{self.api_base}/users/{user_id}/role",
-            headers=self._headers,
-            json={"role": role},
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._user.change_user_role(user_id=user_id, role=role)
 
     # ------------------------------------------------------------------
     # Document Visibility (#3 Multi-User Support Phase 2)
@@ -1138,66 +489,24 @@ class APIClient:
 
     def get_document_visibility(self, document_id: str) -> dict:
         """Get visibility info for a document."""
-        response = requests.get(
-            f"{self.api_base}/documents/{document_id}/visibility",
-            headers=self._headers,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.get_document_visibility(document_id=document_id)
 
     def set_document_visibility(
         self, document_id: str, *, visibility: str = None, owner_id: str = None
     ) -> dict:
         """Set visibility and/or owner for a document."""
-        payload = {}
-        if visibility:
-            payload["visibility"] = visibility
-        if owner_id:
-            payload["owner_id"] = owner_id
-        response = requests.put(
-            f"{self.api_base}/documents/{document_id}/visibility",
-            headers=self._headers,
-            json=payload,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.set_document_visibility(document_id, visibility=visibility, owner_id=owner_id)
 
     def transfer_document_ownership(self, document_id: str, new_owner_id: str) -> dict:
         """Transfer document ownership to another user (admin only)."""
-        response = requests.post(
-            f"{self.api_base}/documents/{document_id}/transfer",
-            headers=self._headers,
-            json={"new_owner_id": new_owner_id},
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.transfer_document_ownership(document_id, new_owner_id)
 
     def list_user_documents(
         self, user_id: str, visibility: str = None, limit: int = 100, offset: int = 0
     ) -> dict:
         """List documents owned by a specific user."""
-        params = {"limit": limit, "offset": offset}
-        if visibility:
-            params["visibility"] = visibility
-        response = requests.get(
-            f"{self.api_base}/users/{user_id}/documents",
-            headers=self._headers,
-            params=params,
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._user.list_user_documents(user_id=user_id, visibility=visibility, limit=limit, offset=offset)
 
     def bulk_set_document_visibility(self, document_ids: list, visibility: str) -> dict:
         """Set visibility for multiple documents at once (admin only)."""
-        response = requests.post(
-            f"{self.api_base}/documents/bulk-visibility",
-            headers=self._headers,
-            json={"document_ids": document_ids, "visibility": visibility},
-            timeout=self.timeout,
-        )
-        response.raise_for_status()
-        return response.json()
+        return self._document.bulk_set_document_visibility(document_ids, visibility)

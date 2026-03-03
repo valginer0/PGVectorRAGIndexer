@@ -7,13 +7,14 @@ with optional caching and batch processing capabilities.
 
 import logging
 import hashlib
-from typing import List, Optional, Union
+from typing import List, Optional, Union, TYPE_CHECKING
 from functools import lru_cache
 
-import numpy as np
-from sentence_transformers import SentenceTransformer
-
 from config import get_config
+
+if TYPE_CHECKING:
+    import numpy as np
+    from sentence_transformers import SentenceTransformer
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +42,12 @@ class EmbeddingService:
         self.config = get_config().embedding
         import threading
         self._lock = threading.Lock()
-        self._model: Optional[SentenceTransformer] = None
+        self._model: Optional["SentenceTransformer"] = None
         self._cache_enabled = get_config().cache_embeddings
         self._embedding_cache = {}
     
     @property
-    def model(self) -> SentenceTransformer:
+    def model(self) -> "SentenceTransformer":
         """Lazy load and return the embedding model."""
         if self._model is None:
             with self._lock:
@@ -57,6 +58,7 @@ class EmbeddingService:
     def _load_model(self) -> None:
         """Load the sentence transformer model."""
         try:
+            from sentence_transformers import SentenceTransformer
             logger.info(f"Loading embedding model: {self.config.model_name}")
             self._model = SentenceTransformer(
                 self.config.model_name,
@@ -176,8 +178,8 @@ class EmbeddingService:
     
     def similarity(
         self,
-        embedding1: Union[List[float], np.ndarray],
-        embedding2: Union[List[float], np.ndarray],
+        embedding1: Union[List[float], "np.ndarray"],
+        embedding2: Union[List[float], "np.ndarray"],
         metric: str = 'cosine'
     ) -> float:
         """
@@ -191,9 +193,10 @@ class EmbeddingService:
         Returns:
             Similarity score
         """
+        import numpy as np
         emb1 = np.array(embedding1)
         emb2 = np.array(embedding2)
-        
+
         if metric == 'cosine':
             # Cosine similarity
             return float(np.dot(emb1, emb2) / (np.linalg.norm(emb1) * np.linalg.norm(emb2)))

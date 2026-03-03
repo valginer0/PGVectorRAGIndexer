@@ -89,6 +89,7 @@ class HealthResponse(BaseModel):
     timestamp: str
     database: Dict[str, Any]
     embedding_model: Dict[str, Any]
+    system: Optional[Dict[str, Any]] = None
 
 
 class StatsResponse(BaseModel):

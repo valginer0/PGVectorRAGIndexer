@@ -31,8 +31,9 @@ from indexer_v2 import DocumentIndexer
 from retriever_v2 import DocumentRetriever, SearchResult
 from auth import require_api_key, require_admin, require_permission
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure logging via centralized logger_setup
+from logger_setup import setup_logging
+setup_logging()
 logger = logging.getLogger(__name__)
 
 

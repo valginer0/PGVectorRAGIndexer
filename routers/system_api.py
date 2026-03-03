@@ -4,9 +4,51 @@ System, Health, and Version information routes for PGVectorRAGIndexer.
 
 import asyncio
 import logging
+import os
+import time
+import sys
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+
+_START_TIME = time.time()
+
+def _get_system_metrics() -> dict:
+    """Collect non-blocking system metrics with safe fallbacks."""
+    metrics = {
+        "uptime_seconds": round(time.time() - _START_TIME, 2),
+        "cpu_load_1m": None,
+        "memory_rss_bytes": None
+    }
+    
+    try:
+        import psutil
+        process = psutil.Process()
+        metrics["memory_rss_bytes"] = process.memory_info().rss
+        # Use os.getloadavg() for consistent 1-minute load average semantics
+        if hasattr(os, "getloadavg"):
+            metrics["cpu_load_1m"] = os.getloadavg()[0]
+    except Exception:
+        # Fallback to standard library
+        try:
+            if hasattr(os, "getloadavg"):
+                metrics["cpu_load_1m"] = os.getloadavg()[0]
+        except Exception:
+            pass
+            
+        try:
+            import resource
+            # Note: ru_maxrss reports *peak* RSS (not current). This is a best-effort
+            # fallback when psutil is unavailable. On Linux it is in KB, on macOS in bytes.
+            mem = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+            if sys.platform == "darwin":
+                metrics["memory_rss_bytes"] = mem
+            else:
+                metrics["memory_rss_bytes"] = mem * 1024
+        except Exception:
+            pass
+            
+    return metrics
 
 from version import __version__
 from api_models import (
@@ -104,7 +146,8 @@ async def health_check():
             status="initializing",
             timestamp=datetime.utcnow().isoformat(),
             database={"status": "initializing"},
-            embedding_model={"status": "loading"}
+            embedding_model={"status": "loading"},
+            system=_get_system_metrics()
         )
     try:
         db_manager = get_db_manager()
@@ -117,7 +160,8 @@ async def health_check():
             status="healthy",
             timestamp=datetime.utcnow().isoformat(),
             database=db_health,
-            embedding_model=model_info
+            embedding_model=model_info,
+            system=_get_system_metrics()
         )
     except Exception as e:
         logger.error(f"Health check failed: {e}")

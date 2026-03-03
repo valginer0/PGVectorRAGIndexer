@@ -2,8 +2,10 @@ import pytest
 from unittest.mock import patch, MagicMock
 
 from desktop_app.controllers.settings_controller import SettingsController
-from desktop_app.utils.controller_result import ControllerResult, UiAction
+from desktop_app.utils.controller_result import ControllerResult, MessageSeverity, UiAction
+from desktop_app.utils.controller_result import MessageSeverity
 from desktop_app.utils.license_service import LicenseServiceError
+from desktop_app.utils.license_dto import LicenseDisplayDTO
 from desktop_app.utils import app_config
 
 class DummyLicenseService:
@@ -16,7 +18,18 @@ class DummyLicenseService:
     def fetch_license_info(self):
         if self.throw_error:
             raise LicenseServiceError("Local fetch failed")
-        return self.return_data
+            
+        rd = self.return_data
+        info = LicenseDisplayDTO(
+            edition_label=rd.get("edition_label", "Community"),
+            is_team=rd.get("is_team", False),
+            org_name=rd.get("org_name", ""),
+            seats=rd.get("seats", 1),
+            days_left=rd.get("days_left", None),
+            expiry_warning=rd.get("expiry_warning", False),
+            warning_text=rd.get("warning_text", "")
+        )
+        return info, rd.get("server_error", False)
         
     def install_license(self, key):
         if self.throw_invalid_key:
@@ -40,11 +53,11 @@ def test_load_license_data_success():
     result = controller.load_license_data()
     assert result.success is True
     assert result.ui_actions == [UiAction.NONE]
-    assert result.data["info"]["edition_label"] == "Team"
+    assert result.data["info"].edition_label == "Team"
     assert result.data["server_error"] is False
 
 def test_load_license_data_server_error():
-    service = DummyLicenseService(return_data={"warning_text": "Server Edition: Unavailable - Using Local"})
+    service = DummyLicenseService(return_data={"server_error": True, "warning_text": "Server Edition: Unavailable - Using Local"})
     controller = SettingsController(license_service=service)
     
     result = controller.load_license_data()
@@ -80,6 +93,7 @@ def test_install_license_success_with_warning():
     result = controller.install_license("valid-key")
     assert result.success is True
     assert result.severity == "warning"
+    assert result.ui_actions == [UiAction.MESSAGE_BOX_WARNING]
     assert "Expiring soon" in result.message
 
 def test_install_license_error():

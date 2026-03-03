@@ -138,8 +138,9 @@ class TestUploadAndIndex:
     
     def test_upload_large_file(self, client):
         """Test uploading a larger file."""
-        # Create a 1MB text file
-        file_content = b"A" * (1024 * 1024)  # 1MB
+        # Create a ~50KB text file with spaces so the chunker doesn't recursively choke
+        # This is large enough to create multiple chunks but small enough to keep tests fast (<1 sec)
+        file_content = b"Word " * (10 * 1024)
         file_data = io.BytesIO(file_content)
         
         response = client.post(

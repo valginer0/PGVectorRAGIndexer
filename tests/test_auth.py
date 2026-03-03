@@ -309,16 +309,16 @@ class TestAPIClientHeaders:
     def test_no_api_key(self):
         from desktop_app.utils.api_client import APIClient
         client = APIClient()
-        assert client._headers == {}
+        assert client._base._session.headers.get("X-API-Key") is None
 
     def test_with_api_key(self):
         from desktop_app.utils.api_client import APIClient
         client = APIClient(api_key="pgv_sk_test123")
-        assert client._headers == {"X-API-Key": "pgv_sk_test123"}
+        assert client._base._session.headers.get("X-API-Key") == "pgv_sk_test123"
 
     def test_backward_compatible(self):
         from desktop_app.utils.api_client import APIClient
         # Old init style still works
         client = APIClient("http://localhost:9000")
         assert client.base_url == "http://localhost:9000"
-        assert client._headers == {}
+        assert client._base._session.headers.get("X-API-Key") is None

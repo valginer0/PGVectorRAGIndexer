@@ -141,6 +141,13 @@ def auto_mock_embeddings(mock_embedding_service):
         yield mock_embedding_service
 
 
+@pytest.fixture(autouse=True)
+def mock_license_revocation_check():
+    """Automatically mock license revocation check to prevent 5.0s network timeouts during tests."""
+    with patch('license.check_license_revocation', return_value=None):
+        yield
+
+
 @pytest.fixture
 def mock_embedding_service():
     """Provide mock embedding service."""
@@ -157,6 +164,7 @@ def mock_embedding_service():
             return [[0.1] * 384 for _ in text]
     
     mock_service.encode = mock_encode
+    mock_service.encode_batch = mock_encode
     mock_service.get_model_info.return_value = {
         'model_name': 'all-MiniLM-L6-v2',
         'dimension': 384,

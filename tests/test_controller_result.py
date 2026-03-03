@@ -1,5 +1,6 @@
 from desktop_app.utils.controller_result import (
     ControllerResult, 
+    MessageSeverity,
     UiAction, 
     EmptyData,
     BackendSaveData
@@ -9,7 +10,7 @@ def test_controller_result_initialization():
     result: ControllerResult[EmptyData] = ControllerResult(
         success=True,
         message="Success",
-        severity="success",
+        severity=MessageSeverity.SUCCESS,
         ui_actions=[UiAction.NONE],
         data=EmptyData()
     )
@@ -23,7 +24,7 @@ def test_controller_result_with_backend_save_data():
     result: ControllerResult[BackendSaveData] = ControllerResult(
         success=True,
         message="Saved",
-        severity="info",
+        severity=MessageSeverity.INFO,
         ui_actions=[UiAction.STATUS_LABEL, UiAction.MESSAGE_BOX_INFO],
         data=BackendSaveData(status_text="Settings saved.")
     )

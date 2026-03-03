@@ -525,7 +525,18 @@ Implementation sequencing (recommended):
 
 ---
 
-Last updated: 2026-03-01
+Last updated: 2026-03-02
+
+### ✅ Phase-C: UI Architecture Decoupling (Completed)
+- **Effort**: ~12h | **Edition**: Both | **Dependencies**: None
+- **Branch**: `main`
+- [x] Extracted logic out of `settings_tab.py` into a strict Controller Pattern (`SettingsController`).
+- [x] Defined rigid, strongly-typed `ControllerResult` with mapped `UiAction` outcomes.
+- [x] Centralized error handling and messaging into mapped enums (`MessageSeverity`).
+- [x] Isolated service-layer logic to `LicenseService` facade.
+- [x] Resolved DTO type collisions and fixed 5.0s network blocking during test sweeps.
+- [x] Full test-suite stabilization passing 100% (22 controller tests integrated).
+
 
 ### ✅ v2.6.20 - Phase-B: Licensing Refactor & Data Integrity
 - **Effort**: ~6h | **Edition**: Both | **Dependencies**: None

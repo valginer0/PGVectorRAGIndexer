@@ -15,6 +15,7 @@ from license import (
     validate_license_key,
 )
 from desktop_app.utils.edition import get_edition_display, open_pricing_page
+from desktop_app.utils.license_dto import LicenseDisplayDTO
 
 logger = logging.getLogger(__name__)
 
@@ -35,27 +36,31 @@ class LicenseService:
     def __init__(self, api_client=None):
         self.api_client = api_client
 
-    def fetch_license_info(self) -> dict:
+    def fetch_license_info(self) -> tuple[LicenseDisplayDTO, bool]:
         """
         Fetches license information, checking the remote server if an API client is available.
-        Returns a dictionary suitable for LicenseLoadData.info.
+        Returns a tuple containing the LicenseDisplayDTO and a boolean indicating if a server error occurred.
         """
         remote_data = None
+        server_error = False
+        from desktop_app.utils import app_config
         
-        # Try to fetch from server if remote mode is active (indicated by api_client having a base_url)
-        # Note: In the future, this might explicitly check backend_mode, but relying on api_client
-        # readiness is usually sufficient for the service layer.
-        if self.api_client and self.api_client.is_api_available():
-            try:
-                # remote_data will be a dict from LicenseInfo.to_dict()
-                remote_data = self.api_client.get_license_info()
-            except Exception as e:
-                logger.debug("Failed to fetch license from server: %s", e)
-                # We do NOT raise here. Falling back to local/community is expected.
-                # The controller handles `server_error` flagging.
+        # Try to fetch from server if remote mode is active
+        if self.api_client and app_config.get_backend_mode() == app_config.BACKEND_MODE_REMOTE:
+            if self.api_client.is_api_available():
+                try:
+                    # remote_data will be a dict from LicenseInfo.to_dict()
+                    remote_data = self.api_client.get_license_info()
+                except Exception as e:
+                    logger.debug("Failed to fetch license from server: %s", e)
+                    # We do NOT raise here. Falling back to local/community is expected.
+                    # The controller handles `server_error` flagging.
+                    server_error = True
+            else:
+                server_error = True
 
         try:
-            return get_edition_display(remote_data)
+            return get_edition_display(remote_data), server_error
         except Exception as e:
             logger.debug("Could not load license info: %s", e)
             raise LicenseServiceError(f"Failed to load local license details: {e}")

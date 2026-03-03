@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Generic, Literal, TypedDict, TypeVar
+from typing import Generic, Literal, TypedDict, TypeVar, Optional
+from desktop_app.utils.license_dto import LicenseDisplayDTO
 
 T = TypeVar('T')
 
@@ -11,13 +12,14 @@ class UiAction(Enum):
     MESSAGE_BOX_ERROR = auto()
     NONE = auto()
 
-class LicenseDisplayDTO(TypedDict):
-    edition: str
-    expiration: str
-    owner: str
+class MessageSeverity(str, Enum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+    SUCCESS = "success"
 
 class LicenseLoadData(TypedDict):
-    info: LicenseDisplayDTO
+    info: Optional[LicenseDisplayDTO]
     server_error: bool
 
 class BackendSaveData(TypedDict, total=False):
@@ -30,6 +32,6 @@ class EmptyData(TypedDict):
 class ControllerResult(Generic[T]):
     success: bool
     message: str
-    severity: Literal['info', 'warning', 'error', 'success']
+    severity: MessageSeverity
     ui_actions: list[UiAction]
     data: T

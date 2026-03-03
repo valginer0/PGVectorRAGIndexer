@@ -57,7 +57,7 @@ def test_perform_search_empty_query(search_tab):
 def test_perform_search_api_unavailable(search_tab, mock_api_client):
     """Test search when API is unavailable."""
     search_tab.query_input.setText("test")
-    mock_api_client.is_api_available.return_value = False
+    mock_api_client.get_health.return_value = {"status": "unreachable"}
     
     with patch("PySide6.QtWidgets.QMessageBox.critical") as mock_crit:
         search_tab.perform_search()

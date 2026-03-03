@@ -2,7 +2,8 @@ import pytest
 from unittest.mock import MagicMock, call, patch
 
 from desktop_app.ui.settings_tab import SettingsTab
-from desktop_app.utils.controller_result import ControllerResult, UiAction, BackendSaveData
+from desktop_app.utils.controller_result import ControllerResult, MessageSeverity, UiAction, BackendSaveData
+from desktop_app.utils.controller_result import MessageSeverity
 
 @pytest.fixture
 def mock_tab():
@@ -18,14 +19,12 @@ def mock_tab():
 @patch('desktop_app.ui.settings_tab.QMessageBox')
 def test_dispatcher_success_status_and_info(mock_msg_box, mock_tab):
     """Verifies that the dispatcher executes STATUS_LABEL then MESSAGE_BOX_INFO sequentially."""
-    from desktop_app.ui.settings_tab import Theme # Mocking dynamic property
-    mock_tab.Theme = MagicMock()
-    mock_tab.Theme.SUCCESS = "#10b981"
+    from desktop_app.ui.styles.theme import Theme
     
     result = ControllerResult(
         success=True,
         message="Message Body",
-        severity="success",
+        severity=MessageSeverity.SUCCESS,
         ui_actions=[UiAction.STATUS_LABEL, UiAction.MESSAGE_BOX_INFO],
         data=BackendSaveData(status_text="Updated label text")
     )
@@ -34,7 +33,7 @@ def test_dispatcher_success_status_and_info(mock_msg_box, mock_tab):
     
     # 1. Assert status label was updated with success coloring
     mock_tab._backend_status.setText.assert_called_with("Updated label text")
-    assert "color: #10b981" in mock_tab._backend_status.setStyleSheet.call_args[0][0]
+    assert f"color: {Theme.SUCCESS}" in mock_tab._backend_status.setStyleSheet.call_args[0][0]
     
     # 2. Assert message box was popped with info severity
     mock_msg_box.information.assert_called_once_with(mock_tab, "Success Title", "Message Body")
@@ -45,7 +44,7 @@ def test_dispatcher_warning_box_only(mock_msg_box, mock_tab):
     result = ControllerResult(
         success=False,
         message="Missing URL",
-        severity="warning",
+        severity=MessageSeverity.WARNING,
         ui_actions=[UiAction.MESSAGE_BOX_WARNING],
         data=BackendSaveData()
     )
@@ -64,7 +63,7 @@ def test_dispatcher_multiple_actions_are_ordered_and_not_deduplicated(mock_msg_b
     result = ControllerResult(
         success=False,
         message="Oops",
-        severity="error",
+        severity=MessageSeverity.ERROR,
         ui_actions=[UiAction.MESSAGE_BOX_ERROR, UiAction.MESSAGE_BOX_WARNING],
         data=BackendSaveData()
     )
@@ -79,7 +78,7 @@ def test_dispatcher_none_action_must_be_alone(mock_tab):
     result = ControllerResult(
         success=True,
         message="Bad mix",
-        severity="info",
+        severity=MessageSeverity.INFO,
         ui_actions=[UiAction.STATUS_LABEL, UiAction.NONE],
         data=BackendSaveData()
     )

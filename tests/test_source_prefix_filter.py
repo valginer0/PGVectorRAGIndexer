@@ -284,11 +284,12 @@ class TestApiClientSourcePrefix:
     def test_source_prefix_included_in_params(self):
         """list_documents should include source_prefix in request params."""
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"items": [], "total": 0}
 
-        with patch("requests.get", return_value=mock_response) as mock_get:
-            from desktop_app.utils.api_client import APIClient
-            real_client = APIClient("http://localhost:8000")
+        from desktop_app.utils.api_client import APIClient
+        real_client = APIClient("http://localhost:8000")
+        with patch.object(real_client._base, "request", return_value=mock_response) as mock_get:
             real_client.list_documents(source_prefix="/docs")
 
             called_params = mock_get.call_args[1].get("params", {})
@@ -297,11 +298,12 @@ class TestApiClientSourcePrefix:
     def test_no_prefix_omits_param(self):
         """list_documents without source_prefix should not include it in params."""
         mock_response = MagicMock()
+        mock_response.status_code = 200
         mock_response.json.return_value = {"items": [], "total": 0}
 
-        with patch("requests.get", return_value=mock_response) as mock_get:
-            from desktop_app.utils.api_client import APIClient
-            real_client = APIClient("http://localhost:8000")
+        from desktop_app.utils.api_client import APIClient
+        real_client = APIClient("http://localhost:8000")
+        with patch.object(real_client._base, "request", return_value=mock_response) as mock_get:
             real_client.list_documents()
 
             called_params = mock_get.call_args[1].get("params", {})

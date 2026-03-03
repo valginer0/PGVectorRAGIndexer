@@ -1,10 +1,10 @@
 import logging
 from typing import Optional
-import urllib.request
-import urllib.error
+import requests
 
 from desktop_app.utils.controller_result import (
     ControllerResult,
+    MessageSeverity,
     UiAction,
     LicenseLoadData,
     BackendSaveData,
@@ -29,17 +29,12 @@ class SettingsController:
     def load_license_data(self) -> ControllerResult[LicenseLoadData]:
         """Loads current license information for display."""
         try:
-            info = self.license_service.fetch_license_info()
-            server_error = False
-            
-            # Additional heuristic: if info mentions it fell back to local due to server issue
-            if "Server Edition: Unavailable" in str(info.get("warning_text", "")):
-                server_error = True
+            info, server_error = self.license_service.fetch_license_info()
                 
             return ControllerResult(
                 success=True,
                 message="Loaded.",
-                severity="info",
+                severity=MessageSeverity.INFO,
                 ui_actions=[UiAction.NONE],
                 data=LicenseLoadData(info=info, server_error=server_error)
             )
@@ -47,9 +42,9 @@ class SettingsController:
             return ControllerResult(
                 success=False,
                 message=str(e),
-                severity="warning",
+                severity=MessageSeverity.WARNING,
                 ui_actions=[UiAction.NONE],
-                data=LicenseLoadData(info={}, server_error=True)
+                data=LicenseLoadData(info=None, server_error=True)
             )
 
     def install_license(self, key_string: str) -> ControllerResult[EmptyData]:
@@ -65,20 +60,22 @@ class SettingsController:
                     f"Organization: {info.org_name}\n\n"
                     f"⚠️ Warning: {info.warning}"
                 )
-                severity = "warning"
+                severity = MessageSeverity.WARNING
+                ui_action = UiAction.MESSAGE_BOX_WARNING
             else:
                 msg = (
                     f"Edition: {info.edition.value.title()}\n"
                     f"Organization: {info.org_name}\n\n"
                     "The application has been updated with your new license."
                 )
-                severity = "info"
+                severity = MessageSeverity.INFO
+                ui_action = UiAction.MESSAGE_BOX_INFO
                 
             return ControllerResult(
                 success=True,
                 message=msg,
                 severity=severity,
-                ui_actions=[UiAction.MESSAGE_BOX_INFO],
+                ui_actions=[ui_action],
                 data=EmptyData()
             )
             
@@ -87,7 +84,7 @@ class SettingsController:
             return ControllerResult(
                 success=False,
                 message=str(e),
-                severity="error",
+                severity=MessageSeverity.ERROR,
                 ui_actions=[UiAction.MESSAGE_BOX_ERROR],
                 data=EmptyData()
             )
@@ -96,7 +93,7 @@ class SettingsController:
             return ControllerResult(
                 success=False,
                 message=f"An unexpected error occurred:\n{e}",
-                severity="error",
+                severity=MessageSeverity.ERROR,
                 ui_actions=[UiAction.MESSAGE_BOX_ERROR],
                 data=EmptyData()
             )
@@ -108,7 +105,7 @@ class SettingsController:
                 return ControllerResult(
                     success=False,
                     message="Please enter a backend URL.",
-                    severity="warning",
+                    severity=MessageSeverity.WARNING,
                     ui_actions=[UiAction.MESSAGE_BOX_WARNING],
                     data=BackendSaveData()
                 )
@@ -116,7 +113,7 @@ class SettingsController:
                 return ControllerResult(
                     success=False,
                     message="Backend URL must start with http:// or https://",
-                    severity="warning",
+                    severity=MessageSeverity.WARNING,
                     ui_actions=[UiAction.MESSAGE_BOX_WARNING],
                     data=BackendSaveData()
                 )
@@ -124,7 +121,7 @@ class SettingsController:
                 return ControllerResult(
                     success=False,
                     message="An API key is required for remote connections.",
-                    severity="warning",
+                    severity=MessageSeverity.WARNING,
                     ui_actions=[UiAction.MESSAGE_BOX_WARNING],
                     data=BackendSaveData()
                 )
@@ -135,8 +132,7 @@ class SettingsController:
             
             # Update live client
             if self.api_client:
-                self.api_client.base_url = url.rstrip('/')
-                self.api_client.api_base = f"{self.api_client.base_url}/api/v1"
+                self.api_client.base_url = url
                 self.api_client._api_key = api_key
                 
         else:
@@ -144,8 +140,7 @@ class SettingsController:
             app_config.set_api_key(None)
             
             if self.api_client:
-                self.api_client.base_url = app_config.DEFAULT_LOCAL_URL.rstrip('/')
-                self.api_client.api_base = f"{self.api_client.base_url}/api/v1"
+                self.api_client.base_url = app_config.DEFAULT_LOCAL_URL
                 self.api_client._api_key = None
 
         msg = (
@@ -157,7 +152,7 @@ class SettingsController:
         return ControllerResult(
             success=True,
             message=msg,
-            severity="success",
+            severity=MessageSeverity.SUCCESS,
             ui_actions=[UiAction.STATUS_LABEL, UiAction.MESSAGE_BOX_INFO],
             data=BackendSaveData(status_text="Settings saved.")
         )
@@ -168,7 +163,7 @@ class SettingsController:
             return ControllerResult(
                 success=False,
                 message="Enter a URL first.",
-                severity="warning",
+                severity=MessageSeverity.WARNING,
                 ui_actions=[UiAction.STATUS_LABEL],
                 data=BackendSaveData(status_text="Enter a URL first.")
             )
@@ -177,60 +172,66 @@ class SettingsController:
             return ControllerResult(
                 success=False,
                 message="URL must start with http:// or https://",
-                severity="warning",
+                severity=MessageSeverity.WARNING,
                 ui_actions=[UiAction.STATUS_LABEL],
                 data=BackendSaveData(status_text="URL must start with http:// or https://")
             )
 
         try:
-            req = urllib.request.Request(f"{url.rstrip('/')}/api/version", method="GET")
+            headers = {}
             if api_key:
-                req.add_header("Authorization", f"Bearer {api_key}")
+                headers["Authorization"] = f"Bearer {api_key}"
 
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                if resp.status == 200:
-                    import json
-                    body = resp.read()
-                    data = json.loads(body)
-                    server_ver = data.get("server_version", "?")
-                    
-                    return ControllerResult(
-                        success=True,
-                        message="Connected",
-                        severity="success",
-                        ui_actions=[UiAction.STATUS_LABEL],
-                        data=BackendSaveData(status_text=f"Connected — server v{server_ver}")
-                    )
-        except urllib.error.HTTPError as e:
-            if e.code == 401:
+            resp = requests.get(f"{url.rstrip('/')}/api/version", headers=headers, timeout=10)
+            
+            if resp.status_code == 200:
+                data = resp.json()
+                server_ver = data.get("server_version", "?")
+                
+                return ControllerResult(
+                    success=True,
+                    message="Connected",
+                    severity=MessageSeverity.SUCCESS,
+                    ui_actions=[UiAction.STATUS_LABEL],
+                    data=BackendSaveData(status_text=f"Connected — server v{server_ver}")
+                )
+            elif resp.status_code == 401:
                 return ControllerResult(
                     success=False,
                     message="Auth failed",
-                    severity="error",
+                    severity=MessageSeverity.ERROR,
                     ui_actions=[UiAction.STATUS_LABEL],
                     data=BackendSaveData(status_text="Authentication failed — check API key.")
                 )
-            return ControllerResult(
-                success=False,
-                message=f"HTTP {e.code}",
-                severity="warning",
-                ui_actions=[UiAction.STATUS_LABEL],
-                data=BackendSaveData(status_text=f"Server returned HTTP {e.code}")
-            )
-        except urllib.error.URLError as e:
-            text = "Connection timed out." if isinstance(e.reason, TimeoutError) else "Connection refused — is the server running?"
+            else:
+                return ControllerResult(
+                    success=False,
+                    message=f"HTTP {resp.status_code}",
+                    severity=MessageSeverity.WARNING,
+                    ui_actions=[UiAction.STATUS_LABEL],
+                    data=BackendSaveData(status_text=f"Server returned HTTP {resp.status_code}")
+                )
+        except requests.exceptions.Timeout:
             return ControllerResult(
                 success=False,
                 message="Connection Error",
-                severity="error",
+                severity=MessageSeverity.ERROR,
                 ui_actions=[UiAction.STATUS_LABEL],
-                data=BackendSaveData(status_text=text)
+                data=BackendSaveData(status_text="Connection timed out.")
+            )
+        except requests.exceptions.RequestException as e:
+            return ControllerResult(
+                success=False,
+                message="Connection Error",
+                severity=MessageSeverity.ERROR,
+                ui_actions=[UiAction.STATUS_LABEL],
+                data=BackendSaveData(status_text="Connection refused — is the server running?")
             )
         except Exception as e:
             return ControllerResult(
                 success=False,
                 message=str(e),
-                severity="error",
+                severity=MessageSeverity.ERROR,
                 ui_actions=[UiAction.STATUS_LABEL],
                 data=BackendSaveData(status_text=f"Error: {e}")
             )

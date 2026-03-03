@@ -62,6 +62,9 @@ def pg_container():
         _engine = create_engine(url)
         _container = container
         yield container
+    
+    if _engine is not None:
+        _engine.dispose()
     _engine = None
     _container = None
 

@@ -4,11 +4,13 @@ Shared service instances and helpers for the PGVectorRAGIndexer API.
 
 import os
 import logging
-from typing import Optional, List, Dict, Any
-from indexer_v2 import DocumentIndexer
-from retriever_v2 import DocumentRetriever
+from typing import Optional, List, Dict, Any, TYPE_CHECKING
 
 from fastapi import Response
+
+if TYPE_CHECKING:
+    from indexer_v2 import DocumentIndexer
+    from retriever_v2 import DocumentRetriever
 
 logger = logging.getLogger(__name__)
 
@@ -19,8 +21,8 @@ def _add_deprecation_headers(response: Response) -> None:
     response.headers["Link"] = '</api/v1/retention/run>; rel="successor-version"'
 
 # Singletons for services
-indexer: Optional[DocumentIndexer] = None
-retriever: Optional[DocumentRetriever] = None
+indexer: Optional["DocumentIndexer"] = None
+retriever: Optional["DocumentRetriever"] = None
 
 # Track encrypted PDFs encountered (in-memory, cleared on restart)
 encrypted_pdfs_encountered: List[Dict[str, Any]] = []
@@ -30,18 +32,20 @@ init_complete = False
 init_error = None
 
 
-def get_indexer() -> DocumentIndexer:
+def get_indexer() -> "DocumentIndexer":
     """Get or create singleton indexer instance."""
     global indexer
     if indexer is None:
+        from indexer_v2 import DocumentIndexer
         indexer = DocumentIndexer()
     return indexer
 
 
-def get_retriever() -> DocumentRetriever:
+def get_retriever() -> "DocumentRetriever":
     """Get or create singleton retriever instance."""
     global retriever
     if retriever is None:
+        from retriever_v2 import DocumentRetriever
         retriever = DocumentRetriever()
     return retriever
 

@@ -71,7 +71,7 @@ class TestClientVersionCheck:
             "min_client_version": "2.0.0",
             "max_client_version": "99.99.99",
         }
-        with patch("desktop_app.utils.api_client.requests.get", return_value=mock_resp):
+        with patch.object(client._base, "request", return_value=mock_resp):
             compatible, msg = client.check_version_compatibility()
         assert compatible is True
         assert msg == ""
@@ -86,7 +86,7 @@ class TestClientVersionCheck:
             "min_client_version": "3.0.0",
             "max_client_version": "99.99.99",
         }
-        with patch("desktop_app.utils.api_client.requests.get", return_value=mock_resp):
+        with patch.object(client._base, "request", return_value=mock_resp):
             compatible, msg = client.check_version_compatibility()
         assert compatible is False
         assert "too old" in msg
@@ -101,7 +101,7 @@ class TestClientVersionCheck:
             "min_client_version": "1.0.0",
             "max_client_version": "1.5.0",
         }
-        with patch("desktop_app.utils.api_client.requests.get", return_value=mock_resp):
+        with patch.object(client._base, "request", return_value=mock_resp):
             compatible, msg = client.check_version_compatibility()
         assert compatible is False
         assert "newer" in msg
@@ -110,8 +110,8 @@ class TestClientVersionCheck:
         """If server is unreachable, don't block the client."""
         import requests as req_lib
         client = self._make_client()
-        with patch(
-            "desktop_app.utils.api_client.requests.get",
+        with patch.object(
+            client._base, "request",
             side_effect=req_lib.ConnectionError("refused"),
         ):
             compatible, msg = client.check_version_compatibility()
@@ -122,7 +122,7 @@ class TestClientVersionCheck:
         client = self._make_client()
         mock_resp = MagicMock()
         mock_resp.status_code = 404
-        with patch("desktop_app.utils.api_client.requests.get", return_value=mock_resp):
+        with patch.object(client._base, "request", side_effect=RuntimeError("HTTP 404")):
             compatible, msg = client.check_version_compatibility()
         assert compatible is True
 

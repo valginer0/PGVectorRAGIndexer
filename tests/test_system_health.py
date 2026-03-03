@@ -36,14 +36,14 @@ def test_health_system_metrics_schema(isolated_app):
     """
     with patch("services.init_complete", False), \
          patch("services.init_error", None):
-        with TestClient(isolated_app) as client:
-            response = client.get("/health")
-            assert response.status_code == 200
+        client = TestClient(isolated_app, raise_server_exceptions=False)
+        response = client.get("/health")
+        assert response.status_code == 200
 
-            data = response.json()
-            assert data["status"] == "initializing"
-            assert "system" in data
-            _assert_system_metrics_schema(data["system"])
+        data = response.json()
+        assert data["status"] == "initializing"
+        assert "system" in data
+        _assert_system_metrics_schema(data["system"])
 
 
 def test_health_system_metrics_healthy_path(isolated_app):
@@ -60,14 +60,14 @@ def test_health_system_metrics_healthy_path(isolated_app):
          patch("routers.system_api.get_db_manager", return_value=mock_db_manager), \
          patch("routers.system_api.get_embedding_service", return_value=mock_embedding), \
          patch("routers.system_api.asyncio.to_thread", side_effect=fake_to_thread):
-        with TestClient(isolated_app) as client:
-            response = client.get("/health")
-            assert response.status_code == 200
+        client = TestClient(isolated_app, raise_server_exceptions=False)
+        response = client.get("/health")
+        assert response.status_code == 200
 
-            data = response.json()
-            assert data["status"] == "healthy"
-            assert "system" in data
-            _assert_system_metrics_schema(data["system"])
+        data = response.json()
+        assert data["status"] == "healthy"
+        assert "system" in data
+        _assert_system_metrics_schema(data["system"])
 
 
 def test_health_system_metrics_without_psutil():

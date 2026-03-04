@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.6.20
+# PGVectorRAGIndexer v2.7.0
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -68,9 +68,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ---
 
-## 🋹 What's New in v2.6.20
+## 🋹 What's New in v2.7.0
 
-### 🆕 Latest Features (v2.6.20)
+### 🆕 Latest Features (v2.7.0)
 
 - **✅ Phase-B: Licensing Refactor & Data Integrity**:
   - **Pure Data Model**: Refactored `LicenseInfo` to a pure data model, moving all calculation logic to a dedicated `license_utils.py` module.

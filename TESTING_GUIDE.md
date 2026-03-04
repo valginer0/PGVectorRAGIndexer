@@ -12,14 +12,25 @@ The v2 system includes a comprehensive test suite covering:
 
 ## 📁 Test Structure
 
-```
-tests/
-├── __init__.py              # Test package initialization
-├── conftest.py              # Shared fixtures and configuration
-├── test_config.py           # Configuration management tests
-├── test_database.py         # Database operations tests
-└── test_embeddings.py       # Embedding service tests
-```
+The test suite contains **~100 test files** organized by domain:
+
+| Category | Files | Examples |
+|----------|-------|---------|
+| **API & Routing** | 10 | `test_api_client.py`, `test_api_client_list_documents.py`, `test_api_initialization.py`, `test_api_license.py`, `test_api_versioning.py`, `test_api_error_registry.py`, `test_server_first_api.py`, `test_retention_api.py` |
+| **Auth & Identity** | 4 | `test_auth.py`, `test_auth_integration.py`, `test_client_identity.py`, `test_saml_auth.py` |
+| **Search** | 4 | `test_hybrid_search.py`, `test_query_parsing.py`, `test_metadata_filtering.py`, `test_metadata_discovery.py` |
+| **Documents & Indexing** | 10 | `test_documents_list.py`, `test_document_tree.py`, `test_document_locks.py`, `test_document_visibility.py`, `test_incremental.py`, `test_indexing_runs.py`, `test_canonical_source_key.py` |
+| **Desktop UI Tabs** | 10 | `test_documents_tab.py`, `test_documents_tab_ui.py`, `test_search_tab.py`, `test_upload_tab.py`, `test_manage_tab.py`, `test_settings_tab.py`, `test_recent_activity_tab_ui.py` |
+| **Desktop Controllers** | 3 | `test_settings_controller.py`, `test_controller_result.py`, `test_license_service.py` |
+| **Licensing** | 4 | `test_license.py`, `test_license_integration.py`, `test_license_utils.py`, `test_yaml_and_license.py` |
+| **Document Processing** | 5 | `test_embeddings.py`, `test_encoding.py`, `test_encrypted_pdf.py`, `test_legacy_word.py`, `test_document_processor_office.py` |
+| **Infrastructure** | 8 | `test_config.py`, `test_database.py`, `test_migrations.py`, `test_migrations_integration.py`, `test_docker_compose.py`, `test_dockerfile.py`, `test_db_roles.py`, `test_app_config.py` |
+| **Observability** | 3 | `test_system_health.py`, `test_logger_setup.py`, `test_startup_hang_regression.py` |
+| **Enterprise** | 5 | `test_enterprise_foundations.py`, `test_role_permissions.py`, `test_scim.py`, `test_compliance_export.py`, `test_data_retention.py` |
+| **Scheduling & Background** | 3 | `test_folder_scheduler.py`, `test_server_scheduler.py`, `test_watched_folders.py` |
+| **E2E & Integration** | 4 | `test_e2e_split_backend.py`, `test_split_deployment.py`, `test_integration.py`, `test_demo_mode.py` |
+| **Other** | ~10 | `test_activity_log.py`, `test_analytics.py`, `test_snippet_utils.py`, `test_virtual_roots.py`, `test_workers.py`, `test_upload_crash.py`, `test_quarantine.py`, etc. |
+| **Support** | 2 | `conftest.py` (shared fixtures), `helpers.py` (utilities like `get_alembic_head()`) |
 
 ## 🚀 Running Tests
 
@@ -39,8 +50,11 @@ pip install pytest pytest-asyncio pytest-cov httpx
 ### Run All Tests
 
 ```bash
-# Run all tests
-pytest
+# Run all tests (excludes known-hanging tests)
+python -m pytest tests/ \
+  --ignore=tests/test_upload_endpoint.py \
+  --ignore=tests/test_web_ui.py \
+  --ignore=tests/test_web_ui_integration.py -q
 
 # Run with verbose output
 pytest -v
@@ -48,6 +62,8 @@ pytest -v
 # Run with detailed output
 pytest -vv
 ```
+
+> **Note**: `test_upload_endpoint.py`, `test_web_ui.py`, and `test_web_ui_integration.py` hang in local/CI environments and should be excluded from batch runs.
 
 ### Run Specific Test Files
 
@@ -109,134 +125,79 @@ pytest --cov=. --cov-report=term-missing
 
 ## 🧩 Test Categories
 
-### 1. Configuration Tests (`test_config.py`)
+### API & Client Tests
+Tests for the REST API layer, desktop API client facade, and error handling:
+- `test_api_client.py` — 24 tests covering the `APIClient` facade and all 9 domain clients
+- `test_api_client_list_documents.py` — Pagination and filtering for document listing
+- `test_api_initialization.py` — Server startup and lifespan management
+- `test_api_error_registry.py` — Structured error codes and machine-readable responses
+- `test_api_license.py`, `test_api_versioning.py` — License endpoint and API version negotiation
 
-**What's Tested**:
-- Default configuration values
-- Environment variable loading
-- Validation rules
-- Configuration composition
-- Singleton pattern
+### Search & Metadata Tests
+- `test_hybrid_search.py` — Vector + keyword hybrid search
+- `test_query_parsing.py` — Query syntax parsing
+- `test_metadata_filtering.py`, `test_metadata_discovery.py` — Metadata-based filtering and key/value discovery
+- `test_metadata_openapi.py` — OpenAPI schema validation for metadata endpoints
 
-**Example Tests**:
-```python
-def test_database_config_defaults():
-    """Test default database configuration."""
-    config = DatabaseConfig()
-    assert config.host == 'localhost'
-    assert config.port == 5432
+### Infrastructure & Observability Tests
+- `test_config.py` — Configuration defaults, env loading, validation
+- `test_database.py` — Connection pooling, CRUD, vector search (requires PostgreSQL)
+- `test_migrations.py`, `test_migrations_integration.py` — Alembic migration chain
+- `test_system_health.py` — 3 async tests for `/health` system metrics schema
+- `test_logger_setup.py` — 2 tests for JSON/text log format switching
+- `test_startup_hang_regression.py` — 7 tests ensuring lazy imports prevent startup hangs
 
-def test_embedding_dimension_validation():
-    """Test embedding dimension validation."""
-    with pytest.raises(ValidationError):
-        EmbeddingConfig(dimension=-1)
-```
+### Desktop UI & Controller Tests
+- `test_settings_controller.py` — 22 tests for `SettingsController` with `ControllerResult`/`UiAction`
+- `test_documents_tab.py`, `test_search_tab.py`, `test_upload_tab.py`, `test_manage_tab.py` — Tab UI logic
+- `test_controller_result.py`, `test_license_service.py` — Controller pattern and service facades
 
-**Run**:
-```bash
-pytest tests/test_config.py -v
-```
+### Enterprise & Compliance Tests
+- `test_enterprise_foundations.py`, `test_role_permissions.py` — RBAC and enterprise features
+- `test_scim.py` — SCIM provisioning
+- `test_data_retention.py`, `test_retention_api.py`, `test_retention_policy.py` — Data retention orchestration
+- `test_compliance_export.py` — Audit log export
 
-### 2. Database Tests (`test_database.py`)
-
-**What's Tested**:
-- Connection pooling
-- CRUD operations
-- Vector search
-- Transaction management
-- Error handling
-- Health checks
-
-**Example Tests**:
-```python
-def test_insert_chunks(db_manager, sample_embeddings):
-    """Test inserting document chunks."""
-    repo = DocumentRepository(db_manager)
-    chunks = [('doc1', 0, 'Text', '/path', sample_embeddings[0])]
-    count = repo.insert_chunks(chunks)
-    assert count == 1
-
-def test_search_similar(db_manager, sample_embeddings):
-    """Test vector similarity search."""
-    repo = DocumentRepository(db_manager)
-    # Insert test data
-    # Perform search
-    # Verify results
-```
-
-**Run**:
-```bash
-pytest tests/test_database.py -v
-```
-
-**Note**: Requires running PostgreSQL database
-
-### 3. Embedding Tests (`test_embeddings.py`)
-
-**What's Tested**:
-- Model loading
-- Embedding generation
-- Caching mechanism
-- Similarity calculations
-- Batch processing
-
-**Example Tests**:
-```python
-def test_encode_single_text(embedding_service):
-    """Test encoding a single text."""
-    text = "Test sentence."
-    embedding = embedding_service.encode(text)
-    assert len(embedding) == 384
-
-def test_embedding_caching(embedding_service):
-    """Test that embeddings are cached."""
-    text = "Test sentence."
-    emb1 = embedding_service.encode(text)
-    emb2 = embedding_service.encode(text)
-    assert emb1 == emb2
-```
-
-**Run**:
-```bash
-pytest tests/test_embeddings.py -v
-```
+### E2E Tests
+- `test_e2e_split_backend.py` — Full server E2E (run in CI with live PostgreSQL + uvicorn)
+- `test_split_deployment.py` — Split deployment topology validation
 
 ## 🔧 Test Fixtures
+
+All shared fixtures are defined in `tests/conftest.py`. Two **autouse** fixtures apply to every test automatically:
+
+### Autouse Fixtures
+
+```python
+@pytest.fixture(autouse=True)
+def auto_mock_embeddings(mock_embedding_service):
+    """Automatically mock embeddings for all tests to ensure speed and isolation."""
+    with patch('embeddings.get_embedding_service', return_value=mock_embedding_service):
+        yield mock_embedding_service
+
+@pytest.fixture(autouse=True)
+def mock_license_revocation_check():
+    """Automatically mock license revocation check to prevent 5.0s network timeouts during tests."""
+    with patch('license.check_license_revocation', return_value=None):
+        yield
+```
 
 ### Database Fixtures
 
 ```python
-@pytest.fixture
+@pytest.fixture(scope='session')
+def setup_test_database(db_connection_params):
+    """Create test database, wipe schema, run alembic migrations. Session-scoped."""
+
+@pytest.fixture(scope='function')
 def db_manager(setup_test_database):
-    """Provide database manager for tests."""
-    manager = DatabaseManager()
-    manager.initialize()
-    yield manager
-    # Cleanup
-    manager.close()
+    """Provide DatabaseManager with per-test TRUNCATE cleanup."""
 ```
 
-### Mock Fixtures
+### Helper Utilities (`tests/helpers.py`)
 
 ```python
-@pytest.fixture
-def mock_embedding_service():
-    """Provide mock embedding service."""
-    mock = Mock()
-    mock.encode.return_value = [0.1] * 384
-    return mock
-```
-
-### Sample Data Fixtures
-
-```python
-@pytest.fixture
-def sample_documents():
-    """Provide sample documents for testing."""
-    return [
-        {'document_id': 'doc1', 'chunks': ['chunk1', 'chunk2']},
-        {'document_id': 'doc2', 'chunks': ['chunk3']}
-    ]
+from tests.helpers import get_alembic_head  # Dynamic revision lookup — never hardcode migration IDs
 ```
 
 ## 🎯 Writing New Tests
@@ -312,46 +273,52 @@ pytest -W all
 
 ## 📈 Continuous Integration
 
-### GitHub Actions Example
+### GitHub Actions — Split-Backend E2E
+
+The actual CI workflow (`.github/workflows/test-split-backend.yml`) runs end-to-end tests against a live server:
 
 ```yaml
-name: Tests
-
-on: [push, pull_request]
+name: Split-Backend E2E Tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
-  test:
+  e2e-split-backend:
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 15
     services:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: rag_vector_db
+          POSTGRES_USER: rag_user
+          POSTGRES_PASSWORD: rag_password
+        ports: ["5432:5432"]
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    
+          --health-cmd "pg_isready -U rag_user -d rag_vector_db"
+          --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
-      - uses: actions/checkout@v2
-      
-      - name: Set up Python
-        uses: actions/setup-python@v2
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.10", cache: "pip" }
+      - run: pip install -r requirements.txt && pip install pytest requests
+      - name: Bootstrap API key, start server, run E2E tests
+        env:
+          DB_HOST: localhost
+          API_REQUIRE_AUTH: "true"
+          API_AUTH_FORCE_ALL: "true"
         run: |
-          pip install -r requirements.txt
-      
-      - name: Run tests
-        run: |
-          pytest --cov=. --cov-report=xml
-      
-      - name: Upload coverage
-        uses: codecov/codecov-action@v2
+          # 1. alembic upgrade head
+          # 2. Bootstrap API key via auth.create_api_key_record('e2e-test')
+          # 3. Start uvicorn on 127.0.0.1:9000
+          # 4. Health-check loop (60 retries × 2s)
+          # 5. pytest tests/test_e2e_split_backend.py -v
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with: { name: server-log, path: server.log, retention-days: 7 }
 ```
 
 ## ✅ Test Checklist

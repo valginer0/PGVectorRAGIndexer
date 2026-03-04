@@ -8,12 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.7.0] - 2026-03-03
 
 ### Added
-- **Phase E**: Deep Observability (Diagnostics) with `/health` system metrics and strictly typed JSON logging support.
-- **Phase F**: Data Retention Orchestration API endpoints and automated background execution.
+- **Phase E — Deep Observability**: `JSONFormatter` with class-level `_STANDARD_ATTRS`, `exc_info` guard, and extra-attribute passthrough for structured JSON logging. `_get_system_metrics()` on `/health` endpoint with psutil → stdlib fallback chain (uptime, CPU load, memory RSS). `setup_logging()` with framework logger interception (uvicorn, fastapi) and `LOG_FORMAT` env toggle.
+- **Phase F — Data Retention Orchestration**: API endpoints for retention policy CRUD and automated background execution via server scheduler.
 
 ### Changed
-- **Phase C**: GUI Controller Decoupling. Isolated settings tab logic into `SettingsController` using strict `ControllerResult` and `UiAction` contracts.
-- **Phase D**: API Modularization. Replaced the monolithic `api.py` with 10+ modular functional routers (e.g., `identity_api.py`, `search_api.py`).
+- **Phase C — GUI Controller Decoupling**: Extracted settings tab logic into `SettingsController` with generic `ControllerResult[T]`, `UiAction` enum, and `MessageSeverity` contracts. Isolated service-layer logic to `LicenseService` facade. Resolved DTO type collisions.
+- **Phase D — Desktop API Client Facade**: Refactored monolithic desktop `APIClient` into Facade pattern with `BaseAPIClient` shared HTTP layer (session pooling, error translation) and 9 domain clients (`SystemClient`, `DocumentClient`, `SearchClient`, `MetadataClient`, `IndexingClient`, `UserClient`, `ActivityClient`, `WatchedFoldersClient`, `IdentityClient`). ~60 public methods, full backward compatibility.
+
+### Fixed
+- **Startup performance**: Lazy imports in `embeddings.py` (sentence_transformers, numpy) and `services.py` (indexer_v2, retriever_v2) eliminated ~25s cold-start penalty.
+- **Test reliability**: Removed TestClient context manager from health tests (direct async endpoint calls), eliminating intermittent test hangs.
 
 ## [2.6.20] - 2026-03-01
 

@@ -1,7 +1,21 @@
 # Implementation Tracker
 
 Derived from [FEATURE_IDEAS_V5.md](./FEATURE_IDEAS_V5.md). Each task maps to a feature number in V5.
-Update status as work progresses. Move completed items to the bottom section.
+
+Last updated: 2026-03-04 (v2.7.0)
+
+---
+
+## Current State
+
+All roadmap features are **implemented and shipping** as of v2.7.0. The codebase includes:
+
+- **Server**: Modular FastAPI routers (11 domain routers), Alembic migrations (001–017), pgvector search, structured JSON logging, `/health` system metrics
+- **Desktop**: Qt6 app with `APIClient` facade (9 domain clients), controller pattern (Settings), analytics, watched folders
+- **Enterprise**: RBAC with custom roles, SAML SSO (Okta), SCIM 2.0 provisioning, data retention orchestration, compliance export
+- **CI**: Split-backend E2E tests in GitHub Actions (PostgreSQL 16 + pgvector, auth-required)
+
+**Deferred** (3 items): Background service integrations for watched-folder scheduling (Linux systemd, macOS launchd, Windows Task Scheduler) — in-app scheduler is sufficient for current use.
 
 ---
 
@@ -10,15 +24,11 @@ Update status as work progresses. Move completed items to the bottom section.
 | Symbol | Meaning |
 |--------|---------|
 | ⬜ | Not started |
-| 🟡 | In progress |
 | ✅ | Complete |
-| ⏸️ | Blocked (note blocker, e.g., "⏸️ Blocked by #11") |
 
 ---
 
-## Immediate Actions (Parallel)
-
-These have zero dependencies on each other and should start simultaneously.
+## Immediate Actions (Complete)
 
 ### ✅ #11 Schema Migration Framework
 - **Effort**: ~4-6h | **Edition**: Both | **Dependencies**: None
@@ -64,7 +74,7 @@ These have zero dependencies on each other and should start simultaneously.
 
 ---
 
-## Phase 1: Security, Versioning, and Licensing Foundation
+## Phase 1: Security, Versioning, and Licensing (Complete)
 
 ### ✅ #0 Remote Security Baseline
 - **Effort**: ~8-12h | **Edition**: Both | **Dependencies**: None
@@ -135,7 +145,7 @@ These have zero dependencies on each other and should start simultaneously.
 
 ---
 
-## Phase 2: Team Enablement
+## Phase 2: Team Enablement (Complete)
 
 ### ✅ #1 Remote Backend Support
 - **Effort**: ~4-6h | **Edition**: Team | **Dependencies**: #0
@@ -191,7 +201,7 @@ These have zero dependencies on each other and should start simultaneously.
 
 ---
 
-## Phase 3: Automation and Navigation
+## Phase 3: Automation and Navigation (Complete)
 
 ### ✅ #6 Scheduled Automatic Indexing
 - **Effort**: ~14-20h | **Edition**: Team | **Dependencies**: #4, #8
@@ -321,7 +331,7 @@ Implementation sequencing (recommended):
 
 ---
 
-## Phase 4: Multi-User and Enterprise
+## Phase 4: Multi-User and Enterprise (Complete)
 
 ### ✅ #2 Split Deployment
 - **Effort**: ~6-10h | **Edition**: Team | **Dependencies**: #1, #0, #12
@@ -473,7 +483,7 @@ Implementation sequencing (recommended):
 
 ---
 
-## Phase 5: Webhook Idempotency & Resilience
+## Phase 5: Webhook Idempotency & Resilience (Complete)
 
 ### ✅ #18 Fortress-Level Resilience (Diamond-Tipped)
 - **Effort**: ~4-6h | **Edition**: Both (Website/Backend) | **Dependencies**: #13b
@@ -485,7 +495,7 @@ Implementation sequencing (recommended):
 
 ---
 
-## Architecture & Refactoring
+## Architecture & Refactoring (Complete)
 
 ### ✅ API Modularization (Verified)
 - **Effort**: ~12-16h | **Edition**: Both | **Dependencies**: #12
@@ -506,7 +516,7 @@ Implementation sequencing (recommended):
 
 ---
 
-## Lower Priority (Any Time)
+## Lower Priority (Complete)
 
 ### ✅ #5 Upload Tab UI Streamlining
 - **Effort**: ~3-5h | **Edition**: Both | **Dependencies**: None
@@ -519,13 +529,27 @@ Implementation sequencing (recommended):
 
 ---
 
-## Completed
+## Refactoring Phases (Complete)
 
-(Move completed features here with completion date)
+### ✅ Phase-E: Deep Observability & Startup Optimization (Completed)
+- **Effort**: ~4h | **Edition**: Both | **Dependencies**: None
+- **Branch**: `main`
+- [x] Implemented `JSONFormatter` with class-level `_STANDARD_ATTRS` frozenset, `exc_info` guard, and extra-attribute passthrough for structured JSON logging.
+- [x] Added `_get_system_metrics()` to `/health` endpoint with psutil → stdlib fallback chain (`uptime_seconds`, `cpu_load_1m`, `memory_rss_bytes`).
+- [x] Rewrote `setup_logging()` with framework logger interception (uvicorn, fastapi) and `LOG_FORMAT` env toggle (`json`/`text`).
+- [x] Lazy imports in `embeddings.py` (sentence_transformers, numpy) and `services.py` (indexer_v2, retriever_v2) — eliminated 25s cold-start penalty.
+- [x] Removed TestClient context manager from health tests (direct async endpoint calls) — eliminated test hangs.
+- [x] 5 new tests (3 health + 2 logger) all passing.
 
----
-
-Last updated: 2026-03-02
+### ✅ Phase-D: Desktop API Client Facade Pattern (Completed)
+- **Effort**: ~8h | **Edition**: Desktop | **Dependencies**: None
+- **Branch**: `main`
+- [x] Extracted monolithic `APIClient` into Facade pattern with shared `BaseAPIClient` HTTP layer (session pooling, timeout enforcement, error translation).
+- [x] Implemented 9 domain-specific clients: `SystemClient`, `DocumentClient`, `SearchClient`, `MetadataClient`, `IndexingClient`, `UserClient`, `ActivityClient`, `WatchedFoldersClient`, `IdentityClient`.
+- [x] `APIClient` facade delegates ~60 public methods to domain clients with full backward compatibility.
+- [x] Property synchronization (`base_url`, `api_base`, `api_key`) propagated from facade to all domain clients.
+- [x] Structured error translation: 401/403 → `APIAuthenticationError`, 429 → `APIRateLimitError`, 4xx → `APIError`.
+- [x] 24 tests covering all domain client routing and error handling.
 
 ### ✅ Phase-C: UI Architecture Decoupling (Completed)
 - **Effort**: ~12h | **Edition**: Both | **Dependencies**: None

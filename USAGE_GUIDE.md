@@ -237,6 +237,7 @@ EMBEDDING_DIMENSION=384
 # API
 API_HOST=0.0.0.0
 API_PORT=8000
+LOG_FORMAT=json  # use 'json' for structured logs or 'text' for terminal output
 
 # Chunking
 CHUNK_SIZE=500

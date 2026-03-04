@@ -458,27 +458,16 @@ async def search_documents(request: Request, search_req: SearchRequest):
 
 ### 1. Application Logging
 
-Configure structured logging:
+PGVectorRAG supports native structured JSON logging for cloud deployments (ELK, Datadog, CloudWatch).
 
-```python
-import logging
-import json
+Configure structured logging by setting the environment variable in your `.env` or systemd service:
 
-class JSONFormatter(logging.Formatter):
-    def format(self, record):
-        log_data = {
-            'timestamp': self.formatTime(record),
-            'level': record.levelname,
-            'message': record.getMessage(),
-            'module': record.module,
-            'function': record.funcName
-        }
-        return json.dumps(log_data)
-
-handler = logging.FileHandler('/var/log/rag-api.log')
-handler.setFormatter(JSONFormatter())
-logging.getLogger().addHandler(handler)
+```bash
+# Enable structured JSON logging
+LOG_FORMAT=json
 ```
+
+When enabled, all access and error logs from the API and web server will be securely output as single-line JSON strings with UTC timestamps, bypassing the default unstructured terminal format.
 
 ### 2. Database Monitoring
 

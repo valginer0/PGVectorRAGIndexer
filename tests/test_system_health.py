@@ -1,19 +1,10 @@
 import pytest
+import asyncio
 import builtins
 import sys
-from fastapi import FastAPI
-from fastapi.testclient import TestClient
-from unittest.mock import patch, AsyncMock, MagicMock
+from unittest.mock import patch, MagicMock
 
-from routers.system_api import system_app_router, _get_system_metrics
-
-
-@pytest.fixture(scope="function")
-def isolated_app():
-    """Create a fully isolated, lightweight app instance just for this test."""
-    app = FastAPI(title="Test App")
-    app.include_router(system_app_router)
-    return app
+from routers.system_api import health_check, _get_system_metrics
 
 
 def _assert_system_metrics_schema(system_metrics: dict):
@@ -28,25 +19,24 @@ def _assert_system_metrics_schema(system_metrics: dict):
     assert system_metrics["memory_rss_bytes"] is None or isinstance(system_metrics["memory_rss_bytes"], (int, float))
 
 
-def test_health_system_metrics_schema(isolated_app):
-    """Verify /health endpoint returns safe canonical system metrics.
+@pytest.mark.asyncio
+async def test_health_system_metrics_schema():
+    """Verify /health returns safe canonical system metrics via the initializing path.
 
-    Uses the 'initializing' path (init_complete=False) to avoid any
-    database or embedding service dependencies that could block.
+    Uses init_complete=False to avoid any database or embedding service
+    dependencies that could block.
     """
     with patch("services.init_complete", False), \
          patch("services.init_error", None):
-        client = TestClient(isolated_app, raise_server_exceptions=False)
-        response = client.get("/health")
-        assert response.status_code == 200
+        response = await health_check()
 
-        data = response.json()
-        assert data["status"] == "initializing"
-        assert "system" in data
-        _assert_system_metrics_schema(data["system"])
+    assert response.status == "initializing"
+    assert response.system is not None
+    _assert_system_metrics_schema(response.system)
 
 
-def test_health_system_metrics_healthy_path(isolated_app):
+@pytest.mark.asyncio
+async def test_health_system_metrics_healthy_path():
     """Verify /health returns system metrics in the fully healthy path."""
     mock_db_manager = MagicMock()
     mock_embedding = MagicMock()
@@ -60,14 +50,11 @@ def test_health_system_metrics_healthy_path(isolated_app):
          patch("routers.system_api.get_db_manager", return_value=mock_db_manager), \
          patch("routers.system_api.get_embedding_service", return_value=mock_embedding), \
          patch("routers.system_api.asyncio.to_thread", side_effect=fake_to_thread):
-        client = TestClient(isolated_app, raise_server_exceptions=False)
-        response = client.get("/health")
-        assert response.status_code == 200
+        response = await health_check()
 
-        data = response.json()
-        assert data["status"] == "healthy"
-        assert "system" in data
-        _assert_system_metrics_schema(data["system"])
+    assert response.status == "healthy"
+    assert response.system is not None
+    _assert_system_metrics_schema(response.system)
 
 
 def test_health_system_metrics_without_psutil():

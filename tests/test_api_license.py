@@ -20,14 +20,13 @@ def setup_module(module):
     """Reset license state before tests and wait for background init."""
     import services
     reset_license()
-    
-    # Wait for the background initialization in api.py to finish 
+
+    # Wait for the background initialization in api.py to finish
     # to avoid it stomping on our test license state later
-    with TestClient(app) as client:
-        timeout = 10
-        start = time.time()
-        while not getattr(services, 'init_complete', False) and time.time() - start < timeout:
-            time.sleep(0.1)
+    timeout = 10
+    start = time.time()
+    while not getattr(services, 'init_complete', False) and time.time() - start < timeout:
+        time.sleep(0.1)
 
 def teardown_module(module):
     """Reset license state after tests."""

@@ -370,14 +370,14 @@ def validate_license_key(
 
     # Validate required fields
     edition_str = payload.get("edition", "").lower()
-    if edition_str not in ("community", "team"):
+    if edition_str not in ("community", "team", "organization"):
         raise LicenseInvalidError(
             f"Invalid edition in license key: '{edition_str}'"
         )
 
     org_name = payload.get("org", "")
-    if not org_name and edition_str == "team":
-        raise LicenseInvalidError("Team license must include 'org' claim")
+    if not org_name and edition_str in ("team", "organization"):
+        raise LicenseInvalidError("Team/Organization license must include 'org' claim")
 
     # Build LicenseInfo
     return LicenseInfo(

@@ -520,10 +520,10 @@ class SettingsTab(QWidget):
         """Update the license panel with current license info via Controller."""
         result = self.controller.load_license_data()
         self._handle_controller_result(result, title="")
-        
+
         info = result.data["info"]
         server_error = result.data["server_error"]
-        
+
         if not info:
             # Fallback (mimics old exception block behavior)
             self._edition_badge.setText("Community Edition")
@@ -553,6 +553,7 @@ class SettingsTab(QWidget):
         self._org_label.setText(info.org_name if info.org_name else "—")
 
         # Expiry
+        _default_label_style = f"color: {Theme.TEXT_PRIMARY};"
         if info.is_team and info.days_left is not None:
             days = info.days_left
             if info.expiry_warning:
@@ -560,11 +561,11 @@ class SettingsTab(QWidget):
                 self._expiry_label.setStyleSheet(f"color: {Theme.WARNING}; font-weight: 600;")
             else:
                 self._expiry_label.setText(f"{days} days remaining")
-                self._expiry_label.setStyleSheet("")
+                self._expiry_label.setStyleSheet(_default_label_style)
             self._expiry_label.setVisible(True)
         else:
             self._expiry_label.setText("—")
-            self._expiry_label.setStyleSheet("")
+            self._expiry_label.setStyleSheet(_default_label_style)
             self._expiry_label.setVisible(True)
 
         # Seats

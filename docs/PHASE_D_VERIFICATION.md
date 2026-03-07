@@ -1,201 +1,60 @@
-# Phase D: Desktop API Client Facade — Manual QA Checklist
+# Phase D: Desktop API Client Facade — Verification
 
-Purpose: validate Phase D (`APIClient` facade, `BaseAPIClient`, 9 domain clients) on a single desktop with a running backend.
+Purpose: validate Phase D (`APIClient` facade, `BaseAPIClient`, 9 domain clients).
 
-## Scope
+## Automated Test Coverage
 
-This checklist covers:
-- Facade delegation to domain clients.
-- Error translation (HTTP status → typed exceptions).
-- Property synchronization (base_url, api_key propagation).
-- Session lifecycle and connection management.
-
-This checklist does not cover:
-- Server-side router logic (covered by E2E CI tests).
-- Automated unit tests (24 tests in `test_api_client.py`).
-
-## Test Environment
-
-1. Start from project root.
-2. Ensure Docker is running.
-3. Start backend locally:
+Phase D acceptance criteria are verified by automated tests. A small number of desktop UI integration scenarios remain manual-only (see bottom).
 
 ```bash
-docker compose up -d
-curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8000/api/version
+# Run all Phase D verification tests (29 tests, <1s)
+python -m pytest tests/test_api_client_facade_verification.py -v
+
+# Run existing facade routing tests (24 tests)
+python -m pytest tests/test_api_client.py -v
+
+# Run list_documents edge cases (3 tests)
+python -m pytest tests/test_api_client_list_documents.py -v
 ```
 
-4. Launch desktop app.
+### Test Matrix
 
-## Test Matrix
+| Scenario | Test Class / File | Tests | What's Verified |
+|----------|-------------------|-------|-----------------|
+| Property sync | `TestPropertySynchronization` | 9 | `base_url` → `api_base` derivation, trailing slash normalization, `api_key` → session header, facade→base propagation, manual `api_base` override |
+| Error translation | `TestErrorTranslation` | 11 | 401/403 → `APIAuthenticationError`, 429 → `APIRateLimitError`, 404/500 → `APIError`, 200 passthrough, JSON detail preservation, text fallback, ConnectionError/Timeout/RequestException mapping |
+| Session lifecycle | `TestSessionLifecycle` | 3 | `close()` delegates, shared session across requests, default timeout applied |
+| Domain routing | `TestDomainClientRouting` | 2 | All 9 clients instantiated, all share same `BaseAPIClient` |
+| Error hierarchy | `TestErrorHierarchy` | 4 | Inheritance chain, `status_code` attribute |
+| Facade delegation | `test_api_client.py` | 24 | Every public method routes to correct domain client with correct URL/params |
+| List pagination | `test_api_client_list_documents.py` | 3 | Pagination, sorting, legacy response handling |
 
-Run all scenarios in order.
+### Acceptance Criteria → Test Mapping
 
-## Scenario 1: System Health via Facade
+| Criterion | Automated Test |
+|-----------|---------------|
+| `base_url` change re-derives `api_base` | `test_base_url_change_updates_api_base` |
+| `api_key` change updates session header | `test_api_key_change_updates_header` |
+| `api_key=None` removes header | `test_api_key_none_removes_header` |
+| Facade property changes reach BaseAPIClient | `test_facade_propagates_base_url_to_base`, `test_facade_propagates_api_key_to_base` |
+| HTTP 401/403 → `APIAuthenticationError` | `test_401_raises_auth_error`, `test_403_raises_auth_error` |
+| HTTP 429 → `APIRateLimitError` | `test_429_raises_rate_limit_error` |
+| HTTP 4xx/5xx → `APIError` with `status_code` | `test_404_raises_api_error`, `test_500_raises_api_error` |
+| Error detail from JSON `detail` field | `test_error_detail_preserved_from_json` |
+| `ConnectionError` → `APIConnectionError` | `test_connection_error_translated` |
+| `Timeout` → `APIConnectionError` | `test_timeout_error_translated` |
+| `close()` releases session | `test_close_closes_session` |
+| Shared session reuse | `test_shared_session_across_requests` |
+| All 9 domain clients instantiated | `test_all_nine_domain_clients_instantiated` |
+| All domain clients share one `BaseAPIClient` | `test_domain_clients_share_base` |
 
-1. Open the app. Observe the status bar connection indicator.
+### Scenarios NOT Automated (Desktop UI Integration)
 
-Expected:
-- `is_api_available()` returns True (status bar shows connected).
-- No errors in the application log.
+These require a running desktop app and cannot be unit tested:
 
-2. Open Settings tab, click "Refresh Statistics".
+- Scenario 1: Status bar connection indicator updates on connect/disconnect
+- Scenario 2: Upload tab → Documents tab visual flow
+- Scenario 5: Client identity auto-registration on first launch
+- Scenario 8: No socket exhaustion after many operations (long-running soak test)
 
-Expected:
-- Stats load (documents, chunks, DB size).
-- Data comes through `SystemClient.get_statistics()`.
-
-3. Open Settings tab, observe server version display.
-
-Expected:
-- Version string displayed (e.g., "v2.7.0").
-- `check_version_compatibility()` runs without warning for matching versions.
-
-## Scenario 2: Document CRUD
-
-1. Upload a test document via the Upload tab ("Index Folder" or single file).
-
-Expected:
-- Upload succeeds. Document appears in Documents tab.
-- Operation routes through `DocumentClient.upload_document()`.
-
-2. Open Documents tab. Verify document list populates.
-
-Expected:
-- `DocumentClient.list_documents()` returns items with pagination metadata.
-- Document count matches expected.
-
-3. Select a document and view its metadata.
-
-Expected:
-- `DocumentClient.get_document()` returns full metadata.
-- Source URI, chunk count, timestamps displayed.
-
-4. Delete the test document.
-
-Expected:
-- Confirmation dialog appears.
-- After confirm, document disappears from list.
-- `DocumentClient.delete_document()` returns success.
-
-## Scenario 3: Search and Metadata
-
-1. Perform a search query in the Search tab.
-
-Expected:
-- Results appear with scores and snippets.
-- `SearchClient.search()` routes correctly.
-
-2. If metadata keys exist, verify metadata filtering works.
-
-Expected:
-- `MetadataClient.get_metadata_keys()` returns available keys.
-- Filtering by metadata narrows results.
-
-## Scenario 4: User and Activity Operations
-
-1. Open the Recent Activity tab (if available).
-
-Expected:
-- Activity log loads without error.
-- `ActivityClient.get_activity_log()` returns entries.
-
-2. If Users management is accessible (admin role), list users.
-
-Expected:
-- `UserClient.list_users()` returns user list.
-- User details (email, role, last login) displayed.
-
-## Scenario 5: Watched Folders and Identity
-
-1. Check that client identity was registered on first launch.
-
-Expected:
-- `IdentityClient.register_client()` was called during startup.
-- Client ID stored in app config.
-
-2. Open Watched Folders tab. List existing folders.
-
-Expected:
-- `WatchedFoldersClient.list_watched_folders()` returns folders (or empty list).
-- No error on empty state.
-
-3. Add a watched folder, then remove it.
-
-Expected:
-- Add succeeds via `WatchedFoldersClient.add_watched_folder()`.
-- Remove succeeds via `WatchedFoldersClient.remove_watched_folder()`.
-- Folder list updates after each operation.
-
-## Scenario 6: Error Path Testing
-
-1. Stop the backend (`docker compose down`). Attempt any operation from the desktop app.
-
-Expected:
-- `APIConnectionError` raised (not a raw `requests` exception).
-- User sees a connection error message, not a traceback.
-- App remains responsive.
-
-2. Start the backend with auth required (`API_REQUIRE_AUTH=true`). Connect without an API key.
-
-Expected:
-- `APIAuthenticationError` raised on first API call.
-- User sees an authentication error message.
-
-3. Connect with an invalid API key.
-
-Expected:
-- 401/403 response translated to `APIAuthenticationError`.
-- Error message mentions authentication, not raw HTTP status.
-
-## Scenario 7: Property Synchronization
-
-1. In Settings, change the backend URL from `http://127.0.0.1:8000` to `http://localhost:8000`.
-
-Expected:
-- `base_url` updates to new value.
-- `api_base` auto-derives to `http://localhost:8000/api/v1`.
-- Subsequent API calls use the new URL.
-
-2. Change the API key in Settings.
-
-Expected:
-- `X-API-Key` header updates on the next request.
-- No stale credentials sent.
-
-## Scenario 8: Session Lifecycle
-
-1. Use the app normally for several operations (search, browse, upload).
-
-Expected:
-- Shared `requests.Session` reuses connections (no connection leak).
-- No socket exhaustion or timeout errors after many operations.
-
-2. Close the app.
-
-Expected:
-- `APIClient.close()` called during shutdown.
-- No orphaned connections or threads.
-
-## Pass/Fail Criteria
-
-Pass:
-- All expected outcomes match.
-- No crashes, hangs, or raw exception tracebacks shown to user.
-- Error messages are user-friendly (typed exceptions, not HTTP codes).
-- Property changes propagate immediately to all domain clients.
-
-Fail:
-- Any raw `requests` exception leaks to the UI.
-- Any operation routes to the wrong domain client.
-- Property changes don't propagate (stale URL or API key used).
-- Session leak or connection pool exhaustion.
-
-## Evidence to Record
-
-Capture for each failed step:
-- Scenario number and step number.
-- Screenshot of the UI state.
-- Exact error message or dialog text.
-- Application log output (if relevant).
+These are low-risk given the facade is fully tested at the API client layer.

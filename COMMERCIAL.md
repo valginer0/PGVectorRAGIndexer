@@ -69,11 +69,11 @@ Commercial license pricing is based on:
 - deployment scope
 - usage context (internal, production, CI/CD, hosted, redistribution)
 
-Typical annual pricing starts in the low hundreds of USD for small teams
-and scales with organizational size and usage scope.
+Annual licensing starts at $199/year for small teams (up to 5 users).
+One-time perpetual licenses are available from $349 for teams and $999 for departments.
+Pricing scales with organizational size and usage scope.
 
 Pricing is intended to be fair, transparent, and proportionate to value.
-One-time, annual, and custom terms are available depending on use case.
 
 ---
 

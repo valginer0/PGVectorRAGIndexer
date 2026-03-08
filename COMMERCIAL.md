@@ -61,25 +61,38 @@ Please contact **valginer0@gmail.com** with a description of the project and sco
 
 ---
 
-## Pricing approach
+## Pricing
 
-Commercial license pricing is based on:
+| Tier         | Annual     | One-time (perpetual) | Users    |
+|--------------|------------|----------------------|----------|
+| Community    | Free       | —                    | 1        |
+| Team         | $199/yr    | $349                 | Up to 5  |
+| Organization | $599/yr    | $999                 | Up to 25 |
+| Enterprise   | Custom     | Custom               | Custom   |
 
-- organization size
-- deployment scope
-- usage context (internal, production, CI/CD, hosted, redistribution)
+Perpetual licenses include updates for the major version purchased.
+Annual licenses include updates for the duration of the subscription.
 
-Annual licensing starts at $199/year for small teams (up to 5 users).
-One-time perpetual licenses are available from $349 for teams and $999 for departments.
-Pricing scales with organizational size and usage scope.
-
-Pricing is intended to be fair, transparent, and proportionate to value.
+Enterprise pricing is handled on a case-by-case basis and is not published.
 
 ---
 
 ## How to obtain a commercial license
 
-To request a commercial license, email:
+### Self-serve (Team and Organization tiers)
+
+Purchase a license instantly at **[ragvault.net](https://ragvault.net)**:
+
+1. Choose your tier (Team or Organization) and billing period (annual or one-time)
+2. Complete payment via Stripe
+3. Receive your license key by email within minutes
+4. Paste the key into the desktop app to activate
+
+No sales call, no waiting.
+
+### Enterprise / OEM / Custom
+
+For Enterprise licenses, OEM/agency use, or custom requirements, email:
 
 **valginer0@gmail.com**
 

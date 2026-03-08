@@ -72,17 +72,10 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ### 🆕 Latest Features (v2.7.3)
 
-- **✅ Phase-B: Licensing Refactor & Data Integrity**:
-  - **Pure Data Model**: Refactored `LicenseInfo` to a pure data model, moving all calculation logic to a dedicated `license_utils.py` module.
-  - **Standardized UI DTO**: Introduced `LicenseDisplayDTO` to decouple the UI from core licensing logic.
-  - **Robust Expiry Handling**: Switched to `math.floor()` for precise day calculations, ensuring reliable status reporting even for sub-second expiry boundaries.
-  - **Server-Side Trust**: The desktop UI now prioritizes server-calculated expiry data in remote mode, eliminating clock-drift issues.
-
-- **✅ Phase-A: Structured Error Registry (v2.6.19)**:
-  - **Centralized Errors**: Introduced a system-wide `ErrorRegistry` for consistent error codes and user-facing messages.
-  - **API Contract Hardening**: Standardized all API error responses with machine-readable codes and hierarchical diagnostic data.
-
-### Recent Milestones (v2.6.18)
+- **✅ License Validation Fixed**: We identified and reverted an incorrect public key update from v2.7.2 that caused valid RSA license signatures to be rejected. Validation is fully restored.
+- **✅ Commercial Enhancements (v2.7.0)**: Updated commercial pricing tiers and finalized deep system observability features, including `JSONFormatter` for structured JSON logging.
+- **✅ Phase-C & D Backend Improvements (v2.7.0)**: Extracted settings tab logic and decoupled the monolithic desktop `APIClient` into smaller, resilient domain clients (`SystemClient`, `DocumentClient`, etc.).
+- **✅ Background Stability (v2.7.0)**: Added automated background execution of data retention policies via the server's background scheduler.
 
 ### Recent Milestones (v2.6)
 

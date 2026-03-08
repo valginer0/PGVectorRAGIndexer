@@ -4,47 +4,33 @@
 
 ## Release Process (CI-based)
 
-### 1. Run Tests
+### 1. Run the Release Script
+
+We now use an automated script to handle version bumping across all files, test execution, changelog updates, tagging, and pushing.
 
 ```bash
-source venv/bin/activate
-python -m pytest tests/ --ignore=tests/test_slow* --ignore=tests/test_search_tab_open.py \
-  --ignore=tests/test_upload_endpoint.py --ignore=tests/test_web_ui.py \
-  --ignore=tests/test_web_ui_integration.py -q
+./release.sh patch  # (or minor/major)
 ```
 
-### 2. Bump Version
+The script will:
+- Verify your git tree is clean
+- Run all test suites
+- Automatically bump the `VERSION` file
+- Update website links, `package.json`, and `index.html`
+- Prompt you to add `CHANGELOG.md` notes
+- Commit the changes as `chore: bump version to vX.Y.Z`
+- Create a git tag
+- Push to GitHub
 
-Update all version references (single source of truth is `VERSION` file):
+*This push will automatically trigger 5 CI workflows, including the `Build Windows Installer` pipeline.*
 
-```bash
-echo "X.Y.Z" > VERSION
-```
+### 2. Wait for the Windows Installer Build
 
-Also update:
-- `CHANGELOG.md` — add new version section
-- Website `index.html` — hero badge (line ~72), footer (line ~1201), download links (lines ~165, ~187, ~202)
-- Website `package.json` — version field
+Go to GitHub Actions and wait for the "Build Windows Installer" workflow to complete for your newly pushed tag.
 
-### 3. Commit, Tag, and Push
+### 3. Sign the Windows Installer
 
-```bash
-git add VERSION CHANGELOG.md
-git commit -m "chore: bump version to vX.Y.Z"
-git tag vX.Y.Z
-git push origin main --tags
-```
-
-This triggers 5 CI workflows:
-- **Docker Build and Publish** — builds and pushes Docker image to GHCR
-- **Build Windows Installer** — builds unsigned `.msi` via PyInstaller + WiX
-- **Build Base Image** — builds tagged Docker base image
-- **Verify Installers** — validates installer scripts
-- **macOS Compatibility Check** — validates macOS support
-
-### 4. Sign the Windows Installer
-
-After CI completes, download the unsigned MSI and sign it:
+After CI completes, download the unsigned MSI to your local `ToSign` staging folder:
 
 ```bash
 # Download from CI artifacts
@@ -52,7 +38,7 @@ gh run download <run-id> --name PGVectorRAGIndexer.msi \
   --dir /mnt/c/Users/v_ale/Desktop/ToSign/PGVectorRAGIndexer-unsigned
 ```
 
-Sign with the code-signing certificate:
+Sign with the code-signing certificate (from a Windows PowerShell prompt):
 ```powershell
 PS C:\Users\v_ale\Desktop\ToSign> .\signtool.exe sign `
   /sha1 c72170b0d48e4ea6a3a64739795f2952a0aac06d `
@@ -61,20 +47,13 @@ PS C:\Users\v_ale\Desktop\ToSign> .\signtool.exe sign `
   PGVectorRAGIndexer-unsigned\PGVectorRAGIndexer.msi
 ```
 
-### 5. Upload Signed MSI to Release
+### 4. Upload Signed MSI to Release
+
+Once signed, upload the MSI directly to the GitHub release that the CI pipeline created:
 
 ```bash
 gh release upload vX.Y.Z /mnt/c/Users/v_ale/Desktop/ToSign/PGVectorRAGIndexer-unsigned/PGVectorRAGIndexer.msi \
   --clobber
-```
-
-### 6. Push Website Updates
-
-```bash
-cd /path/to/PGVectorRAGIndexerWebsite
-git add index.html package.json
-git commit -m "chore: bump version to vX.Y.Z, update download links"
-git push origin main
 ```
 
 ## Prerequisites

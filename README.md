@@ -35,7 +35,7 @@ Everything runs locally on your computer, using local models and a local databas
 
 This design is intentional. It means:
 - Your files never leave your machine
-- There are no accounts, subscriptions, or hidden data flows
+- The application runtime requires no mandatory accounts, cloud subscriptions, or hidden data flows
 - You can use it safely with personal, private, or sensitive documents
 
 **Policy:** PGVectorRAGIndexer is local-only by design — your data stays on your hardware, and we do not offer hosted indexing or storage.

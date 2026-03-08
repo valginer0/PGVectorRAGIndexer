@@ -2,7 +2,7 @@
 
 Derived from [FEATURE_IDEAS_V5.md](./FEATURE_IDEAS_V5.md). Each task maps to a feature number in V5.
 
-Last updated: 2026-03-04 (v2.7.0)
+Last updated: 2026-03-08 (v2.7.3)
 
 ---
 
@@ -47,7 +47,7 @@ All roadmap features are **implemented and shipping** as of v2.7.0. The codebase
 ### ✅ #13a Self-Serve Licensing — MVP Pricing Page
 - **Effort**: ~2-4h | **Edition**: N/A (website) | **Dependencies**: None
 - **Repo**: `PGVectorRAGIndexerWebsite` | **Branch**: `feature/pricing-page`
-- [x] Pricing section with 4 tiers: Community (Free), Team ($299/yr), Organization ($799/yr), Enterprise (Custom)
+- [x] Pricing section with 4 tiers: Community (Free), Team ($199/yr), Organization ($599/yr), Enterprise (Custom)
 - [x] "Reserve your license" CTA (mailto) on Team tier, "Contact Us" on Org/Enterprise
 - [x] Pricing FAQ: 6 questions (personal use, commercial trigger, try-before-buy, data privacy, PO/invoice, renewal)
 - [x] Responsive CSS: 4-col → 2-col → 1-col grid, glassmorphism cards, featured card highlight
@@ -56,7 +56,7 @@ All roadmap features are **implemented and shipping** as of v2.7.0. The codebase
 ### ✅ #13b Self-Serve Licensing — Stripe Automation
 - **Effort**: ~6-8h | **Edition**: N/A (website + backend) | **Dependencies**: #13a, #17
 - **Repo**: `PGVectorRAGIndexerWebsite` (Vercel serverless functions)
-- [x] Stripe Checkout integration (Team $299/yr + Organization $799/yr)
+- [x] Stripe Checkout integration (Team $199/yr + Organization $599/yr)
   - `api/checkout.js`: creates Stripe Checkout sessions per tier
   - Pricing page buttons wired to checkout API with loading state
   - Success modal on return from Stripe (`#purchase-success` hash)
@@ -66,7 +66,7 @@ All roadmap features are **implemented and shipping** as of v2.7.0. The codebase
   - Emails key via Zoho Mail SMTP (`hello@ragvault.net`)
   - Includes installation instructions for macOS/Linux/Windows
 - [x] Manual key generation script for direct sales (`generate_license_key.py` — existed)
-- [x] Stripe Products + Prices created (test mode)
+- [x] Stripe Products + Prices created (live mode)
 - [x] Webhook endpoint configured (`checkout.session.completed`)
 - [x] End-to-end tested: checkout → payment → license key email delivered
 - **Update (v2.6.8)**: Fixed `api/webhook.js` to correctly handle `subscription_create` events, ensuring initial subscription payments trigger license delivery (previously only handled `subscription_cycle`).

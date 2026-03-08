@@ -8,7 +8,7 @@ Last updated: 2026-03-08 (v2.7.3)
 
 ## Current State
 
-All roadmap features are **implemented and shipping** as of v2.7.0. The codebase includes:
+All roadmap features are **implemented and shipping** as of v2.7.3. The codebase includes:
 
 - **Server**: Modular FastAPI routers (11 domain routers), Alembic migrations (001–017), pgvector search, structured JSON logging, `/health` system metrics
 - **Desktop**: Qt6 app with `APIClient` facade (9 domain clients), controller pattern (Settings), analytics, watched folders
@@ -44,16 +44,16 @@ All roadmap features are **implemented and shipping** as of v2.7.0. The codebase
 - [x] Test: idempotency (running migrations twice = no-op)
 - [x] Documentation for contributors on creating new migrations (`docs/MIGRATIONS_GUIDE.md`)
 
-### ✅ #13a Self-Serve Licensing — MVP Pricing Page
+### ✅ #13a Self-Serve Licensing — MVP Pricing Page (Historical Phase)
 - **Effort**: ~2-4h | **Edition**: N/A (website) | **Dependencies**: None
 - **Repo**: `PGVectorRAGIndexerWebsite` | **Branch**: `feature/pricing-page`
 - [x] Pricing section with 4 tiers: Community (Free), Team ($199/yr), Organization ($599/yr), Enterprise (Custom)
-- [x] "Reserve your license" CTA (mailto) on Team tier, "Contact Us" on Org/Enterprise
+- [x] "Reserve your license" CTA (mailto) on Team tier, "Contact Us" on Org/Enterprise (Initially manual, later automated in 13b)
 - [x] Pricing FAQ: 6 questions (personal use, commercial trigger, try-before-buy, data privacy, PO/invoice, renewal)
 - [x] Responsive CSS: 4-col → 2-col → 1-col grid, glassmorphism cards, featured card highlight
 - [x] Nav link added between Teams and Developers
 
-### ✅ #13b Self-Serve Licensing — Stripe Automation
+### ✅ #13b Self-Serve Licensing — Stripe Automation (Current Live Behavior)
 - **Effort**: ~6-8h | **Edition**: N/A (website + backend) | **Dependencies**: #13a, #17
 - **Repo**: `PGVectorRAGIndexerWebsite` (Vercel serverless functions)
 - [x] Stripe Checkout integration (Team $199/yr + Organization $599/yr)

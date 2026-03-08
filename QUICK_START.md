@@ -1,4 +1,4 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.7.2
+# Quick Start Guide - PGVectorRAGIndexer v2.7.3
 
 Get up and running in 5 minutes!
 > 🔒 **Network safety tip**
@@ -6,7 +6,7 @@ Get up and running in 5 minutes!
 > This helps prevent other users on the same network from accessing local services.
 > For home or private networks, this is not a concern.
 
-## 🆕 What's New in v2.7.2
+## 🆕 What's New in v2.7.3
 
 - **Phase-1 Licensing Finalization**: Semantic expiry handling (`null` in API for no expiry), authoritative server-side coercion, and unified dash-placeholder UI for layout stability.
 - **Enhanced Comparison Safety**: Fixed potential TypeErrors by explicitly checking for None in license expiry calculations.

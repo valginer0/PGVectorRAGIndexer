@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.7.3] - 2026-03-08
+
+### Fixed
+- **License Validation**: Reverted the public key change from v2.7.2. The character `t` was actually correct, and the previous "fix" broke license validation for properly signed keys.
+
 ## [2.7.2] - 2026-03-08
 
 ### Fixed

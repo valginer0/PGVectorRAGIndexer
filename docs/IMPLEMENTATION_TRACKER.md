@@ -8,7 +8,7 @@ Last updated: 2026-03-10 (v2.8.2)
 
 ## Current State
 
-All roadmap features are **implemented and shipping** as of v2.8.0. The codebase includes:
+All roadmap features are **implemented and shipping** as of v2.8.2. The codebase includes:
 
 - **Server**: Modular FastAPI routers (11 domain routers + `/me` identity endpoint), Alembic migrations (001–017), pgvector search, structured JSON logging, `/health` system metrics
 - **Desktop**: Qt6 app with `APIClient` facade (10 domain clients), controller pattern (Settings), analytics, watched folders, **Organization Console** (5 sub-panels with server capability detection)

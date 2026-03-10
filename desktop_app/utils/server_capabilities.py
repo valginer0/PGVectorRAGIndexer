@@ -55,7 +55,9 @@ class ServerCapabilities:
         self._probing = True
         try:
             for name, path in _PROBES.items():
+                logger.debug("Probing %s → %s", name, path)
                 result = self._api_client.probe_endpoint(path)
+                logger.debug("Probe %s: %s (code=%s)", name, result.status, result.status_code)
 
                 # Never cache UNREACHABLE — transient failure
                 if result.status != CapabilityStatus.UNREACHABLE:
@@ -71,6 +73,8 @@ class ServerCapabilities:
         finally:
             self._probing = False
 
+        logger.info("Capability probe complete: %s",
+                     {k: self._cache.get(k, CapabilityStatus.UNKNOWN).value for k in _PROBES})
         return {k: self._cache.get(k, CapabilityStatus.UNKNOWN) for k in _PROBES}
 
     def get(self, capability: str) -> CapabilityStatus:

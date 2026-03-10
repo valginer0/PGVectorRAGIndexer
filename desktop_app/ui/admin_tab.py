@@ -829,6 +829,12 @@ class OrganizationTab(QWidget):
         try:
             self._caps.probe_all()
             self._update_visibility()
+        except Exception as e:
+            logger.error(f"Organization tab probe failed: {e}", exc_info=True)
+            self._show_placeholder(
+                f"Failed to load organization features: {e}",
+                show_retry=True,
+            )
         finally:
             self._refresh_btn.setEnabled(True)
             self._refresh_btn.setText("Refresh")

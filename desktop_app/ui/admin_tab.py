@@ -924,11 +924,18 @@ class OrganizationTab(QWidget):
                 item.widget().deleteLater()
 
         if show_learn_more:
-            from desktop_app.ui.gated_feature import GatedFeatureWidget
-            widget = GatedFeatureWidget(
-                feature_name="Organization Console",
-                description=text,
-            )
+            try:
+                from desktop_app.ui.gated_feature import GatedFeatureWidget
+                widget = GatedFeatureWidget(
+                    feature_name="Organization Console",
+                    description=text,
+                )
+            except Exception:
+                # Fallback when qtawesome fonts are unavailable (e.g. CI runners)
+                widget = QLabel(text)
+                widget.setAlignment(Qt.AlignCenter)
+                widget.setWordWrap(True)
+                widget.setStyleSheet("color: #9ca3af; font-size: 14px; padding: 40px;")
             old_layout.addWidget(widget)
         else:
             retry_cb = self._on_refresh if show_retry else None

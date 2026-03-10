@@ -445,6 +445,11 @@ class MainWindow(QMainWindow):
             else:
                 self.status_bar.showMessage("API not available. Please start containers.")
 
+            # Tell Organization tab that the server is offline so it
+            # doesn't sit on "Loading organization features..." forever.
+            if hasattr(self, 'org_tab'):
+                self.org_tab.show_server_offline()
+
     def check_docker_status(self):
         """Manual status refresh trigger (no-op, delegated to worker)."""
         pass

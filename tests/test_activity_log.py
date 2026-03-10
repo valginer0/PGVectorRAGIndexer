@@ -87,6 +87,80 @@ class TestLogActivity:
         from activity_log import log_activity
         assert log_activity("test_action") is None
 
+    @patch("activity_log._get_db_connection")
+    def test_fk_violation_retries_without_client_id(self, mock_conn):
+        """When client_id is not registered, FK violation should retry with client_id=None."""
+        from activity_log import log_activity
+
+        mock_cur = MagicMock()
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+        mock_ctx.cursor.return_value = mock_cur
+
+        call_count = 0
+
+        def conn_side_effect():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call: simulate FK violation
+                mock_cur.execute.side_effect = Exception(
+                    'insert or update on table "activity_log" violates foreign key '
+                    'constraint "activity_log_client_id_fkey"'
+                )
+            else:
+                # Retry: succeed
+                mock_cur.execute.side_effect = None
+            return mock_ctx
+
+        mock_conn.side_effect = conn_side_effect
+
+        result = log_activity("test_action", client_id="unregistered-id")
+        assert result is not None  # Should succeed on retry
+
+        # Verify retry was called with client_id=None (second param)
+        retry_call_args = mock_cur.execute.call_args_list[-1]
+        params = retry_call_args[0][1]
+        assert params[1] is None  # client_id should be None on retry
+
+    @patch("activity_log._get_db_connection")
+    def test_fk_violation_without_client_id_does_not_retry(self, mock_conn):
+        """FK violation without client_id should not attempt retry."""
+        from activity_log import log_activity
+
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+        mock_cur = MagicMock()
+        mock_cur.execute.side_effect = Exception(
+            'violates foreign key constraint "activity_log_client_id_fkey"'
+        )
+        mock_ctx.cursor.return_value = mock_cur
+        mock_conn.return_value = mock_ctx
+
+        result = log_activity("test_action", client_id=None)
+        assert result is None
+        # Should only be called once (no retry when client_id is already None)
+        assert mock_cur.execute.call_count == 1
+
+    @patch("activity_log._get_db_connection")
+    def test_non_fk_error_does_not_retry(self, mock_conn):
+        """Non-FK errors should not trigger the retry path."""
+        from activity_log import log_activity
+
+        mock_ctx = MagicMock()
+        mock_ctx.__enter__ = MagicMock(return_value=mock_ctx)
+        mock_ctx.__exit__ = MagicMock(return_value=False)
+        mock_cur = MagicMock()
+        mock_cur.execute.side_effect = Exception("some other DB error")
+        mock_ctx.cursor.return_value = mock_cur
+        mock_conn.return_value = mock_ctx
+
+        result = log_activity("test_action", client_id="some-client")
+        assert result is None
+        assert mock_cur.execute.call_count == 1
+
 
 class TestGetRecent:
     @patch("activity_log._get_db_connection", side_effect=Exception("DB down"))
@@ -173,3 +247,7 @@ class TestActivityLogEndpoints:
 
     def test_retention_endpoint(self):
         assert "/activity/retention" in self.routes
+
+    def test_version_endpoint_on_v1_router(self):
+        """Verify /version is registered on v1_router (fixes /api/v1/version 404)."""
+        assert "/version" in self.routes

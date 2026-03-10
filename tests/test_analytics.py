@@ -74,6 +74,32 @@ class TestAnalyticsClient:
         call_kwargs = mock_api.post_activity.call_args
         assert call_kwargs[1]["action"] == "test.event"
 
+    def test_send_uses_registered_client_id(self, tmp_config_dir):
+        """_send() should use the registered client_id, not the analytics install_id."""
+        _, store = tmp_config_dir
+        store["analytics_enabled"] = True
+        store["client_id"] = "registered-client-abc"
+        client = AnalyticsClient(app_version="1.0.0")
+        mock_api = MagicMock()
+        client.set_api_client(mock_api)
+
+        client.track("test.event")
+        call_kwargs = mock_api.post_activity.call_args[1]
+        assert call_kwargs["client_id"] == "registered-client-abc"
+
+    def test_send_falls_back_to_install_id_when_no_registered_client(self, tmp_config_dir):
+        """_send() should fall back to install_id if no client_id is registered."""
+        _, store = tmp_config_dir
+        store["analytics_enabled"] = True
+        # No "client_id" in store — registration never happened
+        client = AnalyticsClient(app_version="1.0.0")
+        mock_api = MagicMock()
+        client.set_api_client(mock_api)
+
+        client.track("test.event")
+        call_kwargs = mock_api.post_activity.call_args[1]
+        assert call_kwargs["client_id"] == client._install_id
+
     def test_send_failure_is_silent(self, tmp_config_dir):
         _, store = tmp_config_dir
         store["analytics_enabled"] = True

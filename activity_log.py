@@ -74,22 +74,41 @@ def log_activity(
         The UUID of the log entry, or None on failure.
     """
     entry_id = str(uuid.uuid4())
+    params = (entry_id, client_id, user_id, action, json.dumps(details or {}),
+              executor_scope, executor_id, root_id, run_id)
+    sql = """
+        INSERT INTO activity_log
+            (id, client_id, user_id, action, details,
+             executor_scope, executor_id, root_id, run_id)
+        VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
+    """
     try:
         with _get_db_connection() as conn:
             cur = conn.cursor()
-            cur.execute(
-                """
-                INSERT INTO activity_log
-                    (id, client_id, user_id, action, details,
-                     executor_scope, executor_id, root_id, run_id)
-                VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s, %s, %s)
-                """,
-                (entry_id, client_id, user_id, action, json.dumps(details or {}),
-                 executor_scope, executor_id, root_id, run_id),
-            )
+            cur.execute(sql, params)
             conn.commit()
             return entry_id
     except Exception as e:
+        err_str = str(e)
+        # FK violation on client_id — the client was never registered.
+        # Retry without client_id so the activity event is not lost.
+        if "activity_log_client_id_fkey" in err_str and client_id is not None:
+            logger.warning(
+                "Activity log: client_id %s not registered, retrying without it",
+                client_id[:8] if client_id else "?",
+            )
+            try:
+                retry_params = (entry_id, None, user_id, action,
+                                json.dumps(details or {}),
+                                executor_scope, executor_id, root_id, run_id)
+                with _get_db_connection() as conn:
+                    cur = conn.cursor()
+                    cur.execute(sql, retry_params)
+                    conn.commit()
+                    return entry_id
+            except Exception as retry_e:
+                logger.warning("Failed to log activity '%s' on retry: %s", action, retry_e)
+                return None
         logger.warning("Failed to log activity '%s': %s", action, e)
         return None
 

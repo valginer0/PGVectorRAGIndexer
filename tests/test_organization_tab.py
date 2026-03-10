@@ -417,3 +417,37 @@ class TestStateTransitions:
              patch("desktop_app.utils.edition.is_feature_available", return_value=True):
             org_tab.on_settings_changed()
         assert org_tab._outer_stack.currentWidget() == org_tab._tabs_page
+
+
+class TestServerOffline:
+    """Test show_server_offline() for no-backend scenario."""
+
+    def test_show_server_offline_displays_placeholder(self, org_tab):
+        """show_server_offline() should switch to the placeholder with a clear message."""
+        org_tab.show_server_offline()
+        assert org_tab._outer_stack.currentWidget() == org_tab._placeholder
+
+    def test_show_server_offline_does_not_overwrite_loaded_content(self, org_tab, api_client):
+        """If tab already has real content, show_server_offline() should not overwrite it."""
+        # First: load real content
+        with patch.object(api_client, "probe_endpoint",
+                          side_effect=_make_probe_fn()), \
+             patch("desktop_app.utils.edition.is_feature_available", return_value=True):
+            org_tab.probe_and_refresh()
+        assert org_tab._outer_stack.currentWidget() == org_tab._tabs_page
+
+        # Now: health check says offline — should NOT revert to placeholder
+        org_tab.show_server_offline()
+        assert org_tab._outer_stack.currentWidget() == org_tab._tabs_page
+
+    def test_show_server_offline_then_api_ready_loads_content(self, org_tab, api_client):
+        """After showing offline, probe_and_refresh should recover normally."""
+        org_tab.show_server_offline()
+        assert org_tab._outer_stack.currentWidget() == org_tab._placeholder
+
+        # Server comes up
+        with patch.object(api_client, "probe_endpoint",
+                          side_effect=_make_probe_fn()), \
+             patch("desktop_app.utils.edition.is_feature_available", return_value=True):
+            org_tab.probe_and_refresh()
+        assert org_tab._outer_stack.currentWidget() == org_tab._tabs_page

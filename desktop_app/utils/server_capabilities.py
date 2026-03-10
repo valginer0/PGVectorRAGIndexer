@@ -50,19 +50,23 @@ class ServerCapabilities:
         redundant burst requests.
         """
         if self._probing:
+            logger.info("probe_all: already in progress, returning cached results")
             return {k: self._cache.get(k, CapabilityStatus.UNKNOWN) for k in _PROBES}
 
+        import time
+        t0 = time.monotonic()
+        logger.info("probe_all: starting capability probe (%d endpoints)", len(_PROBES))
         self._probing = True
         try:
             for name, path in _PROBES.items():
-                logger.debug("Probing %s → %s", name, path)
+                logger.info("Probing %s → %s", name, path)
                 result = self._api_client.probe_endpoint(path)
-                logger.debug("Probe %s: %s (code=%s)", name, result.status, result.status_code)
 
                 # Never cache UNREACHABLE — transient failure
                 if result.status != CapabilityStatus.UNREACHABLE:
                     self._cache[name] = result.status
                     self._probe_errors[name] = result.error_message
+                    logger.info("Probe %s: %s (code=%s)", name, result.status.value, result.status_code)
 
                     # Cache /me response for admin detection
                     if name == "me" and result.status == CapabilityStatus.AVAILABLE and result.body:
@@ -70,10 +74,12 @@ class ServerCapabilities:
                 else:
                     # Don't update cache — preserve previous value if any
                     self._probe_errors[name] = result.error_message
+                    logger.warning("Probe %s: UNREACHABLE (error=%s)", name, result.error_message)
         finally:
             self._probing = False
 
-        logger.info("Capability probe complete: %s",
+        elapsed = time.monotonic() - t0
+        logger.info("Capability probe complete in %.1fs: %s", elapsed,
                      {k: self._cache.get(k, CapabilityStatus.UNKNOWN).value for k in _PROBES})
         return {k: self._cache.get(k, CapabilityStatus.UNKNOWN) for k in _PROBES}
 

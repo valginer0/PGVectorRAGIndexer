@@ -105,6 +105,14 @@ async def api_version():
     return info
 
 
+# Also serve at /api/v1/version so the desktop client (which uses api_base)
+# can reach it without a 404.
+@system_v1_router.get("/version")
+async def api_version_v1():
+    """Get version info (v1-prefixed alias)."""
+    return await api_version()
+
+
 @system_app_router.get("/license")
 async def license_info():
     """Get current license information."""

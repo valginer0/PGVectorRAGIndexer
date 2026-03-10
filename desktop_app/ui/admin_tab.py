@@ -824,11 +824,14 @@ class OrganizationTab(QWidget):
 
     def probe_and_refresh(self):
         """Probe server capabilities and populate the tab."""
+        logger.info("OrganizationTab.probe_and_refresh() called")
         self._refresh_btn.setEnabled(False)
         self._refresh_btn.setText("Loading...")
         try:
             self._caps.probe_all()
+            logger.info("probe_and_refresh: probe complete, updating visibility")
             self._update_visibility()
+            logger.info("probe_and_refresh: done, page index=%d", self._outer_stack.currentIndex())
         except Exception as e:
             logger.error(f"Organization tab probe failed: {e}", exc_info=True)
             self._show_placeholder(
@@ -842,6 +845,21 @@ class OrganizationTab(QWidget):
     def _on_refresh(self):
         self._caps.invalidate()
         self.probe_and_refresh()
+
+    def show_server_offline(self):
+        """Show a 'server not available' placeholder.
+
+        Called by MainWindow when the health check reports the API
+        is not reachable, so the tab does not sit on 'Loading...' forever.
+        """
+        # Don't overwrite real content if the tab already loaded successfully
+        if self._outer_stack.currentWidget() is self._tabs_page:
+            return
+        self._show_placeholder(
+            "Cannot connect to server. Organization features will appear "
+            "once the server is running.",
+            show_retry=True,
+        )
 
     def on_settings_changed(self):
         """Called when backend URL or API key changes in Settings.

@@ -205,9 +205,13 @@ class AnalyticsClient:
         if not self._api_client:
             return
         try:
+            # Use the registered client_id (from client registration) rather
+            # than the analytics install_id, which is not in the clients table
+            # and would cause an FK violation on activity_log.
+            registered_id = app_config.get("client_id")
             self._api_client.post_activity(
                 action=record["event"],
-                client_id=self._install_id,
+                client_id=registered_id or self._install_id,
                 details=record.get("properties"),
             )
         except Exception as exc:

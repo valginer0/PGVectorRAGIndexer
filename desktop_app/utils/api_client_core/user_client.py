@@ -84,6 +84,38 @@ class UserClient:
         )
         return response.json()
         
+    # ------------------------------------------------------------------
+    # Roles & Permissions
+    # ------------------------------------------------------------------
+
+    def list_roles(self) -> dict:
+        """List all roles with their permissions."""
+        response = self._base.request(
+            "GET",
+            f"{self._base.api_base}/roles"
+        )
+        return response.json()
+
+    def get_role(self, name: str) -> dict:
+        """Get a single role by name."""
+        response = self._base.request(
+            "GET",
+            f"{self._base.api_base}/roles/{name}"
+        )
+        return response.json()
+
+    def list_permissions(self) -> dict:
+        """List all available permissions."""
+        response = self._base.request(
+            "GET",
+            f"{self._base.api_base}/permissions"
+        )
+        return response.json()
+
+    # ------------------------------------------------------------------
+    # User Documents
+    # ------------------------------------------------------------------
+
     def list_user_documents(
         self, user_id: str, visibility: str = None, limit: int = 100, offset: int = 0
     ) -> dict:

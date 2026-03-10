@@ -107,6 +107,63 @@ async def rotate_key(key_id: int):
 
 
 # ---------------------------------------------------------------------------
+# Current Identity
+# ---------------------------------------------------------------------------
+
+
+@identity_router.get("/me")
+async def get_current_identity(
+    request: Request,
+    key_record: Optional[dict] = Depends(require_api_key),
+):
+    """Return the identity and permissions associated with the current API key.
+
+    In loopback mode (no API key, localhost), returns effective admin authority.
+    This is an intentional current-policy bridge: loopback requests bypass all
+    permission checks, so the response reflects that effective authority rather
+    than an identified user record. If auth policy changes (e.g., loopback
+    exemption removed), this response must change accordingly.
+
+    In authenticated mode, looks up the user linked to the API key and returns
+    their role and resolved permissions.
+    """
+    if key_record is None:
+        # Loopback mode — effective admin authority, no identified user
+        return {
+            "user": None,
+            "role": "admin",
+            "permissions": ["system.admin"],
+            "auth_mode": "loopback",
+        }
+
+    from users import get_user_by_api_key
+    from role_permissions import get_role_permissions
+
+    user = get_user_by_api_key(key_record["id"])
+    if not user:
+        return {
+            "user": None,
+            "role": None,
+            "permissions": [],
+            "auth_mode": "api_key",
+        }
+
+    role = user.get("role", "")
+    perms = get_role_permissions(role) if role else []
+    return {
+        "user": {
+            "id": user["id"],
+            "email": user.get("email"),
+            "display_name": user.get("display_name"),
+            "role": role,
+        },
+        "role": role,
+        "permissions": perms,
+        "auth_mode": "api_key",
+    }
+
+
+# ---------------------------------------------------------------------------
 # Client Identity
 # ---------------------------------------------------------------------------
 

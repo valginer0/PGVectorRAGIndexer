@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.7.3
+# PGVectorRAGIndexer v2.8.0
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -68,14 +68,20 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ---
 
-## 🋹 What's New in v2.7.3
+## 🋹 What's New in v2.8.0
 
-### 🆕 Latest Features (v2.7.3)
+### 🆕 Latest Features (v2.8.0)
 
-- **✅ License Validation Fixed**: We identified and reverted an incorrect public key update from v2.7.2 that caused valid RSA license signatures to be rejected. Validation is fully restored.
-- **✅ Commercial Enhancements (v2.7.0)**: Updated commercial pricing tiers and finalized deep system observability features, including `JSONFormatter` for structured JSON logging.
-- **✅ Phase-C & D Backend Improvements (v2.7.0)**: Extracted settings tab logic and decoupled the monolithic desktop `APIClient` into smaller, resilient domain clients (`SystemClient`, `DocumentClient`, etc.).
-- **✅ Background Stability (v2.7.0)**: Added automated background execution of data retention policies via the server's background scheduler.
+- **✅ Organization Console**: New desktop tab for server-side governance — users, roles, permissions, retention, and audit logs. Adapts to server capabilities with 4-state detection (available/unauthorized/not-supported/unreachable). Admin users get inline write controls for role changes.
+- **✅ Identity Endpoint (`GET /me`)**: Server returns the current user's identity, role, and resolved permissions. Loopback mode returns effective admin authority.
+- **✅ Settings Integration**: Backend URL or API key changes automatically invalidate cached capabilities and trigger a re-probe.
+
+### Recent Features (v2.7)
+
+- **✅ License Validation Fixed**: Reverted incorrect public key update that caused valid RSA license signatures to be rejected.
+- **✅ Deep Observability**: `JSONFormatter` for structured JSON logging, system metrics on `/health`.
+- **✅ Desktop API Client Facade**: Decoupled monolithic `APIClient` into domain clients (`SystemClient`, `DocumentClient`, etc.).
+- **✅ Data Retention Orchestration**: Automated background execution of retention policies.
 
 ### Recent Milestones (v2.6)
 
@@ -151,11 +157,11 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ### User Interface
 
-
 - **Search Interface**: Intuitive search with semantic and hybrid options
 - **Drag & Drop Upload**: Easy file upload with progress tracking
 - **Document Browser**: View and manage all indexed documents
 - **Statistics Dashboard**: Real-time system health and metrics
+- **Organization Console**: Server-side governance visibility — users, roles, permissions, retention, and audit log with admin write controls
 
 ### API Features
 
@@ -164,6 +170,13 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 - **Rate Limiting**: Built-in rate limiting support
 - **Error Handling**: Comprehensive error responses with detailed messages
 - **Async Support**: Asynchronous operations for better performance
+
+### Enterprise Capabilities
+
+- **RBAC and Users**: Server-side users, admin/user roles, and permission-checked endpoints
+- **SSO/SAML**: Optional SAML login flow for enterprise deployments (Okta-oriented configuration)
+- **SCIM Provisioning**: SCIM 2.0 user provisioning endpoints for enterprise identity workflows
+- **Audit and Compliance Controls**: Audit events, data retention orchestration, and compliance export support
 
 ### 🔐 Encrypted PDF Handling
 

@@ -21,7 +21,9 @@ from desktop_app.utils.controller_result import ControllerResult, UiAction, Back
 
 class SettingsTab(QWidget):
     """Tab for settings and Docker management."""
-    
+
+    backend_settings_changed = Signal()
+
     def __init__(self, docker_manager, parent=None):
         super().__init__(parent)
         self.docker_manager = docker_manager
@@ -423,7 +425,7 @@ class SettingsTab(QWidget):
         api_key = self._api_key_input.text().strip()
 
         result = self.controller.save_backend_settings(mode, url, api_key)
-        
+
         # Dispatch the dumb result
         title_map = {
             MessageSeverity.SUCCESS: "Backend Settings Saved",
@@ -431,6 +433,9 @@ class SettingsTab(QWidget):
             MessageSeverity.ERROR: "Error"
         }
         self._handle_controller_result(result, title=title_map.get(result.severity, "Notice"))
+
+        if result.success:
+            self.backend_settings_changed.emit()
 
 
     def _test_connection(self):

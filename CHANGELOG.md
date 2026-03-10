@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-03-10
+
+### Added
+- **Organization Console**: New "Organization" tab in the desktop app providing visibility into server-side governance features (RBAC, retention, audit). Always present in the tab bar — adapts content based on server capability probing and local license state.
+  - **Overview** sub-tab: server version, edition, current user identity, capability status table
+  - **Users & Roles** sub-tab: user list with role/active status, role detail with permissions. Admin users can change roles via inline controls.
+  - **Permissions Reference** sub-tab: read-only table of all available permissions sorted by category
+  - **Retention** sub-tab: retention policy display and execution status
+  - **Server Activity** sub-tab: audit log with action type filtering, pagination, and CSV export
+- **`GET /api/v1/me` endpoint**: Returns the identity, role, and resolved permissions of the current API key holder. In loopback mode, returns effective admin authority.
+- **Server capability detection**: 4-state model (AVAILABLE / UNAUTHORIZED / NOT_SUPPORTED / UNREACHABLE) with caching. UNREACHABLE is never cached (transient). Centralized in `ServerCapabilities` class.
+- **`probe_endpoint()` on APIClient**: Lightweight GET probe that maps HTTP status codes to capability states. Handles non-JSON 500 responses gracefully.
+- **Settings integration**: Changing backend URL or API key in Settings automatically invalidates the Organization tab's capability cache and triggers a re-probe.
+- **MaintenanceClient**: New domain client for retention policy and status endpoints.
+
+### Changed
+- **Desktop APIClient**: Now exposes `CapabilityStatus` enum, `ProbeResult` dataclass, and facade methods for roles, permissions, retention, and identity.
+- **UserClient**: Added `list_roles()`, `get_role()`, `list_permissions()` methods.
+- **IdentityClient**: Added `get_me()` method.
+- **SettingsTab**: Emits `backend_settings_changed` signal on successful save.
+
 ## [2.7.3] - 2026-03-08
 
 ### Fixed

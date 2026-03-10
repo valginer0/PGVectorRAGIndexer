@@ -24,6 +24,7 @@ from .settings_tab import SettingsTab
 from .recent_activity_tab import RecentActivityTab
 from .health_tab import HealthTab
 from .watched_folders_tab import WatchedFoldersTab
+from .admin_tab import OrganizationTab
 from .source_open_manager import SourceOpenManager
 from ..utils.docker_manager import DockerManager
 from ..utils.api_client import APIClient
@@ -134,6 +135,7 @@ class MainWindow(QMainWindow):
         self.recent_tab = RecentActivityTab(self.source_manager, self)
         self.health_tab = HealthTab(self.api_client, self)
         self.watched_folders_tab = WatchedFoldersTab(self.api_client, self)
+        self.org_tab = OrganizationTab(self.api_client, self)
 
         # Initialize in-app folder scheduler (#6)
         from desktop_app.utils.folder_scheduler import FolderScheduler
@@ -148,12 +150,16 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.health_tab, qta.icon('fa5s.heartbeat', color='#9ca3af'), "Health")
         self.tabs.addTab(self.watched_folders_tab, qta.icon('fa5s.folder-open', color='#9ca3af'), "Folders")
         self.tabs.addTab(self.manage_tab, qta.icon('fa5s.trash-alt', color='#9ca3af'), "Manage")
+        self.tabs.addTab(self.org_tab, qta.icon('fa5s.building', color='#9ca3af'), "Organization")
         self.tabs.addTab(self.settings_tab, qta.icon('fa5s.cog', color='#9ca3af'), "Settings")
         
         # Status bar at bottom
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready")
+
+        # Invalidate Organization tab cache when backend settings change
+        self.settings_tab.backend_settings_changed.connect(self._on_backend_settings_changed)
 
         # Wire analytics signals (#14)
         self._wire_analytics_signals()
@@ -601,6 +607,10 @@ class MainWindow(QMainWindow):
             if hasattr(self, 'health_tab'):
                 self.health_tab.refresh()
 
+            # Organization tab — probe server capabilities
+            if hasattr(self, 'org_tab'):
+                self.org_tab.probe_and_refresh()
+
             # Watched Folders (#6)
             if hasattr(self, 'watched_folders_tab'):
                 self.watched_folders_tab.load_folders()
@@ -616,6 +626,15 @@ class MainWindow(QMainWindow):
             logger.info("Initial data load complete")
         except Exception as e:
             logger.error(f"Error during initial data load: {e}")
+
+    # ------------------------------------------------------------------
+    # Settings change handling
+    # ------------------------------------------------------------------
+
+    def _on_backend_settings_changed(self):
+        """Invalidate Organization tab cache and re-probe after backend settings change."""
+        if hasattr(self, 'org_tab'):
+            self.org_tab.on_settings_changed()
 
     # ------------------------------------------------------------------
     # Analytics (#14)

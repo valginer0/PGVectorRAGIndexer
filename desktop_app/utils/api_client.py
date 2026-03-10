@@ -4,6 +4,8 @@ This module now serves as a 100% backward-compatible Façade over the `api_clien
 """
 
 import logging
+from dataclasses import dataclass
+from enum import Enum
 from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 
@@ -18,9 +20,30 @@ from desktop_app.utils.api_client_core.user_client import UserClient
 from desktop_app.utils.api_client_core.activity_client import ActivityClient
 from desktop_app.utils.api_client_core.watched_folders_client import WatchedFoldersClient
 from desktop_app.utils.api_client_core.identity_client import IdentityClient
+from desktop_app.utils.api_client_core.maintenance_client import MaintenanceClient
+from desktop_app.utils.errors import APIError, APIConnectionError, APIAuthenticationError
 from version import __version__ as CLIENT_VERSION
 
 logger = logging.getLogger(__name__)
+
+
+class CapabilityStatus(Enum):
+    """Result of probing a server endpoint for capability detection."""
+    AVAILABLE = "available"          # 200 OK
+    UNAUTHORIZED = "unauthorized"    # 401/403
+    NOT_SUPPORTED = "not_supported"  # 404/405
+    UNREACHABLE = "unreachable"      # ConnectionError/Timeout
+    UNKNOWN = "unknown"              # Not yet probed
+
+
+@dataclass
+class ProbeResult:
+    """Result of a lightweight endpoint probe."""
+    status: CapabilityStatus
+    body: Optional[dict] = None           # Response JSON on 200, None otherwise
+    error_message: Optional[str] = None   # Error detail on 500/error
+    status_code: Optional[int] = None     # Raw HTTP status, None on connection error
+
 
 # Legacy exceptions kept here to allow `except APIClient.Error:` patterns if any exist,
 # but normally these should import from `errors.py`.
@@ -56,7 +79,8 @@ class APIClient:
         self._activity = ActivityClient(self._base)
         self._watched_folders = WatchedFoldersClient(self._base)
         self._identity = IdentityClient(self._base)
-        
+        self._maintenance = MaintenanceClient(self._base)
+
         # Deprecated: Server version is now managed by SystemClient but kept here temporarily
         # if any legacy callers accessed `api_client._server_version` directly.
         self._server_version: Optional[str] = None
@@ -222,6 +246,14 @@ class APIClient:
     def get_indexing_run_detail(self, run_id: str) -> Dict[str, Any]:
         """Get details of a single indexing run."""
         return self._indexing.get_indexing_run_detail(run_id=run_id)
+
+    # ------------------------------------------------------------------
+    # Current Identity
+    # ------------------------------------------------------------------
+
+    def get_me(self) -> dict:
+        """Get the identity and permissions of the current API key holder."""
+        return self._identity.get_me()
 
     # ------------------------------------------------------------------
     # Client Identity (#8)
@@ -510,3 +542,93 @@ class APIClient:
     def bulk_set_document_visibility(self, document_ids: list, visibility: str) -> dict:
         """Set visibility for multiple documents at once (admin only)."""
         return self._document.bulk_set_document_visibility(document_ids, visibility)
+
+    # ------------------------------------------------------------------
+    # Roles & Permissions
+    # ------------------------------------------------------------------
+
+    def list_roles(self) -> dict:
+        """List all roles with their permissions."""
+        return self._user.list_roles()
+
+    def get_role(self, name: str) -> dict:
+        """Get a single role by name."""
+        return self._user.get_role(name)
+
+    def list_permissions(self) -> dict:
+        """List all available permissions."""
+        return self._user.list_permissions()
+
+    # ------------------------------------------------------------------
+    # Maintenance (Retention)
+    # ------------------------------------------------------------------
+
+    def get_retention_policy(self) -> dict:
+        """Get the effective retention policy defaults."""
+        return self._maintenance.get_retention_policy()
+
+    def get_retention_status(self) -> dict:
+        """Get retention execution status."""
+        return self._maintenance.get_retention_status()
+
+    # ------------------------------------------------------------------
+    # Endpoint Probing (Capability Detection)
+    # ------------------------------------------------------------------
+
+    def probe_endpoint(self, path: str, timeout: int = 3) -> ProbeResult:
+        """Lightweight GET probe for capability detection.
+
+        Designed for JSON API endpoints only. Returns a ProbeResult with
+        status, body (on 200), and error_message (on 500 or error).
+
+        NOTE: Uses self._base._session directly rather than BaseAPIClient.request()
+        because probes need different semantics: short timeout, no exception raising,
+        and status-code-to-enum mapping. If cross-cutting concerns are added to
+        BaseAPIClient.request() later, verify whether probes should also adopt them.
+        """
+        import requests as _requests
+
+        url = f"{self._base.base_url}{path}"
+        try:
+            response = self._base._session.request("GET", url, timeout=timeout)
+            code = response.status_code
+
+            if code == 200:
+                try:
+                    body = response.json()
+                except ValueError:
+                    body = None
+                return ProbeResult(
+                    status=CapabilityStatus.AVAILABLE,
+                    body=body,
+                    status_code=code,
+                )
+            elif code in (401, 403):
+                return ProbeResult(
+                    status=CapabilityStatus.UNAUTHORIZED,
+                    status_code=code,
+                )
+            elif code in (404, 405):
+                return ProbeResult(
+                    status=CapabilityStatus.NOT_SUPPORTED,
+                    status_code=code,
+                )
+            else:
+                # 500 or other — endpoint exists but errored
+                try:
+                    err_data = response.json()
+                    err_msg = err_data.get("detail", err_data.get("message", str(err_data)))
+                except (ValueError, AttributeError):
+                    err_msg = response.text[:200] if response.text else f"HTTP {code}"
+                return ProbeResult(
+                    status=CapabilityStatus.AVAILABLE,
+                    error_message=err_msg,
+                    status_code=code,
+                )
+        except (_requests.exceptions.ConnectionError, _requests.exceptions.Timeout):
+            return ProbeResult(status=CapabilityStatus.UNREACHABLE)
+        except Exception as e:
+            return ProbeResult(
+                status=CapabilityStatus.UNREACHABLE,
+                error_message=str(e),
+            )

@@ -9,6 +9,19 @@ class IdentityClient:
         self._base = base_client
 
     # ------------------------------------------------------------------
+    # Current Identity
+    # ------------------------------------------------------------------
+
+    def get_me(self) -> Dict[str, Any]:
+        """Get the identity and permissions of the current API key holder."""
+        response = self._base.request(
+            "GET",
+            f"{self._base.api_base}/me",
+            timeout=5
+        )
+        return response.json()
+
+    # ------------------------------------------------------------------
     # Client Identity (#3 Multi-User, Phase 1)
     # ------------------------------------------------------------------
 

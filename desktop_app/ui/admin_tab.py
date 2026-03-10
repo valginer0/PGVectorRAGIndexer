@@ -782,7 +782,13 @@ class OrganizationTab(QWidget):
 
         # Page 0: Gated / unreachable / loading placeholder
         self._placeholder = QWidget()
-        QVBoxLayout(self._placeholder)
+        ph_layout = QVBoxLayout(self._placeholder)
+        self._loading_label = QLabel("Loading organization features...")
+        self._loading_label.setAlignment(Qt.AlignCenter)
+        self._loading_label.setStyleSheet("color: #9ca3af; font-size: 14px; padding: 40px;")
+        ph_layout.addStretch()
+        ph_layout.addWidget(self._loading_label)
+        ph_layout.addStretch()
         self._outer_stack.addWidget(self._placeholder)
 
         # Page 1: Sub-tabs

@@ -589,43 +589,33 @@ class MainWindow(QMainWindow):
         self._analytics.track_app_started()
         self._analytics.track_daily_active()
 
-        # Load data for tabs
-        try:
-            # Documents Tab
-            if hasattr(self, 'documents_tab'):
-                self.documents_tab.load_documents()
-            
-            # Upload Tab (Document Types)
-            if hasattr(self, 'upload_tab'):
-                self.upload_tab.load_document_types()
-                
-            # Search Tab (Document Types)
-            if hasattr(self, 'search_tab'):
-                self.search_tab.load_document_types()
+        # Load data for tabs — each tab loads independently so one
+        # failure does not block the rest.
+        tab_loads = [
+            ("Documents",      lambda: self.documents_tab.load_documents()      if hasattr(self, 'documents_tab') else None),
+            ("Upload",         lambda: self.upload_tab.load_document_types()    if hasattr(self, 'upload_tab') else None),
+            ("Search",         lambda: self.search_tab.load_document_types()    if hasattr(self, 'search_tab') else None),
+            ("Health",         lambda: self.health_tab.refresh()                if hasattr(self, 'health_tab') else None),
+            ("Organization",   lambda: self.org_tab.probe_and_refresh()         if hasattr(self, 'org_tab') else None),
+            ("Watched Folders", lambda: self._load_watched_folders()),
+        ]
+        for name, loader in tab_loads:
+            try:
+                loader()
+            except Exception as e:
+                logger.error(f"Error loading {name} tab: {e}")
 
-            # Health Dashboard
-            if hasattr(self, 'health_tab'):
-                self.health_tab.refresh()
+        logger.info("Initial data load complete")
 
-            # Organization tab — probe server capabilities
-            if hasattr(self, 'org_tab'):
-                self.org_tab.probe_and_refresh()
-
-            # Watched Folders (#6)
-            if hasattr(self, 'watched_folders_tab'):
-                self.watched_folders_tab.load_folders()
-            if hasattr(self, '_folder_scheduler'):
-                try:
-                    from desktop_app.utils.app_config import get
-                    cid = get("client_id")
-                    if cid:
-                        self._folder_scheduler.set_client_id(cid)
-                except Exception:
-                    pass
-                
-            logger.info("Initial data load complete")
-        except Exception as e:
-            logger.error(f"Error during initial data load: {e}")
+    def _load_watched_folders(self):
+        """Load watched folders and configure scheduler."""
+        if hasattr(self, 'watched_folders_tab'):
+            self.watched_folders_tab.load_folders()
+        if hasattr(self, '_folder_scheduler'):
+            from desktop_app.utils.app_config import get
+            cid = get("client_id")
+            if cid:
+                self._folder_scheduler.set_client_id(cid)
 
     # ------------------------------------------------------------------
     # Settings change handling

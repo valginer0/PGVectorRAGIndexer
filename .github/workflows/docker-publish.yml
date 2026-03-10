@@ -3,6 +3,17 @@ name: Docker Build and Publish
 on:
   push:
     branches: [ "main" ]
+    paths-ignore:
+      - 'desktop_app/**'
+      - 'windows_installer/**'
+      - 'tests/**'
+      - 'docs/**'
+      - 'scripts/**'
+      - '*.md'
+      - '.github/workflows/build-windows-installer.yml'
+      - '.github/workflows/test-windows.yml'
+      - '.github/workflows/test-macos.yml'
+      - '.github/workflows/verify-installers.yml'
     tags:
       - 'v*.*.*'
   workflow_dispatch:

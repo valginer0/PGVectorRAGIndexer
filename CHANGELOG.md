@@ -5,15 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.8.1] - 2026-03-10
+## [2.8.2] - 2026-03-10
 
 ### Fixed
 - **API Version Route**: Fixed `/api/v1/version` returning 404 by properly registering it on the v1 router.
 - **Activity Logging**: Fixed database foreign key violations during logging by correctly retrying with `client_id=None` when an unregistered client ID is provided.
 - **Analytics Client**: Fixed analytics client to use the properly registered `client_id` instead of falling back to the installation ID.
 - **Server Offline UX**: Fixed the organization tab to correctly display the server offline placeholder message and gracefully recover without overwriting existing loaded content when the server status changes.
+- **Permissions-tab Mapping**: Fixed permissions-tab mapping to accurately reflect role authorities.
+- **Documents Tree-status Leakage**: Fixed Documents tree-status leakage in list mode.
+- **Runtime Hardening**: General runtime hardening around offline and organization data loading.
+
+## [2.8.1] - 2026-03-10
+
+### Added
+- **/me endpoint added**: New endpoint `/api/v1/me` successfully implemented to return identity profile.
 
 ## [2.8.0] - 2026-03-10
+
 
 ### Added
 - **Organization Console**: New "Organization" tab in the desktop app providing visibility into server-side governance features (RBAC, retention, audit). Always present in the tab bar — adapts content based on server capability probing and local license state.

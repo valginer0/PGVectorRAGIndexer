@@ -467,11 +467,16 @@ class _PermissionsPanel(QWidget):
         try:
             data = self.api_client.list_permissions()
             perms = data.get("permissions", [])
-            # Sort by category
-            perms.sort(key=lambda p: (p.get("category", ""), p.get("id", "")))
+            # Server returns {"permission": ..., "description": ...}.
+            # Derive category from the permission name (e.g. "documents.read" → "documents").
+            for p in perms:
+                if "category" not in p and "permission" in p:
+                    parts = p["permission"].rsplit(".", 1)
+                    p["category"] = parts[0] if len(parts) > 1 else ""
+            perms.sort(key=lambda p: (p.get("category", ""), p.get("permission", "")))
             self._table.setRowCount(len(perms))
             for i, p in enumerate(perms):
-                self._table.setItem(i, 0, QTableWidgetItem(p.get("id", "—")))
+                self._table.setItem(i, 0, QTableWidgetItem(p.get("permission", p.get("id", "—"))))
                 self._table.setItem(i, 1, QTableWidgetItem(p.get("description", "—")))
                 self._table.setItem(i, 2, QTableWidgetItem(p.get("category", "—")))
             self._stack.setCurrentWidget(self._content)

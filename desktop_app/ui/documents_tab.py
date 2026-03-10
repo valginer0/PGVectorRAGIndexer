@@ -636,10 +636,14 @@ class DocumentsTab(QWidget):
     # ------------------------------------------------------------------
 
     def _on_tree_loading(self, parent_path: str) -> None:
+        if self._view_mode != "tree":
+            return
         self.status_label.setText("Loading tree...")
         self.status_label.setStyleSheet("color: #6366f1; font-style: italic;")
 
     def _on_tree_loaded(self, parent_path: str, child_count: int) -> None:
+        if self._view_mode != "tree":
+            return
         if parent_path:
             self.status_label.setText(f"{parent_path}: {child_count} items")
         else:
@@ -647,6 +651,8 @@ class DocumentsTab(QWidget):
         self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
 
     def _on_tree_load_failed(self, error: str) -> None:
+        if self._view_mode != "tree":
+            return
         self.status_label.setText(f"Tree load failed: {error}")
         self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
 

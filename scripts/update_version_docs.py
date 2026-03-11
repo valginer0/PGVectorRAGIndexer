@@ -41,6 +41,7 @@ MAIN_DOC_PATTERNS = [
         (r'shipping\*\* as of v[\d.]+', 'shipping** as of v{full}'),
     ]),
     ("docs/internal/MONETIZATION_STRATEGY_V4.md", [
+        (r'^# Monetization Strategy V4 — Current State \(\d{4}-\d{2}-\d{2}\)', '# Monetization Strategy V4 — Current State ({date})'),
         (r'implemented state as of v[\d.]+', 'implemented state as of v{full}'),
     ]),
 ]
@@ -79,7 +80,7 @@ def parse_version(version):
         'minor': parts[1] if len(parts) > 1 else '0',
         'patch': parts[2] if len(parts) > 2 else '0',
         'major_minor': f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else version,
-        'date': datetime.datetime.now().strftime('%Y-%m-%d'),
+        'date': datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d'),
     }
 
 

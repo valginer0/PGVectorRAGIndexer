@@ -16,7 +16,15 @@ The user expects YOU (the AI agent) to perform the entire end-to-end process, in
    *Note: If GitHub Container Registry (ghcr.io) authentication fails at the end, use `gh auth refresh -h github.com -s write:packages` and `gh auth token | docker login ghcr.io -u valginer0 --password-stdin` to authenticate via the device code flow, then re-run the release script if necessary.*
 4. Wait for the test suite, Docker build, tagging, and pushing to complete successfully.
 
-## Step 2: Download Unsigned MSI
+## Step 2: Update Internal Docs Repository
+1. The release script automatically updates version strings in `docs/internal/`. Because this is a separate private repository, you must commit and push these changes separately from that directory.
+   ```bash
+   cd docs/internal
+   git commit -am "chore: bump version to <tag>"
+   git push origin main
+   ```
+
+## Step 3: Download Unsigned MSI
 1. Pushing the new version tag to GitHub triggers the "Build Windows Installer" GitHub Actions workflow. Monitor its status:
    ```bash
    gh run list --workflow "Build Windows Installer" --json databaseId,name,status,conclusion,headBranch | head -n 10
@@ -30,12 +38,12 @@ The user expects YOU (the AI agent) to perform the entire end-to-end process, in
    gh run download <run-id> --name PGVectorRAGIndexer.msi --dir /mnt/c/Users/v_ale/Desktop/ToSign/PGVectorRAGIndexer-unsigned
    ```
 
-## Step 3: Wait for User Signature
+## Step 4: Wait for User Signature
 1. Prompt the user and wait for their confirmation before proceeding.
 2. Inform them: "The unsigned MSI has been downloaded to `C:\Users\v_ale\Desktop\ToSign\PGVectorRAGIndexer-unsigned\PGVectorRAGIndexer.msi`. Please sign it using `signtool.exe` and let me know when you are done."
 3. Wait for the user to confirm they have signed it.
 
-## Step 4: Upload Signed MSI to GitHub Release
+## Step 5: Upload Signed MSI to GitHub Release
 1. Once the user confirms the signature is complete, upload the signed MSI from their Windows filesystem directly to the GitHub Release.
    ```bash
    // turbo

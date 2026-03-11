@@ -32,6 +32,9 @@ MAIN_DOC_PATTERNS = [
         (r'^# PGVectorRAGIndexer Usage Guide - v[\d.]+',
          '# PGVectorRAGIndexer Usage Guide - v{full}'),
     ]),
+    ("desktop_app/__init__.py", [
+        (r'^__version__ = "[\d.]+"', '__version__ = "{full}"'),
+    ]),
 ]
 
 # Patterns for the website repository

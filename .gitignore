@@ -215,3 +215,6 @@ backups/
 # User documents (should not be in version control)
 documents/
 docs/internal/
+
+# Release scripts output
+activity_log.csv

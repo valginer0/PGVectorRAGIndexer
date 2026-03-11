@@ -30,6 +30,12 @@ if ! git diff-index --quiet HEAD --; then
     exit 1
 fi
 
+# Check for untracked files
+if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+    echo -e "${RED}✗ You have untracked files. Please commit, stash, or .gitignore them first.${NC}"
+    exit 1
+fi
+
 # Pull latest changes
 echo -e "${GREEN}Pulling latest changes...${NC}"
 git pull origin main
@@ -195,19 +201,34 @@ echo -e "${GREEN}✓ Image pushed to GHCR${NC}"
 if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
     # Commit VERSION file and documentation
     echo ""
-    git add VERSION README.md QUICK_START.md DEPLOYMENT.md
+    # Pragmatic Tradeoff: 'git add -u' stages all tracked modifications made during the script.
+    # Since we enforced a clean tree at the start, this safely captures all newly bumped version files
+    # without needing a hardcoded list, though it will catch side-effects if any exist.
+    git add -u
     git commit -m "chore: Bump version to v$NEW_VERSION [skip ci]"
     echo -e "${GREEN}✓ Committed version bump${NC}"
     
     # Also commit and push website changes if they exist
-    WEBSITE_DIR="../PGVectorRAGIndexerWebsite"
-    if [ -d "$WEBSITE_DIR" ]; then
+    WEBSITE_DIR="${WEBSITE_REPO_PATH:-../PGVectorRAGIndexerWebsite}"
+    if [ -d "$WEBSITE_DIR/.git" ]; then
         cd "$WEBSITE_DIR"
-        if ! git diff-index --quiet HEAD --; then
+        
+        # Verify we are on main branch
+        WEBSITE_BRANCH=$(git branch --show-current)
+        if [ "$WEBSITE_BRANCH" != "main" ]; then
+            echo -e "${YELLOW}⚠ Website is not on 'main' branch (currently '$WEBSITE_BRANCH'). Skipping website deployment.${NC}"
+        elif ! git diff-index --quiet HEAD --; then
             echo -e "${GREEN}Committing and pushing website version bump...${NC}"
+            # Ensure we are up to date before committing and pushing
+            git pull origin main || {
+                echo -e "${RED}✗ Failed to pull latest website changes. Skipping website deployment.${NC}"
+            }
+            
             git add index.html package.json
             git commit -m "chore: release v$NEW_VERSION"
-            git push origin main
+            git push origin main || {
+                echo -e "${RED}✗ Failed to push website changes. Deployment skipped.${NC}"
+            }
             echo -e "${GREEN}✓ Website updated and deployed${NC}"
         fi
         cd - > /dev/null

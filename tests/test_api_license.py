@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api import app
-from license import Edition, LicenseInfo, set_current_license, reset_license
+from license import Edition, LicenseInfo, set_current_license, reset_license, COMMUNITY_LICENSE
 
 client = TestClient(app)
 
@@ -34,7 +34,7 @@ def teardown_module(module):
 
 def test_get_license_community():
     """Verify that the API returns the community edition by default."""
-    reset_license()
+    set_current_license(COMMUNITY_LICENSE)
     response = client.get("/license")
     assert response.status_code == 200
     data = response.json()

@@ -212,8 +212,10 @@ backups/
 *.sql.gz
 *.sql.gpg
 
-# User documents (should not be in version control)
+# Runtime data: files a user uploads to the desktop app locally for indexing
 documents/
+
+# Private project strategy docs (should not be in version control)
 docs/internal/
 
 # Release scripts output

@@ -17,7 +17,7 @@ The user expects YOU (the AI agent) to perform the entire end-to-end process, in
 4. Wait for the test suite, Docker build, tagging, and pushing to complete successfully.
 
 ## Step 2: Download Unsigned MSI
-1. The release script triggers a GitHub Actions workflow called "Build Windows Installer". Monitor its status:
+1. Pushing the new version tag to GitHub triggers the "Build Windows Installer" GitHub Actions workflow. Monitor its status:
    ```bash
    gh run list --workflow "Build Windows Installer" --json databaseId,name,status,conclusion,headBranch | head -n 10
    ```
@@ -31,7 +31,7 @@ The user expects YOU (the AI agent) to perform the entire end-to-end process, in
    ```
 
 ## Step 3: Wait for User Signature
-1. Notify the user using the `notify_user` tool with `BlockedOnUser: true`.
+1. Prompt the user and wait for their confirmation before proceeding.
 2. Inform them: "The unsigned MSI has been downloaded to `C:\Users\v_ale\Desktop\ToSign\PGVectorRAGIndexer-unsigned\PGVectorRAGIndexer.msi`. Please sign it using `signtool.exe` and let me know when you are done."
 3. Wait for the user to confirm they have signed it.
 

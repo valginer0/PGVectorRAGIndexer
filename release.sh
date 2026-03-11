@@ -224,7 +224,7 @@ if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
                 echo -e "${RED}✗ Failed to pull latest website changes. Skipping website deployment.${NC}"
             }
             
-            git add index.html package.json
+            git add -u
             git commit -m "chore: release v$NEW_VERSION"
             git push origin main || {
                 echo -e "${RED}✗ Failed to push website changes. Deployment skipped.${NC}"

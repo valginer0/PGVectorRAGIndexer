@@ -198,6 +198,20 @@ if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
     git add VERSION README.md QUICK_START.md DEPLOYMENT.md
     git commit -m "chore: Bump version to v$NEW_VERSION [skip ci]"
     echo -e "${GREEN}✓ Committed version bump${NC}"
+    
+    # Also commit and push website changes if they exist
+    WEBSITE_DIR="../PGVectorRAGIndexerWebsite"
+    if [ -d "$WEBSITE_DIR" ]; then
+        cd "$WEBSITE_DIR"
+        if ! git diff-index --quiet HEAD --; then
+            echo -e "${GREEN}Committing and pushing website version bump...${NC}"
+            git add index.html package.json
+            git commit -m "chore: release v$NEW_VERSION"
+            git push origin main
+            echo -e "${GREEN}✓ Website updated and deployed${NC}"
+        fi
+        cd - > /dev/null
+    fi
 else
     echo -e "${BLUE}Skipping commit (version unchanged)${NC}"
 fi

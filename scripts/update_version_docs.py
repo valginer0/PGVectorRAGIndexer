@@ -11,6 +11,7 @@ Usage:
 import os
 import re
 import sys
+import datetime
 
 # Default document patterns in the main repository
 MAIN_DOC_PATTERNS = [
@@ -34,6 +35,13 @@ MAIN_DOC_PATTERNS = [
     ]),
     ("desktop_app/__init__.py", [
         (r'^__version__ = "[\d.]+"', '__version__ = "{full}"'),
+    ]),
+    ("docs/IMPLEMENTATION_TRACKER.md", [
+        (r'^Last updated: \d{4}-\d{2}-\d{2} \(v[\d.]+\)', 'Last updated: {date} (v{full})'),
+        (r'shipping\*\* as of v[\d.]+', 'shipping** as of v{full}'),
+    ]),
+    ("docs/internal/MONETIZATION_STRATEGY_V4.md", [
+        (r'implemented state as of v[\d.]+', 'implemented state as of v{full}'),
     ]),
 ]
 
@@ -71,6 +79,7 @@ def parse_version(version):
         'minor': parts[1] if len(parts) > 1 else '0',
         'patch': parts[2] if len(parts) > 2 else '0',
         'major_minor': f"{parts[0]}.{parts[1]}" if len(parts) >= 2 else version,
+        'date': datetime.datetime.now().strftime('%Y-%m-%d'),
     }
 
 

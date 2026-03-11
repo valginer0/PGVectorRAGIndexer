@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.8.2
+# PGVectorRAGIndexer v2.9.0
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -68,9 +68,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ---
 
-## 🋹 What's New in v2.8.2
+## 🋹 What's New in v2.9.0
 
-### 🆕 Latest Features (v2.8.2)
+### 🆕 Latest Features (v2.9.0)
 
 - **✅ Organization Console**: New desktop tab for server-side governance — users, roles, permissions, retention, and audit logs. Adapts to server capabilities with 4-state detection (available/unauthorized/not-supported/unreachable). Admin users get inline write controls for role changes.
 - **✅ Identity Endpoint (`GET /me`)**: Server returns the current user's identity, role, and resolved permissions. Loopback mode returns effective admin authority.

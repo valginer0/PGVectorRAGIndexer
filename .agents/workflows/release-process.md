@@ -7,8 +7,9 @@ When the user asks to release a new version of PGVectorRAGIndexer, follow these 
 The user expects YOU (the AI agent) to perform the entire end-to-end process, including downloading the unsigned installer, waiting for them to sign it, and uploading it back to GitHub. Do not just print instructions for the user.
 
 ## Step 1: Prepare and Run Release Script
-1. Ensure all changes are committed (the git tree must be clean).
-2. Ask the user if this is a `patch`, `minor`, or `major` release based on the changes made.
+1. Ensure all changes are committed in the main repository (the git tree must be clean).
+2. Ensure the `docs/internal/` repository is also clean (no untracked or uncommitted files).
+3. Ask the user if this is a `patch`, `minor`, or `major` release based on the changes made.
 3. Run the release script from the root directory:
    ```bash
    ./release.sh -y <bump_type>
@@ -17,10 +18,11 @@ The user expects YOU (the AI agent) to perform the entire end-to-end process, in
 4. Wait for the test suite, Docker build, tagging, and pushing to complete successfully.
 
 ## Step 2: Update Internal Docs Repository
-1. The release script automatically updates version strings in `docs/internal/`. Because this is a separate private repository, you must commit and push these changes separately from that directory.
+1. The local `scripts/update_version_docs.py` script automatically rewrites version strings in the `docs/internal/` directory on your hard drive as a side-effect. Because this directory is mapped to a separate private repository, you must explicitly stage and commit these file changes.
    ```bash
    cd docs/internal
-   git commit -am "chore: bump version to <tag>"
+   git add -A
+   git commit -m "chore: bump version to <tag>"
    git push origin main
    ```
 

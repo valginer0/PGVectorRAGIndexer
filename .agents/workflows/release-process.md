@@ -10,12 +10,12 @@ The user expects YOU (the AI agent) to perform the entire end-to-end process, in
 1. Ensure all changes are committed in the main repository (the git tree must be clean).
 2. Ensure the `docs/internal/` repository is also clean (no untracked or uncommitted files).
 3. Ask the user if this is a `patch`, `minor`, or `major` release based on the changes made.
-3. Run the release script from the root directory:
+4. Run the release script from the root directory:
    ```bash
    ./release.sh -y <bump_type>
    ```
    *Note: If GitHub Container Registry (ghcr.io) authentication fails at the end, use `gh auth refresh -h github.com -s write:packages` and `gh auth token | docker login ghcr.io -u valginer0 --password-stdin` to authenticate via the device code flow, then re-run the release script if necessary.*
-4. Wait for the test suite, Docker build, tagging, and pushing to complete successfully.
+5. Wait for the test suite, Docker build, tagging, and pushing to complete successfully.
 
 ## Step 2: Update Internal Docs Repository
 1. The local `scripts/update_version_docs.py` script automatically rewrites version strings in the `docs/internal/` directory on your hard drive as a side-effect. Because this directory is mapped to a separate private repository, you must explicitly stage and commit these file changes.

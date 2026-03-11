@@ -252,7 +252,8 @@ class _UsersRolesPanel(QWidget):
         self._users_table.verticalHeader().setVisible(False)
         self._users_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._users_table.setSelectionBehavior(QTableWidget.SelectRows)
-        content_layout.addWidget(self._users_table)
+        self._users_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        content_layout.addWidget(self._users_table, stretch=3)
 
         # Admin actions row (hidden for non-admins)
         self._admin_row = QHBoxLayout()
@@ -282,8 +283,8 @@ class _UsersRolesPanel(QWidget):
         self._roles_table.verticalHeader().setVisible(False)
         self._roles_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._roles_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self._roles_table.setMaximumHeight(180)
-        content_layout.addWidget(self._roles_table)
+        self._roles_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        content_layout.addWidget(self._roles_table, stretch=2)
 
         # Role detail
         self._role_detail = QLabel("")

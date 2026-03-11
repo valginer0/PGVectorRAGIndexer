@@ -246,16 +246,16 @@ class MainWindow(QMainWindow):
             self._license_banner.setVisible(False)
             return
 
-        if not info["is_team"]:
+        if not info.is_team:
             # Community edition or no license — check for warning text
-            if info["warning_text"] and "expired" in info["warning_text"].lower():
+            if info.warning_text and "expired" in info.warning_text.lower():
                 self._license_banner.setStyleSheet(
                     "#licenseBanner { background-color: #991b1b; border-radius: 6px; }"
                 )
                 self._license_banner_icon.setPixmap(
                     qta.icon('fa5s.exclamation-triangle', color='white').pixmap(16, 16)
                 )
-                self._license_banner_text.setText(info["warning_text"])
+                self._license_banner_text.setText(info.warning_text)
                 self._license_banner_text.setStyleSheet("color: white;")
                 self._license_banner.setVisible(True)
             else:
@@ -263,8 +263,8 @@ class MainWindow(QMainWindow):
             return
 
         # Team edition — check expiry
-        if info["expiry_warning"]:
-            days = info["days_left"]
+        if info.expiry_warning:
+            days = info.days_left
             self._license_banner.setStyleSheet(
                 "#licenseBanner { background-color: #92400e; border-radius: 6px; }"
             )

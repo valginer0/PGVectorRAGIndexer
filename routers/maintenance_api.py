@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 
 from api_models import RetentionRunRequest
 from services import _add_deprecation_headers
-from auth import require_api_key, require_admin
+from auth import require_api_key, require_admin, require_team_edition
 from database import get_db_manager
 
 logger = logging.getLogger(__name__)
@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 maintenance_router = APIRouter(tags=["Maintenance & Activity"])
 
 
-@maintenance_router.get("/activity", tags=["Activity Log"], dependencies=[Depends(require_api_key)])
+@maintenance_router.get("/activity", tags=["Activity Log"], dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def get_activity_log(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -72,7 +72,7 @@ async def post_activity(request: Request):
         )
 
 
-@maintenance_router.get("/activity/actions", tags=["Activity Log"], dependencies=[Depends(require_api_key)])
+@maintenance_router.get("/activity/actions", tags=["Activity Log"], dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def get_activity_action_types():
     """Get distinct action types in the activity log."""
     from activity_log import get_action_types
@@ -87,7 +87,7 @@ async def get_activity_action_types():
         )
 
 
-@maintenance_router.get("/activity/export", tags=["Activity Log"], dependencies=[Depends(require_api_key)])
+@maintenance_router.get("/activity/export", tags=["Activity Log"], dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def export_activity_csv(
     client_id: Optional[str] = Query(default=None),
     action: Optional[str] = Query(default=None),
@@ -144,14 +144,14 @@ async def apply_activity_retention(request: Request, response: Response):
         )
 
 
-@maintenance_router.get("/retention/policy", tags=["Retention"], dependencies=[Depends(require_api_key)])
+@maintenance_router.get("/retention/policy", tags=["Retention"], dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def get_retention_policy():
     """Return effective per-category retention defaults."""
     from retention_policy import get_policy_defaults
     return {"policy": get_policy_defaults()}
 
 
-@maintenance_router.post("/retention/run", tags=["Retention"], dependencies=[Depends(require_api_key)])
+@maintenance_router.post("/retention/run", tags=["Retention"], dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def run_retention_policy(request: RetentionRunRequest):
     """Run retention orchestration once with optional per-category overrides."""
     from retention_policy import apply_retention
@@ -170,7 +170,7 @@ async def run_retention_policy(request: RetentionRunRequest):
     return result
 
 
-@maintenance_router.get("/retention/status", tags=["Retention"], dependencies=[Depends(require_api_key)])
+@maintenance_router.get("/retention/status", tags=["Retention"], dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def get_retention_status():
     """Get retention maintenance runner status."""
     from retention_maintenance import get_retention_maintenance_runner

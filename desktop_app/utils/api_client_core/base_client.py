@@ -89,8 +89,11 @@ class BaseAPIClient:
             error_msg = f"API Error ({response.status_code})"
             try:
                 error_data = response.json()
-                if isinstance(error_data, dict) and "detail" in error_data:
-                    error_msg = error_data["detail"]
+                if isinstance(error_data, dict):
+                    if "message" in error_data:
+                        error_msg = error_data["message"]
+                    elif "detail" in error_data:
+                        error_msg = error_data["detail"]
             except ValueError:
                 if response.text:
                     error_msg = f"{error_msg}: {response.text[:200]}"

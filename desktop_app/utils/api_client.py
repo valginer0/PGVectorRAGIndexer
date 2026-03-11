@@ -43,6 +43,7 @@ class ProbeResult:
     body: Optional[dict] = None           # Response JSON on 200, None otherwise
     error_message: Optional[str] = None   # Error detail on 500/error
     status_code: Optional[int] = None     # Raw HTTP status, None on connection error
+    error_code: Optional[str] = None      # Specific ErrorCode identifier (e.g. LIC_3006)
 
 
 # Legacy exceptions kept here to allow `except APIClient.Error:` patterns if any exist,
@@ -603,28 +604,50 @@ class APIClient:
                     body=body,
                     status_code=code,
                 )
-            elif code in (401, 403):
-                return ProbeResult(
-                    status=CapabilityStatus.UNAUTHORIZED,
-                    status_code=code,
-                )
-            elif code in (404, 405):
-                return ProbeResult(
-                    status=CapabilityStatus.NOT_SUPPORTED,
-                    status_code=code,
-                )
-            else:
-                # 500 or other — endpoint exists but errored
+            elif code in (401, 403, 404, 405) or code >= 500:
+                err_msg = None
+                err_code = None
                 try:
                     err_data = response.json()
-                    err_msg = err_data.get("detail", err_data.get("message", str(err_data)))
+                    if isinstance(err_data, dict):
+                        if "error_code" in err_data:
+                            # Flattened format (custom exception handler)
+                            err_code = err_data.get("error_code")
+                            err_msg = err_data.get("message", str(err_data))
+                        elif "detail" in err_data:
+                            # Standard FastAPI format
+                            detail = err_data["detail"]
+                            if isinstance(detail, dict):
+                                err_code = detail.get("error_code")
+                                err_msg = detail.get("message", str(detail))
+                            else:
+                                err_msg = str(detail)
+                        else:
+                            err_msg = str(err_data)
                 except (ValueError, AttributeError):
                     err_msg = response.text[:200] if response.text else f"HTTP {code}"
-                return ProbeResult(
-                    status=CapabilityStatus.AVAILABLE,
-                    error_message=err_msg,
-                    status_code=code,
-                )
+
+                if code in (401, 403):
+                    return ProbeResult(
+                        status=CapabilityStatus.UNAUTHORIZED,
+                        status_code=code,
+                        error_message=err_msg,
+                        error_code=err_code,
+                    )
+                elif code in (404, 405):
+                    return ProbeResult(
+                        status=CapabilityStatus.NOT_SUPPORTED,
+                        status_code=code,
+                        error_message=err_msg,
+                        error_code=err_code,
+                    )
+                else:
+                    return ProbeResult(
+                        status=CapabilityStatus.AVAILABLE,
+                        error_message=err_msg,
+                        status_code=code,
+                        error_code=err_code,
+                    )
         except (_requests.exceptions.ConnectionError, _requests.exceptions.Timeout):
             return ProbeResult(status=CapabilityStatus.UNREACHABLE)
         except Exception as e:

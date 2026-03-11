@@ -37,6 +37,12 @@ class SettingsTab(QWidget):
 
         self.stats_worker = None
         self.setup_ui()
+
+    def showEvent(self, event):
+        """Refresh the license panel each time the tab becomes visible."""
+        super().showEvent(event)
+        if hasattr(self, '_edition_badge'):
+            self._refresh_license_panel()
     
     def setup_ui(self):
         """Setup the user interface."""
@@ -656,6 +662,7 @@ class SettingsTab(QWidget):
         # 2. Re-render the panel visual state explicitly
         if result.success:
              self._refresh_license_panel()
+             self.backend_settings_changed.emit()
 
 
     def _open_pricing(self):

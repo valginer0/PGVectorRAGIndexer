@@ -472,3 +472,22 @@ async def require_admin(
     """
     checker = require_permission("system.admin")
     return await checker(request, api_key)
+
+
+async def require_team_edition() -> None:
+    """FastAPI dependency that requires the active server license to be a Team or Organization edition.
+
+    If the current license is Community, this raises a 403 Forbidden with a 
+    specific ErrorCode (LICENSE_EDITION_RESTRICTED).
+    
+    This is independent of API keys or user roles.
+    """
+    from license import get_current_license
+    from errors import raise_api_error, ErrorCode
+    
+    info = get_current_license()
+    if not info.is_team:
+        raise_api_error(
+            ErrorCode.LICENSE_EDITION_RESTRICTED,
+            message="Organization features require Team or Organization edition."
+        )

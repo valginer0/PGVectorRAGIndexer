@@ -723,7 +723,7 @@ class _ActivityPanel(QWidget):
             self._table.setRowCount(start + len(entries))
             for i, e in enumerate(entries):
                 row = start + i
-                self._table.setItem(row, 0, QTableWidgetItem(_format_timestamp(e.get("created_at"))))
+                self._table.setItem(row, 0, QTableWidgetItem(_format_timestamp(e.get("ts"))))
                 self._table.setItem(row, 1, QTableWidgetItem(e.get("action", "—")))
                 self._table.setItem(row, 2, QTableWidgetItem(e.get("client_id") or "—"))
                 self._table.setItem(row, 3, QTableWidgetItem(e.get("user_id") or "—"))
@@ -834,6 +834,20 @@ class OrganizationTab(QWidget):
         self._refresh_btn.setEnabled(False)
         self._refresh_btn.setText("Loading...")
         try:
+            # Force the backend to re-read its license from disk before we probe.
+            # This ensures the Organization tab reflects the *current* license state
+            # even if the backend server process wasn't restarted.
+            try:
+                reload_url = f"{self.api_client._base.api_base}/license/reload"
+                self.api_client._base.request("POST", reload_url)
+                # Also clear the desktop app's own in-process license cache
+                # so the Settings tab reads fresh data from disk
+                from license import reset_license
+                reset_license()
+                logger.info("Backend + local license cache refreshed before probe")
+            except Exception as e:
+                logger.debug("License reload before probe failed (non-fatal): %s", e)
+            
             self._caps.probe_all()
             logger.info("probe_and_refresh: probe complete, updating visibility")
             self._update_visibility()
@@ -879,10 +893,26 @@ class OrganizationTab(QWidget):
         from desktop_app.utils.edition import is_feature_available
 
         has_any = self._caps.any_available()
-        is_paid = is_feature_available("rbac")
         has_auth_issue = self._caps.any_unauthorized()
+        
+        # Check if the auth issue was specifically an edition denial from the backend
+        has_edition_denial = False
+        from desktop_app.utils.server_capabilities import _PROBES
+        for cap_name in _PROBES:
+            result = self._caps.get_result(cap_name)
+            if result and getattr(result, "error_code", None) == "LIC_3006":
+                has_edition_denial = True
+                break
 
-        # Auth failures take priority — server is reachable but rejecting us
+        # If the server explicitly rejected due to edition constraints -> gated (upgrade path)
+        if has_edition_denial:
+            self._show_placeholder(
+                "Organization Console features are available with a Team or Organization license.",
+                show_learn_more=True,
+            )
+            return
+
+        # Generic Auth failures take priority — server is reachable but rejecting us for permission
         if not has_any and has_auth_issue:
             self._show_placeholder(
                 "Authentication required. Check your API key in Settings, "
@@ -891,22 +921,8 @@ class OrganizationTab(QWidget):
             )
             return
 
-        if not has_any and not is_paid:
-            if self._caps.all_unreachable_or_unknown():
-                # Community + can't reach server → gated (upgrade path)
-                self._show_placeholder(
-                    "Organization features are available with a Team or Organization license.",
-                    show_learn_more=True,
-                )
-            else:
-                # Community + server reachable but all NOT_SUPPORTED → gated
-                self._show_placeholder(
-                    "Organization features are available with a Team or Organization license.",
-                    show_learn_more=True,
-                )
-            return
-
-        if not has_any and is_paid:
+        # Connectivity / Support failures
+        if not has_any:
             if self._caps.all_unreachable_or_unknown():
                 self._show_placeholder(
                     "Cannot connect to server. Organization features will appear once the server is running.",

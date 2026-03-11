@@ -41,6 +41,7 @@ class ServerCapabilities:
         self._cache: Dict[str, CapabilityStatus] = {}
         self._me_response: Optional[dict] = None
         self._probe_errors: Dict[str, Optional[str]] = {}
+        self._probe_results: Dict[str, ProbeResult] = {}
         self._probing = False
 
     def probe_all(self) -> Dict[str, CapabilityStatus]:
@@ -66,6 +67,7 @@ class ServerCapabilities:
                 if result.status != CapabilityStatus.UNREACHABLE:
                     self._cache[name] = result.status
                     self._probe_errors[name] = result.error_message
+                    self._probe_results[name] = result
                     logger.info("Probe %s: %s (code=%s)", name, result.status.value, result.status_code)
 
                     # Cache /me response for admin detection
@@ -74,6 +76,7 @@ class ServerCapabilities:
                 else:
                     # Don't update cache — preserve previous value if any
                     self._probe_errors[name] = result.error_message
+                    self._probe_results[name] = result
                     logger.warning("Probe %s: UNREACHABLE (error=%s)", name, result.error_message)
         finally:
             self._probing = False
@@ -86,6 +89,10 @@ class ServerCapabilities:
     def get(self, capability: str) -> CapabilityStatus:
         """Return cached status for a capability, or UNKNOWN if not probed."""
         return self._cache.get(capability, CapabilityStatus.UNKNOWN)
+
+    def get_result(self, capability: str) -> Optional[ProbeResult]:
+        """Return cached ProbeResult for a capability, if any."""
+        return self._probe_results.get(capability)
 
     def is_available(self, capability: str) -> bool:
         """Shorthand for get(cap) == AVAILABLE."""
@@ -115,6 +122,7 @@ class ServerCapabilities:
         self._cache.clear()
         self._me_response = None
         self._probe_errors.clear()
+        self._probe_results.clear()
 
     def any_available(self) -> bool:
         """True if at least one capability (excluding 'me') is AVAILABLE."""

@@ -25,6 +25,7 @@ class ErrorCode(Enum):
     LICENSE_INVALID = ("LIC_3003", status.HTTP_400_BAD_REQUEST, "Invalid license key format or signature.")
     LICENSE_REVOKED = ("LIC_3004", status.HTTP_403_FORBIDDEN, "This license has been revoked.")
     LICENSE_SEAT_LIMIT_REACHED = ("LIC_3005", status.HTTP_403_FORBIDDEN, "License seat limit reached.")
+    LICENSE_EDITION_RESTRICTED = ("LIC_3006", status.HTTP_403_FORBIDDEN, "Organization features require Team or Organization edition.")
     
     # Document & Search Errors (4xxx)
     DOCUMENT_NOT_FOUND = ("DOC_4001", status.HTTP_404_NOT_FOUND, "The requested document was not found.")

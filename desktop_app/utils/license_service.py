@@ -125,8 +125,17 @@ class LicenseService:
         except Exception as e:
             logger.warning(f"Could not secure license file permissions: {e}")
 
-        # 5. Reload license
+        # 5. Reload license locally
         reset_license()
+        
+        # 6. Tell the backend to reload its cached license from disk
+        if self.api_client:
+            try:
+                reload_url = f"{self.api_client._base.api_base}/license/reload"
+                self.api_client._base.request("POST", reload_url)
+                logger.info("Backend license cache reloaded successfully")
+            except Exception as e:
+                logger.warning("Failed to trigger remote backend license reload: %s", e)
 
     def get_current_license_info(self) -> LicenseInfo:
         """Gets the currently active loaded license object."""

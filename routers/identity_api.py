@@ -5,7 +5,7 @@ API Key, Client, and User management routes for PGVectorRAGIndexer.
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from auth import require_api_key, require_admin, require_permission
+from auth import require_api_key, require_admin, require_permission, require_team_edition
 from api_models import APIErrorResponse
 
 logger = logging.getLogger(__name__)
@@ -111,7 +111,7 @@ async def rotate_key(key_id: int):
 # ---------------------------------------------------------------------------
 
 
-@identity_router.get("/me")
+@identity_router.get("/me", dependencies=[Depends(require_team_edition)])
 async def get_current_identity(
     request: Request,
     key_record: Optional[dict] = Depends(require_api_key),
@@ -250,7 +250,7 @@ async def list_clients_endpoint():
 # User Management
 # ---------------------------------------------------------------------------
 
-@identity_router.get("/users", dependencies=[Depends(require_api_key)])
+@identity_router.get("/users", dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def list_users_endpoint(
     role: Optional[str] = Query(default=None),
     active_only: bool = Query(default=True),
@@ -268,7 +268,7 @@ async def list_users_endpoint(
         )
 
 
-@identity_router.get("/users/{user_id}", dependencies=[Depends(require_api_key)])
+@identity_router.get("/users/{user_id}", dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def get_user_endpoint(user_id: str):
     """Get a user by ID."""
     from users import get_user
@@ -287,7 +287,7 @@ async def get_user_endpoint(user_id: str):
         )
 
 
-@identity_router.post("/users", dependencies=[Depends(require_admin)])
+@identity_router.post("/users", dependencies=[Depends(require_team_edition), Depends(require_admin)])
 async def create_user_endpoint(request: Request):
     """Create a new user (admin only)."""
     from users import create_user
@@ -322,7 +322,7 @@ async def create_user_endpoint(request: Request):
         )
 
 
-@identity_router.put("/users/{user_id}", dependencies=[Depends(require_admin)])
+@identity_router.put("/users/{user_id}", dependencies=[Depends(require_team_edition), Depends(require_admin)])
 async def update_user_endpoint(user_id: str, request: Request):
     """Update a user (admin only)."""
     from users import update_user
@@ -353,7 +353,7 @@ async def update_user_endpoint(user_id: str, request: Request):
         )
 
 
-@identity_router.delete("/users/{user_id}", dependencies=[Depends(require_admin)])
+@identity_router.delete("/users/{user_id}", dependencies=[Depends(require_team_edition), Depends(require_admin)])
 async def delete_user_endpoint(user_id: str):
     """Delete a user (admin only)."""
     from users import delete_user, count_admins, get_user, ROLE_ADMIN
@@ -380,7 +380,7 @@ async def delete_user_endpoint(user_id: str):
         )
 
 
-@identity_router.post("/users/{user_id}/role", dependencies=[Depends(require_admin)])
+@identity_router.post("/users/{user_id}/role", dependencies=[Depends(require_team_edition), Depends(require_admin)])
 async def change_user_role_endpoint(user_id: str, request: Request):
     """Change a user's role (admin only)."""
     from users import change_role, count_admins, get_user, ROLE_ADMIN
@@ -429,14 +429,14 @@ async def change_user_role_endpoint(user_id: str, request: Request):
 # Roles & Permissions
 # ---------------------------------------------------------------------------
 
-@identity_router.get("/roles", dependencies=[Depends(require_api_key)])
+@identity_router.get("/roles", dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def list_roles_endpoint():
     """List all available roles with their permissions."""
     from role_permissions import list_roles
     return {"roles": list_roles()}
 
 
-@identity_router.get("/roles/{role_name}", dependencies=[Depends(require_api_key)])
+@identity_router.get("/roles/{role_name}", dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def get_role_endpoint(role_name: str):
     """Get a specific role's definition and permissions."""
     from role_permissions import get_role_info
@@ -446,14 +446,14 @@ async def get_role_endpoint(role_name: str):
     return info
 
 
-@identity_router.get("/permissions", dependencies=[Depends(require_api_key)])
+@identity_router.get("/permissions", dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def list_permissions_endpoint():
     """List all available granular permissions."""
     from role_permissions import list_permissions
     return {"permissions": list_permissions()}
 
 
-@identity_router.get("/roles/{role_name}/check/{permission}", dependencies=[Depends(require_api_key)])
+@identity_router.get("/roles/{role_name}/check/{permission}", dependencies=[Depends(require_team_edition), Depends(require_api_key)])
 async def check_role_permission_endpoint(role_name: str, permission: str):
     """Check if a role has a specific permission."""
     from role_permissions import has_permission, is_valid_role
@@ -462,7 +462,7 @@ async def check_role_permission_endpoint(role_name: str, permission: str):
     return {"role": role_name, "permission": permission, "granted": has_permission(role_name, permission)}
 
 
-@identity_router.post("/roles", dependencies=[Depends(require_admin)])
+@identity_router.post("/roles", dependencies=[Depends(require_team_edition), Depends(require_admin)])
 async def create_role_endpoint(request: Request):
     """Create a new custom role (admin only)."""
     from role_permissions import create_role
@@ -481,7 +481,7 @@ async def create_role_endpoint(request: Request):
         raise HTTPException(status_code=500, detail=f"Failed to create role: {str(e)}")
 
 
-@identity_router.put("/roles/{role_name}", dependencies=[Depends(require_admin)])
+@identity_router.put("/roles/{role_name}", dependencies=[Depends(require_team_edition), Depends(require_admin)])
 async def update_role_endpoint(role_name: str, request: Request):
     """Update an existing role (admin only)."""
     from role_permissions import update_role
@@ -504,7 +504,7 @@ async def update_role_endpoint(role_name: str, request: Request):
         raise HTTPException(status_code=500, detail=f"Failed to update role: {str(e)}")
 
 
-@identity_router.delete("/roles/{role_name}", dependencies=[Depends(require_admin)])
+@identity_router.delete("/roles/{role_name}", dependencies=[Depends(require_team_edition), Depends(require_admin)])
 async def delete_role_endpoint(role_name: str):
     """Delete a custom role (admin only)."""
     from role_permissions import delete_role

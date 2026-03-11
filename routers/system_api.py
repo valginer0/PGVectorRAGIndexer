@@ -119,6 +119,17 @@ async def license_info():
     return get_current_license().to_dict()
 
 
+@system_v1_router.post("/license/reload")
+async def reload_license():
+    """Force the server to reload the license from disk."""
+    from license import reset_license, load_license, set_current_license
+    reset_license()
+    # Force immediate reload
+    new_lic = load_license()
+    set_current_license(new_lic)
+    return {"status": "reloaded", "license": new_lic.to_dict()}
+
+
 @system_app_router.get(
     "/health", 
     response_model=HealthResponse, 

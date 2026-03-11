@@ -10,16 +10,17 @@ import os
 import sys
 
 import pytest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+from PySide6.QtGui import QIcon
 
 # Force offscreen rendering before any Qt import
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-# Mock qtawesome to prevent FontError in headless CI environments (Windows/macOS Actions)
-from PySide6.QtGui import QIcon
-mock_qta = MagicMock()
-mock_qta.icon.return_value = QIcon()
-sys.modules["qtawesome"] = mock_qta
+@pytest.fixture(autouse=True)
+def mock_qtawesome():
+    """Mock qta.icon to prevent FontError in headless CI environments (Windows/macOS Actions)."""
+    with patch("qtawesome.icon", return_value=QIcon()) as mock_icon:
+        yield mock_icon
 
 from PySide6.QtWidgets import QApplication
 

@@ -9,6 +9,7 @@ from license import (
     LicenseError,
     get_current_license,
     get_license_dir,
+    get_license_file_path,
     reset_license,
     resolve_verification_context,
     secure_license_file,
@@ -88,11 +89,19 @@ class LicenseService:
         dest_dir = get_license_dir()
         dest_dir.mkdir(parents=True, exist_ok=True)
         dest_file = dest_dir / "license.key"
-        
+        logger.info("Installing license: resolved_path=%s", dest_file)
+         
         # 3. Create backup of existing key if it exists
         backup_file = None
         if dest_file.exists():
             backup_file = dest_file.with_suffix(".key.bak")
+        logger.info(
+            "License install preflight: exists=%s backup_path=%s canonical_path=%s",
+            dest_file.exists(),
+            backup_file if backup_file else None,
+            get_license_file_path(),
+        )
+        if dest_file.exists():
             try:
                 shutil.copy2(dest_file, backup_file)
             except Exception as b_err:
@@ -101,13 +110,20 @@ class LicenseService:
         # 4. Write new key (with rollback)
         try:
             dest_file.write_text(key_string, encoding="utf-8")
+            logger.info(
+                "License file written: path=%s size=%d",
+                dest_file,
+                dest_file.stat().st_size,
+            )
         except Exception as write_err:
+            logger.error("License write failed: path=%s error=%s", dest_file, write_err, exc_info=True)
             # ROLLBACK
             rollback_success = False
             if backup_file and backup_file.exists():
                 try:
                     shutil.copy2(backup_file, dest_file)
                     logger.info("Restored license from backup after write failure.")
+                    logger.warning("License rollback executed: restored_from=%s", backup_file)
                     rollback_success = True
                 except Exception as r_err:
                     logger.error("CRITICAL: Failed to restore license backup: %s", r_err)
@@ -127,12 +143,22 @@ class LicenseService:
 
         # 5. Reload license locally
         reset_license()
-        
+        current = get_current_license()
+        logger.info(
+            "Local license reload complete: edition=%s org=%s seats=%s exp=%s",
+            current.edition.value,
+            current.org_name,
+            current.seats,
+            current.expiry_timestamp,
+        )
+         
         # 6. Tell the backend to reload its cached license from disk
         if self.api_client:
             try:
                 reload_url = f"{self.api_client._base.api_base}/license/reload"
-                self.api_client._base.request("POST", reload_url)
+                logger.info("Triggering backend reload: url=%s", reload_url)
+                resp = self.api_client._base.request("POST", reload_url)
+                logger.info("Backend reload finished: status=%s", getattr(resp, "status_code", None))
                 logger.info("Backend license cache reloaded successfully")
             except Exception as e:
                 logger.warning("Failed to trigger remote backend license reload: %s", e)

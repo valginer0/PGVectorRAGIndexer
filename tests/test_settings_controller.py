@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch, MagicMock
+from pathlib import Path
 
 from desktop_app.controllers.settings_controller import SettingsController
 from desktop_app.utils.controller_result import ControllerResult, MessageSeverity, UiAction
@@ -79,12 +80,14 @@ def test_install_license_success():
     service = DummyLicenseService()
     controller = SettingsController(license_service=service)
     
-    result = controller.install_license("valid-key")
+    with patch('desktop_app.controllers.settings_controller.get_license_file_path', return_value=Path('/tmp/license.key')):
+        result = controller.install_license("valid-key")
     assert service.installed is True
     assert result.success is True
     assert result.severity == "info"
     assert result.ui_actions == [UiAction.MESSAGE_BOX_INFO]
     assert "Test Org" in result.message
+    assert "Saved to: /tmp/license.key" in result.message
 
 def test_install_license_success_with_warning():
     service = DummyLicenseService(return_data={"warning": True})

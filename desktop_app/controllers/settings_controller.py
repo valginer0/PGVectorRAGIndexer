@@ -12,6 +12,7 @@ from desktop_app.utils.controller_result import (
 )
 from desktop_app.utils.license_service import LicenseService, LicenseServiceError
 from desktop_app.utils import app_config
+from license import get_license_file_path
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +53,14 @@ class SettingsController:
         try:
             self.license_service.install_license(key_string)
             info = self.license_service.get_current_license_info()
-            
+            resolved_path = get_license_file_path()
+             
             # Format success message
             if info.warning:
                 msg = (
                     f"Edition: {info.edition.value.title()}\n"
-                    f"Organization: {info.org_name}\n\n"
+                    f"Organization: {info.org_name}\n"
+                    f"Saved to: {resolved_path}\n\n"
                     f"⚠️ Warning: {info.warning}"
                 )
                 severity = MessageSeverity.WARNING
@@ -65,7 +68,8 @@ class SettingsController:
             else:
                 msg = (
                     f"Edition: {info.edition.value.title()}\n"
-                    f"Organization: {info.org_name}\n\n"
+                    f"Organization: {info.org_name}\n"
+                    f"Saved to: {resolved_path}\n\n"
                     "The application has been updated with your new license."
                 )
                 severity = MessageSeverity.INFO

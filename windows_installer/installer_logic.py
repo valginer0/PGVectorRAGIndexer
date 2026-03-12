@@ -35,6 +35,8 @@ class Installer:
     
     INSTALL_DIR = os.path.join(os.environ.get('USERPROFILE', ''), 'PGVectorRAGIndexer')
     GITHUB_REPO = "valginer0/PGVectorRAGIndexer"
+    DEFAULT_REPO_REF = "main"
+    DEFAULT_APP_IMAGE = "ghcr.io/valginer0/pgvectorragindexer:latest"
     INSTALLER_VERSION = INSTALLER_VERSION  # From version module
     STATE_MAX_AGE_HOURS = 24  # Ignore state files older than this
 
@@ -66,6 +68,8 @@ class Installer:
     def __init__(self, install_dir: Optional[str] = None):
         if install_dir:
             self.INSTALL_DIR = install_dir
+        self.repo_ref = self._resolve_repo_ref()
+        self.app_image = self._resolve_app_image()
         
         # Ensure install dir exists or parent exists
         try:
@@ -82,6 +86,47 @@ class Installer:
         self.state_file = self._get_state_file_path()
         self.reboot_required = False
         self.virtualization_failed = None  # Set to dict with manufacturer/bios info if VT check fails
+
+    def _resolve_repo_ref(self) -> str:
+        repo_ref = os.environ.get("PGVECTOR_REPO_REF", "").strip()
+        return repo_ref or self.DEFAULT_REPO_REF
+
+    def _resolve_app_image(self) -> str:
+        app_image = os.environ.get("APP_IMAGE", "").strip()
+        return app_image or self.DEFAULT_APP_IMAGE
+
+    def _log_repo_ref(self):
+        self._log(f"Backend source ref: {self.repo_ref}", "info")
+
+    def _log_app_image(self):
+        self._log(f"Backend image: {self.app_image}", "info")
+
+    def _write_compose_env_file(self) -> str:
+        env_file = os.path.join(self.INSTALL_DIR, ".env.installer.tmp")
+        with open(env_file, "w", encoding="utf-8") as handle:
+            handle.write(f"APP_IMAGE={self.app_image}\n")
+        return env_file
+
+    def _is_remote_branch_ref(self, repo_ref: str) -> bool:
+        success, _ = self._run_command(f'git show-ref --verify --quiet refs/remotes/origin/{repo_ref}')
+        return success
+
+    def _checkout_repo_ref(self) -> bool:
+        self._log_repo_ref()
+        success, _ = self._run_command("git fetch origin")
+        if not success:
+            return False
+
+        success, _ = self._run_command(f'git checkout "{self.repo_ref}"')
+        if not success:
+            return False
+
+        if self._is_remote_branch_ref(self.repo_ref):
+            success, _ = self._run_command(f'git pull origin "{self.repo_ref}"')
+            return success
+
+        self._log(f"Using detached/tag/SHA ref without pull: {self.repo_ref}", "info")
+        return True
     
     def _get_state_file_path(self) -> str:
         """
@@ -1140,13 +1185,14 @@ class Installer:
         """Clone repo and setup application."""
         step = self.steps[5]
         self._update_progress(step, "Setting up application...")
+        self._log_repo_ref()
         
         # Clone or update repository
         if os.path.exists(os.path.join(self.INSTALL_DIR, '.git')):
             self._log("Updating existing installation...")
             os.chdir(self.INSTALL_DIR)
             self._run_command("git reset --hard HEAD")
-            success, _ = self._run_command("git pull origin main")
+            success = self._checkout_repo_ref()
         else:
             if os.path.exists(self.INSTALL_DIR):
                 self._log("Removing incomplete installation...")
@@ -1156,9 +1202,16 @@ class Installer:
             success, output = self._run_command(
                 f'git clone https://github.com/{self.GITHUB_REPO}.git "{self.INSTALL_DIR}"'
             )
+            if success:
+                os.chdir(self.INSTALL_DIR)
+                success = self._checkout_repo_ref()
         
         if not os.path.exists(self.INSTALL_DIR):
             self._log("Failed to clone repository", "error")
+            return False
+
+        if not success:
+            self._log(f"Failed to prepare repository ref: {self.repo_ref}", "error")
             return False
         
         self._log("Repository ready", "success")
@@ -1230,32 +1283,41 @@ class Installer:
         self._update_progress(step, "Updating Docker images...")
 
         os.chdir(self.INSTALL_DIR)
+        self._log_app_image()
+        env_file = self._write_compose_env_file()
+        compose_base = f'docker compose --file "docker-compose.yml" --env-file "{env_file}"'
 
         # We always run 'docker compose pull' now. 
         # Docker's internal logic will handle skipping if the digest matches, 
         # so this is efficient while ensuring we never skip a version update.
         self._log("Running 'docker compose pull' to ensure backend is up to date...", "info")
         self._log("(This will only download new data if an update is available)", "info")
-        
-        success = self._run_command_stream("docker compose pull")
-        if success:
-            self._log("Images pulled. Applying updates...", "info")
-            success = self._run_command_stream("docker compose up -d")
 
-        if success:
-            self._log("Images checked/updated successfully", "success")
-            return True
-        else:
-            # Check if we at least have local images as a fallback
-            app_ok, app_out = self._run_command("docker images -q ghcr.io/valginer0/pgvectorragindexer:latest")
-            db_ok, db_out = self._run_command("docker images -q pgvector/pgvector:pg16")
-            
-            if app_ok and app_out.strip() and db_ok and db_out.strip():
-                self._log("Pull failed (offline?), but local images found. Proceeding...", "warning")
+        try:
+            success = self._run_command_stream(f"{compose_base} pull")
+            if success:
+                self._log("Images pulled. Applying updates...", "info")
+                success = self._run_command_stream(f"{compose_base} up -d")
+
+            if success:
+                self._log("Images checked/updated successfully", "success")
                 return True
-            
-            self._log("Error: Could not pull images and no local images found.", "error")
-            return False
+            else:
+                # Check if we at least have local images as a fallback
+                app_ok, app_out = self._run_command(f"docker images -q {self.app_image}")
+                db_ok, db_out = self._run_command("docker images -q pgvector/pgvector:pg16")
+                
+                if app_ok and app_out.strip() and db_ok and db_out.strip():
+                    self._log("Pull failed (offline?), but local images found. Proceeding...", "warning")
+                    return True
+                
+                self._log("Error: Could not pull images and no local images found.", "error")
+                return False
+        finally:
+            try:
+                os.remove(env_file)
+            except OSError:
+                pass
 
     # =========================================================================
     # Step 8: Finalize

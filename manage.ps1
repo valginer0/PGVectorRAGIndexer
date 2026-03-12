@@ -53,11 +53,13 @@ function Invoke-ComposeUpdate {
         [switch]$Preview
     )
 
-    $image = if ($SelectedChannel -eq "dev") { "ghcr.io/valginer0/pgvectorragindexer:dev" } else { "ghcr.io/valginer0/pgvectorragindexer:latest" }
+    $defaultImage = if ($SelectedChannel -eq "dev") { "ghcr.io/valginer0/pgvectorragindexer:dev" } else { "ghcr.io/valginer0/pgvectorragindexer:latest" }
+    $image = if ([string]::IsNullOrWhiteSpace($env:APP_IMAGE)) { $defaultImage } else { $env:APP_IMAGE }
     $envFile = Join-Path $ScriptRoot ".env.manage.tmp"
     $envContent = @("APP_IMAGE=$image")
 
     Write-Host "Preparing update for channel '$SelectedChannel' (image: $image)" -ForegroundColor Cyan
+    Write-Host "Backend image: $image" -ForegroundColor Cyan
 
     if ($Preview) {
         Write-Host "[DRY RUN] docker compose --file docker-compose.yml --env-file $envFile pull" -ForegroundColor Yellow

@@ -4,9 +4,15 @@
 
 param(
     [switch]$Resume,
+    [switch]$NoPause,
     [string]$InstallDir = "$env:USERPROFILE\PGVectorRAGIndexer",
     [string]$StateFile = "$env:USERPROFILE\.pgvector-install-state.json"
 )
+
+$RepoRef = $env:PGVECTOR_REPO_REF
+if ([string]::IsNullOrWhiteSpace($RepoRef)) {
+    $RepoRef = "main"
+}
 
 # ============================================================================
 # CONFIGURATION
@@ -112,7 +118,7 @@ function Show-Success {
 
 function Show-Warning {
     param([string]$Message)
-    Write-Host "  [!] $Message" -ForegroundColor Yellow
+    Write-Host "[WARNING] $Message" -ForegroundColor Yellow
 }
 
 function Show-Error {
@@ -123,6 +129,34 @@ function Show-Error {
 function Show-Info {
     param([string]$Message)
     Write-Host "  [i] $Message" -ForegroundColor Cyan
+}
+
+function Update-RepoRef {
+    param(
+        [string]$Dir,
+        [string]$Ref
+    )
+
+    Set-Location $Dir
+    Write-Host "  Backend source ref: $Ref" -ForegroundColor Cyan
+    git fetch origin 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        return $false
+    }
+
+    git checkout $Ref 2>&1 | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        return $false
+    }
+
+    git show-ref --verify --quiet "refs/remotes/origin/$Ref"
+    if ($LASTEXITCODE -eq 0) {
+        git pull origin $Ref 2>&1 | Out-Null
+        return ($LASTEXITCODE -eq 0)
+    }
+
+    Write-Host "  Using detached/tag/SHA ref without pull: $Ref" -ForegroundColor Cyan
+    return $true
 }
 
 function Run-WithSpinner {
@@ -461,16 +495,31 @@ function Request-Reboot {
 
 function Setup-Application {
     $spinnerChars = @('|','/','-','\')
+    Write-Host "  Backend source ref: $RepoRef" -ForegroundColor Cyan
     
     # Clone or update repository
     if (Test-Path "$InstallDir\.git") {
         $spinIndex = 0
         $job = Start-Job -ScriptBlock { 
-            param($dir)
+            param($dir, $ref)
             Set-Location $dir
             git reset --hard HEAD 2>&1 | Out-Null
-            git pull origin main 2>&1
-        } -ArgumentList $InstallDir
+            git fetch origin 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                exit 1
+            }
+            git checkout $ref 2>&1 | Out-Null
+            if ($LASTEXITCODE -ne 0) {
+                exit 1
+            }
+            git show-ref --verify --quiet "refs/remotes/origin/$ref"
+            if ($LASTEXITCODE -eq 0) {
+                git pull origin $ref 2>&1 | Out-Null
+                if ($LASTEXITCODE -ne 0) {
+                    exit 1
+                }
+            }
+        } -ArgumentList $InstallDir, $RepoRef
         
         while ($job.State -eq 'Running') {
             $char = $spinnerChars[$spinIndex % $spinnerChars.Count]
@@ -480,7 +529,12 @@ function Setup-Application {
         }
         Write-Host "`r                                                              `r" -NoNewline
         Receive-Job -Job $job | Out-Null
+        $updateSuccess = $job.State -eq 'Completed' -and $job.ChildJobs[0].JobStateInfo.Reason -eq $null
         Remove-Job -Job $job -Force
+        if (-not $updateSuccess) {
+            Show-Error "Failed to update repository for ref $RepoRef"
+            return $false
+        }
     } else {
         if (Test-Path $InstallDir) {
             Remove-Item -Recurse -Force $InstallDir
@@ -500,7 +554,17 @@ function Setup-Application {
         }
         Write-Host "`r                                                              `r" -NoNewline
         Receive-Job -Job $job | Out-Null
+        $cloneSuccess = $job.State -eq 'Completed' -and $job.ChildJobs[0].JobStateInfo.Reason -eq $null
         Remove-Job -Job $job -Force
+        if (-not $cloneSuccess) {
+            Show-Error "Failed to clone repository"
+            return $false
+        }
+
+        if (-not (Update-RepoRef -Dir $InstallDir -Ref $RepoRef)) {
+            Show-Error "Failed to prepare repository ref $RepoRef"
+            return $false
+        }
     }
     
     if (-not (Test-Path $InstallDir)) {

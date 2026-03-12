@@ -10,6 +10,37 @@ param(
     [string]$RemoteBackend = ""
 )
 
+$RepoRef = $env:PGVECTOR_REPO_REF
+if ([string]::IsNullOrWhiteSpace($RepoRef)) {
+    $RepoRef = $Branch
+}
+
+function Update-RepoRef {
+    param(
+        [string]$Ref
+    )
+
+    Write-Host "Backend source ref: $Ref" -ForegroundColor Cyan
+    git fetch origin
+    if ($LASTEXITCODE -ne 0) {
+        return $false
+    }
+
+    git checkout $Ref
+    if ($LASTEXITCODE -ne 0) {
+        return $false
+    }
+
+    git show-ref --verify --quiet "refs/remotes/origin/$Ref"
+    if ($LASTEXITCODE -eq 0) {
+        git pull origin $Ref
+        return ($LASTEXITCODE -eq 0)
+    }
+
+    Write-Host "Using detached/tag/SHA ref without pull: $Ref" -ForegroundColor Cyan
+    return $true
+}
+
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "PGVectorRAGIndexer Desktop App Installer" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan
@@ -48,8 +79,7 @@ if (Test-Path $InstallDir) {
         
         # Reset any local changes and pull
         git reset --hard HEAD 2>&1 | Out-Null
-        git pull origin $Branch
-        if ($LASTEXITCODE -ne 0) {
+        if (-not (Update-RepoRef -Ref $RepoRef)) {
             Write-Host "✗ ERROR: Failed to update repository" -ForegroundColor Red
             Write-Host "  Removing corrupted installation and retrying..." -ForegroundColor Yellow
             Set-Location ..
@@ -61,6 +91,11 @@ if (Test-Path $InstallDir) {
                 exit 1
             }
             Set-Location $InstallDir
+            if (-not (Update-RepoRef -Ref $RepoRef)) {
+                Write-Host "✗ ERROR: Failed to prepare repository ref: $RepoRef" -ForegroundColor Red
+                Read-Host "Press Enter to exit"
+                exit 1
+            }
         }
     } else {
         # Directory exists but is not a git repo - remove and clone fresh
@@ -74,6 +109,11 @@ if (Test-Path $InstallDir) {
             exit 1
         }
         Set-Location $InstallDir
+        if (-not (Update-RepoRef -Ref $RepoRef)) {
+            Write-Host "✗ ERROR: Failed to prepare repository ref: $RepoRef" -ForegroundColor Red
+            Read-Host "Press Enter to exit"
+            exit 1
+        }
     }
 } else {
     Write-Host "Installing to: $InstallDir" -ForegroundColor Yellow
@@ -84,6 +124,11 @@ if (Test-Path $InstallDir) {
         exit 1
     }
     Set-Location $InstallDir
+    if (-not (Update-RepoRef -Ref $RepoRef)) {
+        Write-Host "✗ ERROR: Failed to prepare repository ref: $RepoRef" -ForegroundColor Red
+        Read-Host "Press Enter to exit"
+        exit 1
+    }
 }
 
 Write-Host ""

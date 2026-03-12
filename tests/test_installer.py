@@ -5,11 +5,14 @@ import sys
 import json
 import tempfile
 import shutil
+from pathlib import Path
 
 # Add parent dir to path to import installer_logic
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'windows_installer')))
 
 from installer_logic import Installer, InstallStep
+
+PROJECT_ROOT = Path(__file__).parent.parent
 
 @unittest.skipUnless(sys.platform == 'win32', "Windows-specific installer tests")
 class TestInstallerLogic(unittest.TestCase):
@@ -130,33 +133,48 @@ class TestInstallerLogic(unittest.TestCase):
 
     @patch('installer_logic.Installer._run_command_stream')
     @patch('installer_logic.Installer._run_command')
-    def test_step_pull_images_needs_download(self, mock_run, mock_stream):
+    @patch('installer_logic.os.remove')
+    @patch.object(Installer, '_write_compose_env_file')
+    def test_step_pull_images_needs_download(self, mock_env_file, mock_remove, mock_run, mock_stream):
         """Test image pulling when images are NOT cached locally."""
         # First call: app image not found, second call: db image not found
+        mock_env_file.return_value = os.path.join(self.test_dir, '.env.installer.tmp')
         mock_run.side_effect = [
             (True, ""),   # docker images -q app → empty = not found
             (True, ""),   # docker images -q db  → empty = not found
         ]
-        mock_stream.return_value = True
+        mock_stream.side_effect = [True, True]
 
         result = self.installer._step_pull_images()
 
         self.assertTrue(result)
-        mock_stream.assert_called_once_with("docker compose pull")
+        compose_base = f'docker compose --file "docker-compose.yml" --env-file "{mock_env_file.return_value}"'
+        self.assertEqual(
+            [call.args[0] for call in mock_stream.call_args_list],
+            [f"{compose_base} pull", f"{compose_base} up -d"]
+        )
+        mock_remove.assert_called_once_with(mock_env_file.return_value)
 
     @patch('installer_logic.Installer._run_command_stream')
     @patch('installer_logic.Installer._run_command')
-    def test_step_pull_images_skips_when_cached(self, mock_run, mock_stream):
-        """Test image pulling is skipped when both images exist locally."""
+    @patch('installer_logic.os.remove')
+    @patch.object(Installer, '_write_compose_env_file')
+    def test_step_pull_images_uses_cached_images_after_pull_failure(self, mock_env_file, mock_remove, mock_run, mock_stream):
+        """Test image pulling falls back to local images when pull fails."""
+        mock_env_file.return_value = os.path.join(self.test_dir, '.env.installer.tmp')
         mock_run.side_effect = [
             (True, "sha256:abc123\n"),  # app image exists
             (True, "sha256:def456\n"),  # db image exists
         ]
+        mock_stream.return_value = False
 
         result = self.installer._step_pull_images()
 
         self.assertTrue(result)
-        mock_stream.assert_not_called()  # Should NOT pull
+        compose_base = f'docker compose --file "docker-compose.yml" --env-file "{mock_env_file.return_value}"'
+        mock_stream.assert_called_once_with(f"{compose_base} pull")
+        mock_run.assert_any_call(f"docker images -q {self.installer.app_image}")
+        mock_remove.assert_called_once_with(mock_env_file.return_value)
 
     # =======================================================================
     # Docker Detection Improvement Tests
@@ -293,3 +311,180 @@ class TestInstallerLogic(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+def test_resolve_repo_ref_defaults_to_main(monkeypatch, tmp_path):
+    monkeypatch.delenv("PGVECTOR_REPO_REF", raising=False)
+    installer = Installer(install_dir=str(tmp_path / "install-default"))
+    installer._log = MagicMock()
+    assert installer.repo_ref == "main"
+
+
+def test_resolve_repo_ref_uses_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("PGVECTOR_REPO_REF", "debug/windows-license-org-tab")
+    installer = Installer(install_dir=str(tmp_path / "install-override"))
+    installer._log = MagicMock()
+    assert installer.repo_ref == "debug/windows-license-org-tab"
+
+
+def test_resolve_app_image_defaults_to_latest(monkeypatch, tmp_path):
+    monkeypatch.delenv("APP_IMAGE", raising=False)
+    installer = Installer(install_dir=str(tmp_path / "install-image-default"))
+    installer._log = MagicMock()
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:latest"
+
+
+def test_resolve_app_image_uses_override(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab")
+    installer = Installer(install_dir=str(tmp_path / "install-image-override"))
+    installer._log = MagicMock()
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
+
+
+def test_checkout_repo_ref_pulls_remote_branch(monkeypatch, tmp_path):
+    monkeypatch.setenv("PGVECTOR_REPO_REF", "debug/windows-license-org-tab")
+    installer = Installer(install_dir=str(tmp_path / "install-branch"))
+    installer._log = MagicMock()
+
+    commands = []
+
+    def side_effect(cmd, shell=True):
+        commands.append(cmd)
+        if cmd == "git fetch origin":
+            return True, ""
+        if cmd == 'git checkout "debug/windows-license-org-tab"':
+            return True, ""
+        if cmd == 'git show-ref --verify --quiet refs/remotes/origin/debug/windows-license-org-tab':
+            return True, ""
+        if cmd == 'git pull origin "debug/windows-license-org-tab"':
+            return True, ""
+        return False, cmd
+
+    installer._run_command = MagicMock(side_effect=side_effect)
+
+    assert installer._checkout_repo_ref() is True
+    assert commands == [
+        "git fetch origin",
+        'git checkout "debug/windows-license-org-tab"',
+        'git show-ref --verify --quiet refs/remotes/origin/debug/windows-license-org-tab',
+        'git pull origin "debug/windows-license-org-tab"',
+    ]
+    installer._log.assert_any_call("Backend source ref: debug/windows-license-org-tab", "info")
+
+
+def test_checkout_repo_ref_skips_pull_for_detached_ref(monkeypatch, tmp_path):
+    monkeypatch.setenv("PGVECTOR_REPO_REF", "b7ea414")
+    installer = Installer(install_dir=str(tmp_path / "install-detached"))
+    installer._log = MagicMock()
+
+    commands = []
+
+    def side_effect(cmd, shell=True):
+        commands.append(cmd)
+        if cmd == "git fetch origin":
+            return True, ""
+        if cmd == 'git checkout "b7ea414"':
+            return True, ""
+        if cmd == 'git show-ref --verify --quiet refs/remotes/origin/b7ea414':
+            return False, ""
+        return False, cmd
+
+    installer._run_command = MagicMock(side_effect=side_effect)
+
+    assert installer._checkout_repo_ref() is True
+    assert 'git pull origin "b7ea414"' not in commands
+    installer._log.assert_any_call("Using detached/tag/SHA ref without pull: b7ea414", "info")
+
+
+def test_step_setup_application_logs_and_prepares_override_ref(monkeypatch, tmp_path):
+    monkeypatch.setenv("PGVECTOR_REPO_REF", "debug/windows-license-org-tab")
+    install_dir = tmp_path / "installer-app"
+    installer = Installer(install_dir=str(install_dir))
+    installer._log = MagicMock()
+    installer._update_progress = MagicMock()
+
+    original_exists = os.path.exists
+    clone_state = {"cloned": False, "venv": False}
+
+    def exists_side_effect(path):
+        path_str = str(path)
+        if path_str == str(install_dir):
+            return clone_state["cloned"]
+        if path_str == str(install_dir / ".git"):
+            return False
+        if path_str == str(install_dir / "venv-windows"):
+            return clone_state["venv"]
+        return original_exists(path)
+
+    commands = []
+
+    def run_side_effect(cmd, shell=True):
+        commands.append(cmd)
+        if cmd == f'git clone https://github.com/{installer.GITHUB_REPO}.git "{install_dir}"':
+            clone_state["cloned"] = True
+            return True, ""
+        if cmd == "git fetch origin":
+            return True, ""
+        if cmd == 'git checkout "debug/windows-license-org-tab"':
+            return True, ""
+        if cmd == 'git show-ref --verify --quiet refs/remotes/origin/debug/windows-license-org-tab':
+            return True, ""
+        if cmd == 'git pull origin "debug/windows-license-org-tab"':
+            return True, ""
+        if cmd == "python -m venv venv-windows":
+            clone_state["venv"] = True
+            return True, ""
+        if cmd == f'"{install_dir / "venv-windows" / "Scripts" / "pip.exe"}" install -q -r requirements-desktop.txt':
+            return True, ""
+        return False, cmd
+
+    installer._run_command = MagicMock(side_effect=run_side_effect)
+
+    with patch("installer_logic.os.path.exists", side_effect=exists_side_effect), \
+         patch("installer_logic.os.makedirs"), \
+         patch("installer_logic.os.chdir") as mock_chdir, \
+         patch("installer_logic.shutil.rmtree"):
+        assert installer._step_setup_application() is True
+
+    assert commands[:4] == [
+        f'git clone https://github.com/{installer.GITHUB_REPO}.git "{install_dir}"',
+        "git fetch origin",
+        'git checkout "debug/windows-license-org-tab"',
+        'git show-ref --verify --quiet refs/remotes/origin/debug/windows-license-org-tab',
+    ]
+    installer._log.assert_any_call("Backend source ref: debug/windows-license-org-tab", "info")
+    mock_chdir.assert_called()
+
+
+def test_bootstrap_desktop_app_honors_repo_ref_override_textually():
+    content = (PROJECT_ROOT / "bootstrap_desktop_app.ps1").read_text()
+    assert "PGVECTOR_REPO_REF" in content
+    assert "function Update-RepoRef" in content
+    assert 'git show-ref --verify --quiet "refs/remotes/origin/$Ref"' in content
+    assert 'Write-Host "Backend source ref: $Ref"' in content
+
+
+def test_manage_ps1_honors_app_image_override_textually():
+    content = (PROJECT_ROOT / "manage.ps1").read_text()
+    assert "APP_IMAGE" in content
+    assert '$image = if ([string]::IsNullOrWhiteSpace($env:APP_IMAGE)) { $defaultImage } else { $env:APP_IMAGE }' in content
+    assert 'Write-Host "Backend image: $image" -ForegroundColor Cyan' in content
+    assert 'docker compose --file "docker-compose.yml" --env-file $envFile pull' in content
+
+
+def test_installer_ps1_honors_repo_ref_override_textually():
+    content = (PROJECT_ROOT / "installer.ps1").read_text()
+    assert "PGVECTOR_REPO_REF" in content
+    assert "function Update-RepoRef" in content
+    assert 'Write-Host "  Backend source ref: $RepoRef" -ForegroundColor Cyan' in content
+    assert 'git fetch origin 2>&1 | Out-Null' in content
+    assert 'git show-ref --verify --quiet "refs/remotes/origin/$Ref"' in content
+    assert 'git pull origin $Ref 2>&1 | Out-Null' in content
+
+
+def test_installer_logic_logs_backend_image_textually():
+    content = (PROJECT_ROOT / "windows_installer" / "installer_logic.py").read_text()
+    assert 'DEFAULT_APP_IMAGE = "ghcr.io/valginer0/pgvectorragindexer:latest"' in content
+    assert 'app_image = os.environ.get("APP_IMAGE", "").strip()' in content
+    assert 'self._log(f"Backend image: {self.app_image}", "info")' in content
+    assert 'compose_base = f\'docker compose --file "docker-compose.yml" --env-file "{env_file}"\'' in content

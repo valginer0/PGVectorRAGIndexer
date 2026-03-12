@@ -17,6 +17,15 @@ on:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      git_ref:
+        description: 'Git ref to build (branch, tag, or SHA). Leave empty to use the workflow ref.'
+        required: false
+        type: string
+      image_tag:
+        description: 'Optional extra image tag to publish, e.g. debug-windows-license-org-tab'
+        required: false
+        type: string
 
 env:
   REGISTRY: ghcr.io
@@ -32,6 +41,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.git_ref || github.ref }}
 
       - name: Free Disk Space
         run: |
@@ -64,6 +75,7 @@ jobs:
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ github.event.inputs.image_tag }},enable=${{ github.event_name == 'workflow_dispatch' && github.event.inputs.image_tag != '' }}
 
       # Determine platforms: multi-platform for releases, amd64-only for dev builds
       - name: Set build platforms

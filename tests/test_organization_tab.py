@@ -79,7 +79,8 @@ def org_tab(qapp, api_client):
          patch.object(_UsersRolesPanel, "refresh", _noop_refresh), \
          patch.object(_PermissionsPanel, "refresh", _noop_refresh), \
          patch.object(_RetentionPanel, "refresh", _noop_refresh), \
-         patch.object(_ActivityPanel, "refresh", _noop_refresh):
+         patch.object(_ActivityPanel, "refresh", _noop_refresh), \
+         patch.object(api_client._base, "request", return_value=MagicMock()):
         tab = OrganizationTab(api_client)
         yield tab
     tab.deleteLater()
@@ -90,9 +91,17 @@ def org_tab_live(qapp, api_client):
     """OrganizationTab WITHOUT mocked panel refreshes — for testing real panel behavior.
     Tests using this must mock the individual API calls themselves."""
     from desktop_app.ui.admin_tab import OrganizationTab
-    tab = OrganizationTab(api_client)
-    yield tab
+    with patch.object(api_client._base, "request", return_value=MagicMock()):
+        tab = OrganizationTab(api_client)
+        yield tab
     tab.deleteLater()
+
+
+@pytest.fixture(autouse=True)
+def suppress_qt_single_shot_timers():
+    """Prevent real Qt timer callbacks from running in ordinary state-machine tests."""
+    with patch("desktop_app.ui.admin_tab.QTimer.singleShot"):
+        yield
 
 
 # ---------------------------------------------------------------------------
@@ -363,7 +372,7 @@ class TestRefreshBehavior:
         assert not org_tab._caps.is_available("users")
 
     def test_unreachable_startup_state_schedules_auto_retry(self, org_tab, api_client):
-        """Transient unreachable state should schedule a one-shot automatic retry."""
+        """Transient unreachable state should schedule an automatic retry."""
         with patch.object(api_client, "probe_endpoint",
                           return_value=ProbeResult(status=CapabilityStatus.UNREACHABLE)), \
              patch("desktop_app.utils.edition.is_feature_available", return_value=True), \
@@ -372,16 +381,31 @@ class TestRefreshBehavior:
 
         mock_single_shot.assert_called_once_with(org_tab.AUTO_RETRY_DELAY_MS, org_tab._auto_retry_probe)
         assert org_tab._auto_retry_scheduled is True
+        assert org_tab._auto_retry_attempts == 1
+        assert org_tab._transient_retry_window_active is True
+
+    def test_edition_denial_startup_state_schedules_auto_retry(self, org_tab, api_client):
+        """LIC_3006 during startup should also schedule an automatic retry."""
+        with patch.object(api_client, "probe_endpoint",
+                          return_value=ProbeResult(status=CapabilityStatus.UNAUTHORIZED, status_code=403, error_code="LIC_3006")), \
+             patch("desktop_app.utils.edition.is_feature_available", return_value=True), \
+             patch("desktop_app.ui.admin_tab.QTimer.singleShot") as mock_single_shot:
+            org_tab.probe_and_refresh()
+
+        mock_single_shot.assert_called_once_with(org_tab.AUTO_RETRY_DELAY_MS, org_tab._auto_retry_probe)
+        assert org_tab._auto_retry_scheduled is True
+        assert org_tab._auto_retry_attempts == 1
+        assert org_tab._transient_retry_window_active is True
 
     def test_auto_retry_reprobes_and_recovers_content(self, org_tab, api_client):
         """Automatic retry should invalidate cached state and load content once the backend is ready."""
         probe_results = [
             ProbeResult(status=CapabilityStatus.UNREACHABLE),
-            ProbeResult(status=CapabilityStatus.AVAILABLE, body={"permissions": ["system.admin"]}, status_code=200),
-            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
-            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
-            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
-            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
             ProbeResult(status=CapabilityStatus.AVAILABLE, body={"permissions": ["system.admin"]}, status_code=200),
             ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
             ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
@@ -399,16 +423,55 @@ class TestRefreshBehavior:
 
         assert org_tab._outer_stack.currentWidget() == org_tab._tabs_page
         assert org_tab._auto_retry_scheduled is False
+        assert org_tab._auto_retry_attempts == 0
+        assert org_tab._transient_retry_window_active is False
+
+    def test_auto_retry_reschedules_until_retry_budget_exhausted(self, org_tab, api_client):
+        """Transient startup failures should keep retrying up to the configured retry budget."""
+        with patch.object(api_client, "probe_endpoint",
+                          return_value=ProbeResult(status=CapabilityStatus.UNREACHABLE)), \
+             patch("desktop_app.utils.edition.is_feature_available", return_value=True), \
+             patch("desktop_app.ui.admin_tab.QTimer.singleShot") as mock_single_shot:
+            org_tab.probe_and_refresh()
+
+            for attempt in range(2, org_tab.MAX_AUTO_RETRY_ATTEMPTS + 1):
+                org_tab._auto_retry_probe()
+                assert org_tab._auto_retry_attempts == attempt
+
+            org_tab._auto_retry_probe()
+
+        assert mock_single_shot.call_count == org_tab.MAX_AUTO_RETRY_ATTEMPTS
+        assert org_tab._auto_retry_scheduled is False
+        assert org_tab._auto_retry_attempts == org_tab.MAX_AUTO_RETRY_ATTEMPTS
+        assert org_tab._transient_retry_window_active is False
+
+    def test_steady_state_edition_denial_does_not_schedule_auto_retry(self, org_tab, api_client):
+        """Stable edition denial outside the transient startup window should not auto-retry."""
+        org_tab._transient_retry_window_active = False
+
+        with patch.object(api_client, "probe_endpoint",
+                          return_value=ProbeResult(status=CapabilityStatus.UNAUTHORIZED, status_code=403, error_code="LIC_3006")), \
+             patch("desktop_app.utils.edition.is_feature_available", return_value=True), \
+             patch("desktop_app.ui.admin_tab.QTimer.singleShot") as mock_single_shot:
+            org_tab.probe_and_refresh()
+
+        mock_single_shot.assert_not_called()
+        assert org_tab._auto_retry_scheduled is False
+        assert org_tab._auto_retry_attempts == 0
 
     def test_manual_refresh_cancels_scheduled_auto_retry(self, org_tab, api_client):
         """Manual refresh should clear any pending auto-retry marker before reprobe."""
         org_tab._auto_retry_scheduled = True
+        org_tab._auto_retry_attempts = 2
+        org_tab._transient_retry_window_active = True
 
         with patch.object(org_tab._caps, "invalidate") as mock_invalidate, \
              patch.object(org_tab, "probe_and_refresh") as mock_probe:
             org_tab._on_refresh()
 
         assert org_tab._auto_retry_scheduled is False
+        assert org_tab._auto_retry_attempts == 0
+        assert org_tab._transient_retry_window_active is False
         mock_invalidate.assert_called_once_with()
         mock_probe.assert_called_once_with()
 

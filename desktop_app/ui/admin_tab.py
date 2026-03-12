@@ -774,12 +774,15 @@ class _ActivityPanel(QWidget):
 class OrganizationTab(QWidget):
     """Organization console tab — always present, adapts to server capabilities."""
     AUTO_RETRY_DELAY_MS = 2500
+    MAX_AUTO_RETRY_ATTEMPTS = 4
 
     def __init__(self, api_client: APIClient, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.api_client = api_client
         self._caps = ServerCapabilities(api_client)
         self._auto_retry_scheduled = False
+        self._auto_retry_attempts = 0
+        self._transient_retry_window_active = True
         self._setup_ui()
 
     def _setup_ui(self):
@@ -864,8 +867,15 @@ class OrganizationTab(QWidget):
             self._refresh_btn.setEnabled(True)
             self._refresh_btn.setText("Refresh")
 
+    def _begin_transient_retry_window(self):
+        self._auto_retry_scheduled = False
+        self._auto_retry_attempts = 0
+        self._transient_retry_window_active = True
+
     def _on_refresh(self):
         self._auto_retry_scheduled = False
+        self._auto_retry_attempts = 0
+        self._transient_retry_window_active = False
         self._caps.invalidate()
         self.probe_and_refresh()
 
@@ -889,14 +899,20 @@ class OrganizationTab(QWidget):
 
         Invalidates all cached capability state and re-probes the server.
         """
-        self._auto_retry_scheduled = False
+        self._begin_transient_retry_window()
         self._caps.invalidate()
         self.probe_and_refresh()
 
     def _schedule_auto_retry(self):
+        if not self._transient_retry_window_active:
+            return
         if self._auto_retry_scheduled:
             return
+        if self._auto_retry_attempts >= self.MAX_AUTO_RETRY_ATTEMPTS:
+            self._transient_retry_window_active = False
+            return
         self._auto_retry_scheduled = True
+        self._auto_retry_attempts += 1
         QTimer.singleShot(self.AUTO_RETRY_DELAY_MS, self._auto_retry_probe)
 
     def _auto_retry_probe(self):
@@ -954,6 +970,8 @@ class OrganizationTab(QWidget):
 
         # At least one capability available — show tabs
         self._auto_retry_scheduled = False
+        self._auto_retry_attempts = 0
+        self._transient_retry_window_active = False
         self._outer_stack.setCurrentWidget(self._tabs_page)
 
         # Rebuild sub-tabs (remove all except Overview which is always index 0)

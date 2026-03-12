@@ -432,6 +432,7 @@ def resolve_verification_context(
 def load_license(
     signing_secret: Optional[str] = None,
     key_path: Optional[Path] = None,
+    allow_db_fallback: bool = False,
 ) -> LicenseInfo:
     """Load and validate the license key from disk.
 
@@ -447,6 +448,8 @@ def load_license(
         signing_secret: Override the resolved key directly (used in tests). If None,
             the priority logic above applies.
         key_path: Override the license file path. If None, uses platform default.
+        allow_db_fallback: If True, and no local key file exists, also try the
+            server_settings table for a persisted backend license token.
 
     Returns:
         LicenseInfo with edition and details.
@@ -460,6 +463,25 @@ def load_license(
 
     # Check if key file exists
     if not key_path.exists():
+        if allow_db_fallback:
+            try:
+                from server_settings_store import get_server_license_key
+                server_key = get_server_license_key()
+                if server_key:
+                    logger.info("No local license key file found at %s — trying server_settings fallback", key_path)
+                    try:
+                        return validate_license_key(server_key, signing_secret, resolved_algorithms)
+                    except LicenseExpiredError as e:
+                        logger.warning("Server-stored license expired: %s", e)
+                        return LicenseInfo(warning=f"Server-stored license expired: {e}")
+                    except LicenseInvalidError as e:
+                        logger.warning("Server-stored license invalid: %s", e)
+                        return LicenseInfo(warning=f"Server-stored license invalid: {e}")
+                    except LicenseError as e:
+                        logger.warning("Server-stored license error: %s", e)
+                        return LicenseInfo(warning=f"Server-stored license error: {e}")
+            except Exception as e:
+                logger.debug("Server license fallback unavailable: %s", e)
         logger.info(
             "No license key found at %s — running as Community Edition",
             key_path,

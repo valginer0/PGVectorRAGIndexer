@@ -212,7 +212,12 @@ def test_install_license_triggers_backend_reload(
     service = LicenseService(api_client=client)
     service.install_license(_make_key(edition="organization", org="Reload Org", seats=50, secret=TEST_SECRET))
 
-    client._base.request.assert_called_once_with("POST", "http://localhost:8000/api/v1/license/reload")
+    assert client._base.request.call_count == 2
+    first_call = client._base.request.call_args_list[0]
+    second_call = client._base.request.call_args_list[1]
+    assert first_call.args == ("POST", "http://localhost:8000/api/v1/license/install")
+    assert first_call.kwargs["json"]["license_key"]
+    assert second_call.args == ("POST", "http://localhost:8000/api/v1/license/reload")
     mock_reset.assert_called_once()
 
 @patch('desktop_app.utils.license_service.resolve_verification_context')

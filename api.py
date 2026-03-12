@@ -62,7 +62,7 @@ def _run_startup():
 
         # Load and validate license key
         from license import load_license, set_current_license
-        license_info = load_license()
+        license_info = load_license(allow_db_fallback=True)
         set_current_license(license_info)
         logger.info("Edition: %s", license_info.edition.value.title())
         if license_info.warning:

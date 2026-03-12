@@ -8,7 +8,7 @@ import os
 import time
 import sys
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 _START_TIME = time.time()
@@ -119,13 +119,30 @@ async def license_info():
     return get_current_license().to_dict()
 
 
+@system_v1_router.post("/license/install", dependencies=[Depends(require_api_key)])
+async def install_server_license(request: Request):
+    """Persist a backend license token so server-managed endpoints can use it."""
+    from license import validate_license_key, resolve_verification_context
+    from server_settings_store import set_server_license_key
+
+    body = await request.json()
+    license_key = (body.get("license_key") or "").strip() if isinstance(body, dict) else ""
+    if not license_key:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="license_key is required")
+
+    signing_secret, algorithms = resolve_verification_context()
+    validate_license_key(license_key, signing_secret, algorithms)
+    set_server_license_key(license_key)
+    return {"status": "stored"}
+
+
 @system_v1_router.post("/license/reload")
 async def reload_license():
     """Force the server to reload the license from disk."""
     from license import reset_license, load_license, set_current_license
     reset_license()
     # Force immediate reload
-    new_lic = load_license()
+    new_lic = load_license(allow_db_fallback=True)
     set_current_license(new_lic)
     return {"status": "reloaded", "license": new_lic.to_dict()}
 

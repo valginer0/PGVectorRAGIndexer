@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import pytest
+from unittest.mock import patch
 from fastapi.testclient import TestClient
 
 # Add project root to path
@@ -13,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from api import app
 from license import Edition, LicenseInfo, set_current_license, reset_license, COMMUNITY_LICENSE
+from tests.test_license import _make_key, TEST_SECRET
 
 client = TestClient(app)
 
@@ -99,3 +101,15 @@ def test_get_license_warning():
     assert response.status_code == 200
     data = response.json()
     assert data["warning"] == "License expiring soon"
+
+def test_install_server_license_endpoint_stores_key():
+    with patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
+         patch("license.validate_license_key") as mock_validate, \
+         patch("server_settings_store.set_server_license_key") as mock_store:
+        key = _make_key(secret=TEST_SECRET)
+        response = client.post("/api/v1/license/install", json={"license_key": key})
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "stored"
+    mock_validate.assert_called_once_with(key, TEST_SECRET, ["HS256"])
+    mock_store.assert_called_once_with(key)

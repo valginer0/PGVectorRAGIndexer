@@ -369,6 +369,18 @@ class TestLoadLicense:
         assert info.edition == Edition.TEAM
         assert not info.warning
 
+    def test_server_settings_fallback_when_file_missing(self, tmp_path):
+        """Server runtime can fall back to a DB-stored license token."""
+        missing = tmp_path / "missing" / "license.key"
+        with patch("server_settings_store.get_server_license_key", return_value=_make_key(secret=TEST_SECRET)):
+            info = load_license(
+                signing_secret=TEST_SECRET,
+                key_path=missing,
+                allow_db_fallback=True,
+            )
+        assert info.edition == Edition.TEAM
+        assert info.org_name == "Test Org"
+
 
 # ===========================================================================
 # Test: resolve_verification_context

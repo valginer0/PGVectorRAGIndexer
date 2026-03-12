@@ -155,7 +155,15 @@ class LicenseService:
         # 6. Tell the backend to reload its cached license from disk
         if self.api_client:
             try:
+                install_url = f"{self.api_client._base.api_base}/license/install"
                 reload_url = f"{self.api_client._base.api_base}/license/reload"
+                logger.info("Triggering backend license sync: url=%s", install_url)
+                install_resp = self.api_client._base.request(
+                    "POST",
+                    install_url,
+                    json={"license_key": key_string},
+                )
+                logger.info("Backend license sync finished: status=%s", getattr(install_resp, "status_code", None))
                 logger.info("Triggering backend reload: url=%s", reload_url)
                 resp = self.api_client._base.request("POST", reload_url)
                 logger.info("Backend reload finished: status=%s", getattr(resp, "status_code", None))

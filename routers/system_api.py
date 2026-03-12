@@ -11,6 +11,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
+from auth import is_loopback_request
+
 _START_TIME = time.time()
 
 def _get_system_metrics() -> dict:
@@ -124,6 +126,14 @@ async def install_server_license(request: Request):
     """Persist a backend license token so server-managed endpoints can use it."""
     from license import validate_license_key, resolve_verification_context
     from server_settings_store import set_server_license_key
+    from errors import raise_api_error, ErrorCode
+
+    if not is_loopback_request(request):
+        raise_api_error(
+            ErrorCode.FORBIDDEN,
+            message="License install is only allowed from the local machine.",
+            details={"loopback_required": True},
+        )
 
     body = await request.json()
     license_key = (body.get("license_key") or "").strip() if isinstance(body, dict) else ""

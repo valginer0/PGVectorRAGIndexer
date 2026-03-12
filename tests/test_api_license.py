@@ -12,6 +12,9 @@ from fastapi.testclient import TestClient
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+os.environ["DEBUG"] = "false"
+os.environ["API_REQUIRE_AUTH"] = "false"
+
 from api import app
 from license import Edition, LicenseInfo, set_current_license, reset_license, COMMUNITY_LICENSE
 from tests.test_license import _make_key, TEST_SECRET
@@ -103,7 +106,8 @@ def test_get_license_warning():
     assert data["warning"] == "License expiring soon"
 
 def test_install_server_license_endpoint_stores_key():
-    with patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
+    with patch("routers.system_api.is_loopback_request", return_value=True), \
+         patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
          patch("license.validate_license_key") as mock_validate, \
          patch("server_settings_store.set_server_license_key") as mock_store:
         key = _make_key(secret=TEST_SECRET)
@@ -113,3 +117,19 @@ def test_install_server_license_endpoint_stores_key():
     assert response.json()["status"] == "stored"
     mock_validate.assert_called_once_with(key, TEST_SECRET, ["HS256"])
     mock_store.assert_called_once_with(key)
+
+
+def test_install_server_license_endpoint_rejects_non_loopback():
+    with patch("routers.system_api.is_loopback_request", return_value=False), \
+         patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
+         patch("license.validate_license_key") as mock_validate, \
+         patch("server_settings_store.set_server_license_key") as mock_store:
+        key = _make_key(secret=TEST_SECRET)
+        response = client.post("/api/v1/license/install", json={"license_key": key})
+
+    assert response.status_code == 403
+    detail = response.json()
+    assert detail["error_code"] == "AUTH_2002"
+    assert detail["details"]["loopback_required"] is True
+    mock_validate.assert_not_called()
+    mock_store.assert_not_called()

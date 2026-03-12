@@ -9,12 +9,14 @@ import platform
 from typing import Optional, Tuple
 from pathlib import Path
 import os
+import tempfile
 
 logger = logging.getLogger(__name__)
 
 
 class DockerManager:
     """Manages Docker containers for the application."""
+    DEFAULT_APP_IMAGE = "ghcr.io/valginer0/pgvectorragindexer:latest"
     
     def __init__(self, project_path: Path):
         """
@@ -54,7 +56,55 @@ class DockerManager:
                     self.wsl_project_path = path_str.replace("\\", "/")
         else:
             self.wsl_project_path = str(project_path)
-        
+
+    def _read_windows_user_env(self, name: str) -> str:
+        if not self.is_windows:
+            return ""
+        try:
+            import winreg
+
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_READ) as key:
+                value, _ = winreg.QueryValueEx(key, name)
+                return str(value).strip()
+        except Exception:
+            return ""
+
+    def _resolve_override(self, name: str, default: str) -> str:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+        value = self._read_windows_user_env(name)
+        if value:
+            return value
+        return default
+
+    def _resolve_app_image(self) -> str:
+        return self._resolve_override("APP_IMAGE", self.DEFAULT_APP_IMAGE)
+
+    def _run_compose_command(self, compose_args: list, timeout: int) -> subprocess.CompletedProcess:
+        env_file_path = None
+        try:
+            app_image = self._resolve_app_image()
+            logger.info("Backend image: %s", app_image)
+            with tempfile.NamedTemporaryFile("w", encoding="utf-8", prefix="pgvector-app-image-", suffix=".env", dir=str(self.project_path), delete=False) as handle:
+                handle.write(f"APP_IMAGE={app_image}\n")
+                env_file_path = handle.name
+
+            cmd = ["docker", "compose", "--env-file", env_file_path] + compose_args
+            return subprocess.run(
+                cmd,
+                cwd=str(self.project_path),
+                capture_output=True,
+                text=True,
+                timeout=timeout
+            )
+        finally:
+            if env_file_path:
+                try:
+                    os.remove(env_file_path)
+                except OSError:
+                    pass
+
     def _run_docker_command(self, cmd: list, **kwargs) -> subprocess.CompletedProcess:
         """
         Run a docker command, using WSL only for docker compose with path conversion.
@@ -243,13 +293,7 @@ class DockerManager:
         """
         try:
             logger.info("Pulling latest Docker images...")
-            result = subprocess.run(
-                ["docker", "compose", "pull"],
-                cwd=str(self.project_path),
-                capture_output=True,
-                text=True,
-                timeout=300
-            )
+            result = self._run_compose_command(["pull"], timeout=300)
             
             if result.returncode == 0:
                 logger.info("Images pulled successfully")
@@ -322,17 +366,11 @@ class DockerManager:
             logger.info("Starting Docker containers...")
             
             # If force_pull, we should recreate them to pick up new images
-            cmd = ["docker", "compose", "up", "-d"]
+            cmd = ["up", "-d"]
             if force_pull:
                 cmd.append("--force-recreate")
             
-            result = subprocess.run(
-                cmd,
-                cwd=str(self.project_path),
-                capture_output=True,
-                text=True,
-                timeout=120
-            )
+            result = self._run_compose_command(cmd, timeout=120)
             
             if result.returncode == 0:
                 # Wait for containers to be healthy (with retries)
@@ -387,14 +425,7 @@ class DockerManager:
         try:
             logger.info("Stopping Docker containers...")
             
-            # Use docker compose directly
-            result = subprocess.run(
-                ["docker", "compose", "down"],
-                cwd=str(self.project_path),
-                capture_output=True,
-                text=True,
-                timeout=60
-            )
+            result = self._run_compose_command(["down"], timeout=60)
             
             if result.returncode == 0:
                 logger.info("Containers stopped successfully")

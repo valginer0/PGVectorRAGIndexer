@@ -327,6 +327,14 @@ def test_resolve_repo_ref_uses_override(monkeypatch, tmp_path):
     assert installer.repo_ref == "debug/windows-license-org-tab"
 
 
+def test_resolve_repo_ref_uses_windows_user_env_fallback(monkeypatch, tmp_path):
+    monkeypatch.delenv("PGVECTOR_REPO_REF", raising=False)
+    with patch.object(Installer, "_read_windows_user_env", return_value="debug/windows-license-org-tab"):
+        installer = Installer(install_dir=str(tmp_path / "install-override-user-env"))
+    installer._log = MagicMock()
+    assert installer.repo_ref == "debug/windows-license-org-tab"
+
+
 def test_resolve_app_image_defaults_to_latest(monkeypatch, tmp_path):
     monkeypatch.delenv("APP_IMAGE", raising=False)
     installer = Installer(install_dir=str(tmp_path / "install-image-default"))
@@ -337,6 +345,14 @@ def test_resolve_app_image_defaults_to_latest(monkeypatch, tmp_path):
 def test_resolve_app_image_uses_override(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab")
     installer = Installer(install_dir=str(tmp_path / "install-image-override"))
+    installer._log = MagicMock()
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
+
+
+def test_resolve_app_image_uses_windows_user_env_fallback(monkeypatch, tmp_path):
+    monkeypatch.delenv("APP_IMAGE", raising=False)
+    with patch.object(Installer, "_read_windows_user_env", return_value="ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"):
+        installer = Installer(install_dir=str(tmp_path / "install-image-user-env"))
     installer._log = MagicMock()
     assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
 
@@ -459,7 +475,9 @@ def test_step_setup_application_logs_and_prepares_override_ref(monkeypatch, tmp_
 def test_bootstrap_desktop_app_honors_repo_ref_override_textually():
     content = (PROJECT_ROOT / "bootstrap_desktop_app.ps1").read_text()
     assert "PGVECTOR_REPO_REF" in content
+    assert "function Get-EffectiveOverride" in content
     assert "function Update-RepoRef" in content
+    assert '$RepoRef = Get-EffectiveOverride -Name "PGVECTOR_REPO_REF" -DefaultValue $Branch' in content
     assert 'git show-ref --verify --quiet "refs/remotes/origin/$Ref"' in content
     assert 'Write-Host "Backend source ref: $Ref"' in content
 
@@ -467,7 +485,8 @@ def test_bootstrap_desktop_app_honors_repo_ref_override_textually():
 def test_manage_ps1_honors_app_image_override_textually():
     content = (PROJECT_ROOT / "manage.ps1").read_text()
     assert "APP_IMAGE" in content
-    assert '$image = if ([string]::IsNullOrWhiteSpace($env:APP_IMAGE)) { $defaultImage } else { $env:APP_IMAGE }' in content
+    assert "function Get-EffectiveOverride" in content
+    assert '$image = Get-EffectiveOverride -Name "APP_IMAGE" -DefaultValue $defaultImage' in content
     assert 'Write-Host "Backend image: $image" -ForegroundColor Cyan' in content
     assert 'docker compose --file "docker-compose.yml" --env-file $envFile pull' in content
 
@@ -475,7 +494,9 @@ def test_manage_ps1_honors_app_image_override_textually():
 def test_installer_ps1_honors_repo_ref_override_textually():
     content = (PROJECT_ROOT / "installer.ps1").read_text()
     assert "PGVECTOR_REPO_REF" in content
+    assert "function Get-EffectiveOverride" in content
     assert "function Update-RepoRef" in content
+    assert '$RepoRef = Get-EffectiveOverride -Name "PGVECTOR_REPO_REF" -DefaultValue "main"' in content
     assert 'Write-Host "  Backend source ref: $RepoRef" -ForegroundColor Cyan' in content
     assert 'git fetch origin 2>&1 | Out-Null' in content
     assert 'git show-ref --verify --quiet "refs/remotes/origin/$Ref"' in content
@@ -485,6 +506,7 @@ def test_installer_ps1_honors_repo_ref_override_textually():
 def test_installer_logic_logs_backend_image_textually():
     content = (PROJECT_ROOT / "windows_installer" / "installer_logic.py").read_text()
     assert 'DEFAULT_APP_IMAGE = "ghcr.io/valginer0/pgvectorragindexer:latest"' in content
-    assert 'app_image = os.environ.get("APP_IMAGE", "").strip()' in content
+    assert 'with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_READ) as key:' in content
+    assert 'return self._resolve_override("APP_IMAGE", self.DEFAULT_APP_IMAGE)' in content
     assert 'self._log(f"Backend image: {self.app_image}", "info")' in content
     assert 'compose_base = f\'docker compose --file "docker-compose.yml" --env-file "{env_file}"\'' in content

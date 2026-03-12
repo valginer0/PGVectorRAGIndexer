@@ -16,6 +16,25 @@ $ErrorActionPreference = "Stop"
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $ScriptRoot
 
+function Get-EffectiveOverride {
+    param(
+        [string]$Name,
+        [string]$DefaultValue
+    )
+
+    $value = [Environment]::GetEnvironmentVariable($Name, "Process")
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+        return $value
+    }
+
+    $value = [Environment]::GetEnvironmentVariable($Name, "User")
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+        return $value
+    }
+
+    return $DefaultValue
+}
+
 function Show-Usage {
     Write-Host "Usage:" -ForegroundColor Cyan
     Write-Host "  .\\manage.ps1 -Action bootstrap [-Channel prod|dev] [-InstallDir <path>]" -ForegroundColor Yellow
@@ -54,7 +73,7 @@ function Invoke-ComposeUpdate {
     )
 
     $defaultImage = if ($SelectedChannel -eq "dev") { "ghcr.io/valginer0/pgvectorragindexer:dev" } else { "ghcr.io/valginer0/pgvectorragindexer:latest" }
-    $image = if ([string]::IsNullOrWhiteSpace($env:APP_IMAGE)) { $defaultImage } else { $env:APP_IMAGE }
+    $image = Get-EffectiveOverride -Name "APP_IMAGE" -DefaultValue $defaultImage
     $envFile = Join-Path $ScriptRoot ".env.manage.tmp"
     $envContent = @("APP_IMAGE=$image")
 

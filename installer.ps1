@@ -9,10 +9,26 @@ param(
     [string]$StateFile = "$env:USERPROFILE\.pgvector-install-state.json"
 )
 
-$RepoRef = $env:PGVECTOR_REPO_REF
-if ([string]::IsNullOrWhiteSpace($RepoRef)) {
-    $RepoRef = "main"
+function Get-EffectiveOverride {
+    param(
+        [string]$Name,
+        [string]$DefaultValue
+    )
+
+    $value = [Environment]::GetEnvironmentVariable($Name, "Process")
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+        return $value
+    }
+
+    $value = [Environment]::GetEnvironmentVariable($Name, "User")
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+        return $value
+    }
+
+    return $DefaultValue
 }
+
+$RepoRef = Get-EffectiveOverride -Name "PGVECTOR_REPO_REF" -DefaultValue "main"
 
 # ============================================================================
 # CONFIGURATION

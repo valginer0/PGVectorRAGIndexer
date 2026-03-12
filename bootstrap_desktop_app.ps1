@@ -10,10 +10,26 @@ param(
     [string]$RemoteBackend = ""
 )
 
-$RepoRef = $env:PGVECTOR_REPO_REF
-if ([string]::IsNullOrWhiteSpace($RepoRef)) {
-    $RepoRef = $Branch
+function Get-EffectiveOverride {
+    param(
+        [string]$Name,
+        [string]$DefaultValue
+    )
+
+    $value = [Environment]::GetEnvironmentVariable($Name, "Process")
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+        return $value
+    }
+
+    $value = [Environment]::GetEnvironmentVariable($Name, "User")
+    if (-not [string]::IsNullOrWhiteSpace($value)) {
+        return $value
+    }
+
+    return $DefaultValue
 }
+
+$RepoRef = Get-EffectiveOverride -Name "PGVECTOR_REPO_REF" -DefaultValue $Branch
 
 function Update-RepoRef {
     param(

@@ -87,13 +87,32 @@ class Installer:
         self.reboot_required = False
         self.virtualization_failed = None  # Set to dict with manufacturer/bios info if VT check fails
 
+    def _read_windows_user_env(self, name: str) -> str:
+        try:
+            import winreg
+
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_READ) as key:
+                value, _ = winreg.QueryValueEx(key, name)
+                return str(value).strip()
+        except Exception:
+            return ""
+
+    def _resolve_override(self, name: str, default: str) -> str:
+        value = os.environ.get(name, "").strip()
+        if value:
+            return value
+
+        value = self._read_windows_user_env(name)
+        if value:
+            return value
+
+        return default
+
     def _resolve_repo_ref(self) -> str:
-        repo_ref = os.environ.get("PGVECTOR_REPO_REF", "").strip()
-        return repo_ref or self.DEFAULT_REPO_REF
+        return self._resolve_override("PGVECTOR_REPO_REF", self.DEFAULT_REPO_REF)
 
     def _resolve_app_image(self) -> str:
-        app_image = os.environ.get("APP_IMAGE", "").strip()
-        return app_image or self.DEFAULT_APP_IMAGE
+        return self._resolve_override("APP_IMAGE", self.DEFAULT_APP_IMAGE)
 
     def _log_repo_ref(self):
         self._log(f"Backend source ref: {self.repo_ref}", "info")

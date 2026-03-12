@@ -431,6 +431,8 @@ class MainWindow(QMainWindow):
             
             if not self.initial_load_done:
                 self.on_api_ready()
+            elif hasattr(self, 'org_tab'):
+                self.org_tab.on_backend_healthy()
         elif api_status == "initializing":
             self.api_status_label.setText("API: Loading...")
             self.api_status_icon.setPixmap(qta.icon('fa5s.hourglass-half', color='#f59e0b').pixmap(16, 16))

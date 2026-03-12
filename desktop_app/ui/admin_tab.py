@@ -783,6 +783,7 @@ class OrganizationTab(QWidget):
         self._auto_retry_scheduled = False
         self._auto_retry_attempts = 0
         self._transient_retry_window_active = True
+        self._awaiting_backend_healthy_reprobe = True
         self._setup_ui()
 
     def _setup_ui(self):
@@ -871,6 +872,7 @@ class OrganizationTab(QWidget):
         self._auto_retry_scheduled = False
         self._auto_retry_attempts = 0
         self._transient_retry_window_active = True
+        self._awaiting_backend_healthy_reprobe = True
 
     def _on_refresh(self):
         self._auto_retry_scheduled = False
@@ -893,6 +895,25 @@ class OrganizationTab(QWidget):
             "once the server is running.",
             show_retry=True,
         )
+
+    def on_backend_healthy(self):
+        """Reprobe once when the health worker reports the backend is healthy again.
+
+        This covers the gap where the API health endpoint turns green before
+        the organization/license endpoints are fully ready, leaving the tab on
+        a transient placeholder state after the initial startup probe.
+        """
+        if self._outer_stack.currentWidget() is self._tabs_page:
+            return
+        if not self._awaiting_backend_healthy_reprobe:
+            return
+        if self._auto_retry_scheduled:
+            return
+
+        self._awaiting_backend_healthy_reprobe = False
+        self._begin_transient_retry_window()
+        self._caps.invalidate()
+        self.probe_and_refresh()
 
     def on_settings_changed(self):
         """Called when backend URL or API key changes in Settings.
@@ -972,6 +993,7 @@ class OrganizationTab(QWidget):
         self._auto_retry_scheduled = False
         self._auto_retry_attempts = 0
         self._transient_retry_window_active = False
+        self._awaiting_backend_healthy_reprobe = False
         self._outer_stack.setCurrentWidget(self._tabs_page)
 
         # Rebuild sub-tabs (remove all except Overview which is always index 0)

@@ -925,6 +925,7 @@ class OrganizationTab(QWidget):
                 "Organization Console features are available with a Team or Organization license.",
                 show_learn_more=True,
             )
+            self._schedule_auto_retry()
             return
 
         # Generic Auth failures take priority — server is reachable but rejecting us for permission

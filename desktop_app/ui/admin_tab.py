@@ -10,7 +10,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Optional
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QWidget,
@@ -773,11 +773,13 @@ class _ActivityPanel(QWidget):
 
 class OrganizationTab(QWidget):
     """Organization console tab — always present, adapts to server capabilities."""
+    AUTO_RETRY_DELAY_MS = 2500
 
     def __init__(self, api_client: APIClient, parent: Optional[QWidget] = None):
         super().__init__(parent)
         self.api_client = api_client
         self._caps = ServerCapabilities(api_client)
+        self._auto_retry_scheduled = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -863,6 +865,7 @@ class OrganizationTab(QWidget):
             self._refresh_btn.setText("Refresh")
 
     def _on_refresh(self):
+        self._auto_retry_scheduled = False
         self._caps.invalidate()
         self.probe_and_refresh()
 
@@ -886,6 +889,18 @@ class OrganizationTab(QWidget):
 
         Invalidates all cached capability state and re-probes the server.
         """
+        self._auto_retry_scheduled = False
+        self._caps.invalidate()
+        self.probe_and_refresh()
+
+    def _schedule_auto_retry(self):
+        if self._auto_retry_scheduled:
+            return
+        self._auto_retry_scheduled = True
+        QTimer.singleShot(self.AUTO_RETRY_DELAY_MS, self._auto_retry_probe)
+
+    def _auto_retry_probe(self):
+        self._auto_retry_scheduled = False
         self._caps.invalidate()
         self.probe_and_refresh()
 
@@ -919,6 +934,7 @@ class OrganizationTab(QWidget):
                 "or contact your administrator if permissions are insufficient.",
                 show_retry=True,
             )
+            self._schedule_auto_retry()
             return
 
         # Connectivity / Support failures
@@ -928,6 +944,7 @@ class OrganizationTab(QWidget):
                     "Cannot connect to server. Organization features will appear once the server is running.",
                     show_retry=True,
                 )
+                self._schedule_auto_retry()
             else:
                 self._show_placeholder(
                     "This server version does not support organization management features.",
@@ -935,6 +952,7 @@ class OrganizationTab(QWidget):
             return
 
         # At least one capability available — show tabs
+        self._auto_retry_scheduled = False
         self._outer_stack.setCurrentWidget(self._tabs_page)
 
         # Rebuild sub-tabs (remove all except Overview which is always index 0)

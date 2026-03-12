@@ -15,32 +15,62 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ["DEBUG"] = "false"
 os.environ["API_REQUIRE_AUTH"] = "false"
 
-from api import app
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from httpx import AsyncClient, ASGITransport
+from routers.system_api import system_app_router, system_v1_router
 from license import Edition, LicenseInfo, set_current_license, reset_license, COMMUNITY_LICENSE
 from tests.test_license import _make_key, TEST_SECRET
 
-client = TestClient(app)
+# Construct a minimal app for testing these specific routes
+# This avoids the full api.py startup background thread and migrations
+app = FastAPI()
 
-def setup_module(module):
-    """Reset license state before tests and wait for background init."""
-    import services
+# Add exception handlers for parity with production api.py
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    detail = exc.detail
+    error_code = "GENERIC_HTTP_ERROR"
+    message = str(detail)
+    details = None
+    if isinstance(detail, dict):
+        error_code = detail.get("error_code", error_code)
+        message = detail.get("message", message)
+        details = detail.get("details")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error_code": error_code, "message": message, "details": details}
+    )
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    import logging
+    logging.getLogger(__name__).error(f"Unhandled exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error_code": "SYS_1001",
+            "message": "An unexpected internal server error occurred.",
+            "details": {"exception": str(exc)}
+        }
+    )
+
+app.include_router(system_app_router)
+app.include_router(system_v1_router, prefix="/api/v1")
+
+@pytest.fixture
+async def client():
+    """Yield an async client with symmetric license reset."""
+    reset_license()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        yield ac
     reset_license()
 
-    # Wait for the background initialization in api.py to finish
-    # to avoid it stomping on our test license state later
-    timeout = 10
-    start = time.time()
-    while not getattr(services, 'init_complete', False) and time.time() - start < timeout:
-        time.sleep(0.1)
-
-def teardown_module(module):
-    """Reset license state after tests."""
-    reset_license()
-
-def test_get_license_community():
+@pytest.mark.asyncio
+async def test_get_license_community(client):
     """Verify that the API returns the community edition by default."""
     set_current_license(COMMUNITY_LICENSE)
-    response = client.get("/license")
+    response = await client.get("/license")
     assert response.status_code == 200
     data = response.json()
     assert data["edition"] == "community"
@@ -50,7 +80,8 @@ def test_get_license_community():
     assert data["days_until_expiry"] is None
     assert "warning" not in data
 
-def test_get_license_team():
+@pytest.mark.asyncio
+async def test_get_license_team(client):
     """Verify that the API returns team edition details when loaded."""
     info = LicenseInfo(
         Edition.TEAM,
@@ -61,7 +92,7 @@ def test_get_license_team():
     )
     set_current_license(info)
     
-    response = client.get("/license")
+    response = await client.get("/license")
     assert response.status_code == 200
     data = response.json()
     assert data["edition"] == "team"
@@ -71,7 +102,8 @@ def test_get_license_team():
     assert data["key_id"] == "team-key"
     assert data["expired"] is False
 
-def test_get_license_organization():
+@pytest.mark.asyncio
+async def test_get_license_organization(client):
     """Verify that the API returns organization edition details when loaded."""
     info = LicenseInfo(
         Edition.ORGANIZATION,
@@ -82,7 +114,7 @@ def test_get_license_organization():
     )
     set_current_license(info)
     
-    response = client.get("/license")
+    response = await client.get("/license")
     assert response.status_code == 200
     data = response.json()
     assert data["edition"] == "organization"
@@ -92,7 +124,8 @@ def test_get_license_organization():
     assert data["key_id"] == "org-key"
     assert data["expired"] is False
 
-def test_get_license_warning():
+@pytest.mark.asyncio
+async def test_get_license_warning(client):
     """Verify that warnings are included in the API response."""
     info = LicenseInfo(
         Edition.TEAM,
@@ -100,32 +133,33 @@ def test_get_license_warning():
     )
     set_current_license(info)
     
-    response = client.get("/license")
+    response = await client.get("/license")
     assert response.status_code == 200
     data = response.json()
     assert data["warning"] == "License expiring soon"
 
-def test_install_server_license_endpoint_stores_key():
+@pytest.mark.asyncio
+async def test_install_server_license_endpoint_stores_key(client):
     with patch("routers.system_api.is_loopback_request", return_value=True), \
          patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
          patch("license.validate_license_key") as mock_validate, \
          patch("server_settings_store.set_server_license_key") as mock_store:
         key = _make_key(secret=TEST_SECRET)
-        response = client.post("/api/v1/license/install", json={"license_key": key})
+        response = await client.post("/api/v1/license/install", json={"license_key": key})
 
     assert response.status_code == 200
     assert response.json()["status"] == "stored"
     mock_validate.assert_called_once_with(key, TEST_SECRET, ["HS256"])
     mock_store.assert_called_once_with(key)
 
-
-def test_install_server_license_endpoint_rejects_non_loopback():
+@pytest.mark.asyncio
+async def test_install_server_license_endpoint_rejects_non_loopback(client):
     with patch("routers.system_api.is_loopback_request", return_value=False), \
          patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
          patch("license.validate_license_key") as mock_validate, \
          patch("server_settings_store.set_server_license_key") as mock_store:
         key = _make_key(secret=TEST_SECRET)
-        response = client.post("/api/v1/license/install", json={"license_key": key})
+        response = await client.post("/api/v1/license/install", json={"license_key": key})
 
     assert response.status_code == 403
     detail = response.json()

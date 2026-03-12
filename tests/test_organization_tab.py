@@ -362,6 +362,56 @@ class TestRefreshBehavior:
 
         assert not org_tab._caps.is_available("users")
 
+    def test_unreachable_startup_state_schedules_auto_retry(self, org_tab, api_client):
+        """Transient unreachable state should schedule a one-shot automatic retry."""
+        with patch.object(api_client, "probe_endpoint",
+                          return_value=ProbeResult(status=CapabilityStatus.UNREACHABLE)), \
+             patch("desktop_app.utils.edition.is_feature_available", return_value=True), \
+             patch("desktop_app.ui.admin_tab.QTimer.singleShot") as mock_single_shot:
+            org_tab.probe_and_refresh()
+
+        mock_single_shot.assert_called_once_with(org_tab.AUTO_RETRY_DELAY_MS, org_tab._auto_retry_probe)
+        assert org_tab._auto_retry_scheduled is True
+
+    def test_auto_retry_reprobes_and_recovers_content(self, org_tab, api_client):
+        """Automatic retry should invalidate cached state and load content once the backend is ready."""
+        probe_results = [
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={"permissions": ["system.admin"]}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={"permissions": ["system.admin"]}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+        ]
+
+        with patch.object(api_client, "probe_endpoint", side_effect=probe_results), \
+             patch("desktop_app.utils.edition.is_feature_available", return_value=True), \
+             patch("desktop_app.ui.admin_tab.QTimer.singleShot"):
+            org_tab.probe_and_refresh()
+            assert org_tab._outer_stack.currentWidget() == org_tab._placeholder
+            org_tab._auto_retry_probe()
+
+        assert org_tab._outer_stack.currentWidget() == org_tab._tabs_page
+        assert org_tab._auto_retry_scheduled is False
+
+    def test_manual_refresh_cancels_scheduled_auto_retry(self, org_tab, api_client):
+        """Manual refresh should clear any pending auto-retry marker before reprobe."""
+        org_tab._auto_retry_scheduled = True
+
+        with patch.object(org_tab._caps, "invalidate") as mock_invalidate, \
+             patch.object(org_tab, "probe_and_refresh") as mock_probe:
+            org_tab._on_refresh()
+
+        assert org_tab._auto_retry_scheduled is False
+        mock_invalidate.assert_called_once_with()
+        mock_probe.assert_called_once_with()
+
 
 # ---------------------------------------------------------------------------
 # State Transition Tests

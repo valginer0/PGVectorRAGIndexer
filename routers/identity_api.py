@@ -17,7 +17,7 @@ identity_router = APIRouter(tags=["Identity & Auth"])
 # API Key Management
 # ---------------------------------------------------------------------------
 
-@identity_router.post("/api/keys", dependencies=[Depends(require_permission("keys.manage"))])
+@identity_router.post("/keys", dependencies=[Depends(require_permission("keys.manage"))])
 async def create_key(name: str = Query(..., description="Human-readable name for the key")):
     """Create a new API key."""
     from auth import create_api_key_record
@@ -39,7 +39,7 @@ async def create_key(name: str = Query(..., description="Human-readable name for
         )
 
 
-@identity_router.get("/api/keys", dependencies=[Depends(require_permission("keys.manage"))])
+@identity_router.get("/keys", dependencies=[Depends(require_permission("keys.manage"))])
 async def list_keys():
     """List all API keys (active and revoked)."""
     from auth import list_api_keys
@@ -53,7 +53,7 @@ async def list_keys():
         )
 
 
-@identity_router.delete("/api/keys/{key_id}", dependencies=[Depends(require_permission("keys.manage"))])
+@identity_router.delete("/keys/{key_id}", dependencies=[Depends(require_permission("keys.manage"))])
 async def delete_key(key_id: int):
     """Revoke an API key immediately."""
     from auth import revoke_api_key
@@ -75,7 +75,7 @@ async def delete_key(key_id: int):
         )
 
 
-@identity_router.post("/api/keys/{key_id}/rotate", dependencies=[Depends(require_permission("keys.manage"))])
+@identity_router.post("/keys/{key_id}/rotate", dependencies=[Depends(require_permission("keys.manage"))])
 async def rotate_key(key_id: int):
     """Rotate an API key."""
     from auth import rotate_api_key

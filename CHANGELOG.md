@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.9.1] - 2026-03-12
+
+### Added
+- **Organization Console — Admin Write Operations**: Full admin console with write controls across 5 feature areas:
+  - **User Management**: Add User dialog, context-menu Activate/Deactivate/Delete with confirmation dialogs (admin-only, matches `require_admin` backend).
+  - **API Key Management**: New "API Keys" sub-tab with key table, Create Key dialog (shows full key once with copy-to-clipboard), context-menu Revoke/Rotate with 24h grace period display. Gated by `keys.manage` permission (not admin-only).
+  - **Retention Manual Cleanup**: "Run Now" controls with configurable parameters (activity days, quarantine days, indexing runs, SAML cleanup). Available to any authenticated Team user (matches backend `require_api_key`).
+  - **Compliance Export**: "Export Compliance Report" button in Overview panel — downloads ZIP (admin-only, matches `require_admin` backend).
+  - **SCIM Provisioning Visibility**: New "SCIM" sub-tab showing enabled status, default role, copyable endpoint URL for IdP setup, and recent provisioning events filtered from activity log.
+- **Permission-aware UI gating**: New `has_permission(perm)` method on `ServerCapabilities` replaces coarse `is_admin()` checks where backend uses fine-grained permissions. Admin users implicitly have all permissions.
+- **Server capability probes**: Added `keys` (`/api/keys`) and `scim` (`/scim/v2/ServiceProviderConfig`) to capability detection.
+
+### Changed
+- **IdentityClient**: Added `list_keys()`, `create_key()`, `revoke_key()`, `rotate_key()` methods.
+- **MaintenanceClient**: Added `run_retention()` and `export_compliance_report()` methods.
+- **APIClient facade**: Added facade methods for all new domain client operations.
+
 ## [2.9.0] - 2026-03-11
 
 ### Added

@@ -2,16 +2,16 @@
 
 Derived from [FEATURE_IDEAS_V5.md](./FEATURE_IDEAS_V5.md). Each task maps to a feature number in V5.
 
-Last updated: 2026-03-11 (v2.9.0)
+Last updated: 2026-03-12 (v2.9.1)
 
 ---
 
 ## Current State
 
-All roadmap features are **implemented and shipping** as of v2.9.0. The codebase includes:
+All roadmap features are **implemented and shipping** as of v2.9.1. The codebase includes:
 
 - **Server**: Modular FastAPI routers (11 domain routers + `/me` identity endpoint), Alembic migrations (001–017), pgvector search, structured JSON logging, `/health` system metrics
-- **Desktop**: Qt6 app with `APIClient` facade (10 domain clients), controller pattern (Settings), analytics, watched folders, **Organization Console** (5 sub-panels with server capability detection)
+- **Desktop**: Qt6 app with `APIClient` facade (10 domain clients), controller pattern (Settings), analytics, watched folders, **Organization Console** (7 sub-panels with server capability detection, admin write operations, permission-aware UI gating)
 - **Enterprise**: RBAC with custom roles, SAML SSO (Okta), SCIM 2.0 provisioning, data retention orchestration, compliance export
 - **CI**: Split-backend E2E tests in GitHub Actions (PostgreSQL 16 + pgvector, auth-required)
 
@@ -492,6 +492,41 @@ Implementation sequencing (recommended):
 - [x] **Precision Retry Detection**: Broadened SMTP/Network error classification (100% of transient failures trigger 500 Retry).
 - [x] **Comprehensive Auditing**: Metadata audit logs for all data paths (Session, Subscription, Customer).
 - [x] **Atomic Fulfillment**: Fulfillment markers and renewal increments committed in single API calls.
+
+---
+
+## Phase 6: Organization Console Write Operations (Complete)
+
+### ✅ Admin Console Write Features (v2.9.1)
+- **Effort**: ~8-10h | **Edition**: Team/Organization | **Dependencies**: #16
+- **Branch**: `feat/admin-console-write-ops`
+- **Priority 1 — User Management** (complete):
+  - [x] "Add User" button → dialog (email, display name, role selector)
+  - [x] Context menu on user rows → Activate / Deactivate / Delete with confirmation dialogs
+  - [x] Gated by `is_admin()` — matches backend `require_admin`
+- **Priority 2 — API Key Management** (complete):
+  - [x] New "API Keys" sub-tab with key table (name, prefix, created, last used, status)
+  - [x] "Create Key" → dialog → full key shown once with copy-to-clipboard
+  - [x] Context menu → Revoke (immediate) / Rotate (24h grace period, new key shown)
+  - [x] Gated by `has_permission("keys.manage")` — matches backend `require_permission("keys.manage")`
+  - [x] Capability probe: `GET /api/keys`
+- **Priority 3 — Retention Manual Cleanup** (complete):
+  - [x] "Manual Cleanup" section in Retention sub-tab with configurable spinboxes
+  - [x] "Run Now" button with confirmation → summary of removed records
+  - [x] Available to any authenticated Team user — matches backend `require_api_key`
+- **Priority 4 — Compliance Export** (complete):
+  - [x] "Export Compliance Report" button in Overview sub-tab → ZIP download
+  - [x] Gated by `is_admin()` — matches backend `require_admin`
+- **Priority 5 — SCIM Provisioning Visibility** (complete):
+  - [x] New "SCIM" sub-tab (visible only when SCIM enabled)
+  - [x] Status card: enabled, default role, copyable endpoint URL
+  - [x] Recent provisioning events table (filtered `user.scim_*` activity log entries)
+  - [x] Capability probe: `GET /scim/v2/ServiceProviderConfig`
+- **Infrastructure**:
+  - [x] `has_permission(perm)` helper on `ServerCapabilities` — checks cached `/me` permissions, admin gets all
+  - [x] Error messages aligned with backend authorization model (not coarsely "Admin required")
+  - [x] 54 tests covering all panels (visibility, gating, data display, error states, permission checks)
+  - [x] Roadmap and QA checklist updated (`docs/internal/ADMIN_CONSOLE_ROADMAP.md`, `ORGANIZATION_TAB_QA.md`)
 
 ---
 

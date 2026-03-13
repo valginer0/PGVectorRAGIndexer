@@ -29,6 +29,13 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QStackedWidget,
     QSizePolicy,
+    QLineEdit,
+    QSpinBox,
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QMenu,
+    QApplication,
 )
 import qtawesome as qta
 
@@ -153,9 +160,35 @@ class _OverviewPanel(QWidget):
         self._cap_table.setSelectionMode(QTableWidget.NoSelection)
         self._cap_table.setMaximumHeight(200)
         layout.addWidget(self._cap_table)
+
+        # Compliance export button (admin only)
+        self._export_row = QHBoxLayout()
+        self._export_compliance_btn = QPushButton("Export Compliance Report")
+        self._export_compliance_btn.clicked.connect(self._on_export_compliance)
+        self._export_row.addWidget(self._export_compliance_btn)
+        self._export_row.addStretch()
+        self._export_widget = QWidget()
+        self._export_widget.setLayout(self._export_row)
+        layout.addWidget(self._export_widget)
         layout.addStretch()
 
+    def _on_export_compliance(self):
+        try:
+            data = self.api_client.export_compliance_report()
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Save Compliance Report", "compliance_report.zip", "ZIP Files (*.zip)"
+            )
+            if path:
+                with open(path, "wb") as f:
+                    f.write(data)
+                QMessageBox.information(self, "Export Complete", f"Report saved to {path}")
+        except APIAuthenticationError:
+            QMessageBox.warning(self, "Permission Denied", "Admin permission required to export compliance report.")
+        except APIError as e:
+            QMessageBox.warning(self, "Export Failed", f"Failed to export report: {e}")
+
     def refresh(self):
+        self._export_widget.setVisible(self._caps.is_admin())
         self._api_url.setText(self.api_client.base_url or "—")
 
         # Server version
@@ -257,6 +290,10 @@ class _UsersRolesPanel(QWidget):
 
         # Admin actions row (hidden for non-admins)
         self._admin_row = QHBoxLayout()
+        self._add_user_btn = QPushButton("Add User")
+        self._add_user_btn.clicked.connect(self._on_add_user)
+        self._admin_row.addWidget(self._add_user_btn)
+
         self._role_combo = QComboBox()
         self._role_combo.setMinimumWidth(120)
         self._change_role_btn = QPushButton("Change Role")
@@ -268,6 +305,10 @@ class _UsersRolesPanel(QWidget):
         self._admin_widget = QWidget()
         self._admin_widget.setLayout(self._admin_row)
         content_layout.addWidget(self._admin_widget)
+
+        # Context menu on users table
+        self._users_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._users_table.customContextMenuRequested.connect(self._on_users_context_menu)
 
         # Roles section
         roles_label = QLabel("Roles")
@@ -406,6 +447,113 @@ class _UsersRolesPanel(QWidget):
             self._show_message("Admin permission required to change roles.", icon="warning")
         except APIError as e:
             self._show_message(f"Failed to change role: {e}", icon="error", retry=self.refresh)
+
+    def _on_add_user(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add User")
+        dialog.setMinimumWidth(350)
+        form = QFormLayout(dialog)
+
+        email_edit = QLineEdit()
+        email_edit.setPlaceholderText("user@example.com")
+        form.addRow("Email:", email_edit)
+
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("Display Name")
+        form.addRow("Display Name:", name_edit)
+
+        role_combo = QComboBox()
+        for i in range(self._role_combo.count()):
+            role_combo.addItem(self._role_combo.itemText(i))
+        if role_combo.count() > 0:
+            # Default to 'user' if available
+            idx = role_combo.findText("user")
+            if idx >= 0:
+                role_combo.setCurrentIndex(idx)
+        form.addRow("Role:", role_combo)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+        email = email_edit.text().strip()
+        name = name_edit.text().strip()
+        role = role_combo.currentText()
+        if not email:
+            QMessageBox.warning(self, "Validation", "Email is required.")
+            return
+        try:
+            self.api_client.create_user(email=email, display_name=name or None, role=role)
+            self.refresh()
+        except APIAuthenticationError:
+            self._show_message("Admin permission required.", icon="warning")
+        except APIError as e:
+            self._show_message(f"Failed to create user: {e}", icon="error")
+
+    def _on_users_context_menu(self, pos):
+        if not self._caps.is_admin():
+            return
+        row = self._users_table.rowAt(pos.y())
+        if row < 0:
+            return
+        user_id = self._users_table.item(row, 0).data(Qt.UserRole)
+        email = self._users_table.item(row, 0).text()
+        is_active = self._users_table.item(row, 3).text() == "Yes"
+
+        menu = QMenu(self)
+        if is_active:
+            deactivate_action = menu.addAction("Deactivate User")
+        else:
+            activate_action = menu.addAction("Activate User")
+        menu.addSeparator()
+        delete_action = menu.addAction("Delete User")
+
+        chosen = menu.exec(self._users_table.viewport().mapToGlobal(pos))
+        if chosen is None:
+            return
+
+        if is_active and chosen.text() == "Deactivate User":
+            self._toggle_user_active(user_id, email, False)
+        elif not is_active and chosen.text() == "Activate User":
+            self._toggle_user_active(user_id, email, True)
+        elif chosen.text() == "Delete User":
+            self._delete_user(user_id, email)
+
+    def _toggle_user_active(self, user_id, email, activate):
+        action = "activate" if activate else "deactivate"
+        reply = QMessageBox.question(
+            self, f"Confirm {action.title()}",
+            f"Are you sure you want to {action} {email}?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            self.api_client.update_user(user_id, is_active=activate)
+            self.refresh()
+        except APIAuthenticationError:
+            self._show_message("Admin permission required.", icon="warning")
+        except APIError as e:
+            self._show_message(f"Failed to {action} user: {e}", icon="error")
+
+    def _delete_user(self, user_id, email):
+        reply = QMessageBox.warning(
+            self, "Confirm Delete",
+            f"Permanently delete user {email}?\n\nThis action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            self.api_client.delete_user(user_id)
+            self.refresh()
+        except APIAuthenticationError:
+            self._show_message("Admin permission required.", icon="warning")
+        except APIError as e:
+            self._show_message(f"Failed to delete user: {e}", icon="error")
 
 
 class _PermissionsPanel(QWidget):
@@ -548,6 +696,47 @@ class _RetentionPanel(QWidget):
         self._status_form.addRow("Next Run:", self._next_run)
         self._status_form.addRow("Status:", self._run_status)
         content_layout.addLayout(self._status_form)
+
+        # Admin: Run Now controls
+        self._run_section = QWidget()
+        run_layout = QVBoxLayout(self._run_section)
+        run_layout.setContentsMargins(0, 8, 0, 0)
+        run_label = QLabel("Manual Cleanup")
+        run_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        run_layout.addWidget(run_label)
+
+        run_form = QFormLayout()
+        self._run_activity = QSpinBox()
+        self._run_activity.setRange(0, 9999)
+        self._run_activity.setSuffix(" days")
+        self._run_activity.setSpecialValueText("Use default")
+        run_form.addRow("Activity Log:", self._run_activity)
+
+        self._run_quarantine = QSpinBox()
+        self._run_quarantine.setRange(0, 9999)
+        self._run_quarantine.setSuffix(" days")
+        self._run_quarantine.setSpecialValueText("Use default")
+        run_form.addRow("Quarantine:", self._run_quarantine)
+
+        self._run_indexing = QSpinBox()
+        self._run_indexing.setRange(0, 9999)
+        self._run_indexing.setSuffix(" days")
+        self._run_indexing.setSpecialValueText("Use default")
+        run_form.addRow("Indexing Runs:", self._run_indexing)
+
+        self._run_saml = QCheckBox("Clean up SAML sessions")
+        self._run_saml.setChecked(True)
+        run_form.addRow(self._run_saml)
+        run_layout.addLayout(run_form)
+
+        run_btn_row = QHBoxLayout()
+        self._run_now_btn = QPushButton("Run Now")
+        self._run_now_btn.clicked.connect(self._on_run_retention)
+        run_btn_row.addWidget(self._run_now_btn)
+        run_btn_row.addStretch()
+        run_layout.addLayout(run_btn_row)
+
+        content_layout.addWidget(self._run_section)
         content_layout.addStretch()
 
         self._stack.addWidget(self._content)
@@ -559,6 +748,33 @@ class _RetentionPanel(QWidget):
         panel = _MessagePanel(text, icon=icon, retry_callback=retry, parent=self._msg_page)
         self._msg_page.layout().addWidget(panel)
         self._stack.setCurrentWidget(self._msg_page)
+
+    def _on_run_retention(self):
+        kwargs = {"cleanup_saml_sessions": self._run_saml.isChecked()}
+        if self._run_activity.value() > 0:
+            kwargs["activity_days"] = self._run_activity.value()
+        if self._run_quarantine.value() > 0:
+            kwargs["quarantine_days"] = self._run_quarantine.value()
+        if self._run_indexing.value() > 0:
+            kwargs["indexing_runs_days"] = self._run_indexing.value()
+
+        reply = QMessageBox.question(
+            self, "Confirm Retention Run",
+            "Run retention cleanup now with the specified parameters?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            result = self.api_client.run_retention(**kwargs)
+            removed = result.get("removed", {})
+            summary = ", ".join(f"{k}: {v}" for k, v in removed.items()) if removed else "No records removed"
+            self._show_message(f"Retention run complete. {summary}", icon="info")
+            QTimer.singleShot(2000, self.refresh)
+        except APIAuthenticationError:
+            self._show_message("Insufficient permissions to run retention.", icon="warning")
+        except APIError as e:
+            self._show_message(f"Retention run failed: {e}", icon="error")
 
     def refresh(self):
         status = self._caps.get("retention")
@@ -575,6 +791,10 @@ class _RetentionPanel(QWidget):
             return
 
         self._stack.setCurrentWidget(self._content)
+        # Matches backend: POST /retention/run requires Team edition + API key,
+        # not admin. Any authenticated Team user may trigger manual cleanup.
+        # If this should be restricted further, tighten the backend too.
+        self._run_section.setVisible(self._caps.is_available("retention"))
 
         try:
             data = self.api_client.get_retention_policy()
@@ -767,6 +987,356 @@ class _ActivityPanel(QWidget):
             self._show_message(f"Export failed: {e}", icon="error")
 
 
+class _ApiKeysPanel(QWidget):
+    """API Keys management sub-tab."""
+
+    def __init__(self, api_client: APIClient, capabilities: ServerCapabilities, parent=None):
+        super().__init__(parent)
+        self.api_client = api_client
+        self._caps = capabilities
+        self._setup_ui()
+
+    def _setup_ui(self):
+        self._stack = QStackedWidget()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._stack)
+
+        self._msg_page = QWidget()
+        QVBoxLayout(self._msg_page)
+        self._stack.addWidget(self._msg_page)
+
+        self._content = QWidget()
+        content_layout = QVBoxLayout(self._content)
+        content_layout.setSpacing(12)
+        content_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Header row
+        header_row = QHBoxLayout()
+        title = QLabel("API Keys")
+        title.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        header_row.addWidget(title)
+        header_row.addStretch()
+        self._create_btn = QPushButton("Create Key")
+        self._create_btn.clicked.connect(self._on_create_key)
+        header_row.addWidget(self._create_btn)
+        content_layout.addLayout(header_row)
+
+        # Table
+        self._table = QTableWidget()
+        self._table.setColumnCount(5)
+        self._table.setHorizontalHeaderLabels(["Name", "Prefix", "Created", "Last Used", "Status"])
+        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        for col in range(1, 5):
+            self._table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._on_context_menu)
+        content_layout.addWidget(self._table)
+
+        self._stack.addWidget(self._content)
+
+    def _show_message(self, text, icon="info", retry=None):
+        old = self._msg_page.layout().itemAt(0)
+        if old and old.widget():
+            old.widget().deleteLater()
+        panel = _MessagePanel(text, icon=icon, retry_callback=retry, parent=self._msg_page)
+        self._msg_page.layout().addWidget(panel)
+        self._stack.setCurrentWidget(self._msg_page)
+
+    def refresh(self):
+        status = self._caps.get("keys")
+        if status == CapabilityStatus.NOT_SUPPORTED:
+            self._show_message("API key management not available on this server version.", "info")
+            return
+        if status == CapabilityStatus.UNAUTHORIZED:
+            self._show_message("API key required or insufficient permissions.", "warning")
+            return
+        if status == CapabilityStatus.UNREACHABLE:
+            self._show_message("Server unreachable.", "error", retry=self.refresh)
+            return
+        if not self._caps.is_available("keys"):
+            return
+
+        self._stack.setCurrentWidget(self._content)
+        self._create_btn.setVisible(self._caps.has_permission("keys.manage"))
+
+        try:
+            data = self.api_client.list_keys()
+            keys = data.get("keys", [])
+            self._table.setRowCount(len(keys))
+            for i, k in enumerate(keys):
+                self._table.setItem(i, 0, QTableWidgetItem(k.get("name", "—")))
+                self._table.setItem(i, 1, QTableWidgetItem(k.get("prefix", "—")))
+                self._table.setItem(i, 2, QTableWidgetItem(_format_timestamp(k.get("created_at"))))
+                self._table.setItem(i, 3, QTableWidgetItem(_format_timestamp(k.get("last_used_at"))))
+                status_text = k.get("status", "active")
+                status_item = QTableWidgetItem(status_text.title())
+                color = Theme.SUCCESS if status_text == "active" else Theme.ERROR
+                status_item.setForeground(QColor(color))
+                self._table.setItem(i, 4, status_item)
+                # Store key ID
+                self._table.item(i, 0).setData(Qt.UserRole, k.get("id"))
+        except APIConnectionError:
+            self._show_message("Server unreachable.", "error", retry=self.refresh)
+        except APIAuthenticationError:
+            self._show_message("Insufficient permissions.", "warning")
+        except APIError as e:
+            self._show_message(f"Error loading keys: {e}", "error", retry=self.refresh)
+
+    def _on_create_key(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Create API Key")
+        dialog.setMinimumWidth(300)
+        form = QFormLayout(dialog)
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("Key name (e.g. 'CI Pipeline')")
+        form.addRow("Name:", name_edit)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+        name = name_edit.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Validation", "Key name is required.")
+            return
+        try:
+            result = self.api_client.create_key(name)
+            full_key = result.get("key") or result.get("api_key", "")
+            # Show key in a dialog with copy button
+            key_dialog = QDialog(self)
+            key_dialog.setWindowTitle("New API Key Created")
+            key_dialog.setMinimumWidth(450)
+            kd_layout = QVBoxLayout(key_dialog)
+            kd_layout.addWidget(QLabel("Copy this key now — it will not be shown again:"))
+            key_field = QLineEdit(full_key)
+            key_field.setReadOnly(True)
+            key_field.setStyleSheet("font-family: monospace; font-size: 13px; padding: 8px;")
+            kd_layout.addWidget(key_field)
+            copy_btn = QPushButton("Copy to Clipboard")
+            copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(full_key))
+            kd_layout.addWidget(copy_btn)
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(key_dialog.accept)
+            kd_layout.addWidget(close_btn)
+            key_dialog.exec()
+            self.refresh()
+        except APIAuthenticationError:
+            self._show_message("Insufficient permissions (keys.manage required).", icon="warning")
+        except APIError as e:
+            self._show_message(f"Failed to create key: {e}", icon="error")
+
+    def _on_context_menu(self, pos):
+        if not self._caps.has_permission("keys.manage"):
+            return
+        row = self._table.rowAt(pos.y())
+        if row < 0:
+            return
+        key_id = self._table.item(row, 0).data(Qt.UserRole)
+        key_name = self._table.item(row, 0).text()
+        status_text = self._table.item(row, 4).text().lower()
+
+        menu = QMenu(self)
+        if status_text == "active":
+            revoke_action = menu.addAction("Revoke Key")
+            rotate_action = menu.addAction("Rotate Key")
+        else:
+            revoke_action = rotate_action = None
+
+        chosen = menu.exec(self._table.viewport().mapToGlobal(pos))
+        if chosen is None:
+            return
+
+        if chosen == revoke_action:
+            self._revoke_key(key_id, key_name)
+        elif chosen == rotate_action:
+            self._rotate_key(key_id, key_name)
+
+    def _revoke_key(self, key_id, key_name):
+        reply = QMessageBox.warning(
+            self, "Confirm Revoke",
+            f"Revoke API key '{key_name}'?\n\nThis takes effect immediately.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            self.api_client.revoke_key(key_id)
+            self.refresh()
+        except APIError as e:
+            self._show_message(f"Failed to revoke key: {e}", icon="error")
+
+    def _rotate_key(self, key_id, key_name):
+        reply = QMessageBox.question(
+            self, "Confirm Rotate",
+            f"Rotate API key '{key_name}'?\n\nThe old key will remain valid for a 24-hour grace period.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            result = self.api_client.rotate_key(key_id)
+            new_key = result.get("key") or result.get("api_key", "")
+            key_dialog = QDialog(self)
+            key_dialog.setWindowTitle("Key Rotated")
+            key_dialog.setMinimumWidth(450)
+            kd_layout = QVBoxLayout(key_dialog)
+            kd_layout.addWidget(QLabel("New key (old key valid for 24h):"))
+            key_field = QLineEdit(new_key)
+            key_field.setReadOnly(True)
+            key_field.setStyleSheet("font-family: monospace; font-size: 13px; padding: 8px;")
+            kd_layout.addWidget(key_field)
+            copy_btn = QPushButton("Copy to Clipboard")
+            copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(new_key))
+            kd_layout.addWidget(copy_btn)
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(key_dialog.accept)
+            kd_layout.addWidget(close_btn)
+            key_dialog.exec()
+            self.refresh()
+        except APIError as e:
+            self._show_message(f"Failed to rotate key: {e}", icon="error")
+
+
+class _ScimPanel(QWidget):
+    """SCIM Provisioning visibility sub-tab."""
+
+    def __init__(self, api_client: APIClient, capabilities: ServerCapabilities, parent=None):
+        super().__init__(parent)
+        self.api_client = api_client
+        self._caps = capabilities
+        self._setup_ui()
+
+    def _setup_ui(self):
+        self._stack = QStackedWidget()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._stack)
+
+        self._msg_page = QWidget()
+        QVBoxLayout(self._msg_page)
+        self._stack.addWidget(self._msg_page)
+
+        self._content = QWidget()
+        content_layout = QVBoxLayout(self._content)
+        content_layout.setSpacing(16)
+        content_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Status card
+        status_label = QLabel("SCIM Status")
+        status_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        content_layout.addWidget(status_label)
+
+        self._status_form = QFormLayout()
+        self._scim_enabled = QLabel("—")
+        self._scim_default_role = QLabel("—")
+        self._scim_endpoint = QLineEdit()
+        self._scim_endpoint.setReadOnly(True)
+        self._scim_endpoint.setStyleSheet("font-family: monospace; font-size: 12px;")
+        for lbl in (self._scim_enabled, self._scim_default_role):
+            lbl.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 13px;")
+        self._status_form.addRow("Enabled:", self._scim_enabled)
+        self._status_form.addRow("Default Role:", self._scim_default_role)
+        self._status_form.addRow("Endpoint URL:", self._scim_endpoint)
+        content_layout.addLayout(self._status_form)
+
+        # Copy endpoint button
+        copy_row = QHBoxLayout()
+        copy_btn = QPushButton("Copy Endpoint URL")
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self._scim_endpoint.text()))
+        copy_row.addWidget(copy_btn)
+        copy_row.addStretch()
+        content_layout.addLayout(copy_row)
+
+        # Recent provisioning events
+        events_label = QLabel("Recent Provisioning Events")
+        events_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        content_layout.addWidget(events_label)
+
+        self._events_table = QTableWidget()
+        self._events_table.setColumnCount(4)
+        self._events_table.setHorizontalHeaderLabels(["Timestamp", "Action", "User ID", "Details"])
+        self._events_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self._events_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._events_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self._events_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self._events_table.verticalHeader().setVisible(False)
+        self._events_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._events_table.setSelectionBehavior(QTableWidget.SelectRows)
+        content_layout.addWidget(self._events_table)
+
+        self._stack.addWidget(self._content)
+
+    def _show_message(self, text, icon="info", retry=None):
+        old = self._msg_page.layout().itemAt(0)
+        if old and old.widget():
+            old.widget().deleteLater()
+        panel = _MessagePanel(text, icon=icon, retry_callback=retry, parent=self._msg_page)
+        self._msg_page.layout().addWidget(panel)
+        self._stack.setCurrentWidget(self._msg_page)
+
+    def refresh(self):
+        status = self._caps.get("scim")
+        if status == CapabilityStatus.NOT_SUPPORTED:
+            self._show_message("SCIM provisioning is not enabled on this server.", "info")
+            return
+        if status == CapabilityStatus.UNAUTHORIZED:
+            self._show_message("Insufficient permissions to view SCIM status.", "warning")
+            return
+        if status == CapabilityStatus.UNREACHABLE:
+            self._show_message("Server unreachable.", "error", retry=self.refresh)
+            return
+        if not self._caps.is_available("scim"):
+            self._show_message("SCIM provisioning is not available.", "info")
+            return
+
+        self._stack.setCurrentWidget(self._content)
+
+        # Build endpoint URL from API base
+        base = self.api_client.base_url or ""
+        # Strip trailing /api/v1 to get server root
+        server_root = base.rsplit("/api", 1)[0] if "/api" in base else base
+        self._scim_endpoint.setText(f"{server_root}/scim/v2/Users")
+
+        # Fetch SCIM config from ServiceProviderConfig
+        try:
+            from desktop_app.utils.api_client_core.base_client import BaseAPIClient
+            scim_url = f"{server_root}/scim/v2/ServiceProviderConfig"
+            response = self.api_client._base.request("GET", scim_url, timeout=5)
+            config = response.json()
+            self._scim_enabled.setText("Yes")
+            self._scim_default_role.setText(config.get("defaultRole", "—"))
+        except Exception:
+            self._scim_enabled.setText("Yes (config unavailable)")
+            self._scim_default_role.setText("—")
+
+        # Fetch recent SCIM provisioning events from activity log
+        try:
+            data = self.api_client.get_activity_log(
+                limit=50, offset=0, action=None
+            )
+            scim_actions = {"user.scim_provisioned", "user.scim_updated", "user.scim_patched", "user.scim_deprovisioned"}
+            entries = [e for e in data.get("entries", []) if e.get("action") in scim_actions]
+            self._events_table.setRowCount(len(entries))
+            for i, e in enumerate(entries):
+                self._events_table.setItem(i, 0, QTableWidgetItem(_format_timestamp(e.get("ts"))))
+                self._events_table.setItem(i, 1, QTableWidgetItem(e.get("action", "—")))
+                self._events_table.setItem(i, 2, QTableWidgetItem(e.get("user_id") or "—"))
+                details = e.get("details")
+                detail_str = str(details) if details else "—"
+                if len(detail_str) > 100:
+                    detail_str = detail_str[:100] + "..."
+                self._events_table.setItem(i, 3, QTableWidgetItem(detail_str))
+        except Exception as e:
+            logger.warning("Failed to load SCIM events: %s", e)
+            self._events_table.setRowCount(0)
+
+
 # ---------------------------------------------------------------------------
 # Main Organization Tab
 # ---------------------------------------------------------------------------
@@ -828,6 +1398,8 @@ class OrganizationTab(QWidget):
         self._permissions = _PermissionsPanel(self.api_client, self._caps)
         self._retention = _RetentionPanel(self.api_client, self._caps)
         self._activity = _ActivityPanel(self.api_client, self._caps)
+        self._api_keys = _ApiKeysPanel(self.api_client, self._caps)
+        self._scim = _ScimPanel(self.api_client, self._caps)
 
         self._sub_tabs.addTab(self._overview, "Overview")
         # Other tabs added dynamically based on capabilities
@@ -1004,10 +1576,14 @@ class OrganizationTab(QWidget):
             self._sub_tabs.addTab(self._users_roles, "Users & Roles")
         if self._caps.is_available("permissions"):
             self._sub_tabs.addTab(self._permissions, "Permissions")
+        if self._caps.is_available("keys"):
+            self._sub_tabs.addTab(self._api_keys, "API Keys")
         if self._caps.is_available("retention"):
             self._sub_tabs.addTab(self._retention, "Retention")
         if self._caps.is_available("activity"):
             self._sub_tabs.addTab(self._activity, "Activity")
+        if self._caps.is_available("scim"):
+            self._sub_tabs.addTab(self._scim, "SCIM")
 
         # Refresh all visible panels
         self._overview.refresh()
@@ -1015,10 +1591,14 @@ class OrganizationTab(QWidget):
             self._users_roles.refresh()
         if self._caps.is_available("permissions"):
             self._permissions.refresh()
+        if self._caps.is_available("keys"):
+            self._api_keys.refresh()
         if self._caps.is_available("retention"):
             self._retention.refresh()
         if self._caps.is_available("activity"):
             self._activity.refresh()
+        if self._caps.is_available("scim"):
+            self._scim.refresh()
 
     def _show_placeholder(self, text, show_learn_more=False, show_retry=False):
         # Clear old placeholder content

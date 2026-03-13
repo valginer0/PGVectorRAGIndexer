@@ -572,6 +572,34 @@ class APIClient:
         """Get retention execution status."""
         return self._maintenance.get_retention_status()
 
+    def run_retention(self, **kwargs) -> dict:
+        """Run a one-off retention cycle."""
+        return self._maintenance.run_retention(**kwargs)
+
+    def export_compliance_report(self) -> bytes:
+        """Download the compliance report ZIP file."""
+        return self._maintenance.export_compliance_report()
+
+    # ------------------------------------------------------------------
+    # API Key Management
+    # ------------------------------------------------------------------
+
+    def list_keys(self) -> dict:
+        """List all API keys."""
+        return self._identity.list_keys()
+
+    def create_key(self, name: str) -> dict:
+        """Create a new API key."""
+        return self._identity.create_key(name)
+
+    def revoke_key(self, key_id: int) -> dict:
+        """Revoke an API key."""
+        return self._identity.revoke_key(key_id)
+
+    def rotate_key(self, key_id: int) -> dict:
+        """Rotate an API key (24h grace period)."""
+        return self._identity.rotate_key(key_id)
+
     # ------------------------------------------------------------------
     # Endpoint Probing (Capability Detection)
     # ------------------------------------------------------------------

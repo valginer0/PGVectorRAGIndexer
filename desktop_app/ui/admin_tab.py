@@ -158,11 +158,7 @@ class _OverviewPanel(QWidget):
         self._cap_table.verticalHeader().setVisible(False)
         self._cap_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._cap_table.setSelectionMode(QTableWidget.NoSelection)
-        # Size to fit content: header + rows + small margin
-        from desktop_app.utils.server_capabilities import _PROBES
-        row_h = self._cap_table.verticalHeader().defaultSectionSize()
-        header_h = self._cap_table.horizontalHeader().height()
-        self._cap_table.setMaximumHeight(header_h + row_h * len(_PROBES) + 4)
+        self._cap_table.setMaximumHeight(280)
         layout.addWidget(self._cap_table)
 
         # Compliance export button (admin only)
@@ -1113,9 +1109,12 @@ class _ApiKeysPanel(QWidget):
                 self._table.setItem(i, 1, QTableWidgetItem(k.get("prefix", "—")))
                 self._table.setItem(i, 2, QTableWidgetItem(_format_timestamp(k.get("created_at"))))
                 self._table.setItem(i, 3, QTableWidgetItem(_format_timestamp(k.get("last_used_at"))))
-                is_active = k.get("active", k.get("status", "active") == "active")
-                status_text = "Active" if is_active else "Revoked"
-                status_item = QTableWidgetItem(status_text)
+                # Backend returns "active" (bool); older responses may use "status" (string)
+                if "active" in k:
+                    is_active = bool(k["active"])
+                else:
+                    is_active = k.get("status", "active").lower() == "active"
+                status_item = QTableWidgetItem("Active" if is_active else "Revoked")
                 color = Theme.SUCCESS if is_active else Theme.ERROR
                 status_item.setForeground(QColor(color))
                 self._table.setItem(i, 4, status_item)

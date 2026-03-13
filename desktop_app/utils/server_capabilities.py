@@ -19,7 +19,7 @@ _PROBES: Dict[str, str] = {
     "users":       "/api/v1/users?limit=1&active_only=true",
     "roles":       "/api/v1/roles",
     "permissions": "/api/v1/permissions",
-    "keys":        "/api/keys",
+    "keys":        "/api/v1/keys",
     "retention":   "/api/v1/retention/policy",
     "activity":    "/api/v1/activity?limit=1",
     "scim":        "/scim/v2/ServiceProviderConfig",

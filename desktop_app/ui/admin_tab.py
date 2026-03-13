@@ -170,6 +170,43 @@ class _OverviewPanel(QWidget):
         self._export_widget = QWidget()
         self._export_widget.setLayout(self._export_row)
         layout.addWidget(self._export_widget)
+
+        # CLI tips — features also available from the command line
+        cli_frame = QFrame()
+        cli_frame.setFrameShape(QFrame.StyledPanel)
+        cli_frame.setStyleSheet(
+            f"QFrame {{ background: {Theme.SURFACE}; border: 1px solid {Theme.BORDER}; "
+            f"border-radius: 6px; padding: 12px; }}"
+        )
+        cli_layout = QVBoxLayout(cli_frame)
+        cli_layout.setSpacing(4)
+        cli_title = QLabel("CLI Tools")
+        cli_title.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 13px; font-weight: bold; border: none;")
+        cli_layout.addWidget(cli_title)
+        cli_hints = [
+            ("API key management", "python pgvector_admin.py create-key | list-keys | revoke-key | rotate-key"),
+            ("Bulk reindex", "python scripts/reindex_all.py [--dry-run] [--batch-size N]"),
+            ("Index documents", "python indexer_v2.py --path <file-or-dir>"),
+            ("Search from terminal", "python retriever_v2.py --query 'your query'"),
+        ]
+        for label, cmd in cli_hints:
+            row = QHBoxLayout()
+            name_lbl = QLabel(f"{label}:")
+            name_lbl.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px; border: none;")
+            name_lbl.setFixedWidth(140)
+            cmd_lbl = QLabel(cmd)
+            cmd_lbl.setStyleSheet(
+                f"color: {Theme.TEXT_PRIMARY}; font-size: 11px; font-family: monospace; border: none;"
+            )
+            cmd_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            row.addWidget(name_lbl)
+            row.addWidget(cmd_lbl, 1)
+            cli_layout.addLayout(row)
+        cli_note = QLabel("Run from the project root directory. See docs/USAGE_GUIDE.md for details.")
+        cli_note.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 11px; font-style: italic; border: none;")
+        cli_layout.addWidget(cli_note)
+        layout.addWidget(cli_frame)
+
         layout.addStretch()
 
     def _on_export_compliance(self):
@@ -1432,10 +1469,15 @@ class OrganizationTab(QWidget):
             logger.info("probe_and_refresh: done, page index=%d", self._outer_stack.currentIndex())
         except Exception as e:
             logger.error(f"Organization tab probe failed: {e}", exc_info=True)
-            self._show_placeholder(
-                f"Failed to load organization features: {e}",
-                show_retry=True,
-            )
+            if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
+                # Still in startup — show a gentle loading message and auto-retry
+                self._show_placeholder("Loading organization features...")
+                self._schedule_auto_retry()
+            else:
+                self._show_placeholder(
+                    f"Failed to load organization features: {e}",
+                    show_retry=True,
+                )
         finally:
             self._refresh_btn.setEnabled(True)
             self._refresh_btn.setText("Refresh")
@@ -1530,30 +1572,41 @@ class OrganizationTab(QWidget):
 
         # If the server explicitly rejected due to edition constraints -> gated (upgrade path)
         if has_edition_denial:
-            self._show_placeholder(
-                "Organization Console features are available with a Team or Organization license.",
-                show_learn_more=True,
-            )
+            if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
+                self._show_placeholder("Loading organization features...")
+            else:
+                self._show_placeholder(
+                    "Organization Console features are available with a Team or Organization license.",
+                    show_learn_more=True,
+                )
             self._schedule_auto_retry()
             return
 
         # Generic Auth failures take priority — server is reachable but rejecting us for permission
         if not has_any and has_auth_issue:
-            self._show_placeholder(
-                "Authentication required. Check your API key in Settings, "
-                "or contact your administrator if permissions are insufficient.",
-                show_retry=True,
-            )
+            if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
+                self._show_placeholder("Loading organization features...")
+            else:
+                self._show_placeholder(
+                    "Authentication required. Check your API key in Settings, "
+                    "or contact your administrator if permissions are insufficient.",
+                    show_retry=True,
+                )
             self._schedule_auto_retry()
             return
 
         # Connectivity / Support failures
         if not has_any:
             if self._caps.all_unreachable_or_unknown():
-                self._show_placeholder(
-                    "Cannot connect to server. Organization features will appear once the server is running.",
-                    show_retry=True,
-                )
+                if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
+                    # Still in startup — show a gentle loading message instead of
+                    # flashing a scary "Cannot connect" error with a Retry button.
+                    self._show_placeholder("Loading organization features...")
+                else:
+                    self._show_placeholder(
+                        "Cannot connect to server. Organization features will appear once the server is running.",
+                        show_retry=True,
+                    )
                 self._schedule_auto_retry()
             else:
                 self._show_placeholder(

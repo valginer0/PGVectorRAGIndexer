@@ -445,6 +445,53 @@ class TestRefreshBehavior:
         assert org_tab._auto_retry_attempts == org_tab.MAX_AUTO_RETRY_ATTEMPTS
         assert org_tab._transient_retry_window_active is False
 
+    def test_backend_healthy_reprobes_placeholder_and_recovers_content(self, org_tab, api_client):
+        """A later backend-healthy signal should reprobe transient placeholder state and load content."""
+        probe_results = [
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.UNREACHABLE),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={"permissions": ["system.admin"]}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+            ProbeResult(status=CapabilityStatus.AVAILABLE, body={}, status_code=200),
+        ]
+
+        with patch.object(api_client, "probe_endpoint", side_effect=probe_results), \
+             patch("desktop_app.utils.edition.is_feature_available", return_value=True), \
+             patch("desktop_app.ui.admin_tab.QTimer.singleShot") as mock_single_shot:
+            org_tab.probe_and_refresh()
+            assert org_tab._outer_stack.currentWidget() == org_tab._placeholder
+            assert org_tab._awaiting_backend_healthy_reprobe is True
+
+            org_tab._auto_retry_scheduled = False
+            mock_single_shot.reset_mock()
+            org_tab.on_backend_healthy()
+
+        assert org_tab._outer_stack.currentWidget() == org_tab._tabs_page
+        assert org_tab._awaiting_backend_healthy_reprobe is False
+        assert org_tab._auto_retry_scheduled is False
+        assert org_tab._auto_retry_attempts == 0
+        mock_single_shot.assert_not_called()
+
+    def test_backend_healthy_does_not_overwrite_loaded_content(self, org_tab, api_client):
+        """A later backend-healthy signal should do nothing once real content is already loaded."""
+        with patch.object(api_client, "probe_endpoint", side_effect=_make_probe_fn()), \
+             patch("desktop_app.utils.edition.is_feature_available", return_value=True):
+            org_tab.probe_and_refresh()
+
+        assert org_tab._outer_stack.currentWidget() == org_tab._tabs_page
+
+        with patch.object(org_tab, "probe_and_refresh") as mock_probe:
+            org_tab.on_backend_healthy()
+
+        mock_probe.assert_not_called()
+
     def test_steady_state_edition_denial_does_not_schedule_auto_retry(self, org_tab, api_client):
         """Stable edition denial outside the transient startup window should not auto-retry."""
         org_tab._transient_retry_window_active = False

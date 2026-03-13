@@ -158,7 +158,7 @@ class _OverviewPanel(QWidget):
         self._cap_table.verticalHeader().setVisible(False)
         self._cap_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._cap_table.setSelectionMode(QTableWidget.NoSelection)
-        self._cap_table.setMaximumHeight(280)
+        self._cap_table.setSizeAdjustPolicy(QTableWidget.AdjustToContents)
         layout.addWidget(self._cap_table)
 
         # Compliance export button (admin only)
@@ -267,16 +267,31 @@ class _OverviewPanel(QWidget):
         # Capabilities table
         from desktop_app.utils.server_capabilities import _PROBES
         cap_names = [k for k in _PROBES if k != "me"]
+        # Setup hints for capabilities that need configuration
+        _cap_hints = {
+            "scim": "Set SCIM_ENABLED=true and SCIM_BEARER_TOKEN in server env",
+            "keys": "Requires keys.manage permission or admin role",
+            "retention": "Requires Team/Organization license",
+        }
         self._cap_table.setRowCount(len(cap_names))
         for i, name in enumerate(cap_names):
             status = self._caps.get(name)
-            name_item = QTableWidgetItem(name.replace("_", " ").title())
+            display_name = name.replace("_", " ").title()
+            if name == "scim":
+                display_name = "SCIM Provisioning"
+            name_item = QTableWidgetItem(display_name)
             name_item.setFlags(Qt.ItemIsEnabled)
             self._cap_table.setItem(i, 0, name_item)
 
-            status_item = QTableWidgetItem(_status_label(status))
+            status_text = _status_label(status)
+            hint = _cap_hints.get(name, "")
+            if status == CapabilityStatus.NOT_SUPPORTED and hint:
+                status_text = f"{status_text} — {hint}"
+            status_item = QTableWidgetItem(status_text)
             status_item.setForeground(QColor(_status_color(status)))
             status_item.setFlags(Qt.ItemIsEnabled)
+            if hint:
+                status_item.setToolTip(hint)
             self._cap_table.setItem(i, 1, status_item)
 
 

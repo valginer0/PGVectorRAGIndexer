@@ -158,7 +158,7 @@ class _OverviewPanel(QWidget):
         self._cap_table.verticalHeader().setVisible(False)
         self._cap_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._cap_table.setSelectionMode(QTableWidget.NoSelection)
-        self._cap_table.setSizeAdjustPolicy(QTableWidget.AdjustToContents)
+        self._cap_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(self._cap_table)
 
         # Compliance export button (admin only)
@@ -293,6 +293,12 @@ class _OverviewPanel(QWidget):
             if hint:
                 status_item.setToolTip(hint)
             self._cap_table.setItem(i, 1, status_item)
+
+        # Fix height to exact content so the layout can't squish rows
+        h = self._cap_table.horizontalHeader().height() + 2  # header + border
+        for i in range(self._cap_table.rowCount()):
+            h += self._cap_table.rowHeight(i)
+        self._cap_table.setFixedHeight(h)
 
 
 class _UsersRolesPanel(QWidget):
@@ -1328,6 +1334,62 @@ class _ScimPanel(QWidget):
 
         self._stack.addWidget(self._content)
 
+    def _show_scim_setup_guide(self):
+        """Show an informative setup guide when SCIM is not enabled."""
+        old = self._msg_page.layout().itemAt(0)
+        if old and old.widget():
+            old.widget().deleteLater()
+
+        guide = QFrame(self._msg_page)
+        guide.setFrameShape(QFrame.StyledPanel)
+        guide.setStyleSheet(
+            f"QFrame {{ background: {Theme.SURFACE}; border: 1px solid {Theme.BORDER}; "
+            f"border-radius: 8px; padding: 20px; }}"
+        )
+        gl = QVBoxLayout(guide)
+        gl.setSpacing(12)
+
+        title = QLabel("SCIM 2.0 Provisioning")
+        title.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 15px; font-weight: bold; border: none;")
+        gl.addWidget(title)
+
+        desc = QLabel(
+            "SCIM automates user provisioning from identity providers like Okta, "
+            "Azure AD, and OneLogin. When enabled, user accounts are automatically "
+            "created, updated, and deactivated in sync with your company directory."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 13px; border: none;")
+        gl.addWidget(desc)
+
+        how_label = QLabel("To enable SCIM, add these to your server environment:")
+        how_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 13px; border: none;")
+        gl.addWidget(how_label)
+
+        env_text = QLabel(
+            "SCIM_ENABLED=true\n"
+            "SCIM_BEARER_TOKEN=<generate-a-strong-random-token>\n"
+            "SCIM_DEFAULT_ROLE=user"
+        )
+        env_text.setStyleSheet(
+            f"color: {Theme.TEXT_PRIMARY}; font-size: 12px; font-family: monospace; "
+            f"background: {Theme.BACKGROUND}; padding: 10px; border-radius: 4px; border: none;"
+        )
+        env_text.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        gl.addWidget(env_text)
+
+        features = QLabel(
+            "Supported: User and Group provisioning (RFC 7643/7644), "
+            "PATCH operations, filtering, pagination.\n"
+            "See docs/SCIM_SETUP.md for Okta, Azure AD, and OneLogin setup guides."
+        )
+        features.setWordWrap(True)
+        features.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px; font-style: italic; border: none;")
+        gl.addWidget(features)
+
+        self._msg_page.layout().addWidget(guide)
+        self._stack.setCurrentWidget(self._msg_page)
+
     def _show_message(self, text, icon="info", retry=None):
         old = self._msg_page.layout().itemAt(0)
         if old and old.widget():
@@ -1339,7 +1401,7 @@ class _ScimPanel(QWidget):
     def refresh(self):
         status = self._caps.get("scim")
         if status == CapabilityStatus.NOT_SUPPORTED:
-            self._show_message("SCIM provisioning is not enabled on this server.", "info")
+            self._show_scim_setup_guide()
             return
         if status == CapabilityStatus.UNAUTHORIZED:
             self._show_message("Insufficient permissions to view SCIM status.", "warning")

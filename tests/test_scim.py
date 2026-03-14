@@ -432,3 +432,17 @@ class TestScimEndpoints:
     def test_delete_user_endpoint(self):
         # DELETE /scim/v2/Users/{user_id} — same path as GET
         assert "/scim/v2/Users/{user_id}" in self.routes
+
+    def test_list_groups_endpoint(self):
+        assert "/scim/v2/Groups" in self.routes
+
+    def test_get_group_endpoint(self):
+        assert "/scim/v2/Groups/{group_id}" in self.routes
+
+    def test_create_group_endpoint(self):
+        # POST /scim/v2/Groups — same path as GET list
+        assert "/scim/v2/Groups" in self.routes
+
+    def test_delete_group_endpoint(self):
+        # DELETE /scim/v2/Groups/{group_id} — same path as GET
+        assert "/scim/v2/Groups/{group_id}" in self.routes

@@ -518,10 +518,11 @@ Implementation sequencing (recommended):
   - [x] "Export Compliance Report" button in Overview sub-tab → ZIP download
   - [x] Gated by `is_admin()` — matches backend `require_admin`
 - **Priority 5 — SCIM Provisioning Visibility** (complete):
-  - [x] New "SCIM" sub-tab (visible only when SCIM enabled)
+  - [x] New "SCIM" sub-tab (always visible — shows setup guide when not enabled, status/events when enabled)
   - [x] Status card: enabled, default role, copyable endpoint URL
   - [x] Recent provisioning events table (filtered `user.scim_*` activity log entries)
   - [x] Capability probe: `GET /scim/v2/ServiceProviderConfig`
+  - [x] Note: SCIM configuration (tokens, roles) is read-only in desktop UI — managed via server env vars
 - **Infrastructure**:
   - [x] `has_permission(perm)` helper on `ServerCapabilities` — checks cached `/me` permissions, admin gets all
   - [x] Error messages aligned with backend authorization model (not coarsely "Admin required")

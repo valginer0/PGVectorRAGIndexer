@@ -273,7 +273,7 @@ class TestTabVisibilityStates:
              patch("desktop_app.utils.edition.is_feature_available", return_value=True):
             org_tab._on_refresh()
 
-        assert org_tab._sub_tabs.count() == 2  # Overview + Users & Roles
+        assert org_tab._sub_tabs.count() == 3  # Overview + Users & Roles + SCIM (always shown)
 
 
 # ---------------------------------------------------------------------------
@@ -1652,8 +1652,8 @@ class TestSubTabWiring:
         tab_titles = [org_tab._sub_tabs.tabText(i) for i in range(org_tab._sub_tabs.count())]
         assert "API Keys" not in tab_titles
 
-    def test_scim_tab_hidden_when_not_supported(self, org_tab, api_client):
-        """SCIM tab does not appear when SCIM is not enabled on server."""
+    def test_scim_tab_always_visible(self, org_tab, api_client):
+        """SCIM tab is always shown — displays setup guide when not enabled."""
         status_map = {k: CapabilityStatus.AVAILABLE for k in _PROBES}
         status_map["scim"] = CapabilityStatus.NOT_SUPPORTED
         with patch.object(api_client, "probe_endpoint", side_effect=_make_probe_fn(status_map)), \
@@ -1661,7 +1661,7 @@ class TestSubTabWiring:
             org_tab.probe_and_refresh()
 
         tab_titles = [org_tab._sub_tabs.tabText(i) for i in range(org_tab._sub_tabs.count())]
-        assert "SCIM" not in tab_titles
+        assert "SCIM" in tab_titles
 
     def test_tab_order(self, org_tab, api_client):
         """Sub-tabs appear in the correct order."""

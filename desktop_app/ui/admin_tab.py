@@ -36,6 +36,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QMenu,
     QApplication,
+    QScrollArea,
 )
 import qtawesome as qta
 
@@ -124,7 +125,13 @@ class _OverviewPanel(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        inner = QWidget()
+        layout = QVBoxLayout(inner)
         layout.setSpacing(16)
         layout.setContentsMargins(20, 20, 20, 20)
 
@@ -208,6 +215,8 @@ class _OverviewPanel(QWidget):
         layout.addWidget(cli_frame)
 
         layout.addStretch()
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
 
     def _on_export_compliance(self):
         try:
@@ -1716,8 +1725,8 @@ class OrganizationTab(QWidget):
             self._sub_tabs.addTab(self._retention, "Retention")
         if self._caps.is_available("activity"):
             self._sub_tabs.addTab(self._activity, "Activity")
-        if self._caps.is_available("scim"):
-            self._sub_tabs.addTab(self._scim, "SCIM")
+        # Always show SCIM tab — displays setup guide when not enabled
+        self._sub_tabs.addTab(self._scim, "SCIM")
 
         # Refresh all visible panels
         self._overview.refresh()
@@ -1731,8 +1740,7 @@ class OrganizationTab(QWidget):
             self._retention.refresh()
         if self._caps.is_available("activity"):
             self._activity.refresh()
-        if self._caps.is_available("scim"):
-            self._scim.refresh()
+        self._scim.refresh()
 
     def _show_placeholder(self, text, show_learn_more=False, show_retry=False):
         # Clear old placeholder content

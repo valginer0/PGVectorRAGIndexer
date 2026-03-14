@@ -1816,3 +1816,255 @@ class TestActivityPanelBehavior:
         assert len(detail_text) <= 103  # 100 chars + "..."
         assert detail_text.endswith("...")
         panel.deleteLater()
+
+
+# ---------------------------------------------------------------------------
+# SCIM Panel — Group Management & Admin Gating Tests
+# ---------------------------------------------------------------------------
+
+class TestScimGroupManagement:
+    """Tests for SCIM group-to-role mapping UI and admin gating."""
+
+    def _make_scim_panel(self, qapp, api_client, is_admin=True):
+        from desktop_app.ui.admin_tab import _ScimPanel
+        caps = ServerCapabilities(api_client)
+        for name in _PROBES:
+            caps._cache[name] = CapabilityStatus.AVAILABLE
+        if is_admin:
+            caps._me_response = {"permissions": ["system.admin"]}
+        else:
+            caps._me_response = {"permissions": ["docs.read"]}
+        return _ScimPanel(api_client, caps), caps
+
+    def test_add_group_button_visible_for_admin(self, qapp, api_client):
+        """Admin user sees 'Add Group Mapping' button."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"defaultRole": "user"}
+        with patch.object(api_client, "_base") as mock_base, \
+             patch.object(api_client, "get_activity_log", return_value={"entries": []}):
+            mock_base.request.return_value = mock_response
+            panel.refresh()
+        # Use isHidden() — isVisible() returns False in offscreen mode
+        assert not panel._group_btn_row.isHidden()
+        panel.deleteLater()
+
+    def test_add_group_button_hidden_for_non_admin(self, qapp, api_client):
+        """Non-admin user does not see 'Add Group Mapping' button."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=False)
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"defaultRole": "user"}
+        with patch.object(api_client, "_base") as mock_base, \
+             patch.object(api_client, "get_activity_log", return_value={"entries": []}):
+            mock_base.request.return_value = mock_response
+            panel.refresh()
+        assert panel._group_btn_row.isHidden()
+        panel.deleteLater()
+
+    def test_context_menu_blocked_for_non_admin(self, qapp, api_client):
+        """Non-admin right-click on groups table does nothing (no menu)."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=False)
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"defaultRole": "user"}
+        with patch.object(api_client, "_base") as mock_base, \
+             patch.object(api_client, "get_activity_log", return_value={"entries": []}):
+            mock_base.request.return_value = mock_response
+            panel.refresh()
+        # Simulate right-click — should return early without showing menu
+        from PySide6.QtCore import QPoint
+        with patch("PySide6.QtWidgets.QMenu.exec") as mock_menu:
+            panel._on_group_context_menu(QPoint(10, 10))
+            mock_menu.assert_not_called()
+        panel.deleteLater()
+
+    def test_groups_table_populated(self, qapp, api_client):
+        """Groups table loads data from the admin endpoint."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        config_resp = MagicMock()
+        config_resp.json.return_value = {"defaultRole": "user"}
+        groups_resp = MagicMock()
+        groups_resp.json.return_value = {
+            "groups": [
+                {"id": "g1", "display_name": "Admins", "role_name": "admin",
+                 "member_count": 3, "created_at": "2026-01-01T00:00:00+00:00"},
+                {"id": "g2", "display_name": "Users", "role_name": "user",
+                 "member_count": 10, "created_at": "2026-01-02T00:00:00+00:00"},
+            ],
+            "total": 2,
+        }
+        def side_effect(method, url, **kwargs):
+            if "scim-groups" in url:
+                return groups_resp
+            return config_resp
+        with patch.object(api_client, "_base") as mock_base, \
+             patch.object(api_client, "get_activity_log", return_value={"entries": []}):
+            mock_base.request.side_effect = side_effect
+            panel.refresh()
+        assert panel._groups_table.rowCount() == 2
+        assert panel._groups_table.item(0, 0).text() == "Admins"
+        assert panel._groups_table.item(0, 1).text() == "admin"
+        assert panel._groups_table.item(1, 0).text() == "Users"
+        panel.deleteLater()
+
+    def test_add_group_dialog_validation(self, qapp, api_client):
+        """Add Group dialog rejects empty group name with a warning."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"defaultRole": "user"}
+        with patch.object(api_client, "_base") as mock_base, \
+             patch.object(api_client, "get_activity_log", return_value={"entries": []}):
+            mock_base.request.return_value = mock_response
+            panel.refresh()
+
+        from PySide6.QtWidgets import QDialog
+        with patch.object(QDialog, "exec", return_value=QDialog.Accepted), \
+             patch.object(api_client, "list_roles", return_value={"roles": [{"name": "admin"}]}), \
+             patch.object(QMessageBox, "warning") as mock_warn:
+            panel._on_add_group()
+            # Empty name → validation warning, no POST
+            mock_warn.assert_called_once()
+            assert "required" in str(mock_warn.call_args).lower()
+        panel.deleteLater()
+
+    def test_add_group_dialog_cancel(self, qapp, api_client):
+        """Cancelling the add group dialog does not send any request."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"defaultRole": "user"}
+        with patch.object(api_client, "_base") as mock_base, \
+             patch.object(api_client, "get_activity_log", return_value={"entries": []}):
+            mock_base.request.return_value = mock_response
+            panel.refresh()
+
+        from PySide6.QtWidgets import QDialog
+        with patch.object(QDialog, "exec", return_value=QDialog.Rejected), \
+             patch.object(api_client, "list_roles", return_value={"roles": [{"name": "admin"}]}), \
+             patch.object(api_client, "_base") as mock_base:
+            panel._on_add_group()
+            # Cancelled → no request made
+            mock_base.request.assert_not_called()
+        panel.deleteLater()
+
+    def test_setup_guide_has_open_button(self, qapp, api_client):
+        """Setup guide panel includes 'Open Full Setup Guide' button."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        caps._cache["scim"] = CapabilityStatus.NOT_SUPPORTED
+        panel.refresh()
+        from PySide6.QtWidgets import QPushButton
+        buttons = panel._msg_page.findChildren(QPushButton)
+        button_texts = [b.text() for b in buttons]
+        assert any("Setup Guide" in t for t in button_texts), f"Expected setup guide button, found: {button_texts}"
+        panel.deleteLater()
+
+    def test_open_setup_guide_calls_system_open(self, qapp, api_client):
+        """Open Full Setup Guide button triggers system file opener."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        caps._cache["scim"] = CapabilityStatus.NOT_SUPPORTED
+        panel.refresh()
+        with patch("subprocess.Popen") as mock_popen, \
+             patch("pathlib.Path.exists", return_value=True):
+            panel._open_setup_guide_file()
+            mock_popen.assert_called_once()
+            call_args = mock_popen.call_args[0][0]
+            assert any("SCIM_SETUP.md" in str(a) for a in call_args)
+        panel.deleteLater()
+
+    def test_open_setup_guide_missing_file(self, qapp, api_client):
+        """Open guide shows warning when file doesn't exist."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        caps._cache["scim"] = CapabilityStatus.NOT_SUPPORTED
+        panel.refresh()
+        with patch("pathlib.Path.exists", return_value=False), \
+             patch.object(QMessageBox, "warning") as mock_warn:
+            panel._open_setup_guide_file()
+            mock_warn.assert_called_once()
+        panel.deleteLater()
+
+    def test_events_include_group_actions(self, qapp, api_client):
+        """Provisioning events table includes group.scim_* events."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"defaultRole": "user"}
+        entries = [
+            {"ts": "2026-01-01T00:00:00Z", "action": "group.scim_created", "user_id": None, "details": {"group_id": "g1"}},
+            {"ts": "2026-01-01T01:00:00Z", "action": "user.scim_provisioned", "user_id": "u1", "details": {}},
+        ]
+        with patch.object(api_client, "_base") as mock_base, \
+             patch.object(api_client, "get_activity_log", return_value={"entries": entries}):
+            mock_base.request.return_value = mock_response
+            panel.refresh()
+        assert panel._events_table.rowCount() == 2
+        actions = [panel._events_table.item(i, 1).text() for i in range(2)]
+        assert "group.scim_created" in actions
+        assert "user.scim_provisioned" in actions
+        panel.deleteLater()
+
+    def test_add_group_successful_post(self, qapp, api_client):
+        """Successful add group sends POST with correct display_name and role_name."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"defaultRole": "user"}
+        with patch.object(api_client, "_base") as mock_base, \
+             patch.object(api_client, "get_activity_log", return_value={"entries": []}):
+            mock_base.request.return_value = mock_response
+            panel.refresh()
+
+        from PySide6.QtWidgets import QDialog, QLineEdit
+        # Patch exec to accept, and inject text into the QLineEdit before it returns
+        original_exec = QDialog.exec
+        def fake_exec(dlg):
+            # Find the QLineEdit in the dialog and set text
+            line_edits = dlg.findChildren(QLineEdit)
+            if line_edits:
+                line_edits[0].setText("Engineering Admins")
+            return QDialog.Accepted
+        with patch.object(QDialog, "exec", fake_exec), \
+             patch.object(api_client, "list_roles", return_value={"roles": [{"name": "admin"}, {"name": "user"}]}), \
+             patch.object(api_client, "_base") as mock_base, \
+             patch.object(panel, "refresh"):
+            mock_base.request.return_value = mock_response
+            panel._on_add_group()
+            mock_base.request.assert_called_once_with(
+                "POST",
+                f"{api_client.base_url}/scim-groups",
+                json={"display_name": "Engineering Admins", "role_name": "admin"},
+            )
+        panel.deleteLater()
+
+    def _setup_groups_table_for_delete(self, panel):
+        """Helper: populate groups table with one row for delete tests."""
+        from PySide6.QtCore import Qt as QtCore_Qt
+        from PySide6.QtWidgets import QTableWidgetItem
+        panel._groups_table.setRowCount(1)
+        name_item = QTableWidgetItem("Admins")
+        name_item.setData(QtCore_Qt.UserRole, "g1")
+        panel._groups_table.setItem(0, 0, name_item)
+        panel._groups_table.setItem(0, 1, QTableWidgetItem("admin"))
+
+    def test_delete_group_confirmed(self, qapp, api_client):
+        """Confirmed delete sends DELETE /scim-groups/{id} and refreshes."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        self._setup_groups_table_for_delete(panel)
+
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.Yes), \
+             patch.object(api_client, "_base") as mock_base, \
+             patch.object(panel, "refresh") as mock_refresh:
+            mock_base.request.return_value = MagicMock()
+            panel._confirm_delete_group("g1", "Admins")
+            mock_base.request.assert_called_once_with(
+                "DELETE",
+                f"{api_client.base_url}/scim-groups/g1",
+            )
+            mock_refresh.assert_called_once()
+        panel.deleteLater()
+
+    def test_delete_group_cancelled(self, qapp, api_client):
+        """Cancelled delete confirmation does not send DELETE request."""
+        panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
+        self._setup_groups_table_for_delete(panel)
+
+        with patch.object(QMessageBox, "question", return_value=QMessageBox.No), \
+             patch.object(api_client, "_base") as mock_base:
+            panel._confirm_delete_group("g1", "Admins")
+            mock_base.request.assert_not_called()
+        panel.deleteLater()

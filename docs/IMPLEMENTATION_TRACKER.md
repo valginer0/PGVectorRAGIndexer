@@ -522,7 +522,8 @@ Implementation sequencing (recommended):
   - [x] Status card: enabled, default role, copyable endpoint URL
   - [x] Recent provisioning events table (filtered `user.scim_*` activity log entries)
   - [x] Capability probe: `GET /scim/v2/ServiceProviderConfig`
-  - [x] Note: SCIM configuration (tokens, roles) is read-only in desktop UI — managed via server env vars
+  - [x] Group-to-role mapping management (admin only): add/delete group mappings from desktop UI
+  - [x] Note: SCIM token and default-role configuration remains server-side (env vars)
 - **Infrastructure**:
   - [x] `has_permission(perm)` helper on `ServerCapabilities` — checks cached `/me` permissions, admin gets all
   - [x] Error messages aligned with backend authorization model (not coarsely "Admin required")

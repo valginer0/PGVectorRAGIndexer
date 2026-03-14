@@ -1294,7 +1294,11 @@ class _ScimPanel(QWidget):
         self._stack.addWidget(self._msg_page)
 
         self._content = QWidget()
-        content_layout = QVBoxLayout(self._content)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        inner = QWidget()
+        content_layout = QVBoxLayout(inner)
         content_layout.setSpacing(16)
         content_layout.setContentsMargins(20, 20, 20, 20)
 
@@ -1324,6 +1328,43 @@ class _ScimPanel(QWidget):
         copy_row.addStretch()
         content_layout.addLayout(copy_row)
 
+        # Group-to-Role mappings
+        groups_label = QLabel("Group-to-Role Mappings")
+        groups_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        content_layout.addWidget(groups_label)
+
+        groups_desc = QLabel(
+            "Each SCIM group maps to one internal role. "
+            "When an IdP adds a user to a group, their role changes to match."
+        )
+        groups_desc.setWordWrap(True)
+        groups_desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
+        content_layout.addWidget(groups_desc)
+
+        self._groups_table = QTableWidget()
+        self._groups_table.setColumnCount(4)
+        self._groups_table.setHorizontalHeaderLabels(["Group Name", "Role", "Members", "Created"])
+        self._groups_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._groups_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._groups_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self._groups_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self._groups_table.verticalHeader().setVisible(False)
+        self._groups_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._groups_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._groups_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._groups_table.customContextMenuRequested.connect(self._on_group_context_menu)
+        content_layout.addWidget(self._groups_table)
+
+        # Group action buttons (admin only — hidden in refresh() for non-admins)
+        self._group_btn_row = QWidget()
+        group_btn_layout = QHBoxLayout(self._group_btn_row)
+        group_btn_layout.setContentsMargins(0, 0, 0, 0)
+        self._add_group_btn = QPushButton("Add Group Mapping")
+        self._add_group_btn.clicked.connect(self._on_add_group)
+        group_btn_layout.addWidget(self._add_group_btn)
+        group_btn_layout.addStretch()
+        content_layout.addWidget(self._group_btn_row)
+
         # Recent provisioning events
         events_label = QLabel("Recent Provisioning Events")
         events_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
@@ -1340,6 +1381,12 @@ class _ScimPanel(QWidget):
         self._events_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._events_table.setSelectionBehavior(QTableWidget.SelectRows)
         content_layout.addWidget(self._events_table)
+
+        content_layout.addStretch()
+        scroll.setWidget(inner)
+        content_scroll_wrapper = QVBoxLayout(self._content)
+        content_scroll_wrapper.setContentsMargins(0, 0, 0, 0)
+        content_scroll_wrapper.addWidget(scroll)
 
         self._stack.addWidget(self._content)
 
@@ -1389,15 +1436,138 @@ class _ScimPanel(QWidget):
 
         features = QLabel(
             "Supported: User and Group provisioning (RFC 7643/7644), "
-            "PATCH operations, filtering, pagination.\n"
-            "See docs/SCIM_SETUP.md for Okta, Azure AD, and OneLogin setup guides."
+            "PATCH operations, filtering, pagination."
         )
         features.setWordWrap(True)
         features.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px; font-style: italic; border: none;")
         gl.addWidget(features)
 
+        # Open full setup guide button
+        open_guide_btn = QPushButton("Open Full Setup Guide (SCIM_SETUP.md)")
+        open_guide_btn.clicked.connect(self._open_setup_guide_file)
+        gl.addWidget(open_guide_btn)
+
         self._msg_page.layout().addWidget(guide)
         self._stack.setCurrentWidget(self._msg_page)
+
+    def _open_setup_guide_file(self):
+        """Open docs/SCIM_SETUP.md in the system default application."""
+        import subprocess
+        import sys
+        from pathlib import Path
+        guide_path = Path(__file__).parent.parent.parent / "docs" / "SCIM_SETUP.md"
+        if not guide_path.exists():
+            QMessageBox.warning(self, "File Not Found", f"Could not find:\n{guide_path}")
+            return
+        try:
+            if sys.platform == "win32":
+                import os
+                os.startfile(str(guide_path))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(guide_path)])
+            else:
+                subprocess.Popen(["xdg-open", str(guide_path)])
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not open file:\n{e}")
+
+    def _on_add_group(self):
+        """Show dialog to create a new SCIM group mapping."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add Group-to-Role Mapping")
+        dialog.setMinimumWidth(350)
+        dlg_layout = QVBoxLayout(dialog)
+
+        form = QFormLayout()
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("e.g. Engineering Admins")
+        form.addRow("Group Name:", name_edit)
+
+        role_combo = QComboBox()
+        try:
+            roles_data = self.api_client.list_roles()
+            for r in roles_data.get("roles", []):
+                role_combo.addItem(r.get("name", ""))
+        except Exception:
+            role_combo.addItems(["admin", "user"])
+        form.addRow("Maps to Role:", role_combo)
+        dlg_layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        dlg_layout.addWidget(buttons)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+        display_name = name_edit.text().strip()
+        role_name = role_combo.currentText()
+        if not display_name:
+            QMessageBox.warning(self, "Validation Error", "Group name is required.")
+            return
+        try:
+            self.api_client._base.request(
+                "POST",
+                f"{self.api_client.base_url}/scim-groups",
+                json={"display_name": display_name, "role_name": role_name},
+            )
+            self.refresh()
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to create group:\n{e}")
+
+    def _on_group_context_menu(self, pos):
+        """Right-click menu on groups table for delete (admin only)."""
+        if not self._caps.is_admin():
+            return
+        row = self._groups_table.rowAt(pos.y())
+        if row < 0:
+            return
+        group_id = self._groups_table.item(row, 0).data(Qt.UserRole)
+        group_name = self._groups_table.item(row, 0).text()
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete Group Mapping")
+        action = menu.exec(self._groups_table.viewport().mapToGlobal(pos))
+        if action == delete_action:
+            self._confirm_delete_group(group_id, group_name)
+
+    def _confirm_delete_group(self, group_id, group_name):
+        """Ask for confirmation and delete a SCIM group mapping."""
+        reply = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Delete group mapping '{group_name}'?\n\n"
+            "This removes the SCIM mapping only. Users keep their current roles.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            try:
+                self.api_client._base.request(
+                    "DELETE",
+                    f"{self.api_client.base_url}/scim-groups/{group_id}",
+                )
+                self.refresh()
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to delete group:\n{e}")
+
+    def _load_groups(self):
+        """Load SCIM group-to-role mappings into the table."""
+        try:
+            resp = self.api_client._base.request(
+                "GET", f"{self.api_client.base_url}/scim-groups"
+            )
+            data = resp.json()
+            groups = data.get("groups", [])
+            self._groups_table.setRowCount(len(groups))
+            for i, g in enumerate(groups):
+                name_item = QTableWidgetItem(g.get("display_name", "—"))
+                name_item.setData(Qt.UserRole, g.get("id"))
+                self._groups_table.setItem(i, 0, name_item)
+                self._groups_table.setItem(i, 1, QTableWidgetItem(g.get("role_name", "—")))
+                self._groups_table.setItem(i, 2, QTableWidgetItem(str(g.get("member_count", 0))))
+                self._groups_table.setItem(i, 3, QTableWidgetItem(
+                    _format_timestamp(g.get("created_at")) if g.get("created_at") else "—"
+                ))
+        except Exception as e:
+            logger.warning("Failed to load SCIM groups: %s", e)
+            self._groups_table.setRowCount(0)
 
     def _show_message(self, text, icon="info", retry=None):
         old = self._msg_page.layout().itemAt(0)
@@ -1424,6 +1594,10 @@ class _ScimPanel(QWidget):
 
         self._stack.setCurrentWidget(self._content)
 
+        # Show group write controls only for admins
+        is_admin = self._caps.is_admin()
+        self._group_btn_row.setVisible(is_admin)
+
         # Build endpoint URL from API base
         base = self.api_client.base_url or ""
         # Strip trailing /api/v1 to get server root
@@ -1442,12 +1616,18 @@ class _ScimPanel(QWidget):
             self._scim_enabled.setText("Yes (config unavailable)")
             self._scim_default_role.setText("—")
 
+        # Load group-to-role mappings
+        self._load_groups()
+
         # Fetch recent SCIM provisioning events from activity log
         try:
             data = self.api_client.get_activity_log(
                 limit=50, offset=0, action=None
             )
-            scim_actions = {"user.scim_provisioned", "user.scim_updated", "user.scim_patched", "user.scim_deprovisioned"}
+            scim_actions = {
+                "user.scim_provisioned", "user.scim_updated", "user.scim_patched", "user.scim_deprovisioned",
+                "group.scim_created", "group.scim_updated", "group.scim_membership_changed", "group.scim_deleted",
+            }
             entries = [e for e in data.get("entries", []) if e.get("action") in scim_actions]
             self._events_table.setRowCount(len(entries))
             for i, e in enumerate(entries):

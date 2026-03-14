@@ -29,6 +29,14 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QStackedWidget,
     QSizePolicy,
+    QLineEdit,
+    QSpinBox,
+    QCheckBox,
+    QDialog,
+    QDialogButtonBox,
+    QMenu,
+    QApplication,
+    QScrollArea,
 )
 import qtawesome as qta
 
@@ -117,7 +125,13 @@ class _OverviewPanel(QWidget):
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        inner = QWidget()
+        layout = QVBoxLayout(inner)
         layout.setSpacing(16)
         layout.setContentsMargins(20, 20, 20, 20)
 
@@ -151,11 +165,76 @@ class _OverviewPanel(QWidget):
         self._cap_table.verticalHeader().setVisible(False)
         self._cap_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self._cap_table.setSelectionMode(QTableWidget.NoSelection)
-        self._cap_table.setMaximumHeight(200)
+        self._cap_table.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         layout.addWidget(self._cap_table)
+
+        # Compliance export button (admin only)
+        self._export_row = QHBoxLayout()
+        self._export_compliance_btn = QPushButton("Export Compliance Report")
+        self._export_compliance_btn.clicked.connect(self._on_export_compliance)
+        self._export_row.addWidget(self._export_compliance_btn)
+        self._export_row.addStretch()
+        self._export_widget = QWidget()
+        self._export_widget.setLayout(self._export_row)
+        layout.addWidget(self._export_widget)
+
+        # CLI tips — features also available from the command line
+        cli_frame = QFrame()
+        cli_frame.setFrameShape(QFrame.StyledPanel)
+        cli_frame.setStyleSheet(
+            f"QFrame {{ background: {Theme.SURFACE}; border: 1px solid {Theme.BORDER}; "
+            f"border-radius: 6px; padding: 12px; }}"
+        )
+        cli_layout = QVBoxLayout(cli_frame)
+        cli_layout.setSpacing(4)
+        cli_title = QLabel("CLI Tools")
+        cli_title.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 13px; font-weight: bold; border: none;")
+        cli_layout.addWidget(cli_title)
+        cli_hints = [
+            ("API key management", "python pgvector_admin.py create-key | list-keys | revoke-key | rotate-key"),
+            ("Bulk reindex", "python scripts/reindex_all.py [--dry-run] [--batch-size N]"),
+            ("Index documents", "python indexer_v2.py --path <file-or-dir>"),
+            ("Search from terminal", "python retriever_v2.py --query 'your query'"),
+        ]
+        for label, cmd in cli_hints:
+            row = QHBoxLayout()
+            name_lbl = QLabel(f"{label}:")
+            name_lbl.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px; border: none;")
+            name_lbl.setFixedWidth(140)
+            cmd_lbl = QLabel(cmd)
+            cmd_lbl.setStyleSheet(
+                f"color: {Theme.TEXT_PRIMARY}; font-size: 11px; font-family: monospace; border: none;"
+            )
+            cmd_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+            row.addWidget(name_lbl)
+            row.addWidget(cmd_lbl, 1)
+            cli_layout.addLayout(row)
+        cli_note = QLabel("Run from the project root directory. See docs/USAGE_GUIDE.md for details.")
+        cli_note.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 11px; font-style: italic; border: none;")
+        cli_layout.addWidget(cli_note)
+        layout.addWidget(cli_frame)
+
         layout.addStretch()
+        scroll.setWidget(inner)
+        outer.addWidget(scroll)
+
+    def _on_export_compliance(self):
+        try:
+            data = self.api_client.export_compliance_report()
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Save Compliance Report", "compliance_report.zip", "ZIP Files (*.zip)"
+            )
+            if path:
+                with open(path, "wb") as f:
+                    f.write(data)
+                QMessageBox.information(self, "Export Complete", f"Report saved to {path}")
+        except APIAuthenticationError:
+            QMessageBox.warning(self, "Permission Denied", "Admin permission required to export compliance report.")
+        except APIError as e:
+            QMessageBox.warning(self, "Export Failed", f"Failed to export report: {e}")
 
     def refresh(self):
+        self._export_widget.setVisible(self._caps.is_admin())
         self._api_url.setText(self.api_client.base_url or "—")
 
         # Server version
@@ -197,17 +276,38 @@ class _OverviewPanel(QWidget):
         # Capabilities table
         from desktop_app.utils.server_capabilities import _PROBES
         cap_names = [k for k in _PROBES if k != "me"]
+        # Setup hints for capabilities that need configuration
+        _cap_hints = {
+            "scim": "Set SCIM_ENABLED=true and SCIM_BEARER_TOKEN in server env",
+            "keys": "Requires keys.manage permission or admin role",
+            "retention": "Requires Team/Organization license",
+        }
         self._cap_table.setRowCount(len(cap_names))
         for i, name in enumerate(cap_names):
             status = self._caps.get(name)
-            name_item = QTableWidgetItem(name.replace("_", " ").title())
+            display_name = name.replace("_", " ").title()
+            if name == "scim":
+                display_name = "SCIM Provisioning"
+            name_item = QTableWidgetItem(display_name)
             name_item.setFlags(Qt.ItemIsEnabled)
             self._cap_table.setItem(i, 0, name_item)
 
-            status_item = QTableWidgetItem(_status_label(status))
+            status_text = _status_label(status)
+            hint = _cap_hints.get(name, "")
+            if status == CapabilityStatus.NOT_SUPPORTED and hint:
+                status_text = f"{status_text} — {hint}"
+            status_item = QTableWidgetItem(status_text)
             status_item.setForeground(QColor(_status_color(status)))
             status_item.setFlags(Qt.ItemIsEnabled)
+            if hint:
+                status_item.setToolTip(hint)
             self._cap_table.setItem(i, 1, status_item)
+
+        # Fix height to exact content so the layout can't squish rows
+        h = self._cap_table.horizontalHeader().height() + 2  # header + border
+        for i in range(self._cap_table.rowCount()):
+            h += self._cap_table.rowHeight(i)
+        self._cap_table.setFixedHeight(h)
 
 
 class _UsersRolesPanel(QWidget):
@@ -257,6 +357,10 @@ class _UsersRolesPanel(QWidget):
 
         # Admin actions row (hidden for non-admins)
         self._admin_row = QHBoxLayout()
+        self._add_user_btn = QPushButton("Add User")
+        self._add_user_btn.clicked.connect(self._on_add_user)
+        self._admin_row.addWidget(self._add_user_btn)
+
         self._role_combo = QComboBox()
         self._role_combo.setMinimumWidth(120)
         self._change_role_btn = QPushButton("Change Role")
@@ -268,6 +372,10 @@ class _UsersRolesPanel(QWidget):
         self._admin_widget = QWidget()
         self._admin_widget.setLayout(self._admin_row)
         content_layout.addWidget(self._admin_widget)
+
+        # Context menu on users table
+        self._users_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._users_table.customContextMenuRequested.connect(self._on_users_context_menu)
 
         # Roles section
         roles_label = QLabel("Roles")
@@ -406,6 +514,113 @@ class _UsersRolesPanel(QWidget):
             self._show_message("Admin permission required to change roles.", icon="warning")
         except APIError as e:
             self._show_message(f"Failed to change role: {e}", icon="error", retry=self.refresh)
+
+    def _on_add_user(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add User")
+        dialog.setMinimumWidth(350)
+        form = QFormLayout(dialog)
+
+        email_edit = QLineEdit()
+        email_edit.setPlaceholderText("user@example.com")
+        form.addRow("Email:", email_edit)
+
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("Display Name")
+        form.addRow("Display Name:", name_edit)
+
+        role_combo = QComboBox()
+        for i in range(self._role_combo.count()):
+            role_combo.addItem(self._role_combo.itemText(i))
+        if role_combo.count() > 0:
+            # Default to 'user' if available
+            idx = role_combo.findText("user")
+            if idx >= 0:
+                role_combo.setCurrentIndex(idx)
+        form.addRow("Role:", role_combo)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+        email = email_edit.text().strip()
+        name = name_edit.text().strip()
+        role = role_combo.currentText()
+        if not email:
+            QMessageBox.warning(self, "Validation", "Email is required.")
+            return
+        try:
+            self.api_client.create_user(email=email, display_name=name or None, role=role)
+            self.refresh()
+        except APIAuthenticationError:
+            self._show_message("Admin permission required.", icon="warning")
+        except APIError as e:
+            self._show_message(f"Failed to create user: {e}", icon="error")
+
+    def _on_users_context_menu(self, pos):
+        if not self._caps.is_admin():
+            return
+        row = self._users_table.rowAt(pos.y())
+        if row < 0:
+            return
+        user_id = self._users_table.item(row, 0).data(Qt.UserRole)
+        email = self._users_table.item(row, 0).text()
+        is_active = self._users_table.item(row, 3).text() == "Yes"
+
+        menu = QMenu(self)
+        if is_active:
+            deactivate_action = menu.addAction("Deactivate User")
+        else:
+            activate_action = menu.addAction("Activate User")
+        menu.addSeparator()
+        delete_action = menu.addAction("Delete User")
+
+        chosen = menu.exec(self._users_table.viewport().mapToGlobal(pos))
+        if chosen is None:
+            return
+
+        if is_active and chosen.text() == "Deactivate User":
+            self._toggle_user_active(user_id, email, False)
+        elif not is_active and chosen.text() == "Activate User":
+            self._toggle_user_active(user_id, email, True)
+        elif chosen.text() == "Delete User":
+            self._delete_user(user_id, email)
+
+    def _toggle_user_active(self, user_id, email, activate):
+        action = "activate" if activate else "deactivate"
+        reply = QMessageBox.question(
+            self, f"Confirm {action.title()}",
+            f"Are you sure you want to {action} {email}?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            self.api_client.update_user(user_id, is_active=activate)
+            self.refresh()
+        except APIAuthenticationError:
+            self._show_message("Admin permission required.", icon="warning")
+        except APIError as e:
+            self._show_message(f"Failed to {action} user: {e}", icon="error")
+
+    def _delete_user(self, user_id, email):
+        reply = QMessageBox.warning(
+            self, "Confirm Delete",
+            f"Permanently delete user {email}?\n\nThis action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            self.api_client.delete_user(user_id)
+            self.refresh()
+        except APIAuthenticationError:
+            self._show_message("Admin permission required.", icon="warning")
+        except APIError as e:
+            self._show_message(f"Failed to delete user: {e}", icon="error")
 
 
 class _PermissionsPanel(QWidget):
@@ -548,6 +763,47 @@ class _RetentionPanel(QWidget):
         self._status_form.addRow("Next Run:", self._next_run)
         self._status_form.addRow("Status:", self._run_status)
         content_layout.addLayout(self._status_form)
+
+        # Admin: Run Now controls
+        self._run_section = QWidget()
+        run_layout = QVBoxLayout(self._run_section)
+        run_layout.setContentsMargins(0, 8, 0, 0)
+        run_label = QLabel("Manual Cleanup")
+        run_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        run_layout.addWidget(run_label)
+
+        run_form = QFormLayout()
+        self._run_activity = QSpinBox()
+        self._run_activity.setRange(0, 9999)
+        self._run_activity.setSuffix(" days")
+        self._run_activity.setSpecialValueText("Use default")
+        run_form.addRow("Activity Log:", self._run_activity)
+
+        self._run_quarantine = QSpinBox()
+        self._run_quarantine.setRange(0, 9999)
+        self._run_quarantine.setSuffix(" days")
+        self._run_quarantine.setSpecialValueText("Use default")
+        run_form.addRow("Quarantine:", self._run_quarantine)
+
+        self._run_indexing = QSpinBox()
+        self._run_indexing.setRange(0, 9999)
+        self._run_indexing.setSuffix(" days")
+        self._run_indexing.setSpecialValueText("Use default")
+        run_form.addRow("Indexing Runs:", self._run_indexing)
+
+        self._run_saml = QCheckBox("Clean up SAML sessions")
+        self._run_saml.setChecked(True)
+        run_form.addRow(self._run_saml)
+        run_layout.addLayout(run_form)
+
+        run_btn_row = QHBoxLayout()
+        self._run_now_btn = QPushButton("Run Now")
+        self._run_now_btn.clicked.connect(self._on_run_retention)
+        run_btn_row.addWidget(self._run_now_btn)
+        run_btn_row.addStretch()
+        run_layout.addLayout(run_btn_row)
+
+        content_layout.addWidget(self._run_section)
         content_layout.addStretch()
 
         self._stack.addWidget(self._content)
@@ -559,6 +815,33 @@ class _RetentionPanel(QWidget):
         panel = _MessagePanel(text, icon=icon, retry_callback=retry, parent=self._msg_page)
         self._msg_page.layout().addWidget(panel)
         self._stack.setCurrentWidget(self._msg_page)
+
+    def _on_run_retention(self):
+        kwargs = {"cleanup_saml_sessions": self._run_saml.isChecked()}
+        if self._run_activity.value() > 0:
+            kwargs["activity_days"] = self._run_activity.value()
+        if self._run_quarantine.value() > 0:
+            kwargs["quarantine_days"] = self._run_quarantine.value()
+        if self._run_indexing.value() > 0:
+            kwargs["indexing_runs_days"] = self._run_indexing.value()
+
+        reply = QMessageBox.question(
+            self, "Confirm Retention Run",
+            "Run retention cleanup now with the specified parameters?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            result = self.api_client.run_retention(**kwargs)
+            removed = result.get("removed", {})
+            summary = ", ".join(f"{k}: {v}" for k, v in removed.items()) if removed else "No records removed"
+            self._show_message(f"Retention run complete. {summary}", icon="info")
+            QTimer.singleShot(2000, self.refresh)
+        except APIAuthenticationError:
+            self._show_message("Insufficient permissions to run retention.", icon="warning")
+        except APIError as e:
+            self._show_message(f"Retention run failed: {e}", icon="error")
 
     def refresh(self):
         status = self._caps.get("retention")
@@ -575,6 +858,10 @@ class _RetentionPanel(QWidget):
             return
 
         self._stack.setCurrentWidget(self._content)
+        # Matches backend: POST /retention/run requires Team edition + API key,
+        # not admin. Any authenticated Team user may trigger manual cleanup.
+        # If this should be restricted further, tighten the backend too.
+        self._run_section.setVisible(self._caps.is_available("retention"))
 
         try:
             data = self.api_client.get_retention_policy()
@@ -767,6 +1054,596 @@ class _ActivityPanel(QWidget):
             self._show_message(f"Export failed: {e}", icon="error")
 
 
+class _ApiKeysPanel(QWidget):
+    """API Keys management sub-tab."""
+
+    def __init__(self, api_client: APIClient, capabilities: ServerCapabilities, parent=None):
+        super().__init__(parent)
+        self.api_client = api_client
+        self._caps = capabilities
+        self._setup_ui()
+
+    def _setup_ui(self):
+        self._stack = QStackedWidget()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._stack)
+
+        self._msg_page = QWidget()
+        QVBoxLayout(self._msg_page)
+        self._stack.addWidget(self._msg_page)
+
+        self._content = QWidget()
+        content_layout = QVBoxLayout(self._content)
+        content_layout.setSpacing(12)
+        content_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Header row
+        header_row = QHBoxLayout()
+        title = QLabel("API Keys")
+        title.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        header_row.addWidget(title)
+        header_row.addStretch()
+        self._create_btn = QPushButton("Create Key")
+        self._create_btn.clicked.connect(self._on_create_key)
+        header_row.addWidget(self._create_btn)
+        content_layout.addLayout(header_row)
+
+        # Table
+        self._table = QTableWidget()
+        self._table.setColumnCount(5)
+        self._table.setHorizontalHeaderLabels(["Name", "Prefix", "Created", "Last Used", "Status"])
+        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        for col in range(1, 5):
+            self._table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._table.customContextMenuRequested.connect(self._on_context_menu)
+        content_layout.addWidget(self._table)
+
+        self._stack.addWidget(self._content)
+
+    def _show_message(self, text, icon="info", retry=None):
+        old = self._msg_page.layout().itemAt(0)
+        if old and old.widget():
+            old.widget().deleteLater()
+        panel = _MessagePanel(text, icon=icon, retry_callback=retry, parent=self._msg_page)
+        self._msg_page.layout().addWidget(panel)
+        self._stack.setCurrentWidget(self._msg_page)
+
+    def refresh(self):
+        status = self._caps.get("keys")
+        if status == CapabilityStatus.NOT_SUPPORTED:
+            self._show_message("API key management not available on this server version.", "info")
+            return
+        if status == CapabilityStatus.UNAUTHORIZED:
+            self._show_message("API key required or insufficient permissions.", "warning")
+            return
+        if status == CapabilityStatus.UNREACHABLE:
+            self._show_message("Server unreachable.", "error", retry=self.refresh)
+            return
+        if not self._caps.is_available("keys"):
+            return
+
+        self._stack.setCurrentWidget(self._content)
+        self._create_btn.setVisible(self._caps.has_permission("keys.manage"))
+
+        try:
+            data = self.api_client.list_keys()
+            keys = data.get("keys", [])
+            self._table.setRowCount(len(keys))
+            for i, k in enumerate(keys):
+                self._table.setItem(i, 0, QTableWidgetItem(k.get("name", "—")))
+                self._table.setItem(i, 1, QTableWidgetItem(k.get("prefix", "—")))
+                self._table.setItem(i, 2, QTableWidgetItem(_format_timestamp(k.get("created_at"))))
+                self._table.setItem(i, 3, QTableWidgetItem(_format_timestamp(k.get("last_used_at"))))
+                # Backend returns "active" (bool); older responses may use "status" (string)
+                if "active" in k:
+                    is_active = bool(k["active"])
+                else:
+                    is_active = k.get("status", "active").lower() == "active"
+                status_item = QTableWidgetItem("Active" if is_active else "Revoked")
+                color = Theme.SUCCESS if is_active else Theme.ERROR
+                status_item.setForeground(QColor(color))
+                self._table.setItem(i, 4, status_item)
+                # Store key ID
+                self._table.item(i, 0).setData(Qt.UserRole, k.get("id"))
+        except APIConnectionError:
+            self._show_message("Server unreachable.", "error", retry=self.refresh)
+        except APIAuthenticationError:
+            self._show_message("Insufficient permissions.", "warning")
+        except APIError as e:
+            self._show_message(f"Error loading keys: {e}", "error", retry=self.refresh)
+
+    def _on_create_key(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Create API Key")
+        dialog.setMinimumWidth(300)
+        form = QFormLayout(dialog)
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("Key name (e.g. 'CI Pipeline')")
+        form.addRow("Name:", name_edit)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        form.addRow(buttons)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+        name = name_edit.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Validation", "Key name is required.")
+            return
+        try:
+            result = self.api_client.create_key(name)
+            full_key = result.get("key") or result.get("api_key", "")
+            # Show key in a dialog with copy button
+            key_dialog = QDialog(self)
+            key_dialog.setWindowTitle("New API Key Created")
+            key_dialog.setMinimumWidth(450)
+            kd_layout = QVBoxLayout(key_dialog)
+            kd_layout.addWidget(QLabel("Copy this key now — it will not be shown again:"))
+            key_field = QLineEdit(full_key)
+            key_field.setReadOnly(True)
+            key_field.setStyleSheet("font-family: monospace; font-size: 13px; padding: 8px;")
+            kd_layout.addWidget(key_field)
+            copy_btn = QPushButton("Copy to Clipboard")
+            copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(full_key))
+            kd_layout.addWidget(copy_btn)
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(key_dialog.accept)
+            kd_layout.addWidget(close_btn)
+            key_dialog.exec()
+            self.refresh()
+        except APIAuthenticationError:
+            self._show_message("Insufficient permissions (keys.manage required).", icon="warning")
+        except APIError as e:
+            self._show_message(f"Failed to create key: {e}", icon="error")
+
+    def _on_context_menu(self, pos):
+        if not self._caps.has_permission("keys.manage"):
+            return
+        row = self._table.rowAt(pos.y())
+        if row < 0:
+            return
+        key_id = self._table.item(row, 0).data(Qt.UserRole)
+        key_name = self._table.item(row, 0).text()
+        status_text = self._table.item(row, 4).text().lower()
+
+        menu = QMenu(self)
+        if status_text == "active":
+            revoke_action = menu.addAction("Revoke Key")
+            rotate_action = menu.addAction("Rotate Key")
+        else:
+            revoke_action = rotate_action = None
+
+        chosen = menu.exec(self._table.viewport().mapToGlobal(pos))
+        if chosen is None:
+            return
+
+        if chosen == revoke_action:
+            self._revoke_key(key_id, key_name)
+        elif chosen == rotate_action:
+            self._rotate_key(key_id, key_name)
+
+    def _revoke_key(self, key_id, key_name):
+        reply = QMessageBox.warning(
+            self, "Confirm Revoke",
+            f"Revoke API key '{key_name}'?\n\nThis takes effect immediately.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            self.api_client.revoke_key(key_id)
+            self.refresh()
+        except APIError as e:
+            self._show_message(f"Failed to revoke key: {e}", icon="error")
+
+    def _rotate_key(self, key_id, key_name):
+        reply = QMessageBox.question(
+            self, "Confirm Rotate",
+            f"Rotate API key '{key_name}'?\n\nThe old key will remain valid for a 24-hour grace period.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            result = self.api_client.rotate_key(key_id)
+            new_key = result.get("key") or result.get("api_key", "")
+            key_dialog = QDialog(self)
+            key_dialog.setWindowTitle("Key Rotated")
+            key_dialog.setMinimumWidth(450)
+            kd_layout = QVBoxLayout(key_dialog)
+            kd_layout.addWidget(QLabel("New key (old key valid for 24h):"))
+            key_field = QLineEdit(new_key)
+            key_field.setReadOnly(True)
+            key_field.setStyleSheet("font-family: monospace; font-size: 13px; padding: 8px;")
+            kd_layout.addWidget(key_field)
+            copy_btn = QPushButton("Copy to Clipboard")
+            copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(new_key))
+            kd_layout.addWidget(copy_btn)
+            close_btn = QPushButton("Close")
+            close_btn.clicked.connect(key_dialog.accept)
+            kd_layout.addWidget(close_btn)
+            key_dialog.exec()
+            self.refresh()
+        except APIError as e:
+            self._show_message(f"Failed to rotate key: {e}", icon="error")
+
+
+class _ScimPanel(QWidget):
+    """SCIM Provisioning visibility sub-tab."""
+
+    def __init__(self, api_client: APIClient, capabilities: ServerCapabilities, parent=None):
+        super().__init__(parent)
+        self.api_client = api_client
+        self._caps = capabilities
+        self._setup_ui()
+
+    def _setup_ui(self):
+        self._stack = QStackedWidget()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._stack)
+
+        self._msg_page = QWidget()
+        QVBoxLayout(self._msg_page)
+        self._stack.addWidget(self._msg_page)
+
+        self._content = QWidget()
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        inner = QWidget()
+        content_layout = QVBoxLayout(inner)
+        content_layout.setSpacing(16)
+        content_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Status card
+        status_label = QLabel("SCIM Status")
+        status_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        content_layout.addWidget(status_label)
+
+        self._status_form = QFormLayout()
+        self._scim_enabled = QLabel("—")
+        self._scim_default_role = QLabel("—")
+        self._scim_endpoint = QLineEdit()
+        self._scim_endpoint.setReadOnly(True)
+        self._scim_endpoint.setStyleSheet("font-family: monospace; font-size: 12px;")
+        for lbl in (self._scim_enabled, self._scim_default_role):
+            lbl.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 13px;")
+        self._status_form.addRow("Enabled:", self._scim_enabled)
+        self._status_form.addRow("Default Role:", self._scim_default_role)
+        self._status_form.addRow("Endpoint URL:", self._scim_endpoint)
+        content_layout.addLayout(self._status_form)
+
+        # Copy endpoint button
+        copy_row = QHBoxLayout()
+        copy_btn = QPushButton("Copy Endpoint URL")
+        copy_btn.clicked.connect(lambda: QApplication.clipboard().setText(self._scim_endpoint.text()))
+        copy_row.addWidget(copy_btn)
+        copy_row.addStretch()
+        content_layout.addLayout(copy_row)
+
+        # Group-to-Role mappings
+        groups_label = QLabel("Group-to-Role Mappings")
+        groups_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        content_layout.addWidget(groups_label)
+
+        groups_desc = QLabel(
+            "Each SCIM group maps to one internal role. "
+            "When an IdP adds a user to a group, their role changes to match."
+        )
+        groups_desc.setWordWrap(True)
+        groups_desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
+        content_layout.addWidget(groups_desc)
+
+        self._groups_table = QTableWidget()
+        self._groups_table.setColumnCount(4)
+        self._groups_table.setHorizontalHeaderLabels(["Group Name", "Role", "Members", "Created"])
+        self._groups_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._groups_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._groups_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self._groups_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self._groups_table.verticalHeader().setVisible(False)
+        self._groups_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._groups_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self._groups_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._groups_table.customContextMenuRequested.connect(self._on_group_context_menu)
+        content_layout.addWidget(self._groups_table)
+
+        # Group action buttons (admin only — hidden in refresh() for non-admins)
+        self._group_btn_row = QWidget()
+        group_btn_layout = QHBoxLayout(self._group_btn_row)
+        group_btn_layout.setContentsMargins(0, 0, 0, 0)
+        self._add_group_btn = QPushButton("Add Group Mapping")
+        self._add_group_btn.clicked.connect(self._on_add_group)
+        group_btn_layout.addWidget(self._add_group_btn)
+        group_btn_layout.addStretch()
+        content_layout.addWidget(self._group_btn_row)
+
+        # Recent provisioning events
+        events_label = QLabel("Recent Provisioning Events")
+        events_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        content_layout.addWidget(events_label)
+
+        self._events_table = QTableWidget()
+        self._events_table.setColumnCount(4)
+        self._events_table.setHorizontalHeaderLabels(["Timestamp", "Action", "User ID", "Details"])
+        self._events_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self._events_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._events_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self._events_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self._events_table.verticalHeader().setVisible(False)
+        self._events_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._events_table.setSelectionBehavior(QTableWidget.SelectRows)
+        content_layout.addWidget(self._events_table)
+
+        content_layout.addStretch()
+        scroll.setWidget(inner)
+        content_scroll_wrapper = QVBoxLayout(self._content)
+        content_scroll_wrapper.setContentsMargins(0, 0, 0, 0)
+        content_scroll_wrapper.addWidget(scroll)
+
+        self._stack.addWidget(self._content)
+
+    def _show_scim_setup_guide(self):
+        """Show an informative setup guide when SCIM is not enabled."""
+        old = self._msg_page.layout().itemAt(0)
+        if old and old.widget():
+            old.widget().deleteLater()
+
+        guide = QFrame(self._msg_page)
+        guide.setFrameShape(QFrame.StyledPanel)
+        guide.setStyleSheet(
+            f"QFrame {{ background: {Theme.SURFACE}; border: 1px solid {Theme.BORDER}; "
+            f"border-radius: 8px; padding: 20px; }}"
+        )
+        gl = QVBoxLayout(guide)
+        gl.setSpacing(12)
+
+        title = QLabel("SCIM 2.0 Provisioning")
+        title.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 15px; font-weight: bold; border: none;")
+        gl.addWidget(title)
+
+        desc = QLabel(
+            "SCIM automates user provisioning from identity providers like Okta, "
+            "Azure AD, and OneLogin. When enabled, user accounts are automatically "
+            "created, updated, and deactivated in sync with your company directory."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 13px; border: none;")
+        gl.addWidget(desc)
+
+        how_label = QLabel("To enable SCIM, add these to your server environment:")
+        how_label.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 13px; border: none;")
+        gl.addWidget(how_label)
+
+        env_text = QLabel(
+            "SCIM_ENABLED=true\n"
+            "SCIM_BEARER_TOKEN=<generate-a-strong-random-token>\n"
+            "SCIM_DEFAULT_ROLE=user"
+        )
+        env_text.setStyleSheet(
+            f"color: {Theme.TEXT_PRIMARY}; font-size: 12px; font-family: monospace; "
+            f"background: {Theme.BACKGROUND}; padding: 10px; border-radius: 4px; border: none;"
+        )
+        env_text.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        gl.addWidget(env_text)
+
+        features = QLabel(
+            "Supported: User and Group provisioning (RFC 7643/7644), "
+            "PATCH operations, filtering, pagination."
+        )
+        features.setWordWrap(True)
+        features.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px; font-style: italic; border: none;")
+        gl.addWidget(features)
+
+        # Open full setup guide button
+        open_guide_btn = QPushButton("Open Full Setup Guide (SCIM_SETUP.md)")
+        open_guide_btn.clicked.connect(self._open_setup_guide_file)
+        gl.addWidget(open_guide_btn)
+
+        self._msg_page.layout().addWidget(guide)
+        self._stack.setCurrentWidget(self._msg_page)
+
+    def _open_setup_guide_file(self):
+        """Open docs/SCIM_SETUP.md in the system default application."""
+        import subprocess
+        import sys
+        from pathlib import Path
+        guide_path = Path(__file__).parent.parent.parent / "docs" / "SCIM_SETUP.md"
+        if not guide_path.exists():
+            QMessageBox.warning(self, "File Not Found", f"Could not find:\n{guide_path}")
+            return
+        try:
+            if sys.platform == "win32":
+                import os
+                os.startfile(str(guide_path))
+            elif sys.platform == "darwin":
+                subprocess.Popen(["open", str(guide_path)])
+            else:
+                subprocess.Popen(["xdg-open", str(guide_path)])
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not open file:\n{e}")
+
+    def _on_add_group(self):
+        """Show dialog to create a new SCIM group mapping."""
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add Group-to-Role Mapping")
+        dialog.setMinimumWidth(350)
+        dlg_layout = QVBoxLayout(dialog)
+
+        form = QFormLayout()
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("e.g. Engineering Admins")
+        form.addRow("Group Name:", name_edit)
+
+        role_combo = QComboBox()
+        try:
+            roles_data = self.api_client.list_roles()
+            for r in roles_data.get("roles", []):
+                role_combo.addItem(r.get("name", ""))
+        except Exception:
+            role_combo.addItems(["admin", "user"])
+        form.addRow("Maps to Role:", role_combo)
+        dlg_layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        dlg_layout.addWidget(buttons)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+        display_name = name_edit.text().strip()
+        role_name = role_combo.currentText()
+        if not display_name:
+            QMessageBox.warning(self, "Validation Error", "Group name is required.")
+            return
+        try:
+            self.api_client._base.request(
+                "POST",
+                f"{self.api_client.base_url}/scim-groups",
+                json={"display_name": display_name, "role_name": role_name},
+            )
+            self.refresh()
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to create group:\n{e}")
+
+    def _on_group_context_menu(self, pos):
+        """Right-click menu on groups table for delete (admin only)."""
+        if not self._caps.is_admin():
+            return
+        row = self._groups_table.rowAt(pos.y())
+        if row < 0:
+            return
+        group_id = self._groups_table.item(row, 0).data(Qt.UserRole)
+        group_name = self._groups_table.item(row, 0).text()
+        menu = QMenu(self)
+        delete_action = menu.addAction("Delete Group Mapping")
+        action = menu.exec(self._groups_table.viewport().mapToGlobal(pos))
+        if action == delete_action:
+            self._confirm_delete_group(group_id, group_name)
+
+    def _confirm_delete_group(self, group_id, group_name):
+        """Ask for confirmation and delete a SCIM group mapping."""
+        reply = QMessageBox.question(
+            self, "Confirm Delete",
+            f"Delete group mapping '{group_name}'?\n\n"
+            "This removes the SCIM mapping only. Users keep their current roles.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            try:
+                self.api_client._base.request(
+                    "DELETE",
+                    f"{self.api_client.base_url}/scim-groups/{group_id}",
+                )
+                self.refresh()
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to delete group:\n{e}")
+
+    def _load_groups(self):
+        """Load SCIM group-to-role mappings into the table."""
+        try:
+            resp = self.api_client._base.request(
+                "GET", f"{self.api_client.base_url}/scim-groups"
+            )
+            data = resp.json()
+            groups = data.get("groups", [])
+            self._groups_table.setRowCount(len(groups))
+            for i, g in enumerate(groups):
+                name_item = QTableWidgetItem(g.get("display_name", "—"))
+                name_item.setData(Qt.UserRole, g.get("id"))
+                self._groups_table.setItem(i, 0, name_item)
+                self._groups_table.setItem(i, 1, QTableWidgetItem(g.get("role_name", "—")))
+                self._groups_table.setItem(i, 2, QTableWidgetItem(str(g.get("member_count", 0))))
+                self._groups_table.setItem(i, 3, QTableWidgetItem(
+                    _format_timestamp(g.get("created_at")) if g.get("created_at") else "—"
+                ))
+        except Exception as e:
+            logger.warning("Failed to load SCIM groups: %s", e)
+            self._groups_table.setRowCount(0)
+
+    def _show_message(self, text, icon="info", retry=None):
+        old = self._msg_page.layout().itemAt(0)
+        if old and old.widget():
+            old.widget().deleteLater()
+        panel = _MessagePanel(text, icon=icon, retry_callback=retry, parent=self._msg_page)
+        self._msg_page.layout().addWidget(panel)
+        self._stack.setCurrentWidget(self._msg_page)
+
+    def refresh(self):
+        status = self._caps.get("scim")
+        if status == CapabilityStatus.NOT_SUPPORTED:
+            self._show_scim_setup_guide()
+            return
+        if status == CapabilityStatus.UNAUTHORIZED:
+            self._show_message("Insufficient permissions to view SCIM status.", "warning")
+            return
+        if status == CapabilityStatus.UNREACHABLE:
+            self._show_message("Server unreachable.", "error", retry=self.refresh)
+            return
+        if not self._caps.is_available("scim"):
+            self._show_message("SCIM provisioning is not available.", "info")
+            return
+
+        self._stack.setCurrentWidget(self._content)
+
+        # Show group write controls only for admins
+        is_admin = self._caps.is_admin()
+        self._group_btn_row.setVisible(is_admin)
+
+        # Build endpoint URL from API base
+        base = self.api_client.base_url or ""
+        # Strip trailing /api/v1 to get server root
+        server_root = base.rsplit("/api", 1)[0] if "/api" in base else base
+        self._scim_endpoint.setText(f"{server_root}/scim/v2/Users")
+
+        # Fetch SCIM config from ServiceProviderConfig
+        try:
+            from desktop_app.utils.api_client_core.base_client import BaseAPIClient
+            scim_url = f"{server_root}/scim/v2/ServiceProviderConfig"
+            response = self.api_client._base.request("GET", scim_url, timeout=5)
+            config = response.json()
+            self._scim_enabled.setText("Yes")
+            self._scim_default_role.setText(config.get("defaultRole", "—"))
+        except Exception:
+            self._scim_enabled.setText("Yes (config unavailable)")
+            self._scim_default_role.setText("—")
+
+        # Load group-to-role mappings
+        self._load_groups()
+
+        # Fetch recent SCIM provisioning events from activity log
+        try:
+            data = self.api_client.get_activity_log(
+                limit=50, offset=0, action=None
+            )
+            scim_actions = {
+                "user.scim_provisioned", "user.scim_updated", "user.scim_patched", "user.scim_deprovisioned",
+                "group.scim_created", "group.scim_updated", "group.scim_membership_changed", "group.scim_deleted",
+            }
+            entries = [e for e in data.get("entries", []) if e.get("action") in scim_actions]
+            self._events_table.setRowCount(len(entries))
+            for i, e in enumerate(entries):
+                self._events_table.setItem(i, 0, QTableWidgetItem(_format_timestamp(e.get("ts"))))
+                self._events_table.setItem(i, 1, QTableWidgetItem(e.get("action", "—")))
+                self._events_table.setItem(i, 2, QTableWidgetItem(e.get("user_id") or "—"))
+                details = e.get("details")
+                detail_str = str(details) if details else "—"
+                if len(detail_str) > 100:
+                    detail_str = detail_str[:100] + "..."
+                self._events_table.setItem(i, 3, QTableWidgetItem(detail_str))
+        except Exception as e:
+            logger.warning("Failed to load SCIM events: %s", e)
+            self._events_table.setRowCount(0)
+
+
 # ---------------------------------------------------------------------------
 # Main Organization Tab
 # ---------------------------------------------------------------------------
@@ -828,6 +1705,8 @@ class OrganizationTab(QWidget):
         self._permissions = _PermissionsPanel(self.api_client, self._caps)
         self._retention = _RetentionPanel(self.api_client, self._caps)
         self._activity = _ActivityPanel(self.api_client, self._caps)
+        self._api_keys = _ApiKeysPanel(self.api_client, self._caps)
+        self._scim = _ScimPanel(self.api_client, self._caps)
 
         self._sub_tabs.addTab(self._overview, "Overview")
         # Other tabs added dynamically based on capabilities
@@ -860,10 +1739,15 @@ class OrganizationTab(QWidget):
             logger.info("probe_and_refresh: done, page index=%d", self._outer_stack.currentIndex())
         except Exception as e:
             logger.error(f"Organization tab probe failed: {e}", exc_info=True)
-            self._show_placeholder(
-                f"Failed to load organization features: {e}",
-                show_retry=True,
-            )
+            if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
+                # Still in startup — show a gentle loading message and auto-retry
+                self._show_placeholder("Loading organization features...")
+                self._schedule_auto_retry()
+            else:
+                self._show_placeholder(
+                    f"Failed to load organization features: {e}",
+                    show_retry=True,
+                )
         finally:
             self._refresh_btn.setEnabled(True)
             self._refresh_btn.setText("Refresh")
@@ -958,30 +1842,41 @@ class OrganizationTab(QWidget):
 
         # If the server explicitly rejected due to edition constraints -> gated (upgrade path)
         if has_edition_denial:
-            self._show_placeholder(
-                "Organization Console features are available with a Team or Organization license.",
-                show_learn_more=True,
-            )
+            if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
+                self._show_placeholder("Loading organization features...")
+            else:
+                self._show_placeholder(
+                    "Organization Console features are available with a Team or Organization license.",
+                    show_learn_more=True,
+                )
             self._schedule_auto_retry()
             return
 
         # Generic Auth failures take priority — server is reachable but rejecting us for permission
         if not has_any and has_auth_issue:
-            self._show_placeholder(
-                "Authentication required. Check your API key in Settings, "
-                "or contact your administrator if permissions are insufficient.",
-                show_retry=True,
-            )
+            if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
+                self._show_placeholder("Loading organization features...")
+            else:
+                self._show_placeholder(
+                    "Authentication required. Check your API key in Settings, "
+                    "or contact your administrator if permissions are insufficient.",
+                    show_retry=True,
+                )
             self._schedule_auto_retry()
             return
 
         # Connectivity / Support failures
         if not has_any:
             if self._caps.all_unreachable_or_unknown():
-                self._show_placeholder(
-                    "Cannot connect to server. Organization features will appear once the server is running.",
-                    show_retry=True,
-                )
+                if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
+                    # Still in startup — show a gentle loading message instead of
+                    # flashing a scary "Cannot connect" error with a Retry button.
+                    self._show_placeholder("Loading organization features...")
+                else:
+                    self._show_placeholder(
+                        "Cannot connect to server. Organization features will appear once the server is running.",
+                        show_retry=True,
+                    )
                 self._schedule_auto_retry()
             else:
                 self._show_placeholder(
@@ -1004,10 +1899,14 @@ class OrganizationTab(QWidget):
             self._sub_tabs.addTab(self._users_roles, "Users & Roles")
         if self._caps.is_available("permissions"):
             self._sub_tabs.addTab(self._permissions, "Permissions")
+        if self._caps.is_available("keys"):
+            self._sub_tabs.addTab(self._api_keys, "API Keys")
         if self._caps.is_available("retention"):
             self._sub_tabs.addTab(self._retention, "Retention")
         if self._caps.is_available("activity"):
             self._sub_tabs.addTab(self._activity, "Activity")
+        # Always show SCIM tab — displays setup guide when not enabled
+        self._sub_tabs.addTab(self._scim, "SCIM")
 
         # Refresh all visible panels
         self._overview.refresh()
@@ -1015,10 +1914,13 @@ class OrganizationTab(QWidget):
             self._users_roles.refresh()
         if self._caps.is_available("permissions"):
             self._permissions.refresh()
+        if self._caps.is_available("keys"):
+            self._api_keys.refresh()
         if self._caps.is_available("retention"):
             self._retention.refresh()
         if self._caps.is_available("activity"):
             self._activity.refresh()
+        self._scim.refresh()
 
     def _show_placeholder(self, text, show_learn_more=False, show_retry=False):
         # Clear old placeholder content

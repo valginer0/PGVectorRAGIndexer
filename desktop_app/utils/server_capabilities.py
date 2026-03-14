@@ -19,8 +19,10 @@ _PROBES: Dict[str, str] = {
     "users":       "/api/v1/users?limit=1&active_only=true",
     "roles":       "/api/v1/roles",
     "permissions": "/api/v1/permissions",
+    "keys":        "/api/v1/keys",
     "retention":   "/api/v1/retention/policy",
     "activity":    "/api/v1/activity?limit=1",
+    "scim":        "/scim/v2/ServiceProviderConfig",
 }
 
 
@@ -102,16 +104,24 @@ class ServerCapabilities:
         """Return cached error message for a capability, if any."""
         return self._probe_errors.get(capability)
 
+    def has_permission(self, permission: str) -> bool:
+        """Check if the current user has a specific permission.
+
+        Based on cached /me response. Returns False if /me was not
+        probed or not available. Admins implicitly have all permissions.
+        """
+        if not self._me_response:
+            return False
+        perms = self._me_response.get("permissions", [])
+        return permission in perms or "system.admin" in perms
+
     def is_admin(self) -> bool:
         """Check if the current user has system.admin permission.
 
         Based on cached /me response. Returns False if /me was not
         probed or not available.
         """
-        if not self._me_response:
-            return False
-        perms = self._me_response.get("permissions", [])
-        return "system.admin" in perms
+        return self.has_permission("system.admin")
 
     def get_identity(self) -> Optional[dict]:
         """Return cached /me response, or None if not available."""

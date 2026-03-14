@@ -72,7 +72,7 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ### 🆕 Latest Features (v2.9.0)
 
-- **✅ Organization Console**: New desktop tab for server-side governance — users, roles, permissions, retention, and audit logs. Adapts to server capabilities with 4-state detection (available/unauthorized/not-supported/unreachable). Admin users get inline write controls for role changes.
+- **✅ Organization Console**: Full admin console for server-side governance — users, roles, permissions, retention, audit logs, API keys, and SCIM provisioning. Adapts to server capabilities with 4-state detection. Admin write operations: user CRUD, API key lifecycle (create/revoke/rotate), retention manual cleanup, and compliance export. Permission-aware gating matches backend authorization.
 - **✅ Identity Endpoint (`GET /me`)**: Server returns the current user's identity, role, and resolved permissions. Loopback mode returns effective admin authority.
 - **✅ Settings Integration**: Backend URL or API key changes automatically invalidate cached capabilities and trigger a re-probe.
 
@@ -161,7 +161,7 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 - **Drag & Drop Upload**: Easy file upload with progress tracking
 - **Document Browser**: View and manage all indexed documents
 - **Statistics Dashboard**: Real-time system health and metrics
-- **Organization Console**: Server-side governance visibility — users, roles, permissions, retention, and audit log with admin write controls
+- **Organization Console**: Server-side governance console — users, roles, permissions, retention, audit log, API keys, and SCIM visibility with permission-aware write controls
 
 ### API Features
 

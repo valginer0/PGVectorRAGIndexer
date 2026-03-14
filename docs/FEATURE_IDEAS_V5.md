@@ -916,8 +916,22 @@ CREATE TABLE users (
 
 ## Implemented Features
 
-(Move completed features here)
+**All v5 features (#0–#17) are complete as of v2.9.1 (2026-03-14).**
+
+This includes all 4 phases plus commercial enablement:
+- Phase 1: Security, Versioning, Licensing (#0, #4, #11, #12, #17)
+- Phase 2: Team Enablement (#1, #8, #15)
+- Phase 3: Automation and Navigation (#5, #6, #6b, #7, #9, #10)
+- Phase 4: Multi-User and Enterprise (#2, #3, #13, #14, #16)
+
+Additional work shipped beyond v5 scope:
+- SCIM 2.0 Group provisioning (RFC 7643/7644)
+- Organization edition with 3-tier licensing (Community/Team/Organization)
+- Desktop admin console with full CRUD and capability probing
+- 1527+ automated tests across 106 test files
+
+**→ See [FEATURE_IDEAS_V6.md](FEATURE_IDEAS_V6.md) for the next roadmap.**
 
 ---
 
-Last updated: 2026-02-10
+Last updated: 2026-03-14

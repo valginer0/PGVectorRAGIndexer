@@ -57,6 +57,8 @@ SCIM_SCHEMA_RESOURCE_TYPE = "urn:ietf:params:scim:schemas:core:2.0:ResourceType"
 SCIM_SCHEMA_SCHEMA = "urn:ietf:params:scim:schemas:core:2.0:Schema"
 
 CUSTOM_SCHEMA_ROLE = "urn:ietf:params:scim:schemas:extension:pgvector:2.0:User"
+SCIM_SCHEMA_GROUP = "urn:ietf:params:scim:schemas:core:2.0:Group"
+CUSTOM_SCHEMA_GROUP_ROLE = "urn:ietf:params:scim:schemas:extension:pgvector:2.0:Group"
 
 
 def is_scim_available() -> bool:
@@ -181,7 +183,24 @@ def scim_error(status: int, detail: str, scim_type: str = "") -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 
-def parse_scim_filter(filter_str: str) -> Optional[Tuple[str, list]]:
+_USER_ATTR_MAP = {
+    "userName": "email",
+    "username": "email",
+    "displayName": "display_name",
+    "displayname": "display_name",
+    "emails.value": "email",
+    "active": "is_active",
+    "id": "id",
+    "externalId": "id",
+    "externalid": "id",
+    "meta.created": "created_at",
+    "meta.lastModified": "updated_at",
+}
+
+
+def parse_scim_filter(
+    filter_str: str, attr_map: Optional[Dict[str, str]] = None
+) -> Optional[Tuple[str, list]]:
     """Parse a SCIM filter string into a SQL WHERE clause and params.
 
     Supports a practical subset of SCIM filtering:
@@ -189,25 +208,17 @@ def parse_scim_filter(filter_str: str) -> Optional[Tuple[str, list]]:
     - Boolean: and, or
     - Nested attributes: emails.value, name.givenName
 
+    Args:
+        filter_str: SCIM filter expression.
+        attr_map: Attribute-to-column mapping. Defaults to User attributes.
+
     Returns (sql_fragment, params) or None if unparseable.
     """
     if not filter_str or not filter_str.strip():
         return None
 
-    # Attribute → column mapping
-    attr_map = {
-        "userName": "email",
-        "username": "email",
-        "displayName": "display_name",
-        "displayname": "display_name",
-        "emails.value": "email",
-        "active": "is_active",
-        "id": "id",
-        "externalId": "id",
-        "externalid": "id",
-        "meta.created": "created_at",
-        "meta.lastModified": "updated_at",
-    }
+    if attr_map is None:
+        attr_map = _USER_ATTR_MAP
 
     # Tokenize: split on 'and' / 'or' while preserving quoted strings
     # Pattern: attr op "value" (and|or attr op "value")*
@@ -468,13 +479,27 @@ def get_resource_types() -> List[Dict[str, Any]]:
                     "required": False,
                 }
             ],
-        }
+        },
+        {
+            "schemas": [SCIM_SCHEMA_RESOURCE_TYPE],
+            "id": "Group",
+            "name": "Group",
+            "endpoint": "/scim/v2/Groups",
+            "description": "Group — maps to an internal role",
+            "schema": SCIM_SCHEMA_GROUP,
+            "schemaExtensions": [
+                {
+                    "schema": CUSTOM_SCHEMA_GROUP_ROLE,
+                    "required": False,
+                }
+            ],
+        },
     ]
 
 
 def get_schemas() -> List[Dict[str, Any]]:
-    """Return SCIM Schemas for the User resource."""
-    return [
+    """Return SCIM Schemas for User and Group resources."""
+    schemas = [
         {
             "schemas": [SCIM_SCHEMA_SCHEMA],
             "id": SCIM_SCHEMA_USER,
@@ -545,3 +570,344 @@ def get_schemas() -> List[Dict[str, Any]]:
             ],
         },
     ]
+
+    # Group schema
+    schemas.append({
+        "schemas": [SCIM_SCHEMA_SCHEMA],
+        "id": SCIM_SCHEMA_GROUP,
+        "name": "Group",
+        "description": "Group resource for role-based access mapping",
+        "attributes": [
+            {
+                "name": "displayName",
+                "type": "string",
+                "multiValued": False,
+                "required": True,
+                "caseExact": False,
+                "mutability": "readWrite",
+                "returned": "default",
+                "uniqueness": "server",
+            },
+            {
+                "name": "members",
+                "type": "complex",
+                "multiValued": True,
+                "required": False,
+                "mutability": "readWrite",
+                "returned": "default",
+                "subAttributes": [
+                    {"name": "value", "type": "string", "mutability": "readWrite",
+                     "description": "User id"},
+                    {"name": "display", "type": "string", "mutability": "readOnly"},
+                    {"name": "$ref", "type": "reference", "mutability": "readOnly"},
+                ],
+            },
+        ],
+    })
+
+    # Group role extension schema
+    schemas.append({
+        "schemas": [SCIM_SCHEMA_SCHEMA],
+        "id": CUSTOM_SCHEMA_GROUP_ROLE,
+        "name": "PGVectorRAGIndexer Group Extension",
+        "description": "Maps a SCIM group to an internal role",
+        "attributes": [
+            {
+                "name": "roleName",
+                "type": "string",
+                "multiValued": False,
+                "required": False,
+                "caseExact": True,
+                "mutability": "readWrite",
+                "returned": "default",
+                "uniqueness": "none",
+                "description": "Internal role name this group maps to",
+            },
+        ],
+    })
+
+    return schemas
+
+
+# ---------------------------------------------------------------------------
+# SCIM Group ↔ internal role mapping
+# ---------------------------------------------------------------------------
+
+
+def _get_db_connection():
+    """Get a pooled database connection as a context manager."""
+    from database import get_db_manager
+    return get_db_manager().get_connection()
+
+
+def _group_row_to_dict(row) -> Dict[str, Any]:
+    """Convert a scim_groups row to a dict."""
+    cols = ("id", "external_id", "display_name", "role_name", "created_at", "updated_at")
+    d = dict(zip(cols, row))
+    for ts_key in ("created_at", "updated_at"):
+        val = d.get(ts_key)
+        if isinstance(val, datetime):
+            d[ts_key] = val.isoformat()
+    return d
+
+
+def get_group_members(role_name: str, base_url: str = "") -> List[Dict[str, Any]]:
+    """Return SCIM member references for all active users with the given role."""
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, email, display_name FROM users WHERE role = %s AND is_active = true",
+            (role_name,),
+        )
+        members = []
+        for row in cursor.fetchall():
+            member: Dict[str, Any] = {
+                "value": row[0],
+                "display": row[2] or row[1] or "",
+            }
+            if base_url:
+                member["$ref"] = f"{base_url}/scim/v2/Users/{row[0]}"
+            members.append(member)
+        return members
+
+
+def group_to_scim(group: Dict[str, Any], base_url: str = "") -> Dict[str, Any]:
+    """Convert an internal group dict to a SCIM 2.0 Group resource."""
+    members = get_group_members(group["role_name"], base_url)
+    scim_group: Dict[str, Any] = {
+        "schemas": [SCIM_SCHEMA_GROUP, CUSTOM_SCHEMA_GROUP_ROLE],
+        "id": group["id"],
+        "displayName": group["display_name"],
+        "members": members,
+        "meta": {
+            "resourceType": "Group",
+            "created": group.get("created_at", ""),
+            "lastModified": group.get("updated_at", ""),
+        },
+        CUSTOM_SCHEMA_GROUP_ROLE: {
+            "roleName": group["role_name"],
+        },
+    }
+    if group.get("external_id"):
+        scim_group["externalId"] = group["external_id"]
+    if base_url:
+        scim_group["meta"]["location"] = f"{base_url}/scim/v2/Groups/{group['id']}"
+    return scim_group
+
+
+def _resolve_role_name(scim_data: Dict[str, Any]) -> str:
+    """Determine the internal role name from a SCIM Group resource.
+
+    Priority:
+    1. Custom extension roleName if present
+    2. Case-insensitive match of displayName against existing roles
+    3. Fall back to SCIM_DEFAULT_ROLE
+    """
+    ext = scim_data.get(CUSTOM_SCHEMA_GROUP_ROLE, {})
+    if "roleName" in ext:
+        return ext["roleName"]
+
+    display = scim_data.get("displayName", "")
+    if display:
+        from role_permissions import is_valid_role
+        # Try exact, then lowercase
+        if is_valid_role(display):
+            return display
+        if is_valid_role(display.lower()):
+            return display.lower()
+
+    return SCIM_DEFAULT_ROLE
+
+
+def create_scim_group(
+    display_name: str, role_name: str, external_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """Create a SCIM group mapping to an internal role."""
+    from role_permissions import is_valid_role
+    if not is_valid_role(role_name):
+        raise ValueError(f"Role '{role_name}' does not exist")
+
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO scim_groups (display_name, role_name, external_id)
+            VALUES (%s, %s, %s)
+            RETURNING id, external_id, display_name, role_name, created_at, updated_at
+            """,
+            (display_name, role_name, external_id),
+        )
+        row = cursor.fetchone()
+        conn.commit()
+    return _group_row_to_dict(row)
+
+
+def get_scim_group(group_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch a SCIM group by id."""
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, external_id, display_name, role_name, created_at, updated_at "
+            "FROM scim_groups WHERE id = %s",
+            (group_id,),
+        )
+        row = cursor.fetchone()
+    return _group_row_to_dict(row) if row else None
+
+
+def update_scim_group(
+    group_id: str,
+    display_name: Optional[str] = None,
+    role_name: Optional[str] = None,
+    external_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Update a SCIM group's mapping."""
+    if role_name:
+        from role_permissions import is_valid_role
+        if not is_valid_role(role_name):
+            raise ValueError(f"Role '{role_name}' does not exist")
+
+    sets = []
+    params: list = []
+    if display_name is not None:
+        sets.append("display_name = %s")
+        params.append(display_name)
+    if role_name is not None:
+        sets.append("role_name = %s")
+        params.append(role_name)
+    if external_id is not None:
+        sets.append("external_id = %s")
+        params.append(external_id)
+    if not sets:
+        return get_scim_group(group_id)
+
+    sets.append("updated_at = now()")
+    params.append(group_id)
+
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            f"UPDATE scim_groups SET {', '.join(sets)} WHERE id = %s "
+            "RETURNING id, external_id, display_name, role_name, created_at, updated_at",
+            params,
+        )
+        row = cursor.fetchone()
+        conn.commit()
+    return _group_row_to_dict(row) if row else None
+
+
+def delete_scim_group(group_id: str) -> bool:
+    """Delete a SCIM group mapping. Does not affect users or the underlying role."""
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM scim_groups WHERE id = %s", (group_id,))
+        deleted = cursor.rowcount > 0
+        conn.commit()
+    return deleted
+
+
+def list_scim_groups(
+    filter_str: Optional[str] = None,
+    start_index: int = 1,
+    count: int = 100,
+    base_url: str = "",
+) -> Dict[str, Any]:
+    """List SCIM groups with optional filtering and pagination."""
+    group_attr_map = {
+        "displayName": "display_name",
+        "displayname": "display_name",
+        "externalId": "external_id",
+        "externalid": "external_id",
+        "id": "id",
+    }
+
+    where_sql = ""
+    params: list = []
+
+    if filter_str:
+        parsed = parse_scim_filter(filter_str, attr_map=group_attr_map)
+        if parsed:
+            where_sql, params = parsed
+
+    with _get_db_connection() as conn:
+        cursor = conn.cursor()
+        count_sql = "SELECT COUNT(*) FROM scim_groups"
+        if where_sql:
+            count_sql += f" WHERE {where_sql}"
+        cursor.execute(count_sql, params)
+        total = cursor.fetchone()[0]
+
+        offset = max(0, start_index - 1)
+        select_sql = (
+            "SELECT id, external_id, display_name, role_name, created_at, updated_at "
+            "FROM scim_groups"
+        )
+        if where_sql:
+            select_sql += f" WHERE {where_sql}"
+        select_sql += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+        cursor.execute(select_sql, params + [count, offset])
+        rows = cursor.fetchall()
+
+    groups = [_group_row_to_dict(r) for r in rows]
+    return {
+        "schemas": [SCIM_SCHEMA_LIST],
+        "totalResults": total,
+        "startIndex": start_index,
+        "itemsPerPage": len(groups),
+        "Resources": [group_to_scim(g, base_url) for g in groups],
+    }
+
+
+def apply_group_membership(group_id: str, operations: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Apply SCIM PATCH operations to a group (membership changes + attribute updates).
+
+    Membership operations:
+    - add members: set each user's role to the group's role
+    - remove members: revert each user to SCIM_DEFAULT_ROLE
+    - replace displayName or extension roleName: update group mapping
+    """
+    import users as users_mod
+
+    group = get_scim_group(group_id)
+    if not group:
+        return None
+
+    update_kwargs: Dict[str, Any] = {}
+
+    for op_item in operations:
+        op = op_item.get("op", "").lower()
+        path = (op_item.get("path") or "").lower()
+        value = op_item.get("value")
+
+        if op in ("add", "replace") and path == "members":
+            # Add/replace members: set their role to this group's role
+            member_list = value if isinstance(value, list) else [value]
+            for member in member_list:
+                uid = member.get("value") if isinstance(member, dict) else member
+                if uid:
+                    users_mod.change_role(uid, group["role_name"])
+                    logger.info("SCIM group %s: set user %s role to %s", group_id, uid, group["role_name"])
+
+        elif op == "remove" and path == "members":
+            # Remove members: revert to default role
+            member_list = value if isinstance(value, list) else ([value] if value else [])
+            for member in member_list:
+                uid = member.get("value") if isinstance(member, dict) else member
+                if uid:
+                    users_mod.change_role(uid, SCIM_DEFAULT_ROLE)
+                    logger.info("SCIM group %s: reverted user %s to %s", group_id, uid, SCIM_DEFAULT_ROLE)
+
+        elif op in ("add", "replace"):
+            # Attribute updates
+            if path == "displayname" or (not path and isinstance(value, dict) and "displayName" in value):
+                dn = value if isinstance(value, str) else value.get("displayName", "")
+                if dn:
+                    update_kwargs["display_name"] = dn
+            elif path.startswith(CUSTOM_SCHEMA_GROUP_ROLE.lower()):
+                if "rolename" in path and isinstance(value, str):
+                    update_kwargs["role_name"] = value
+
+    if update_kwargs:
+        group = update_scim_group(group_id, **update_kwargs)
+
+    return group

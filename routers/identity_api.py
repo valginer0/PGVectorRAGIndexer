@@ -17,7 +17,7 @@ identity_router = APIRouter(tags=["Identity & Auth"])
 # API Key Management
 # ---------------------------------------------------------------------------
 
-@identity_router.post("/api/keys", dependencies=[Depends(require_permission("keys.manage"))])
+@identity_router.post("/keys", dependencies=[Depends(require_permission("keys.manage"))])
 async def create_key(name: str = Query(..., description="Human-readable name for the key")):
     """Create a new API key."""
     from auth import create_api_key_record
@@ -39,7 +39,7 @@ async def create_key(name: str = Query(..., description="Human-readable name for
         )
 
 
-@identity_router.get("/api/keys", dependencies=[Depends(require_permission("keys.manage"))])
+@identity_router.get("/keys", dependencies=[Depends(require_permission("keys.manage"))])
 async def list_keys():
     """List all API keys (active and revoked)."""
     from auth import list_api_keys
@@ -53,7 +53,7 @@ async def list_keys():
         )
 
 
-@identity_router.delete("/api/keys/{key_id}", dependencies=[Depends(require_permission("keys.manage"))])
+@identity_router.delete("/keys/{key_id}", dependencies=[Depends(require_permission("keys.manage"))])
 async def delete_key(key_id: int):
     """Revoke an API key immediately."""
     from auth import revoke_api_key
@@ -75,7 +75,7 @@ async def delete_key(key_id: int):
         )
 
 
-@identity_router.post("/api/keys/{key_id}/rotate", dependencies=[Depends(require_permission("keys.manage"))])
+@identity_router.post("/keys/{key_id}/rotate", dependencies=[Depends(require_permission("keys.manage"))])
 async def rotate_key(key_id: int):
     """Rotate an API key."""
     from auth import rotate_api_key
@@ -520,6 +520,68 @@ async def delete_role_endpoint(role_name: str):
     except Exception as e:
         logger.error(f"Failed to delete role: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to delete role: {str(e)}")
+
+
+# ---------------------------------------------------------------------------
+# SCIM Groups (admin view — uses same DB as SCIM provisioning)
+# ---------------------------------------------------------------------------
+
+
+@identity_router.get("/scim-groups", dependencies=[Depends(require_team_edition), Depends(require_admin)])
+async def list_scim_groups_admin():
+    """List SCIM group-to-role mappings (admin only)."""
+    from scim import _get_db_connection, _group_row_to_dict, get_group_members
+    try:
+        conn = _get_db_connection()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, external_id, display_name, role_name, created_at, updated_at "
+                "FROM scim_groups ORDER BY display_name"
+            )
+            rows = cur.fetchall()
+        conn.close()
+        groups = []
+        for row in rows:
+            g = _group_row_to_dict(row)
+            members = get_group_members(g["role_name"])
+            g["member_count"] = len(members)
+            groups.append(g)
+        return {"groups": groups, "total": len(groups)}
+    except Exception as e:
+        logger.error(f"Failed to list SCIM groups: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@identity_router.post("/scim-groups", dependencies=[Depends(require_team_edition), Depends(require_admin)])
+async def create_scim_group_admin(request: Request):
+    """Create a SCIM group mapping (admin only)."""
+    from scim import create_scim_group
+    try:
+        body = await request.json()
+        display_name = body.get("display_name")
+        role_name = body.get("role_name")
+        if not display_name or not role_name:
+            raise HTTPException(status_code=400, detail="display_name and role_name are required")
+        group = create_scim_group(display_name, role_name, body.get("external_id"))
+        return group
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to create SCIM group: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@identity_router.delete("/scim-groups/{group_id}", dependencies=[Depends(require_team_edition), Depends(require_admin)])
+async def delete_scim_group_admin(group_id: str):
+    """Delete a SCIM group mapping (admin only)."""
+    from scim import get_scim_group, delete_scim_group
+    existing = get_scim_group(group_id)
+    if not existing:
+        raise HTTPException(status_code=404, detail=f"Group {group_id} not found")
+    delete_scim_group(group_id)
+    return {"deleted": True, "group_id": group_id}
 
 
 # ---------------------------------------------------------------------------

@@ -354,17 +354,20 @@ class TestScimDiscovery:
     def test_resource_types(self):
         from scim import get_resource_types
         types = get_resource_types()
-        assert len(types) == 1
-        assert types[0]["name"] == "User"
-        assert types[0]["endpoint"] == "/scim/v2/Users"
+        assert len(types) == 2
+        names = {t["name"] for t in types}
+        assert "User" in names
+        assert "Group" in names
 
     def test_schemas(self):
-        from scim import get_schemas, SCIM_SCHEMA_USER, CUSTOM_SCHEMA_ROLE
+        from scim import get_schemas, SCIM_SCHEMA_USER, CUSTOM_SCHEMA_ROLE, SCIM_SCHEMA_GROUP, CUSTOM_SCHEMA_GROUP_ROLE
         schemas = get_schemas()
-        assert len(schemas) == 2
+        assert len(schemas) == 4
         ids = [s["id"] for s in schemas]
         assert SCIM_SCHEMA_USER in ids
         assert CUSTOM_SCHEMA_ROLE in ids
+        assert SCIM_SCHEMA_GROUP in ids
+        assert CUSTOM_SCHEMA_GROUP_ROLE in ids
 
     def test_user_schema_attributes(self):
         from scim import get_schemas, SCIM_SCHEMA_USER
@@ -429,3 +432,17 @@ class TestScimEndpoints:
     def test_delete_user_endpoint(self):
         # DELETE /scim/v2/Users/{user_id} — same path as GET
         assert "/scim/v2/Users/{user_id}" in self.routes
+
+    def test_list_groups_endpoint(self):
+        assert "/scim/v2/Groups" in self.routes
+
+    def test_get_group_endpoint(self):
+        assert "/scim/v2/Groups/{group_id}" in self.routes
+
+    def test_create_group_endpoint(self):
+        # POST /scim/v2/Groups — same path as GET list
+        assert "/scim/v2/Groups" in self.routes
+
+    def test_delete_group_endpoint(self):
+        # DELETE /scim/v2/Groups/{group_id} — same path as GET
+        assert "/scim/v2/Groups/{group_id}" in self.routes

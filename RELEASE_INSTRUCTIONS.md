@@ -14,13 +14,12 @@ We now use an automated script to handle version bumping across all files, test 
 
 The script will:
 - Verify your git tree is clean
-- Run all test suites
+- Run fast unit tests if a `venv` is present (skipping slow UI tests)
 - Automatically bump the `VERSION` file
 - Update website links, `package.json`, and `index.html`
-- Prompt you to add `CHANGELOG.md` notes
-- Commit the changes as `chore: bump version to vX.Y.Z`
-- Create a git tag
-- Push to GitHub
+- Commit the changes as `chore: bump version to vX.Y.Z [skip ci]`
+- Create a git tag referencing the latest `CHANGELOG.md`
+- Push to GitHub (main and tag)
 
 *This push will automatically trigger 5 CI workflows, including the `Build Windows Installer` pipeline.*
 

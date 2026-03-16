@@ -87,7 +87,9 @@ def test_install_license_success():
     assert result.severity == "info"
     assert result.ui_actions == [UiAction.MESSAGE_BOX_INFO]
     assert "Test Org" in result.message
-    assert "Saved to: /tmp/license.key" in result.message
+    # Use str(Path(...)) to match platform-specific separators (e.g., \ on Windows)
+    expected_path_str = f"Saved to: {Path('/tmp/license.key')}"
+    assert expected_path_str in result.message
 
 def test_install_license_success_with_warning():
     service = DummyLicenseService(return_data={"warning": True})

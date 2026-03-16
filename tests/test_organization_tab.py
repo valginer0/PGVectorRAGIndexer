@@ -1961,12 +1961,21 @@ class TestScimGroupManagement:
         panel, caps = self._make_scim_panel(qapp, api_client, is_admin=True)
         caps._cache["scim"] = CapabilityStatus.NOT_SUPPORTED
         panel.refresh()
+        
+        # Patch both possible openers to be platform-agnostic
         with patch("subprocess.Popen") as mock_popen, \
+             patch("os.startfile", create=True) as mock_startfile, \
              patch("pathlib.Path.exists", return_value=True):
             panel._open_setup_guide_file()
-            mock_popen.assert_called_once()
-            call_args = mock_popen.call_args[0][0]
-            assert any("SCIM_SETUP.md" in str(a) for a in call_args)
+            
+            import sys
+            if sys.platform == "win32":
+                mock_startfile.assert_called_once()
+                assert "SCIM_SETUP.md" in str(mock_startfile.call_args[0][0])
+            else:
+                mock_popen.assert_called_once()
+                call_args = mock_popen.call_args[0][0]
+                assert any("SCIM_SETUP.md" in str(a) for a in call_args)
         panel.deleteLater()
 
     def test_open_setup_guide_missing_file(self, qapp, api_client):

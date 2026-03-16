@@ -47,15 +47,13 @@ PS C:\Users\v_ale\Desktop\ToSign> .\signtool.exe sign `
   PGVectorRAGIndexer-unsigned\PGVectorRAGIndexer.msi
 ```
 
-### 4. Upload Signed Assets to Release
+### 4. Upload Signed MSI to Release
 
-Once signed, upload the MSI and the cross-platform install scripts directly to the GitHub release that the CI pipeline created:
+Once signed, upload the **signed MSI only** directly to the GitHub release. The support scripts (`install.command`, `install-linux.sh`) are handled automatically by the CI pipeline during the tag creation.
 
 ```bash
 gh release upload vX.Y.Z \
   /mnt/c/Users/v_ale/Desktop/ToSign/PGVectorRAGIndexer-unsigned/PGVectorRAGIndexer.msi \
-  install.command \
-  install-linux.sh \
   --clobber
 ```
 

@@ -497,7 +497,7 @@ Implementation sequencing (recommended):
 
 ## Phase 6: Organization Console Write Operations (Complete)
 
-### ✅ Admin Console Write Features (v2.9.1)
+### ✅ Admin Console Write Features (v2.10.0)
 - **Effort**: ~8-10h | **Edition**: Team/Organization | **Dependencies**: #16
 - **Branch**: `feat/admin-console-write-ops`
 - **Priority 1 — User Management** (complete):

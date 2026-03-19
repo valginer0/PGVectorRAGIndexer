@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.10.0
+# PGVectorRAGIndexer v2.11.0
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -68,9 +68,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ---
 
-## 🋹 What's New in v2.10.0
+## 🋹 What's New in v2.11.0
 
-### 🆕 Latest Features (v2.10.0)
+### 🆕 Latest Features (v2.11.0)
 
 - **✅ First-Run Onboarding Wizard**: Guided 5-step setup shown automatically on first launch — connect, verify, license, index sample docs, and run a first search. Re-accessible at any time from **Settings → Run Setup Wizard**.
 - **✅ Organization Console**: Full admin console for server-side governance — users, roles, permissions, retention, audit logs, API keys, and SCIM provisioning. Adapts to server capabilities with 4-state detection. Admin write operations: user CRUD, API key lifecycle (create/revoke/rotate), retention manual cleanup, and compliance export. Permission-aware gating matches backend authorization.

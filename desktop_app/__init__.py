@@ -1,3 +1,3 @@
 """PGVectorRAGIndexer Desktop Application"""
 
-__version__ = "2.11.0"
+__version__ = "2.11.1"

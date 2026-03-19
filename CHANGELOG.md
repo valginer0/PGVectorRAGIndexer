@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.0] - 2026-03-19
+
+### Added
+- **First-Run Onboarding Wizard**: Multi-step guided setup shown automatically on first launch and re-accessible from Settings → "Run Setup Wizard".
+  - **Connect** step: choose local Docker or remote server (URL + API key)
+  - **Verify** step: live connectivity test with server version display
+  - **License** step: optional license key activation (skippable)
+  - **Index** step: one-click indexing of five bundled sample documents
+  - **Search** step: run a first search to confirm the full pipeline works end-to-end
+  - Completion state persisted via `app_config`; wizard is skipped on all subsequent launches
+- **"Run Setup Wizard" button** added to the Settings tab for re-access at any time
+
+### Fixed
+- **Worker Lifetime**: Closing the wizard while a background worker is in progress no longer risks "QThread: Destroyed while thread is still running". Workers receive `requestInterruption()` and are held in a module-level `_LIVE_WORKERS` set until the OS thread exits naturally.
+- **Backend Mode Sync**: Switching mode (Local ↔ Remote) in the wizard now fully propagates to the live `APIClient`, `HealthCheckWorker.remote_mode`, the `_remote_mode` flag, and the remote-connection banner — no restart required.
+- **Empty URL Guard**: The Connect step validates that a URL is provided before advancing in Remote mode, preventing false-positive verification results.
+
 ## [2.10.0] - 2026-03-16
 
 ### Added

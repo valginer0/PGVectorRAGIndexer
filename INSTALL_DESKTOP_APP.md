@@ -184,6 +184,20 @@ Then proceed to [Run the App](#3-run-the-app).
 
 ## Software User Interface Guide
 
+### 🧙 First-Run Setup Wizard
+
+When you launch the app for the first time, a **Setup Wizard** guides you through five steps so you reach a working search in under 10 minutes:
+
+1. **Connect** — choose Local (Docker) or Remote (URL + API key)
+2. **Verify** — confirms the server is reachable and shows its version
+3. **License** — optionally activate a license key (skippable)
+4. **Index** — indexes five bundled sample documents with one click
+5. **Search** — runs a test query so you can see results immediately
+
+The wizard runs once automatically. You can re-launch it at any time from **Settings → Run Setup Wizard**.
+
+---
+
 The desktop app has six tabs, ordered by typical workflow:
 
 1. **Upload** – Add documents to the system. Upload individual files or entire folders. Full file paths are preserved.
@@ -200,7 +214,7 @@ The desktop app has six tabs, ordered by typical workflow:
 3. **Documents** – Browse all indexed documents with pagination and sorting.
 4. **Recent** – Track files you've opened and manage reindexing. When you open a file (from Search or Documents), you might edit it—and edited files should be reindexed. Since there's no automatic way to detect significant edits, this tab lets you queue and batch-reindex files as needed.
 5. **Manage** – Bulk operations like filtering, deleting, and backing up documents. Includes features to export backups before deletion and restore from previously saved backups.
-6. **Settings** – View database statistics and manage Docker containers.
+6. **Settings** – View database statistics, manage Docker containers, and re-launch the Setup Wizard via **Run Setup Wizard**.
 
 ### Working with the Recent Activity Tab
 

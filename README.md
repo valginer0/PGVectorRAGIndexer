@@ -72,6 +72,7 @@ Both modes run **entirely on your hardware** — no cloud, no external services.
 
 ### 🆕 Latest Features (v2.10.0)
 
+- **✅ First-Run Onboarding Wizard**: Guided 5-step setup shown automatically on first launch — connect, verify, license, index sample docs, and run a first search. Re-accessible at any time from **Settings → Run Setup Wizard**.
 - **✅ Organization Console**: Full admin console for server-side governance — users, roles, permissions, retention, audit logs, API keys, and SCIM provisioning. Adapts to server capabilities with 4-state detection. Admin write operations: user CRUD, API key lifecycle (create/revoke/rotate), retention manual cleanup, and compliance export. Permission-aware gating matches backend authorization.
 - **✅ Identity Endpoint (`GET /me`)**: Server returns the current user's identity, role, and resolved permissions. Loopback mode returns effective admin authority.
 - **✅ Settings Integration**: Backend URL or API key changes automatically invalidate cached capabilities and trigger a re-probe.

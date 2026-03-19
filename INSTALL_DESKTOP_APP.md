@@ -9,7 +9,9 @@ The app runs local services on your machine. On public or shared Wi-Fi networks 
 For technical details, see [SECURITY.md](SECURITY.md).
 
 > **Already have a PGVectorRAGIndexer server at your company?**
-> You only need the desktop app — no Docker required on your machine. Download and install the desktop app (skip any Docker/container steps), then open **Settings**, switch to **Remote Server** mode, and enter your server URL and API key. See [DEPLOYMENT.md](docs/DEPLOYMENT.md) for the remote client setup.
+> You only need the desktop app — no Docker required on your machine.
+> Follow the [Remote Client Setup](docs/DEPLOYMENT.md#quick-start-desktop-client-remote-mode) instead of the installers below.
+> On Windows, run in PowerShell: `.\bootstrap_desktop_app.ps1 -RemoteBackend "http://your-server:8000"`
 
 ## Windows Installation
 

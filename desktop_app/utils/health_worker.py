@@ -25,6 +25,10 @@ class HealthCheckWorker(QThread):
         """Request the worker to stop."""
         self._running = False
 
+    def set_remote_mode(self, mode: bool) -> None:
+        """Update the remote-mode flag live (GIL makes bool assignment thread-safe)."""
+        self.remote_mode = mode
+
     def run(self):
         """Continuous polling loop."""
         logger.debug("HealthCheckWorker started (remote=%s)", self.remote_mode)

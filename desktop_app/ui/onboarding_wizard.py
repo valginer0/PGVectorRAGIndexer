@@ -50,6 +50,8 @@ class _VerifyWorker(QThread):
     def run(self):
         try:
             health = self._client.get_health()
+            if self.isInterruptionRequested():
+                return
             status = health.get("status", "unknown")
             if status in ("healthy", "initializing"):
                 ver = (
@@ -62,7 +64,8 @@ class _VerifyWorker(QThread):
                 err = health.get("error", "Server not responding")
                 self.result.emit(False, err, "")
         except Exception as exc:
-            self.result.emit(False, str(exc), "")
+            if not self.isInterruptionRequested():
+                self.result.emit(False, str(exc), "")
 
 
 class _IndexWorker(QThread):
@@ -81,6 +84,8 @@ class _IndexWorker(QThread):
         failed = 0
         total = len(self._files)
         for i, path in enumerate(self._files):
+            if self.isInterruptionRequested():
+                break
             self.progress.emit(i, total, path.name)
             try:
                 self._client.upload_document(path)
@@ -88,7 +93,8 @@ class _IndexWorker(QThread):
             except Exception as exc:
                 logger.warning("Wizard: upload failed for %s: %s", path.name, exc)
                 failed += 1
-        self.finished.emit(indexed, failed)
+        if not self.isInterruptionRequested():
+            self.finished.emit(indexed, failed)
 
 
 class _SearchWorker(QThread):
@@ -105,9 +111,11 @@ class _SearchWorker(QThread):
     def run(self):
         try:
             results = self._client.search(self._query, top_k=5, min_score=0.1)
-            self.result.emit(results)
+            if not self.isInterruptionRequested():
+                self.result.emit(results)
         except Exception as exc:
-            self.error.emit(str(exc))
+            if not self.isInterruptionRequested():
+                self.error.emit(str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -782,15 +790,25 @@ class OnboardingWizard(QDialog):
         super().closeEvent(event)
 
     def _stop_all_workers(self):
-        """Gracefully stop all running background threads."""
+        """Detach and interrupt all running background threads.
+
+        quit()/wait() are not used because these workers run pure blocking
+        Python code and never enter a Qt event loop, so quit() has no effect.
+        Instead we:
+          1. Disconnect all signals so no callbacks fire on the dead dialog.
+          2. Request interruption so loops and post-call guards skip emits.
+          3. Reparent to None so the QThread object outlives the dialog.
+          4. Connect finished→deleteLater so the thread self-cleans when done.
+        """
         for worker in (self._verify_worker, self._index_worker, self._search_worker):
             if worker and worker.isRunning():
                 try:
                     worker.disconnect()  # prevent signals firing on dead dialog
                 except RuntimeError:
                     pass
-                worker.quit()
-                worker.wait(500)
+                worker.requestInterruption()   # loop guards will see this
+                worker.setParent(None)         # detach — GC won't destroy a running QThread
+                worker.finished.connect(worker.deleteLater)  # self-clean when done
 
     # ------------------------------------------------------------------
     # Connect page logic

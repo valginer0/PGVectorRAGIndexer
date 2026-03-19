@@ -632,9 +632,11 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_backend_settings_changed(self):
-        """Sync runtime state after backend settings change (mode, banner, org tab)."""
+        """Sync runtime state after backend settings change (mode, banner, health worker, org tab)."""
         from desktop_app.utils import app_config
         self._remote_mode = app_config.is_remote_mode()
+        if hasattr(self, 'health_worker'):
+            self.health_worker.set_remote_mode(self._remote_mode)
         self._update_remote_banner()
         if hasattr(self, 'org_tab'):
             self.org_tab.on_settings_changed()

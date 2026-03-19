@@ -1,11 +1,13 @@
-# PGVectorRAGIndexer — Deployment Guide
+# PGVectorRAGIndexer — Team & Organization Deployment Guide
+
+> **For teams and organizations: deploy one shared server and connect desktop clients from any machine on your network. Your data stays on your infrastructure.**
 
 ## Architecture Overview
 
 PGVectorRAGIndexer supports two deployment modes:
 
 1. **Local (default)** — Desktop app runs Docker containers on the same machine
-2. **Split Deployment** — Server (Docker) runs on one machine, desktop clients connect remotely
+2. **Remote Server Deployment** — Server (Docker) runs on a shared machine, desktop clients connect from anywhere on your network
 
 ```
 ┌─────────────────┐         ┌─────────────────────────────────┐

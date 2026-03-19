@@ -3,8 +3,8 @@
 
 > **Start here:**
 > - 🟢 **Most Users (Desktop App)**: [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md)
+> - 🏢 **Teams & Organizations**: [DEPLOYMENT.md](docs/DEPLOYMENT.md) — one shared server, many desktop clients
 > - ⚡ **Quick 5-Minute Setup (Docker)**: [QUICK_START.md](QUICK_START.md)
-> - 🟡 **Advanced / Server Deployment**: [DEPLOYMENT.md](DEPLOYMENT.md)
 > - 🔵 **Usage & API Reference**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
 
 > **Commercial use?**  
@@ -18,7 +18,7 @@
 
 > **Imagine a magic bookshelf** that reads and understands every book, document, and note you put on it. When you have a question, you don't have to search for keywords yourself—you just ask the bookshelf in plain English (like "How do I fix the printer?" or "What was our revenue last year?"), and it instantly hands you the exact page with the answer.
 >
-> **Best of all? It lives 100% on your computer.** Your documents never get sent to the "cloud" or some stranger's server. It's your personal librarian that keeps your secrets safe.
+> **Best of all? It lives 100% on your own hardware.** Your documents never get sent to the "cloud" or some stranger's server. Whether on your laptop or your company's server, your data stays yours.
 
 Most search bars are dumb—they only find exact word matches. If you search for **"dog"**, they won't find **"puppy"**.
 
@@ -30,11 +30,11 @@ Most search bars are dumb—they only find exact word matches. If you search for
 
 What this system does **not** do is just as important as what it does.
 
-PGVectorRAGIndexer does **not** upload your documents, open a public server, or rely on any external AI service.  
-Everything runs locally on your computer, using local models and a local database.
+PGVectorRAGIndexer does **not** upload your documents to external services or rely on any external AI service.
+Everything runs on your own infrastructure — your laptop for personal use, or your company's server for teams.
 
 This design is intentional. It means:
-- Your files never leave your machine
+- Your files never leave your infrastructure
 - The application runtime requires no mandatory accounts, cloud subscriptions, or hidden data flows
 - You can use it safely with personal, private, or sensitive documents
 
@@ -45,24 +45,43 @@ It helps you *find and rediscover* documents by meaning — even when you don’
 
 ---
 
-### 🖥️ Two Ways to Deploy
+### 🖥️ Choose Your Deployment
 
-> **💡 Most users only need the Desktop App.** The rest of the docs are for advanced scenarios.
+> **For teams and organizations, run PGVectorRAGIndexer on a shared server and connect Windows/macOS/Linux desktop clients remotely. No Docker needed on client machines.**
 
-| Feature | **Desktop App** (Recommended) | **Docker / Server** |
-|-------|-------------------------------|---------------------|
-| **Best For** | Personal use, everyday search | Teams, servers, NAS, automation |
-| **Interface** | Native GUI (Windows/Mac/Linux) | Web UI + REST API |
-| **Setup** | One-line installer / executable | Docker Compose |
-| **File Access** | Native file picker | Mounted volumes only |
-| **Privacy** | 100% Local | 100% Local |
+```
+┌─────────────┐     ┌─────────────┐     ┌─────────────┐
+│  Desktop     │     │  Desktop     │     │  Desktop     │
+│  (Windows)   │     │  (macOS)     │     │  (Linux)     │
+└──────┬───────┘     └──────┬───────┘     └──────┬───────┘
+       │                    │                    │
+       └────────────────────┼────────────────────┘
+                            │ HTTP
+                   ┌────────▼────────┐
+                   │  Shared Server  │
+                   │  (Docker)       │
+                   │  Centralized    │
+                   │  indexing,      │
+                   │  search, audit  │
+                   └─────────────────┘
+```
 
-Both modes run **entirely on your hardware** — no cloud, no external services.
+| | **Personal / Desktop** | **Team / Organization Server** |
+|-------|------------------------|-------------------------------|
+| **Best For** | Individual use | Teams, departments, companies |
+| **Architecture** | Everything on one machine | Shared server + desktop clients |
+| **Setup** | One-click installer | Deploy server, install desktop clients |
+| **Docker** | Required locally | Server only — clients need no Docker |
+| **Admin Controls** | Single user | Users, roles, audit logs, retention |
+| **Data** | Your machine only | Centralized — IT-managed, backed up |
+| **Guide** | [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md) | [DEPLOYMENT.md](docs/DEPLOYMENT.md) |
+
+Both modes run **entirely on your hardware** — no cloud, no external services, your data never leaves your network.
 
 > **💡 CLI is also available** in both modes for power users:
 > - Batch processing
 > - Scripting and automation
-> - Headless usage  
+> - Headless usage
 >
 > CLI requires the backend running (via Docker or Desktop App).
 

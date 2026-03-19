@@ -1,0 +1,33 @@
+What Is Retrieval-Augmented Generation?
+
+Retrieval-Augmented Generation, or RAG, is a technique that combines two powerful ideas:
+information retrieval and language generation.
+
+Instead of relying solely on what a language model memorised during training, RAG lets the model
+look up relevant documents at query time and use them as context when generating an answer.
+This means answers are grounded in real, up-to-date information rather than stale training data.
+
+How It Works
+
+1. Your documents are broken into chunks and converted into numerical representations called
+   embeddings. Each embedding captures the meaning of a piece of text as a point in a high-
+   dimensional space.
+
+2. When a user asks a question, that question is also converted to an embedding.
+
+3. The system finds the document chunks whose embeddings are closest to the question embedding.
+   This is the "retrieval" step.
+
+4. Those chunks are passed to a language model as context, and the model generates a response
+   that draws on the retrieved material.
+
+Why It Matters
+
+- Accuracy: The model can cite actual documents instead of hallucinating facts.
+- Freshness: You can add new documents at any time without retraining.
+- Transparency: You can show users exactly which source was used to answer their question.
+- Control: Your data stays on your infrastructure — nothing is sent to an external model
+  unless you explicitly choose a cloud provider.
+
+PGVectorRAGIndexer gives you the retrieval layer: it stores your document embeddings in
+PostgreSQL using the pgvector extension and serves fast similarity-search queries over them.

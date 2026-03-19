@@ -93,6 +93,9 @@ class MainWindow(QMainWindow):
         # Show analytics consent dialog on first run
         self._maybe_show_analytics_consent()
 
+        # Show onboarding wizard on first run (after analytics dialog)
+        self._maybe_show_onboarding_wizard()
+
         # Check Docker and API status
         QTimer.singleShot(500, self.check_initial_status)
     
@@ -634,6 +637,27 @@ class MainWindow(QMainWindow):
             self.org_tab.on_settings_changed()
 
     # ------------------------------------------------------------------
+    # Onboarding Wizard (#18)
+    # ------------------------------------------------------------------
+
+    def _maybe_show_onboarding_wizard(self):
+        """Show the setup wizard on first launch (skipped if already completed)."""
+        from desktop_app.utils import app_config
+        if app_config.get("wizard_complete"):
+            return
+        QTimer.singleShot(400, self._show_onboarding_wizard)
+
+    def _show_onboarding_wizard(self):
+        """Launch the onboarding wizard (also callable from Settings)."""
+        from .onboarding_wizard import OnboardingWizard
+        wizard = OnboardingWizard(
+            api_client=self.api_client,
+            docker_manager=self.docker_manager,
+            parent=self,
+        )
+        wizard.settings_changed.connect(self._on_backend_settings_changed)
+        wizard.exec()
+
     # Analytics (#14)
     # ------------------------------------------------------------------
 

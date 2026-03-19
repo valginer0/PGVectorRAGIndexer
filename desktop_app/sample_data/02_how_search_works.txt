@@ -1,0 +1,38 @@
+How Search Works in PGVectorRAGIndexer
+
+PGVectorRAGIndexer uses a unified search pipeline that automatically selects the best strategy
+for each query.
+
+Step 1 — You type a question or keyword
+
+Your query is sent to the backend API. The server converts it into an embedding using a local
+sentence-transformer model. No query text is sent to any external service.
+
+Step 2 — The server looks for the best matches
+
+The server runs two checks simultaneously:
+- Vector similarity: finds chunks whose meaning is closest to your query, even if the exact
+  words are different. Great for conceptual questions like "how does the billing system work?"
+- Full-text match: finds chunks that contain your exact keywords. Great for code, names, or
+  specific terms like "JWT expiry" or "invoice #4421".
+
+If a precise keyword match exists, it appears first. Otherwise the best semantic result is
+shown. You get the advantages of both approaches without configuring anything.
+
+Step 3 — Results are returned with source information
+
+Every result includes:
+- The document name and path
+- The matching text snippet
+- A relevance score (0–1)
+- The document type and metadata
+
+Step 4 — You can filter and refine
+
+You can filter by document type, date, or other metadata. The search tab also supports
+highlighting the matched terms inside the snippet.
+
+Performance
+
+On a standard laptop with 50,000 document chunks, a typical search takes under 100ms.
+PostgreSQL + pgvector handles the heavy lifting; the API layer adds minimal overhead.

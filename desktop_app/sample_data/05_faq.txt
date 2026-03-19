@@ -1,0 +1,56 @@
+Frequently Asked Questions
+
+Q: Does my data leave my computer?
+
+A: No. In local mode, all document processing happens inside Docker containers on your own
+machine. The embedding model runs locally. Only you have access to your data.
+
+In remote mode, your documents are sent to the server you configured. If that server is
+inside your organisation's network, your data stays within your organisation.
+
+---
+
+Q: What file types are supported?
+
+A: PGVectorRAGIndexer supports: PDF, Word (.docx), Markdown (.md), plain text (.txt),
+HTML, and more. Scanned PDFs can be processed with OCR mode enabled.
+
+---
+
+Q: How many documents can it handle?
+
+A: On a standard server (4 CPU cores, 8GB RAM), the system handles 100,000+ documents
+with sub-100ms search latency. A single laptop running Docker can comfortably handle
+10,000–50,000 documents.
+
+---
+
+Q: Can I update a document after indexing?
+
+A: Yes. Upload the same file again with "Force Re-index" enabled, or delete the existing
+document and re-upload. The Watched Folders feature can do this automatically whenever
+a file changes on disk.
+
+---
+
+Q: What happens when my license expires?
+
+A: The application continues to work normally after expiry. You can still search and
+index documents. The only change is that new users cannot be added beyond the Community
+limit. Your data is never locked or deleted.
+
+---
+
+Q: Can I run the server without Docker?
+
+A: Yes. The backend is a standard Python FastAPI application. You can run it directly
+with pip install and uvicorn for more advanced deployments, or use the provided
+docker-compose.yml for the standard setup.
+
+---
+
+Q: Is there a hosted version?
+
+A: A live demo is available at https://demo-pgvectorrag.onrender.com — explore the
+interface with pre-loaded sample data before installing. For production use, the product
+is designed to run on your own infrastructure.

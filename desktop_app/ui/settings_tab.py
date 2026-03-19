@@ -118,6 +118,9 @@ class SettingsTab(QWidget):
         # Usage analytics (#14)
         self._build_analytics_panel(layout)
 
+        # Setup wizard (#18)
+        self._build_wizard_panel(layout)
+
         # Docker controls
         self._docker_group = QGroupBox("Docker Container Management")
         self._docker_group.setStyleSheet(_compact_gb)
@@ -305,6 +308,41 @@ class SettingsTab(QWidget):
         vbox.addWidget(self._analytics_log_text)
 
         parent_layout.addWidget(group)
+
+    # ------------------------------------------------------------------
+    # Setup wizard panel (#18)
+    # ------------------------------------------------------------------
+
+    def _build_wizard_panel(self, parent_layout):
+        """Build the Setup Wizard group box."""
+        from PySide6.QtWidgets import QGroupBox
+        _compact_gb = "QGroupBox { margin-top: 0.8em; padding-top: 8px; }"
+        group = QGroupBox("Setup Wizard")
+        group.setStyleSheet(_compact_gb)
+        vbox = QVBoxLayout(group)
+        vbox.setSpacing(8)
+
+        desc = QLabel(
+            "Re-run the setup wizard to reconfigure your connection, "
+            "activate a license, or index sample documents."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
+        vbox.addWidget(desc)
+
+        wizard_btn = QPushButton("Run Setup Wizard")
+        wizard_btn.setIcon(qta.icon("fa5s.magic", color="white"))
+        wizard_btn.setMinimumHeight(38)
+        wizard_btn.clicked.connect(self._on_run_wizard)
+        vbox.addWidget(wizard_btn)
+
+        parent_layout.addWidget(group)
+
+    def _on_run_wizard(self):
+        """Launch the onboarding wizard from Settings."""
+        main_win = self.parent()
+        if main_win and hasattr(main_win, "_show_onboarding_wizard"):
+            main_win._show_onboarding_wizard()
 
     def _on_analytics_toggled(self, checked: bool):
         """Handle analytics toggle change."""

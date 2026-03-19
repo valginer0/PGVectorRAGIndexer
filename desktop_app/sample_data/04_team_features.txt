@@ -1,0 +1,44 @@
+Team and Organization Features
+
+PGVectorRAGIndexer offers three license tiers designed for different team sizes and needs.
+
+Community Edition (Free)
+
+The Community edition is free with no time limit. It includes:
+- Full document indexing and search
+- Local Docker deployment
+- All core upload, search, and document management features
+- Single-user mode
+
+This edition is ideal for personal use or for evaluating the product before purchasing.
+
+Team Edition
+
+Team edition adds multi-user collaboration and administrative features:
+- Up to 5 users (with a 1-user grace zone)
+- Role-based access control (admin, editor, viewer)
+- API key management
+- Retention policy controls
+- Scheduled document folder watching
+- Remote backend support for shared team deployments
+
+Team edition costs $299/year. A license key is delivered by email after purchase.
+
+Organization Edition
+
+Organization edition is designed for larger teams and enterprise deployments:
+- Up to 25 users
+- All Team features, plus:
+- SAML single sign-on (Okta, Azure AD, Google Workspace)
+- SCIM automatic user provisioning
+- Compliance report export
+- Activity audit log
+- Full admin console with user management, permissions, and key rotation
+
+Organization edition costs $799/year.
+
+The Admin Console
+
+If you have a Team or Organization license, the Organization tab in the desktop app provides
+a full admin console where you can manage users, roles, API keys, and review server activity.
+All administrative actions are logged in the audit trail.

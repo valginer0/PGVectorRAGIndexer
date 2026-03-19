@@ -1,0 +1,42 @@
+Getting Started with PGVectorRAGIndexer
+
+This guide walks you through your first five minutes with the application.
+
+Prerequisites
+
+- Docker Desktop installed and running (for local mode)
+- OR a remote server URL if your team already runs a shared instance
+
+Step 1 — Start the server
+
+Local mode: Click "Start Containers" in the top bar. Docker will pull the backend image
+(first time takes 1-2 minutes) and start the database and API server.
+
+Remote mode: Enter your server URL in Settings → Backend Connection. You may also need
+an API key if your administrator has enabled authentication.
+
+Step 2 — Index your first document
+
+Go to the Upload tab. Drag a PDF, Word document, Markdown file, or plain text file onto
+the upload area, or click "Choose Files". Click "Upload & Index".
+
+The server will extract the text, split it into chunks, generate embeddings, and store
+everything in the database. A typical 10-page PDF takes about 5 seconds.
+
+Step 3 — Search
+
+Go to the Search tab. Type a question or a few keywords related to your document.
+Results appear instantly, showing the relevant passage and the source document.
+
+Step 4 — Explore the Documents tab
+
+The Documents tab shows all your indexed content in a browsable tree. You can see which
+folders have been indexed, open the original file, and delete documents you no longer need.
+
+Tips for Good Results
+
+- Index documents that answer the kinds of questions your team asks most often.
+- Use descriptive filenames — the filename appears in search results.
+- For large document collections, use the Watched Folders feature to automatically index
+  new files as they appear.
+- The more documents you index, the more useful the search becomes.

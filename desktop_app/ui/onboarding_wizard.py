@@ -33,6 +33,13 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_DATA_DIR = Path(__file__).parent.parent / "sample_data"
 
+# Module-level strong-reference pool for detached workers.
+# Workers are created with no C++ parent, so setParent(None) is a no-op and
+# the only Python reference is the dialog attribute.  Adding to this set keeps
+# the QThread wrapper alive after the dialog is GC'd; the finished signal
+# removes it so it can be collected once the OS thread has exited.
+_LIVE_WORKERS: set = set()
+
 
 # ---------------------------------------------------------------------------
 # Background workers
@@ -790,15 +797,19 @@ class OnboardingWizard(QDialog):
         super().closeEvent(event)
 
     def _stop_all_workers(self):
-        """Detach and interrupt all running background threads.
+        """Interrupt and keep-alive all running background threads.
 
-        quit()/wait() are not used because these workers run pure blocking
-        Python code and never enter a Qt event loop, so quit() has no effect.
-        Instead we:
-          1. Disconnect all signals so no callbacks fire on the dead dialog.
-          2. Request interruption so loops and post-call guards skip emits.
-          3. Reparent to None so the QThread object outlives the dialog.
-          4. Connect finished→deleteLater so the thread self-cleans when done.
+        quit()/wait() have no effect: these workers run pure blocking Python
+        and never enter a Qt event loop.  setParent(None) is also a no-op
+        because the workers were created without a C++ parent.
+
+        The actual fix:
+          1. Disconnect all signals — no callbacks fire on the dead dialog.
+          2. requestInterruption() — loop guards and post-call checks skip emits.
+          3. Add to _LIVE_WORKERS — module-level set holds the only remaining
+             strong Python reference, preventing GC from destroying the QThread
+             wrapper while the OS thread is still alive.
+          4. On finished, remove from the set so the wrapper can be collected.
         """
         for worker in (self._verify_worker, self._index_worker, self._search_worker):
             if worker and worker.isRunning():
@@ -806,9 +817,11 @@ class OnboardingWizard(QDialog):
                     worker.disconnect()  # prevent signals firing on dead dialog
                 except RuntimeError:
                     pass
-                worker.requestInterruption()   # loop guards will see this
-                worker.setParent(None)         # detach — GC won't destroy a running QThread
-                worker.finished.connect(worker.deleteLater)  # self-clean when done
+                worker.requestInterruption()  # loop guards will see this
+                _LIVE_WORKERS.add(worker)     # keep Python object alive past dialog GC
+                worker.finished.connect(      # release once the OS thread has exited
+                    lambda w=worker: _LIVE_WORKERS.discard(w)
+                )
 
     # ------------------------------------------------------------------
     # Connect page logic

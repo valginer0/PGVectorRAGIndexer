@@ -79,7 +79,7 @@ class _IndexWorker(QThread):
     """Uploads a list of files to the backend, emitting progress signals."""
 
     progress = Signal(int, int, str)  # current_index, total, filename
-    finished = Signal(int, int)       # indexed_count, failed_count
+    upload_finished = Signal(int, int)  # indexed_count, failed_count
 
     def __init__(self, api_client: APIClient, files: list):
         super().__init__()
@@ -101,7 +101,7 @@ class _IndexWorker(QThread):
                 logger.warning("Wizard: upload failed for %s: %s", path.name, exc)
                 failed += 1
         if not self.isInterruptionRequested():
-            self.finished.emit(indexed, failed)
+            self.upload_finished.emit(indexed, failed)
 
 
 class _SearchWorker(QThread):
@@ -1025,7 +1025,7 @@ class OnboardingWizard(QDialog):
 
         self._index_worker = _IndexWorker(self._api_client, files)
         self._index_worker.progress.connect(self._on_index_progress)
-        self._index_worker.finished.connect(self._on_index_finished)
+        self._index_worker.upload_finished.connect(self._on_index_finished)
         self._index_worker.start()
 
     def _on_index_progress(self, current: int, total: int, filename: str):

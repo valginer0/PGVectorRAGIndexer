@@ -69,6 +69,17 @@ class SettingsTab(QWidget):
         header_layout.addWidget(title)
         header_layout.addStretch()
 
+        try:
+            from pathlib import Path
+            _ver = (Path(__file__).parent.parent.parent / "VERSION").read_text().strip()
+        except Exception:
+            _ver = ""
+        if _ver:
+            ver_lbl = QLabel(f"v{_ver}")
+            ver_lbl.setStyleSheet("color: #9ca3af; font-size: 12px;")
+            ver_lbl.setToolTip("Installed application version")
+            header_layout.addWidget(ver_lbl)
+
         layout.addLayout(header_layout)
         
         # Compact group-box margins for this tab (override QSS margin-top: 1.5em)

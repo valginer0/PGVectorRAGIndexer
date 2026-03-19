@@ -36,6 +36,39 @@ jobs:
     - name: Generate version_info.txt
       run: python scripts/generate_version_info.py
 
+    - name: Pin repo ref to release tag
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: python
+      run: |
+        import re, os
+        tag = os.environ["GITHUB_REF"].replace("refs/tags/", "")
+
+        # Patch installer_logic.py so the frozen binary checks out the exact tag
+        with open("windows_installer/installer_logic.py", encoding="utf-8") as f:
+            content = f.read()
+        patched = re.sub(
+            r'DEFAULT_REPO_REF\s*=\s*"main"',
+            f'DEFAULT_REPO_REF = "{tag}"',
+            content,
+        )
+        assert patched != content, "DEFAULT_REPO_REF pattern not found – check installer_logic.py"
+        with open("windows_installer/installer_logic.py", "w", encoding="utf-8") as f:
+            f.write(patched)
+
+        # Patch bootstrap_desktop_app.ps1 default Branch parameter
+        with open("bootstrap_desktop_app.ps1", encoding="utf-8") as f:
+            content = f.read()
+        patched = re.sub(
+            r'(\[string\]\$Branch\s*=\s*)"main"',
+            rf'\g<1>"{tag}"',
+            content,
+        )
+        assert patched != content, "$Branch pattern not found – check bootstrap_desktop_app.ps1"
+        with open("bootstrap_desktop_app.ps1", "w", encoding="utf-8") as f:
+            f.write(patched)
+
+        print(f"Pinned DEFAULT_REPO_REF and $Branch to {tag}")
+
     - name: Build installer (onedir, no UPX)
       working-directory: windows_installer
       run: |

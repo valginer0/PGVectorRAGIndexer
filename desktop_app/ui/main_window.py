@@ -632,7 +632,10 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _on_backend_settings_changed(self):
-        """Invalidate Organization tab cache and re-probe after backend settings change."""
+        """Sync runtime state after backend settings change (mode, banner, org tab)."""
+        from desktop_app.utils import app_config
+        self._remote_mode = app_config.is_remote_mode()
+        self._update_remote_banner()
         if hasattr(self, 'org_tab'):
             self.org_tab.on_settings_changed()
 

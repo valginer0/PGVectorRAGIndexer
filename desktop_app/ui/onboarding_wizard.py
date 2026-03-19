@@ -369,6 +369,15 @@ class OnboardingWizard(QDialog):
         rf.addLayout(key_row)
 
         layout.addWidget(self._remote_fields)
+
+        self._connect_error_lbl = QLabel("")
+        self._connect_error_lbl.setWordWrap(True)
+        self._connect_error_lbl.setStyleSheet(
+            f"font-size: 12px; color: {Theme.ERROR}; padding: 4px;"
+        )
+        self._connect_error_lbl.setVisible(False)
+        layout.addWidget(self._connect_error_lbl)
+
         layout.addStretch()
 
         self._radio_local.toggled.connect(self._on_mode_toggled)
@@ -723,6 +732,15 @@ class OnboardingWizard(QDialog):
         if p == self._PAGE_WELCOME:
             self._go_to_page(self._PAGE_CONNECT)
         elif p == self._PAGE_CONNECT:
+            if self._radio_remote.isChecked():
+                url = self._url_edit.text().strip()
+                if not url:
+                    self._connect_error_lbl.setText(
+                        "Please enter the server URL before continuing."
+                    )
+                    self._connect_error_lbl.setVisible(True)
+                    return
+            self._connect_error_lbl.setVisible(False)
             self._save_connection_settings()
             self._go_to_page(self._PAGE_VERIFY)
         elif p == self._PAGE_VERIFY:
@@ -755,7 +773,24 @@ class OnboardingWizard(QDialog):
 
     def _on_finish(self):
         app_config.set("wizard_complete", True)
+        self._stop_all_workers()
         self.accept()
+
+    def closeEvent(self, event):  # noqa: N802
+        """Stop any background workers before Qt destroys the dialog."""
+        self._stop_all_workers()
+        super().closeEvent(event)
+
+    def _stop_all_workers(self):
+        """Gracefully stop all running background threads."""
+        for worker in (self._verify_worker, self._index_worker, self._search_worker):
+            if worker and worker.isRunning():
+                try:
+                    worker.disconnect()  # prevent signals firing on dead dialog
+                except RuntimeError:
+                    pass
+                worker.quit()
+                worker.wait(500)
 
     # ------------------------------------------------------------------
     # Connect page logic
@@ -767,6 +802,13 @@ class OnboardingWizard(QDialog):
     def _save_connection_settings(self):
         if self._radio_local.isChecked():
             app_config.set_backend_mode(app_config.BACKEND_MODE_LOCAL)
+            app_config.set_api_key(None)
+            local_url = app_config.DEFAULT_LOCAL_URL
+            self._api_client.base_url = local_url
+            if hasattr(self._api_client, "_base"):
+                self._api_client._base.base_url = local_url
+                self._api_client._base.api_key = None
+            self.settings_changed.emit()
         else:
             url = self._url_edit.text().strip().rstrip("/")
             key = self._key_edit.text().strip()
@@ -774,7 +816,6 @@ class OnboardingWizard(QDialog):
                 app_config.set_backend_mode(app_config.BACKEND_MODE_REMOTE)
                 app_config.set_backend_url(url)
                 app_config.set_api_key(key or None)
-                # Update the live API client
                 self._api_client.base_url = url
                 if hasattr(self._api_client, "_base"):
                     self._api_client._base.base_url = url
@@ -1007,6 +1048,7 @@ class OnboardingWizard(QDialog):
 
         self._search_btn.setEnabled(False)
         self._search_btn.setText("Searching…")
+        self._next_btn.setEnabled(False)  # prevent Finish while search in flight
         self._search_outcome_lbl.setText("")
 
         # Clear previous results (keep the stretch at the end)
@@ -1023,6 +1065,7 @@ class OnboardingWizard(QDialog):
     def _on_search_result(self, results: list):
         self._search_btn.setEnabled(True)
         self._search_btn.setText("Search")
+        self._next_btn.setEnabled(True)
 
         if not results:
             self._search_outcome_lbl.setText(
@@ -1048,6 +1091,7 @@ class OnboardingWizard(QDialog):
     def _on_search_error(self, error: str):
         self._search_btn.setEnabled(True)
         self._search_btn.setText("Search")
+        self._next_btn.setEnabled(True)
         self._search_outcome_lbl.setText(
             f"Search failed: {error}\n"
             "Make sure the server is running and at least one document is indexed."

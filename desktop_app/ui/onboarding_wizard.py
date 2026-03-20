@@ -341,7 +341,7 @@ class OnboardingWizard(QDialog):
 
         # --- Remote option ---
         self._radio_remote = QRadioButton(
-            "On another server  (enter a URL + API key)"
+            "On a shared server  (teams & organizations)"
         )
         self._radio_remote.setStyleSheet(
             f"font-size: 13px; color: {Theme.TEXT_PRIMARY}; font-weight: 500;"
@@ -350,6 +350,16 @@ class OnboardingWizard(QDialog):
             app_config.get_backend_mode() == app_config.BACKEND_MODE_REMOTE
         )
         layout.addWidget(self._radio_remote)
+
+        remote_note = QLabel(
+            "    Connect to your company's PGVectorRAGIndexer server. "
+            "No Docker needed on this machine — just enter the server URL and API key."
+        )
+        remote_note.setWordWrap(True)
+        remote_note.setStyleSheet(
+            f"font-size: 12px; color: {Theme.TEXT_SECONDARY}; margin-left: 4px;"
+        )
+        layout.addWidget(remote_note)
 
         # Remote sub-fields
         self._remote_fields = QWidget()

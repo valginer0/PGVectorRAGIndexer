@@ -351,13 +351,13 @@ class SettingsTab(QWidget):
 
     def _on_run_wizard(self):
         """Launch the onboarding wizard from Settings."""
-        main_win = self.parent()
+        main_win = self.window()
         if main_win and hasattr(main_win, "_show_onboarding_wizard"):
             main_win._show_onboarding_wizard()
 
     def _on_analytics_toggled(self, checked: bool):
         """Handle analytics toggle change."""
-        main_win = self.parent()
+        main_win = self.window()
         if main_win and hasattr(main_win, "_analytics"):
             main_win._analytics.set_enabled(checked)
         else:
@@ -367,7 +367,7 @@ class SettingsTab(QWidget):
     def _show_analytics_log(self):
         """Show the local analytics event log."""
         self._analytics_log_text.setVisible(True)
-        main_win = self.parent()
+        main_win = self.window()
         analytics = getattr(main_win, "_analytics", None) if main_win else None
 
         if analytics:
@@ -396,7 +396,7 @@ class SettingsTab(QWidget):
 
     def _clear_analytics_log(self):
         """Clear the local analytics event log."""
-        main_win = self.parent()
+        main_win = self.window()
         analytics = getattr(main_win, "_analytics", None) if main_win else None
         if analytics:
             analytics.clear_event_log()
@@ -423,7 +423,7 @@ class SettingsTab(QWidget):
             self._logs_group.setVisible(not is_remote)
 
         # Hide Docker status bar in main window
-        main_win = self.parent()
+        main_win = self.window()
         if main_win and hasattr(main_win, 'docker_status_label'):
             docker_bar = main_win.docker_status_label.parent()
             if docker_bar:
@@ -774,8 +774,8 @@ class SettingsTab(QWidget):
             if success:
                 QMessageBox.information(self, "Success", message)
                 # Refresh parent status
-                if self.parent() and hasattr(self.parent(), 'check_docker_status'):
-                    self.parent().check_docker_status()
+                if self.window() and hasattr(self.window(), 'check_docker_status'):
+                    self.window().check_docker_status()
             else:
                 QMessageBox.critical(self, "Error", message)
 
@@ -840,8 +840,8 @@ class SettingsTab(QWidget):
                 # Step 2: Update Docker images and restart
                 success, message = self.docker_manager.start_containers(force_pull=True)
                 if success:
-                    if self.parent() and hasattr(self.parent(), 'check_docker_status'):
-                        self.parent().check_docker_status()
+                    if self.window() and hasattr(self.window(), 'check_docker_status'):
+                        self.window().check_docker_status()
 
                     if code_updated:
                         QMessageBox.information(

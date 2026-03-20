@@ -109,13 +109,32 @@ class Installer:
         return default
 
     def _resolve_repo_ref(self) -> str:
-        return self._resolve_override("PGVECTOR_REPO_REF", self.DEFAULT_REPO_REF)
+        override = os.environ.get("PGVECTOR_REPO_REF", "").strip()
+        if not override:
+            override = self._read_windows_user_env("PGVECTOR_REPO_REF")
+        if override:
+            # Only honour the override if it differs from the pinned default
+            # AND the user explicitly set it in the current session (env var).
+            # Registry overrides are likely stale debug leftovers — ignore them
+            # when a pinned release ref is present.
+            if self.DEFAULT_REPO_REF != "main" and not os.environ.get("PGVECTOR_REPO_REF", "").strip():
+                # Pinned release build + registry-only override → ignore stale override
+                return self.DEFAULT_REPO_REF
+            return override
+        return self.DEFAULT_REPO_REF
 
     def _resolve_app_image(self) -> str:
         return self._resolve_override("APP_IMAGE", self.DEFAULT_APP_IMAGE)
 
     def _log_repo_ref(self):
         self._log(f"Backend source ref: {self.repo_ref}", "info")
+        if self.repo_ref != self.DEFAULT_REPO_REF:
+            self._log(
+                f"WARNING: Using override ref '{self.repo_ref}' "
+                f"(default is '{self.DEFAULT_REPO_REF}'). "
+                f"Clear PGVECTOR_REPO_REF env/registry to use the release version.",
+                "warning",
+            )
 
     def _log_app_image(self):
         self._log(f"Backend image: {self.app_image}", "info")

@@ -145,12 +145,12 @@ class SettingsTab(QWidget):
         restart_btn.setStyleSheet("background-color: #f59e0b; border: 1px solid #f59e0b;") # Warning color
         docker_layout.addWidget(restart_btn)
 
-        update_backend_btn = QPushButton("Update Backend (Pull Latest)")
-        update_backend_btn.setIcon(qta.icon('fa5s.download', color='white'))
-        update_backend_btn.clicked.connect(self.update_backend)
-        update_backend_btn.setMinimumHeight(40)
-        update_backend_btn.setStyleSheet("background-color: #3b82f6; border: 1px solid #3b82f6;") # Info/Blue color
-        docker_layout.addWidget(update_backend_btn)
+        update_btn = QPushButton("Check for Updates")
+        update_btn.setIcon(qta.icon('fa5s.download', color='white'))
+        update_btn.clicked.connect(self.update_backend)
+        update_btn.setMinimumHeight(40)
+        update_btn.setStyleSheet("background-color: #3b82f6; border: 1px solid #3b82f6;")
+        docker_layout.addWidget(update_btn)
         
         logs_btn = QPushButton("View Application Logs")
         logs_btn.setIcon(qta.icon('fa5s.file-alt', color='white'))
@@ -779,29 +779,78 @@ class SettingsTab(QWidget):
             else:
                 QMessageBox.critical(self, "Error", message)
 
+    def _update_app_code(self) -> tuple:
+        """Pull latest application code from git. Returns (updated: bool, error: str|None)."""
+        import subprocess
+        from pathlib import Path
+        repo_dir = Path(__file__).parent.parent.parent
+        git_dir = repo_dir / ".git"
+        if not git_dir.exists():
+            return False, None  # Not a git checkout (e.g. dev install) — skip silently
+
+        try:
+            old_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(repo_dir), capture_output=True, text=True, timeout=15,
+            ).stdout.strip()
+
+            result = subprocess.run(
+                ["git", "pull", "--ff-only"],
+                cwd=str(repo_dir), capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode != 0:
+                return False, result.stderr.strip()
+
+            new_head = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=str(repo_dir), capture_output=True, text=True, timeout=15,
+            ).stdout.strip()
+
+            return old_head != new_head, None
+        except Exception as e:
+            return False, str(e)
+
     def update_backend(self):
-        """Force pull latest images and restart containers."""
+        """Pull latest app code and Docker images, then restart containers."""
         reply = QMessageBox.question(
             self,
-            "Update Backend?",
-            "This will check for backend updates (docker pull) and restart containers.\n\n"
-            "If an update is available, it will be downloaded. Existing data will be preserved.\n\n"
+            "Update Everything?",
+            "This will:\n"
+            "  1. Update the desktop app to the latest version (git pull)\n"
+            "  2. Update backend containers (docker pull)\n"
+            "  3. Restart containers\n\n"
+            "Existing data will be preserved.\n\n"
             "Proceed?",
             QMessageBox.Yes | QMessageBox.No,
             QMessageBox.No
         )
-        
+
         if reply == QMessageBox.Yes:
-            # Show a processing dialog or change button state? 
-            # For now, let's just run it and show the result.
             self.setCursor(Qt.WaitCursor)
             try:
+                # Step 1: Update app code
+                code_updated, code_error = self._update_app_code()
+                if code_error:
+                    QMessageBox.warning(
+                        self, "App Update Warning",
+                        f"Could not update app code:\n{code_error}\n\n"
+                        "Continuing with backend update..."
+                    )
+
+                # Step 2: Update Docker images and restart
                 success, message = self.docker_manager.start_containers(force_pull=True)
                 if success:
-                    QMessageBox.information(self, "Success", "Backend updated and restarted successfully.")
-                    # Refresh parent status
                     if self.parent() and hasattr(self.parent(), 'check_docker_status'):
                         self.parent().check_docker_status()
+
+                    if code_updated:
+                        QMessageBox.information(
+                            self, "Update Complete",
+                            "App code and backend updated successfully.\n\n"
+                            "Please restart the application to use the new version."
+                        )
+                    else:
+                        QMessageBox.information(self, "Success", "Backend updated and restarted successfully.")
                 else:
                     QMessageBox.critical(self, "Update Failed", message)
             finally:

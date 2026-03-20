@@ -101,7 +101,13 @@ class MainWindow(QMainWindow):
     
     def setup_ui(self):
         """Setup the user interface."""
-        self.setWindowTitle("PGVectorRAGIndexer - Document Management")
+        try:
+            from pathlib import Path
+            _ver = (Path(__file__).parent.parent.parent / "VERSION").read_text().strip()
+        except Exception:
+            _ver = ""
+        title = f"PGVectorRAGIndexer v{_ver} - Document Management" if _ver else "PGVectorRAGIndexer - Document Management"
+        self.setWindowTitle(title)
         # Height: Need enough room for Settings tab content
         self.setMinimumSize(1100, 1000)
         

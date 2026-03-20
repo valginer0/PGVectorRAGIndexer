@@ -653,9 +653,14 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------
 
     def _maybe_show_onboarding_wizard(self):
-        """Show the setup wizard on first launch (skipped if already completed)."""
+        """Show the setup wizard on first launch or after a version upgrade."""
         from desktop_app.utils import app_config
-        if app_config.get("wizard_complete"):
+        try:
+            current_ver = (Path(__file__).parent.parent.parent / "VERSION").read_text().strip()
+        except Exception:
+            current_ver = ""
+        wizard_ver = app_config.get("wizard_completed_version", "")
+        if app_config.get("wizard_complete") and wizard_ver == current_ver:
             return
         QTimer.singleShot(400, self._show_onboarding_wizard)
 

@@ -845,6 +845,11 @@ class OnboardingWizard(QDialog):
 
     def _on_finish(self):
         app_config.set("wizard_complete", True)
+        try:
+            ver = (Path(__file__).parent.parent.parent / "VERSION").read_text().strip()
+            app_config.set("wizard_completed_version", ver)
+        except Exception:
+            pass
         self._stop_all_workers()
         self.navigate_to_tab.emit("Search")
         self.accept()

@@ -26,6 +26,7 @@ from .health_tab import HealthTab
 from .watched_folders_tab import WatchedFoldersTab
 from .admin_tab import OrganizationTab
 from .source_open_manager import SourceOpenManager
+from .styles.theme import Theme
 from ..utils.docker_manager import DockerManager
 from ..utils.api_client import APIClient
 from ..utils.analytics import AnalyticsClient
@@ -667,7 +668,25 @@ class MainWindow(QMainWindow):
             parent=self,
         )
         wizard.settings_changed.connect(self._on_backend_settings_changed)
+        wizard.navigate_to_tab.connect(self._navigate_to_tab)
         wizard.exec()
+
+    def _navigate_to_tab(self, tab_name: str):
+        """Switch to a tab by name and briefly highlight it."""
+        for i in range(self.tabs.count()):
+            if self.tabs.tabText(i) == tab_name:
+                self.tabs.setCurrentIndex(i)
+                # Brief highlight pulse on the tab bar
+                original_style = self.tabs.tabBar().styleSheet()
+                self.tabs.tabBar().setStyleSheet(
+                    original_style
+                    + f" QTabBar::tab:selected {{ background: {Theme.PRIMARY}22; }}"
+                )
+                QTimer.singleShot(
+                    1500,
+                    lambda: self.tabs.tabBar().setStyleSheet(original_style),
+                )
+                break
 
     # Analytics (#14)
     # ------------------------------------------------------------------

@@ -137,6 +137,7 @@ class OnboardingWizard(QDialog):
     """
 
     settings_changed = Signal()  # emitted when connection settings are saved
+    navigate_to_tab = Signal(str)  # emitted on finish with target tab name
 
     _PAGE_WELCOME = 0
     _PAGE_CONNECT = 1
@@ -405,6 +406,11 @@ class OnboardingWizard(QDialog):
 
         layout.addStretch()
 
+        layout.addWidget(self._make_tab_hint(
+            "fa5s.cog", "Settings",
+            "you can change the connection anytime"
+        ))
+
         self._radio_local.toggled.connect(self._on_mode_toggled)
         self._on_mode_toggled()
         return w
@@ -509,6 +515,12 @@ class OnboardingWizard(QDialog):
         layout.addWidget(no_key_note)
 
         layout.addStretch()
+
+        layout.addWidget(self._make_tab_hint(
+            "fa5s.cog", "Settings",
+            "manage your license key later"
+        ))
+
         return w
 
     def _build_index_page(self) -> QWidget:
@@ -588,6 +600,12 @@ class OnboardingWizard(QDialog):
         layout.addWidget(self._index_status_lbl)
 
         layout.addStretch()
+
+        layout.addWidget(self._make_tab_hint(
+            "fa5s.cloud-upload-alt", "Upload",
+            "add more documents anytime"
+        ))
+
         return w
 
     def _build_search_page(self) -> QWidget:
@@ -646,6 +664,11 @@ class OnboardingWizard(QDialog):
         )
         layout.addWidget(self._search_outcome_lbl)
 
+        layout.addWidget(self._make_tab_hint(
+            "fa5s.search", "Search",
+            "this is your main workspace after setup"
+        ))
+
         return w
 
     # ------------------------------------------------------------------
@@ -667,6 +690,30 @@ class OnboardingWizard(QDialog):
             )
             layout.addWidget(s)
         layout.addSpacing(4)
+
+    @staticmethod
+    def _make_tab_hint(icon_name: str, tab_name: str, hint_text: str) -> QWidget:
+        """Build a small 'find this later' hint with the tab's icon and name."""
+        container = QWidget()
+        row = QHBoxLayout(container)
+        row.setContentsMargins(0, 8, 0, 0)
+        row.setSpacing(6)
+
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(
+            qta.icon(icon_name, color=Theme.TEXT_SECONDARY).pixmap(14, 14)
+        )
+        icon_lbl.setFixedSize(14, 14)
+        row.addWidget(icon_lbl)
+
+        text_lbl = QLabel(f"<b>{tab_name}</b> tab  —  {hint_text}")
+        text_lbl.setStyleSheet(
+            f"font-size: 11px; color: {Theme.TEXT_SECONDARY}; font-style: italic;"
+        )
+        text_lbl.setWordWrap(True)
+        row.addWidget(text_lbl, stretch=1)
+
+        return container
 
     @staticmethod
     def _dot_style_inactive() -> str:
@@ -799,6 +846,7 @@ class OnboardingWizard(QDialog):
     def _on_finish(self):
         app_config.set("wizard_complete", True)
         self._stop_all_workers()
+        self.navigate_to_tab.emit("Search")
         self.accept()
 
     def closeEvent(self, event):  # noqa: N802

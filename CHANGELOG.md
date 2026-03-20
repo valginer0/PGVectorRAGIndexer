@@ -5,6 +5,37 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.11.7] - 2026-03-20
+
+### Fixed
+- **Wizard Version Tracking**: Setup wizard now re-shows automatically after a version upgrade. Completion state stores the version it was last completed on; a mismatch with the installed `VERSION` triggers a re-run, ensuring new users see fresh setup guidance after each MSI update.
+
+## [2.11.6] - 2026-03-20
+
+### Changed
+- Internal version bump and staged file corrections from v2.11.5.
+
+## [2.11.5] - 2026-03-20
+
+### Fixed
+- **Settings Tab Callbacks**: All `self.parent()` calls in `SettingsTab` replaced with `self.window()`. After `QTabWidget` reparents tabs into an internal `QStackedWidget`, `parent()` no longer returns `MainWindow`, silently breaking "Run Setup Wizard", analytics toggle, analytics log, Docker status bar visibility, and container restart callbacks.
+
+## [2.11.4] - 2026-03-20
+
+### Added
+- **Wizard Tab Navigation Hints**: Completion pages of each wizard step now show small contextual hints pointing to the relevant app tab (e.g. "Upload tab — add more documents anytime"). Wizard auto-navigates to the **Search** tab on finish via a new `navigate_to_tab` signal on `OnboardingWizard`.
+
+## [2.11.3] - 2026-03-19
+
+### Changed
+- **Wizard Connect Step**: Remote mode radio label changed from "On another server" to **"On a shared server (teams & organizations)"** with an explanatory note clarifying no local Docker is needed for remote clients. Teams & Org deployment link made prominent across `README.md` and `INSTALL_DESKTOP_APP.md`.
+
+## [2.11.2] - 2026-03-19
+
+### Fixed
+- **Installer Registry Override**: `_resolve_repo_ref()` now ignores `PGVECTOR_REPO_REF` values found only in the Windows registry when the build has a pinned release ref (`DEFAULT_REPO_REF != "main"`). Stale debug registry entries from development sessions no longer override the release tag. Active process-level env overrides are still honoured.
+- **"Check for Updates"**: Renamed from "Update Backend" and expanded to pull the latest desktop app code (`git pull --ff-only`) in addition to Docker images before restarting containers. Version number now shown in the main window title bar.
+
 ## [2.11.1] - 2026-03-19
 
 ### Fixed

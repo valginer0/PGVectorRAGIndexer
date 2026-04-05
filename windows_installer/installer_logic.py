@@ -691,7 +691,7 @@ class Installer:
         
         schtasks_cmd = (
             f'C:\\Windows\\System32\\schtasks.exe /create /tn "PGVectorRAGIndexer_Resume" '
-            f'/tr "\'{executable}\' {script_args}" '
+            f'/tr "\\"{executable}\\" {script_args}" '
             f'/sc onlogon /f'
         )
         

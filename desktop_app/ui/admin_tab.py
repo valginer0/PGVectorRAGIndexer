@@ -1815,6 +1815,9 @@ class OrganizationTab(QWidget):
             return
         if self._auto_retry_attempts >= self.MAX_AUTO_RETRY_ATTEMPTS:
             self._transient_retry_window_active = False
+            # Re-run visibility so the final (non-"Loading...") message is shown
+            # now that the transient window is closed.
+            QTimer.singleShot(0, self._update_visibility)
             return
         self._auto_retry_scheduled = True
         self._auto_retry_attempts += 1

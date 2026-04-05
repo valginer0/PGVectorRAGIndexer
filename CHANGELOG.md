@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.12.0] - 2026-04-05
+
+### Added
+- **Automatic Database Backups**: Startup and pre-migration pg_dump backups are now created automatically in Docker mode, with rotation (keeps last 5 pre-migration, 3 startup). Backups persist on the host via a new `./backups:/app/backups` volume mount.
+- **Data-Loss Auto-Recovery**: On startup, the backend detects if the database was wiped (0 document chunks but backup files exist) and automatically restores from the most recent pg_dump backup. Covers Docker volume loss scenarios (e.g., container runtime updates).
+- **Recovery Notification**: Health endpoint includes `recovery_message` when auto-recovery occurs; desktop app shows a one-time dialog informing the user.
+- **Restore from Backup File (Manage Tab)**: New always-enabled "Restore from Backup File" button lets users restore a JSON backup without needing to delete documents first.
+- **Setup Wizard Desktop Shortcut**: Windows installer now copies the Setup .EXE into the install directory and creates a "PGVectorRAGIndexer Setup" desktop shortcut for easy reinstallation/upgrades.
+- **License File Volume Mount**: `docker-compose.yml` now mounts `~/.pgvector-license` into the container so the license key survives container recreation.
+
+### Fixed
+- **Organization Tab Retry Bug**: After exhausting retry attempts, the tab remained stuck on "Loading organization features..." instead of showing the proper edition-gated or error message. Fixed by re-running visibility logic when the retry budget is exhausted.
+
+### Changed
+- **Backup Module Refactor**: Extracted pg_dump logic from `migrate.py` into reusable `auto_backup.py` module (`run_pg_dump_backup()`, `rotate_backups()`, `find_latest_backup()`).
+
 ## [2.11.7] - 2026-03-20
 
 ### Fixed

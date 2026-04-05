@@ -41,6 +41,8 @@ services:
     volumes:
       # Mount for document processing
       - ./documents:/app/documents:ro
+      # Persist auto-backups on host
+      - ./backups:/app/backups
       # Mount for model cache
       - model_cache:/root/.cache/huggingface
     depends_on:

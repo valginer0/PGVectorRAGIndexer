@@ -70,8 +70,7 @@ class TestMigrateModule:
     def test_run_pg_dump_no_pg_dump(self, tmp_path):
         """Test pg_dump gracefully handles missing binary."""
         from migrate import _run_pg_dump
-        with patch('migrate.Path', return_value=tmp_path / "backups"):
-            # Patch the hardcoded /app/backups path
+        with patch('auto_backup.DEFAULT_BACKUP_DIR', tmp_path / "backups"):
             with patch('subprocess.run', side_effect=FileNotFoundError):
                 result = _run_pg_dump("postgresql://user:pass@localhost/test")
                 assert result is False
@@ -80,7 +79,7 @@ class TestMigrateModule:
         """Test pg_dump handles timeout gracefully."""
         import subprocess
         from migrate import _run_pg_dump
-        with patch('migrate.Path', return_value=tmp_path / "backups"):
+        with patch('auto_backup.DEFAULT_BACKUP_DIR', tmp_path / "backups"):
             with patch('subprocess.run', side_effect=subprocess.TimeoutExpired("pg_dump", 300)):
                 result = _run_pg_dump("postgresql://user:pass@localhost/test")
                 assert result is False

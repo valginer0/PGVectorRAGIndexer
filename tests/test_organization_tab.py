@@ -445,7 +445,9 @@ class TestRefreshBehavior:
 
             org_tab._auto_retry_probe()
 
-        assert mock_single_shot.call_count == org_tab.MAX_AUTO_RETRY_ATTEMPTS
+        # MAX_AUTO_RETRY_ATTEMPTS retries + 1 deferred _update_visibility call
+        # when the retry budget is exhausted (to show the final error message)
+        assert mock_single_shot.call_count == org_tab.MAX_AUTO_RETRY_ATTEMPTS + 1
         assert org_tab._auto_retry_scheduled is False
         assert org_tab._auto_retry_attempts == org_tab.MAX_AUTO_RETRY_ATTEMPTS
         assert org_tab._transient_retry_window_active is False

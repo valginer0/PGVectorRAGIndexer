@@ -30,6 +30,7 @@ encrypted_pdfs_encountered: List[Dict[str, Any]] = []
 # Initialization state
 init_complete = False
 init_error = None
+recovery_message: Optional[str] = None
 
 
 def get_indexer() -> "DocumentIndexer":

@@ -90,6 +90,7 @@ class HealthResponse(BaseModel):
     database: Dict[str, Any]
     embedding_model: Dict[str, Any]
     system: Optional[Dict[str, Any]] = None
+    recovery_message: Optional[str] = None
 
 
 class StatsResponse(BaseModel):

@@ -231,6 +231,7 @@ services:
     volumes:
       - /srv/shared-docs:/data/shared-docs:ro     # read-only is sufficient
       - /home/team/reports:/data/reports:ro
+      - ./backups:/app/backups                     # persist automatic backups on host
     environment:
       - SERVER_SCHEDULER_ENABLED=true
 ```

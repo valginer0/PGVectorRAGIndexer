@@ -439,6 +439,16 @@ class MainWindow(QMainWindow):
             else:
                 self.status_bar.showMessage("Ready - All systems operational")
             
+            # Show one-time recovery notification if backend recovered data
+            recovery_msg = health.get("recovery_message")
+            if recovery_msg and not getattr(self, '_recovery_shown', False):
+                self._recovery_shown = True
+                QMessageBox.information(
+                    self,
+                    "Database Recovery",
+                    recovery_msg,
+                )
+
             if not self.initial_load_done:
                 self.on_api_ready()
             elif hasattr(self, 'org_tab'):

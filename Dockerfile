@@ -23,7 +23,7 @@ COPY alembic/ ./alembic/
 COPY static/ ./static/
 
 # Create directories
-RUN mkdir -p /app/documents
+RUN mkdir -p /app/documents /app/backups
 
 # Ensure LibreOffice is available (needed for .doc conversion)
 RUN if ! command -v soffice >/dev/null 2>&1 && ! command -v libreoffice >/dev/null 2>&1; then \

@@ -1,12 +1,31 @@
 # Database Backup Guide
 
-> [!CAUTION]
-> **Optional / Advanced Feature**
->
-> Most users **do not need this** unless they require database-level backups and external syncing (e.g., to Google Drive). Standard file backups of your documents folder are usually sufficient.
+## Built-in Automatic Backups (v2.12.0+)
 
+PGVectorRAGIndexer now includes **automatic database backups** that require no setup:
 
-Complete guide for backing up your PGVectorRAGIndexer database to Google Drive.
+- **Startup backups**: A pg_dump backup is created every time the Docker containers start (keeps last 3).
+- **Pre-migration backups**: A backup is created before any schema migration runs (keeps last 5).
+- **Auto-recovery**: If the database is empty but backups exist (e.g., after a Docker volume wipe), the system automatically restores from the most recent backup on startup.
+- **Backup location**: `./backups/` in your project directory (host-mounted via Docker volume).
+
+**No configuration needed** — this works out of the box with the default `docker-compose.yml`.
+
+### Desktop App Restore
+
+You can also restore from a JSON backup file (created via the Manage tab's "Export Backup" button):
+
+1. Go to the **Manage** tab
+2. Click **"Restore from Backup File"**
+3. Select your `.json` backup file
+4. Confirm the restore
+
+---
+
+## External Backup & Google Drive Sync (Optional)
+
+> [!NOTE]
+> The section below is for users who want **additional** backups beyond the built-in automatic system — e.g., cloud sync to Google Drive or S3.
 
 ## 🎯 Quick Start
 

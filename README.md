@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.11.7
+# PGVectorRAGIndexer v2.12.0
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -87,18 +87,21 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ---
 
-## 🋹 What's New in v2.11.7
+## 🋹 What's New in v2.12.0
 
-### 🆕 Latest Features (v2.11.7)
+### 🆕 Latest Features (v2.12.0)
+
+- **✅ Automatic Database Backups**: Startup and pre-migration pg_dump backups run automatically in Docker mode with rotation. Backups persist on the host via `./backups:/app/backups` volume mount.
+- **✅ Data-Loss Auto-Recovery**: Detects empty databases with existing backups (e.g., after Docker volume wipe) and auto-restores from the most recent pg_dump backup on startup.
+- **✅ Restore from Backup File**: New always-enabled button in the Manage tab to restore documents from a JSON backup file at any time.
+- **✅ Setup Wizard Desktop Shortcut**: Windows installer now creates a second desktop icon for easy reinstallation/upgrades.
+
+### Recent Features (v2.11)
 
 - **✅ First-Run Onboarding Wizard**: Guided 5-step setup shown automatically on first launch — connect, verify, license, index sample docs, and run a first search. Re-accessible at any time from **Settings → Run Setup Wizard**. Re-shown automatically after each version upgrade.
-- **✅ Wizard Tab Hints**: Completion pages link to the relevant app tab with contextual hints; wizard auto-navigates to Search on finish.
-- **✅ Windows Installer Ref Pinning**: Release MSI now installs the exact release tag (e.g. `v2.11.7`), not `main` — users installing months later always get the correct versioned code.
-- **✅ App Version Everywhere**: Version shown in the title bar, in the Settings header, and tracked per-install for upgrade detection.
-- **✅ Check for Updates**: Pulls latest app code (`git pull`) **and** Docker images in one click from the Settings tab.
 - **✅ Organization Console**: Full admin console for server-side governance — users, roles, permissions, retention, audit logs, API keys, and SCIM provisioning. Adapts to server capabilities with 4-state detection. Admin write operations: user CRUD, API key lifecycle (create/revoke/rotate), retention manual cleanup, and compliance export. Permission-aware gating matches backend authorization.
 - **✅ Identity Endpoint (`GET /me`)**: Server returns the current user's identity, role, and resolved permissions. Loopback mode returns effective admin authority.
-- **✅ Settings Integration**: Backend URL or API key changes automatically invalidate cached capabilities and trigger a re-probe.
+- **✅ Check for Updates**: Pulls latest app code (`git pull`) **and** Docker images in one click from the Settings tab.
 
 ### Recent Features (v2.7)
 
@@ -174,7 +177,7 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 - **Hybrid Search**: Combine vector and full-text search with configurable weights
 - **Document Management**: Full CRUD operations for indexed documents
 - **Bulk Operations**: Preview, export, delete, and restore multiple documents
-- **Backup/Restore**: Export documents as JSON and restore with undo functionality
+- **Backup/Restore**: Automatic pg_dump backups on startup with auto-recovery; export/restore documents as JSON via Manage tab
 - **Connection Pooling**: Efficient database connection management
 - **Embedding Cache**: Speed up repeated queries with in-memory cache
 - **Health Monitoring**: Built-in health checks and statistics

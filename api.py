@@ -60,6 +60,20 @@ def _run_startup():
         logger.info("[init] Migrations complete")
         sys.stdout.flush()
 
+        # Auto-recovery: detect empty database with available backups
+        if os.environ.get("DB_HOST") == "db":
+            try:
+                from auto_recovery import auto_recover_if_needed
+                from config import get_config
+                recovery_msg = auto_recover_if_needed(
+                    get_config().database.connection_string,
+                )
+                if recovery_msg:
+                    services.recovery_message = recovery_msg
+                    logger.info("[init] Recovery: %s", recovery_msg)
+            except Exception as e:
+                logger.warning("[init] Auto-recovery check failed (non-fatal): %s", e)
+
         # Load and validate license key
         from license import load_license, set_current_license
         license_info = load_license(allow_db_fallback=True)
@@ -86,6 +100,24 @@ def _run_startup():
         _ = get_embedding_service()
         logger.info("[init] Services initialized successfully")
         sys.stdout.flush()
+
+        # Run a startup backup (Docker mode only) so there's always a
+        # recent pg_dump available for auto-recovery.
+        if os.environ.get("DB_HOST") == "db":
+            try:
+                from auto_backup import run_pg_dump_backup, rotate_backups
+                from config import get_config
+                logger.info("[init] Running startup backup...")
+                bk = run_pg_dump_backup(
+                    get_config().database.connection_string,
+                    prefix="startup_backup",
+                )
+                if bk:
+                    rotate_backups(prefix="startup_backup", keep=3)
+                logger.info("[init] Startup backup complete")
+            except Exception as e:
+                logger.warning("[init] Startup backup failed (non-fatal): %s", e)
+
         services.init_complete = True
     except Exception as e:
         logger.error(f"[init] Failed to initialize services: {e}", exc_info=True)

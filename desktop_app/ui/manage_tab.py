@@ -125,15 +125,23 @@ class ManageTab(QWidget):
         
         button_layout.addLayout(action_btn_layout)
         
-        # Undo button
-        undo_btn_layout = QHBoxLayout()
-        self.undo_btn = QPushButton("Undo Last Delete (Restore)")
+        # Restore buttons
+        restore_btn_layout = QHBoxLayout()
+
+        self.restore_file_btn = QPushButton("Restore from Backup File")
+        self.restore_file_btn.setIcon(qta.icon('fa5s.file-upload', color='white'))
+        self.restore_file_btn.clicked.connect(self.undo_delete)
+        self.restore_file_btn.setStyleSheet("background-color: #3b82f6; border: 1px solid #3b82f6;")
+        restore_btn_layout.addWidget(self.restore_file_btn)
+
+        self.undo_btn = QPushButton("Undo Last Delete")
         self.undo_btn.setIcon(qta.icon('fa5s.undo', color='white'))
         self.undo_btn.clicked.connect(self.undo_delete)
         self.undo_btn.setStyleSheet("background-color: #f59e0b; border: 1px solid #f59e0b;") # Warning color
         self.undo_btn.setEnabled(False)
-        undo_btn_layout.addWidget(self.undo_btn)
-        button_layout.addLayout(undo_btn_layout)
+        restore_btn_layout.addWidget(self.undo_btn)
+
+        button_layout.addLayout(restore_btn_layout)
         
         layout.addWidget(button_group)
         

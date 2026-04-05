@@ -246,15 +246,21 @@ CHUNK_OVERLAP=50
 
 ### 3. Backup and Restore
 
-**Backup:**
+**Automatic backups (v2.12.0+):** The application creates pg_dump backups automatically on every startup and before schema migrations. Backups are stored in `./backups/` and the system will auto-recover from the latest backup if data loss is detected.
+
+**Desktop App restore:** Go to the **Manage** tab → click **"Restore from Backup File"** → select a `.json` backup file exported previously.
+
+**Manual backup:**
 ```bash
 cd ~/pgvector-rag
-docker exec vector_rag_db pg_dump -U rag_user rag_vector_db > backup.sql
+./backup_database.sh
+# Or: docker exec vector_rag_db pg_dump -U rag_user rag_vector_db > backup.sql
 ```
 
-**Restore:**
+**Manual restore:**
 ```bash
-cat backup.sql | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db
+./restore_database.sh ./backups/latest_backup.sql
+# Or: cat backup.sql | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db
 ```
 
 ### 4. Update to Latest Version

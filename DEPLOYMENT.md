@@ -1,4 +1,4 @@
-# Deployment Guide - PGVectorRAGIndexer v2.11.7
+# Deployment Guide - PGVectorRAGIndexer v2.12.0
 
 > **📌 Note:** For quick Docker-only deployment (recommended for most users), see:
 > - **Linux/WSL Setup**: [QUICK_START.md](QUICK_START.md)
@@ -99,6 +99,8 @@ services:
         condition: service_healthy
     volumes:
       - ./documents:/app/documents:ro
+      - ./backups:/app/backups
+      - ${HOME:-.}/.pgvector-license:/root/.pgvector-license:ro
 
 volumes:
   postgres_data:
@@ -504,31 +506,39 @@ async def metrics():
 
 ## 🔄 Backup & Recovery
 
-### Database Backup
+### Automatic Backups (Built-in)
+
+As of v2.12.0, the application creates pg_dump backups automatically:
+
+- **On every startup** (Docker mode): saved to `./backups/startup_backup_*.sql` (keeps 3)
+- **Before schema migrations**: saved to `./backups/pre_migrate_*.sql` (keeps 5)
+- **Auto-recovery**: If the database is empty but backups exist, the system restores automatically on startup
+
+Ensure the `./backups:/app/backups` volume mount is present in your `docker-compose.yml` (included by default since v2.12.0).
+
+### Manual Backup
 
 ```bash
-# Daily backup script
-#!/bin/bash
-BACKUP_DIR="/backups/postgres"
-DATE=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="$BACKUP_DIR/rag_db_$DATE.sql.gz"
+# On-demand backup using the included script
+./backup_database.sh
 
-# Create backup
-docker exec vector_rag_db pg_dump -U rag_user rag_vector_db | gzip > $BACKUP_FILE
-
-# Keep only last 7 days
-find $BACKUP_DIR -name "rag_db_*.sql.gz" -mtime +7 -delete
-
-# Upload to S3 (optional)
-aws s3 cp $BACKUP_FILE s3://your-bucket/backups/
+# Or manual pg_dump
+docker exec vector_rag_db pg_dump -U rag_user rag_vector_db > backup.sql
 ```
 
 ### Restore
 
 ```bash
-# Restore from backup
-gunzip -c backup.sql.gz | docker exec -i vector_rag_db psql -U rag_user rag_vector_db
+# Restore using the included script
+./restore_database.sh ./backups/latest_backup.sql
+
+# Or manual restore
+cat backup.sql | docker exec -i vector_rag_db psql -U rag_user -d rag_vector_db
 ```
+
+### Additional Cloud Sync
+
+For S3 or Google Drive sync, see [BACKUP_GUIDE.md](BACKUP_GUIDE.md).
 
 ## 🚀 Performance Tuning
 

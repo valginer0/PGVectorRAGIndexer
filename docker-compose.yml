@@ -50,7 +50,9 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./documents:/app/documents
+      - ./backups:/app/backups
       - model_cache:/root/.cache/huggingface
+      - ${HOME:-.}/.pgvector-license:/root/.pgvector-license:ro
     depends_on:
       db:
         condition: service_healthy

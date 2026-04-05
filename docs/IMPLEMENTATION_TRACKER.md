@@ -2,16 +2,16 @@
 
 Derived from [FEATURE_IDEAS_V5.md](./FEATURE_IDEAS_V5.md). Each task maps to a feature number in V5.
 
-Last updated: 2026-03-20 (v2.11.6)
+Last updated: 2026-04-05 (v2.12.0)
 
 ---
 
 ## Current State
 
-All roadmap features are **implemented and shipping** as of v2.11.6 The codebase includes:
+All roadmap features are **implemented and shipping** as of v2.12.0 The codebase includes:
 
-- **Server**: Modular FastAPI routers (11 domain routers + `/me` identity endpoint), Alembic migrations (001–017), pgvector search, structured JSON logging, `/health` system metrics
-- **Desktop**: Qt6 app with `APIClient` facade (10 domain clients), controller pattern (Settings), analytics, watched folders, **Organization Console** (7 sub-panels with server capability detection, admin write operations, permission-aware UI gating)
+- **Server**: Modular FastAPI routers (11 domain routers + `/me` identity endpoint), Alembic migrations (001–018), pgvector search, structured JSON logging, `/health` system metrics, **automatic pg_dump backups with auto-recovery**
+- **Desktop**: Qt6 app with `APIClient` facade (10 domain clients), controller pattern (Settings), analytics, watched folders, **Organization Console** (7 sub-panels with server capability detection, admin write operations, permission-aware UI gating), **Manage tab restore from backup file**
 - **Enterprise**: RBAC with custom roles, SAML SSO (Okta), SCIM 2.0 provisioning, data retention orchestration, compliance export
 - **CI**: Split-backend E2E tests in GitHub Actions (PostgreSQL 16 + pgvector, auth-required)
 

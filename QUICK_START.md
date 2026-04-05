@@ -1,4 +1,4 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.11.7
+# Quick Start Guide - PGVectorRAGIndexer v2.12.0
 
 Get up and running in 5 minutes!
 > 🔒 **Network safety tip**
@@ -6,7 +6,7 @@ Get up and running in 5 minutes!
 > This helps prevent other users on the same network from accessing local services.
 > For home or private networks, this is not a concern.
 
-## 🆕 What's New in v2.11.7
+## 🆕 What's New in v2.12.0
 
 - **Complete Changelog**: We are constantly adding new features! Check the [`CHANGELOG.md`](CHANGELOG.md) or the [Releases page](https://github.com/valginer0/PGVectorRAGIndexer/releases) for the latest updates.
 

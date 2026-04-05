@@ -179,7 +179,7 @@ async def reload_license():
 )
 async def health_check():
     """Check API and database health."""
-    from services import init_complete, init_error # Re-import to ensure latest value
+    from services import init_complete, init_error, recovery_message # Re-import to ensure latest value
     
     if not init_complete:
         from errors import raise_api_error, ErrorCode
@@ -202,13 +202,16 @@ async def health_check():
         embedding_service = get_embedding_service()
         model_info = embedding_service.get_model_info()
         
-        return HealthResponse(
+        response = HealthResponse(
             status="healthy",
             timestamp=datetime.utcnow().isoformat(),
             database=db_health,
             embedding_model=model_info,
-            system=_get_system_metrics()
+            system=_get_system_metrics(),
         )
+        if recovery_message:
+            response.recovery_message = recovery_message
+        return response
     except Exception as e:
         logger.error(f"Health check failed: {e}")
         raise HTTPException(

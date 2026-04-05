@@ -97,62 +97,12 @@ def _run_pg_dump(db_url: str) -> bool:
     Saves backup to /app/backups/pre_migrate_<timestamp>.sql
     Returns True if backup succeeded, False otherwise.
     """
-    backup_dir = Path("/app/backups")
-    backup_dir.mkdir(parents=True, exist_ok=True)
-
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    backup_file = backup_dir / f"pre_migrate_{timestamp}.sql"
-
-    try:
-        # Parse connection details from URL
-        # Format: postgresql://user:password@host:port/dbname
-        from urllib.parse import urlparse
-        parsed = urlparse(db_url)
-
-        env = os.environ.copy()
-        env["PGPASSWORD"] = parsed.password or ""
-
-        result = subprocess.run(
-            [
-                "pg_dump",
-                "-h", parsed.hostname or "db",
-                "-p", str(parsed.port or 5432),
-                "-U", parsed.username or "rag_user",
-                "-d", parsed.path.lstrip("/") or "rag_vector_db",
-                "-f", str(backup_file),
-                "--no-owner",
-                "--no-privileges",
-            ],
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 minute timeout
-        )
-
-        if result.returncode == 0:
-            size_mb = backup_file.stat().st_size / (1024 * 1024)
-            logger.info(
-                f"Pre-migration backup saved: {backup_file} ({size_mb:.1f} MB)"
-            )
-            return True
-        else:
-            logger.warning(
-                f"pg_dump failed (exit {result.returncode}): {result.stderr}"
-            )
-            return False
-
-    except FileNotFoundError:
-        logger.warning(
-            "pg_dump not found — skipping pre-migration backup. "
-            "Install postgresql-client for automatic backups."
-        )
-        return False
-    except subprocess.TimeoutExpired:
-        logger.warning("pg_dump timed out after 5 minutes — skipping backup")
-        return False
-    except Exception as e:
-        logger.warning(f"Pre-migration backup failed: {e}")
-        return False
+    from auto_backup import run_pg_dump_backup, rotate_backups
+    result = run_pg_dump_backup(db_url, prefix="pre_migrate")
+    if result:
+        rotate_backups(prefix="pre_migrate", keep=5)
+        return True
+    return False
 
 
 def _check_recent_backup() -> bool:

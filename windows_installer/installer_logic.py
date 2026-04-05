@@ -1364,32 +1364,38 @@ class Installer:
     def _step_finalize(self) -> bool:
         """Create shortcuts and finalize installation."""
         step = self.steps[7]
-        self._update_progress(step, "Creating desktop shortcut...")
-        
-        # Create desktop shortcut
+        self._update_progress(step, "Creating desktop shortcuts...")
+
+        # Create desktop shortcut for the app
         try:
             self._create_shortcut()
             self._log("Desktop shortcut created", "success")
         except Exception as e:
             self._log(f"Could not create shortcut: {e}", "warning")
-        
+
+        # Copy Setup .EXE into install dir and create shortcut for reinstallation
+        try:
+            self._install_setup_shortcut()
+            self._log("Setup Wizard shortcut created", "success")
+        except Exception as e:
+            self._log(f"Could not create Setup Wizard shortcut: {e}", "warning")
+
         self._log("Installation complete!", "success")
         return True
     
     def _create_shortcut(self):
-        """Create a desktop shortcut."""
+        """Create a desktop shortcut for the application."""
         try:
-            import winreg
             from pathlib import Path
-            
+
             desktop = Path.home() / "Desktop"
             if not desktop.exists():
                 # Try OneDrive Desktop
                 desktop = Path.home() / "OneDrive" / "Desktop"
-            
+
             shortcut_path = desktop / "PGVectorRAGIndexer.lnk"
             target = os.path.join(self.INSTALL_DIR, "run_desktop_app.bat")
-            
+
             # Use PowerShell to create shortcut
             ps_command = f'''
             $WshShell = New-Object -comObject WScript.Shell
@@ -1399,7 +1405,7 @@ class Installer:
             $Shortcut.Description = "PGVectorRAGIndexer - Semantic Document Search"
             $Shortcut.Save()
             '''
-            
+
             subprocess.run(
                 ["powershell", "-Command", ps_command],
                 capture_output=True,
@@ -1407,6 +1413,52 @@ class Installer:
             )
         except Exception as e:
             raise e
+
+    def _install_setup_shortcut(self):
+        """Copy the Setup .EXE into the install directory and create a desktop shortcut.
+
+        This allows users to re-run the installer for upgrades or repairs
+        without needing to re-download it.
+        """
+        from pathlib import Path
+
+        # Locate the running Setup .EXE
+        if getattr(sys, 'frozen', False):
+            src_exe = sys.executable
+        else:
+            # Running as script — no .EXE to copy
+            return
+
+        dest_exe = os.path.join(self.INSTALL_DIR, "PGVectorRAGIndexer-Setup.exe")
+
+        # Copy .EXE into install dir (skip if already there)
+        src_path = os.path.abspath(src_exe)
+        dest_path = os.path.abspath(dest_exe)
+        if os.path.normcase(src_path) != os.path.normcase(dest_path):
+            import shutil
+            shutil.copy2(src_path, dest_path)
+            self._log(f"Setup .EXE copied to {dest_exe}", "info")
+
+        # Create desktop shortcut
+        desktop = Path.home() / "Desktop"
+        if not desktop.exists():
+            desktop = Path.home() / "OneDrive" / "Desktop"
+
+        shortcut_path = desktop / "PGVectorRAGIndexer Setup.lnk"
+        ps_command = f'''
+        $WshShell = New-Object -comObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut("{shortcut_path}")
+        $Shortcut.TargetPath = "{dest_exe}"
+        $Shortcut.WorkingDirectory = "{self.INSTALL_DIR}"
+        $Shortcut.Description = "PGVectorRAGIndexer - Setup Wizard (Reinstall / Upgrade)"
+        $Shortcut.Save()
+        '''
+
+        subprocess.run(
+            ["powershell", "-Command", ps_command],
+            capture_output=True,
+            timeout=30
+        )
     
     # =========================================================================
     # Main Run

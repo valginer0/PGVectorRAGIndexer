@@ -140,17 +140,25 @@ async def test_get_license_warning(client):
 
 @pytest.mark.asyncio
 async def test_install_server_license_endpoint_stores_key(client):
+    from license import AggregatedLicense, Edition
+    agg = AggregatedLicense(edition=Edition.TEAM, seats=5, active_key_ids=["k1"])
     with patch("routers.system_api.is_loopback_request", return_value=True), \
          patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
          patch("license.validate_license_key") as mock_validate, \
-         patch("server_settings_store.set_server_license_key") as mock_store:
+         patch("server_settings_store.add_server_license_key") as mock_add, \
+         patch("license.load_all_licenses", return_value=agg), \
+         patch("license.reset_license"), \
+         patch("license.set_current_license"), \
+         patch("server_settings_store.get_server_license_keys", return_value=["k1"]):
         key = _make_key(secret=TEST_SECRET)
         response = await client.post("/api/v1/license/install", json={"license_key": key})
 
     assert response.status_code == 200
-    assert response.json()["status"] == "stored"
+    data = response.json()
+    assert data["status"] == "stored"
+    assert data["action"] == "add"
     mock_validate.assert_called_once_with(key, TEST_SECRET, ["HS256"])
-    mock_store.assert_called_once_with(key)
+    mock_add.assert_called_once_with(key)
 
 @pytest.mark.asyncio
 async def test_install_server_license_endpoint_rejects_non_loopback(client):

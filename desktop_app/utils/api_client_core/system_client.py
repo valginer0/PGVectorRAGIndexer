@@ -87,3 +87,21 @@ class SystemClient:
             timeout=10
         )
         return response.json()
+
+    def get_license_usage(self) -> Dict[str, Any]:
+        """Get seat usage: licensed_seats, active_seats, overage.
+
+        Returns a dict with keys ``licensed_seats``, ``active_seats``,
+        ``overage``, and ``edition``.  Returns an empty dict on error so
+        callers never raise.
+        """
+        try:
+            response = self._base.request(
+                "GET",
+                f"{self._base.api_base}/license/usage",
+                timeout=10,
+            )
+            return response.json()
+        except Exception as e:
+            logger.debug("get_license_usage failed: %s", e)
+            return {}

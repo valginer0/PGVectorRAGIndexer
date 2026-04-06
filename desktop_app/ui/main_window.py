@@ -127,6 +127,10 @@ class MainWindow(QMainWindow):
         # License expiry banner (hidden by default)
         self._create_license_banner(layout)
 
+        # License overage (seat-count) banner (hidden by default)
+        self._overage_dismissed = False
+        self._create_overage_banner(layout)
+
         # Remote mode banner (hidden by default)
         self._create_remote_banner(layout)
         
@@ -293,6 +297,72 @@ class MainWindow(QMainWindow):
         """Open the pricing page."""
         from desktop_app.utils.edition import open_pricing_page
         open_pricing_page()
+
+    def _create_overage_banner(self, parent_layout):
+        """Create a red seat-overage banner (hidden by default)."""
+        self._overage_banner = QWidget()
+        self._overage_banner.setObjectName("overageBanner")
+        self._overage_banner.setVisible(False)
+        self._overage_banner.setStyleSheet(
+            "#overageBanner { background-color: #7f1d1d; border-radius: 6px; "
+            "border: 1px solid #ef4444; }"
+        )
+
+        banner_layout = QHBoxLayout(self._overage_banner)
+        banner_layout.setContentsMargins(15, 8, 15, 8)
+
+        icon_lbl = QLabel()
+        icon_lbl.setPixmap(
+            qta.icon('fa5s.exclamation-circle', color='#fca5a5').pixmap(16, 16)
+        )
+        banner_layout.addWidget(icon_lbl)
+
+        self._overage_banner_text = QLabel()
+        self._overage_banner_text.setWordWrap(True)
+        self._overage_banner_text.setStyleSheet("color: #fee2e2; font-weight: 600;")
+        banner_layout.addWidget(self._overage_banner_text, 1)
+
+        buy_btn = QPushButton("Add Licenses")
+        buy_btn.setFlat(True)
+        buy_btn.setCursor(Qt.PointingHandCursor)
+        buy_btn.setStyleSheet("color: white; text-decoration: underline; border: none;")
+        buy_btn.clicked.connect(self._open_pricing)
+        banner_layout.addWidget(buy_btn)
+
+        dismiss_btn = QPushButton("Dismiss")
+        dismiss_btn.setFlat(True)
+        dismiss_btn.setCursor(Qt.PointingHandCursor)
+        dismiss_btn.setStyleSheet("color: #fca5a5; border: none; font-size: 11px;")
+        dismiss_btn.clicked.connect(self._dismiss_overage_banner)
+        banner_layout.addWidget(dismiss_btn)
+
+        parent_layout.addWidget(self._overage_banner)
+
+    def _check_license_overage(self):
+        """Query /api/v1/license/usage and show/hide the overage banner."""
+        if self._overage_dismissed:
+            return
+        try:
+            usage = self.api_client.get_license_usage()
+            overage = usage.get("overage", 0)
+            if overage and overage > 0:
+                active = usage.get("active_seats", 0)
+                licensed = usage.get("licensed_seats", 0)
+                self._overage_banner_text.setText(
+                    f"\u26a0\u00a0License Non-Compliance: {active} active users on a "
+                    f"{licensed}-seat license ({overage} over). "
+                    "Purchase additional Organization licenses."
+                )
+                self._overage_banner.setVisible(True)
+            else:
+                self._overage_banner.setVisible(False)
+        except Exception as e:
+            logger.debug("Overage check failed (non-fatal): %s", e)
+
+    def _dismiss_overage_banner(self):
+        """Hide the overage banner for the rest of this session."""
+        self._overage_dismissed = True
+        self._overage_banner.setVisible(False)
 
     def _create_remote_banner(self, parent_layout):
         """Create a remote-mode info banner (hidden by default)."""
@@ -608,6 +678,14 @@ class MainWindow(QMainWindow):
 
         # Update remote mode banner
         self._update_remote_banner()
+
+        # Check seat overage (deferred so API is fully ready)
+        QTimer.singleShot(2000, self._check_license_overage)
+
+        # Re-check every 10 minutes
+        self._overage_timer = QTimer(self)
+        self._overage_timer.timeout.connect(self._check_license_overage)
+        self._overage_timer.start(10 * 60 * 1000)
 
         # Register client identity (#8)
         self._register_client()

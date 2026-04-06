@@ -132,6 +132,10 @@ class APIClient:
         """Get the full health status of the API."""
         return self._system.get_health()
 
+    def get_license_usage(self) -> Dict[str, Any]:
+        """Get seat usage: licensed_seats, active_seats, overage. Never raises."""
+        return self._system.get_license_usage()
+
     def is_api_available(self) -> bool:
         """Check if the API is available (responding 200)."""
         return self._system.is_api_available()

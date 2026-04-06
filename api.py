@@ -74,11 +74,14 @@ def _run_startup():
             except Exception as e:
                 logger.warning("[init] Auto-recovery check failed (non-fatal): %s", e)
 
-        # Load and validate license key
-        from license import load_license, set_current_license
-        license_info = load_license(allow_db_fallback=True)
+        # Load and validate license keys (supports stacked keys)
+        from license import load_all_licenses, set_current_license
+        license_info = load_all_licenses()
         set_current_license(license_info)
-        logger.info("Edition: %s", license_info.edition.value.title())
+        logger.info("Edition: %s | Licensed seats: %d | Stacked keys: %d",
+                    license_info.edition.value.title(),
+                    license_info.seats,
+                    len(getattr(license_info, 'active_key_ids', [])))
         if license_info.warning:
             logger.warning("License warning: %s", license_info.warning)
 
@@ -205,6 +208,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add license overage shame middleware (no-op for Community edition)
+from license_overage import LicenseOverageMiddleware
+app.add_middleware(LicenseOverageMiddleware)
 
 # Add TrustedHost middleware (restrict allowed Host headers)
 if config.api.allowed_hosts != ["*"]:

@@ -123,9 +123,14 @@ async def license_info():
 
 @system_v1_router.post("/license/install", dependencies=[Depends(require_api_key)])
 async def install_server_license(request: Request):
-    """Persist a backend license token so server-managed endpoints can use it."""
-    from license import validate_license_key, resolve_verification_context
-    from server_settings_store import set_server_license_key
+    """Persist a backend license token so server-managed endpoints can use it.
+
+    ``action`` field (optional, default ``"add"``):
+    - ``"add"``     — append to the stack (deduplicates by kid)
+    - ``"replace"`` — remove all existing keys and set only this one
+    """
+    from license import validate_license_key, resolve_verification_context, load_all_licenses, reset_license, set_current_license
+    from server_settings_store import add_server_license_key, set_server_license_key, get_server_license_keys
     from errors import raise_api_error, ErrorCode
 
     if not is_loopback_request(request):
@@ -137,22 +142,87 @@ async def install_server_license(request: Request):
 
     body = await request.json()
     license_key = (body.get("license_key") or "").strip() if isinstance(body, dict) else ""
+    action = (body.get("action") or "add").strip().lower() if isinstance(body, dict) else "add"
     if not license_key:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="license_key is required")
+    if action not in ("add", "replace"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="action must be 'add' or 'replace'")
 
     signing_secret, algorithms = resolve_verification_context()
-    validate_license_key(license_key, signing_secret, algorithms)
-    set_server_license_key(license_key)
-    return {"status": "stored"}
+    info = validate_license_key(license_key, signing_secret, algorithms)
+
+    if action == "replace":
+        set_server_license_key(license_key)
+    else:
+        add_server_license_key(license_key)
+
+    # Reload aggregated license cache
+    reset_license()
+    new_agg = load_all_licenses()
+    set_current_license(new_agg)
+
+    active_keys = get_server_license_keys()
+    return {
+        "status": "stored",
+        "action": action,
+        "total_licensed_seats": new_agg.seats,
+        "active_keys": len(active_keys),
+    }
+
+
+@system_v1_router.delete("/license/{kid}", dependencies=[Depends(require_api_key)])
+async def remove_server_license(kid: str, request: Request):
+    """Remove a stacked license key by its JWT kid claim."""
+    from license import reset_license, load_all_licenses, set_current_license
+    from server_settings_store import remove_server_license_key
+    from errors import raise_api_error, ErrorCode
+
+    if not is_loopback_request(request):
+        raise_api_error(
+            ErrorCode.FORBIDDEN,
+            message="License removal is only allowed from the local machine.",
+            details={"loopback_required": True},
+        )
+
+    removed = remove_server_license_key(kid)
+    if not removed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No key with kid '{kid}' found")
+
+    reset_license()
+    new_agg = load_all_licenses()
+    set_current_license(new_agg)
+    return {"status": "removed", "kid": kid, "total_licensed_seats": new_agg.seats}
+
+
+@system_v1_router.get("/license/usage", dependencies=[Depends(require_api_key)])
+async def get_license_usage():
+    """Return licensed seats, active named users, and overage count.
+
+    ``overage = max(0, active_seats - licensed_seats)``.
+    Community edition always returns ``overage: 0`` (no seat concept).
+    """
+    from license import get_current_license, Edition
+    from users import count_active_users
+
+    lic = get_current_license()
+    licensed_seats: int = lic.seats if lic.is_team else 0
+    active_seats: int = count_active_users() if lic.is_team else 0
+    overage: int = max(0, active_seats - licensed_seats) if lic.is_team else 0
+
+    return {
+        "licensed_seats": licensed_seats,
+        "active_seats": active_seats,
+        "overage": overage,
+        "edition": lic.edition.value,
+    }
 
 
 @system_v1_router.post("/license/reload")
 async def reload_license():
     """Force the server to reload the license from disk."""
-    from license import reset_license, load_license, set_current_license
+    from license import reset_license, load_all_licenses, set_current_license
     reset_license()
-    # Force immediate reload
-    new_lic = load_license(allow_db_fallback=True)
+    new_lic = load_all_licenses()
     set_current_license(new_lic)
     return {"status": "reloaded", "license": new_lic.to_dict()}
 

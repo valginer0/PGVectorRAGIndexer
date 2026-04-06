@@ -589,25 +589,159 @@ def load_license(
 
 
 # ---------------------------------------------------------------------------
+# Aggregated (stacked) license
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class AggregatedLicense:
+    """Result of validating and summing all stacked license keys.
+
+    Exposes the same interface as ``LicenseInfo`` for drop-in compatibility
+    with all existing call sites that use ``.edition``, ``.seats``,
+    ``.is_team``, and ``.to_dict()``.
+    """
+
+    edition: Edition = Edition.COMMUNITY
+    org_name: str = ""
+    seats: int = 0
+    active_key_ids: List[str] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)
+    expiry_timestamp: float = 0.0  # earliest non-zero expiry among valid keys
+    issued_at: float = 0.0
+    key_id: str = ""  # first valid key's id (compat with LicenseInfo.key_id)
+    warning: str = ""  # joined warnings (compat with LicenseInfo.warning)
+
+    @property
+    def is_team(self) -> bool:
+        return self.edition in (Edition.TEAM, Edition.ORGANIZATION)
+
+    def to_dict(self) -> dict:
+        days_left = compute_days_until_expiry(self.expiry_timestamp) if self.expiry_timestamp else None
+        result = {
+            "edition": self.edition.value,
+            "org_name": self.org_name,
+            "seats": self.seats,
+            "days_until_expiry": days_left,
+            "expired": is_expired(self.expiry_timestamp) if self.expiry_timestamp else False,
+            "key_id": self.key_id,
+            "stacked_keys": len(self.active_key_ids),
+        }
+        if self.warning:
+            result["warning"] = self.warning
+        return result
+
+
+def load_all_licenses(
+    signing_secret: Optional[str] = None,
+) -> AggregatedLicense:
+    """Load and aggregate all stacked license keys.
+
+    Reads keys from:
+      1. Server DB (``get_server_license_keys()`` — all stacked keys)
+      2. Filesystem license file (platform-specific path)
+
+    Each key is validated independently. Invalid or expired keys are skipped
+    with a warning but never raise.  The returned ``AggregatedLicense`` has:
+      - ``seats`` = SUM of valid-key seats
+      - ``edition`` = highest edition across valid keys
+      - ``org_name`` = from the first valid key
+
+    Falls back to Community edition if no valid keys are found.
+    """
+    signing_secret_resolved, resolved_algorithms = resolve_verification_context(signing_secret)
+
+    raw_keys: List[str] = []
+
+    # Source 1: DB-stored stacked keys
+    try:
+        from server_settings_store import get_server_license_keys
+        raw_keys.extend(get_server_license_keys())
+    except Exception as e:
+        logger.debug("Could not read server license keys: %s", e)
+
+    # Source 2: filesystem key (may duplicate Source 1 — deduplicate by token string)
+    fs_path = get_license_file_path()
+    if fs_path.exists():
+        try:
+            fs_key = "".join(fs_path.read_text(encoding="utf-8").split())
+            if fs_key and fs_key not in raw_keys:
+                raw_keys.append(fs_key)
+        except Exception as e:
+            logger.debug("Could not read filesystem license key: %s", e)
+
+    if not raw_keys:
+        return AggregatedLicense()  # Community
+
+    total_seats = 0
+    highest_edition = Edition.COMMUNITY
+    first_org = ""
+    first_kid = ""
+    earliest_expiry = 0.0
+    active_kids: List[str] = []
+    agg_warnings: List[str] = []
+
+    _edition_rank = {Edition.COMMUNITY: 0, Edition.TEAM: 1, Edition.ORGANIZATION: 2}
+
+    for raw_key in raw_keys:
+        try:
+            info = validate_license_key(raw_key, signing_secret_resolved, resolved_algorithms)
+            if is_expired(info.expiry_timestamp):
+                agg_warnings.append(f"Key {info.key_id or '?'}: expired")
+                continue
+            total_seats += int(info.seats or 0)
+            if _edition_rank.get(info.edition, 0) > _edition_rank.get(highest_edition, 0):
+                highest_edition = info.edition
+            if not first_org:
+                first_org = info.org_name
+                first_kid = info.key_id
+            if info.expiry_timestamp:
+                if earliest_expiry == 0.0 or info.expiry_timestamp < earliest_expiry:
+                    earliest_expiry = info.expiry_timestamp
+            if info.key_id:
+                active_kids.append(info.key_id)
+        except LicenseExpiredError as e:
+            agg_warnings.append(str(e))
+        except (LicenseInvalidError, LicenseError) as e:
+            agg_warnings.append(str(e))
+
+    if not active_kids:
+        # All keys were expired or invalid
+        return AggregatedLicense(warnings=agg_warnings, warning="; ".join(agg_warnings))
+
+    return AggregatedLicense(
+        edition=highest_edition,
+        org_name=first_org,
+        seats=total_seats,
+        active_key_ids=active_kids,
+        warnings=agg_warnings,
+        expiry_timestamp=earliest_expiry,
+        key_id=first_kid,
+        warning="; ".join(agg_warnings) if agg_warnings else "",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Global license state
 # ---------------------------------------------------------------------------
 
-_current_license: Optional[LicenseInfo] = None
+_current_license = None  # LicenseInfo | AggregatedLicense | None
 
 
-def get_current_license() -> LicenseInfo:
-    """Get the current license info, loading from disk on first call.
+def get_current_license():
+    """Get the current (aggregated) license, loading on first call.
 
-    Returns:
-        LicenseInfo for the current session.
+    Returns an ``AggregatedLicense`` which exposes the same ``.edition``,
+    ``.seats``, ``.is_team``, and ``.to_dict()`` interface as the old
+    ``LicenseInfo`` so all existing call sites work without changes.
     """
     global _current_license
     if _current_license is None:
-        _current_license = load_license()
+        _current_license = load_all_licenses()
     return _current_license
 
 
-def set_current_license(license_info: LicenseInfo) -> None:
+def set_current_license(license_info) -> None:
     """Set the current license (used by startup and tests)."""
     global _current_license
     _current_license = license_info

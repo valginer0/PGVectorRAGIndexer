@@ -298,3 +298,20 @@ def count_admins() -> int:
     except Exception as e:
         logger.error("Failed to count admins: %s", e)
         return 0
+
+
+def count_active_users() -> int:
+    """Count the number of active (named) users for seat-limit enforcement.
+
+    Returns the number of rows in the ``users`` table with ``is_active = true``.
+    Unauthenticated desktop clients are not counted — only provisioned identities.
+    """
+    try:
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM users WHERE is_active = true")
+            row = cursor.fetchone()
+            return row[0] if row else 0
+    except Exception as e:
+        logger.error("Failed to count active users: %s", e)
+        return 0

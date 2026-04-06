@@ -125,6 +125,7 @@ def indexed_document(processor, repository, embedding_service, test_document):
 @pytest.mark.slow
 @pytest.mark.integration
 @pytest.mark.database
+@pytest.mark.requires_model
 class TestIndexAndRetrieve:
     """Test full indexing and retrieval workflow."""
     

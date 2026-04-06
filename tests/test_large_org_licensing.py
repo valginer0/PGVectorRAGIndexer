@@ -6,8 +6,11 @@ Covers:
 - load_all_licenses() — seat summation, edition elevation, expired/invalid key handling
 - server_settings_store multi-key helpers (get/add/remove)
 - count_active_users()
-- GET /api/v1/license/usage endpoint
+- GET /api/v1/license/usage endpoint (unit + HTTP integration)
+- POST /api/v1/license/install action=add|replace (HTTP integration)
+- DELETE /api/v1/license/{kid} (HTTP integration)
 - LicenseOverageMiddleware — headers injected / suppressed
+- Desktop overage banner — headless widget logic
 """
 
 import os
@@ -30,10 +33,57 @@ from license import (
     AggregatedLicense,
     load_all_licenses,
     validate_license_key,
+    reset_license,
 )
 from license_utils import is_expired
 
 TEST_SECRET = "test-secret-large-org-only"
+
+
+# ---------------------------------------------------------------------------
+# Shared ASGI test app (mirrors test_api_license.py pattern)
+# ---------------------------------------------------------------------------
+
+os.environ.setdefault("DEBUG", "false")
+os.environ.setdefault("API_REQUIRE_AUTH", "false")
+
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import JSONResponse
+from httpx import AsyncClient, ASGITransport
+from routers.system_api import system_app_router, system_v1_router
+
+_test_app = FastAPI()
+
+
+@_test_app.exception_handler(HTTPException)
+async def _http_exc(request, exc):
+    detail = exc.detail
+    error_code = "GENERIC_HTTP_ERROR"
+    message = str(detail)
+    details = None
+    if isinstance(detail, dict):
+        error_code = detail.get("error_code", error_code)
+        message = detail.get("message", message)
+        details = detail.get("details")
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error_code": error_code, "message": message, "details": details},
+    )
+
+
+_test_app.include_router(system_app_router)
+_test_app.include_router(system_v1_router, prefix="/api/v1")
+
+
+@pytest.fixture
+async def http_client():
+    """Async HTTP client against the minimal ASGI app."""
+    reset_license()
+    async with AsyncClient(
+        transport=ASGITransport(app=_test_app), base_url="http://test"
+    ) as ac:
+        yield ac
+    reset_license()
 
 
 # ---------------------------------------------------------------------------
@@ -486,3 +536,239 @@ class TestLicenseOverageMiddleware:
         assert not _cache.is_stale()
         invalidate_overage_cache()
         assert _cache.is_stale()
+
+
+# ---------------------------------------------------------------------------
+# HTTP integration tests — new endpoints through ASGI transport
+# ---------------------------------------------------------------------------
+
+
+class TestLicenseUsageEndpointHTTP:
+    """Hit GET /api/v1/license/usage via real HTTP through the ASGI stack."""
+
+    @pytest.mark.asyncio
+    async def test_community_returns_zeros(self, http_client):
+        agg = AggregatedLicense(edition=Edition.COMMUNITY)
+        with patch("license.get_current_license", return_value=agg), \
+             patch("users.count_active_users", return_value=0):
+            resp = await http_client.get("/api/v1/license/usage")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["overage"] == 0
+        assert data["licensed_seats"] == 0
+        assert data["active_seats"] == 0
+        assert data["edition"] == "community"
+
+    @pytest.mark.asyncio
+    async def test_team_within_limit(self, http_client):
+        agg = AggregatedLicense(edition=Edition.TEAM, seats=10, active_key_ids=["k1"])
+        with patch("license.get_current_license", return_value=agg), \
+             patch("users.count_active_users", return_value=7):
+            resp = await http_client.get("/api/v1/license/usage")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["licensed_seats"] == 10
+        assert data["active_seats"] == 7
+        assert data["overage"] == 0
+
+    @pytest.mark.asyncio
+    async def test_overage_reflected_correctly(self, http_client):
+        agg = AggregatedLicense(edition=Edition.TEAM, seats=5, active_key_ids=["k1"])
+        with patch("license.get_current_license", return_value=agg), \
+             patch("users.count_active_users", return_value=8):
+            resp = await http_client.get("/api/v1/license/usage")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["overage"] == 3
+        assert data["active_seats"] == 8
+        assert data["licensed_seats"] == 5
+
+    @pytest.mark.asyncio
+    async def test_stacked_seats_combined(self, http_client):
+        """Two 5-seat keys → 10 licensed seats reflected in usage endpoint."""
+        agg = AggregatedLicense(
+            edition=Edition.ORGANIZATION, seats=10, active_key_ids=["k1", "k2"]
+        )
+        with patch("license.get_current_license", return_value=agg), \
+             patch("users.count_active_users", return_value=9):
+            resp = await http_client.get("/api/v1/license/usage")
+        data = resp.json()
+        assert data["licensed_seats"] == 10
+        assert data["overage"] == 0
+
+
+class TestInstallEndpointHTTP:
+    """POST /api/v1/license/install — action=add and action=replace via HTTP."""
+
+    def _agg(self, seats=5):
+        return AggregatedLicense(edition=Edition.TEAM, seats=seats, active_key_ids=["k1"])
+
+    @pytest.mark.asyncio
+    async def test_add_action_default(self, http_client):
+        key = _make_key(seats=5, kid="k1")
+        agg = self._agg(5)
+        with patch("routers.system_api.is_loopback_request", return_value=True), \
+             patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
+             patch("license.validate_license_key", return_value=MagicMock()), \
+             patch("server_settings_store.add_server_license_key") as mock_add, \
+             patch("license.reset_license"), \
+             patch("license.load_all_licenses", return_value=agg), \
+             patch("license.set_current_license"), \
+             patch("server_settings_store.get_server_license_keys", return_value=[key]):
+            resp = await http_client.post("/api/v1/license/install", json={"license_key": key})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "stored"
+        assert data["action"] == "add"
+        assert data["total_licensed_seats"] == 5
+        mock_add.assert_called_once_with(key)
+
+    @pytest.mark.asyncio
+    async def test_replace_action(self, http_client):
+        key = _make_key(seats=25, kid="k-org")
+        agg = AggregatedLicense(edition=Edition.ORGANIZATION, seats=25, active_key_ids=["k-org"])
+        with patch("routers.system_api.is_loopback_request", return_value=True), \
+             patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
+             patch("license.validate_license_key", return_value=MagicMock()), \
+             patch("server_settings_store.set_server_license_key") as mock_set, \
+             patch("license.reset_license"), \
+             patch("license.load_all_licenses", return_value=agg), \
+             patch("license.set_current_license"), \
+             patch("server_settings_store.get_server_license_keys", return_value=[key]):
+            resp = await http_client.post(
+                "/api/v1/license/install",
+                json={"license_key": key, "action": "replace"},
+            )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["action"] == "replace"
+        mock_set.assert_called_once_with(key)
+
+    @pytest.mark.asyncio
+    async def test_invalid_action_rejected(self, http_client):
+        key = _make_key(kid="k1")
+        with patch("routers.system_api.is_loopback_request", return_value=True), \
+             patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])), \
+             patch("license.validate_license_key", return_value=MagicMock()):
+            resp = await http_client.post(
+                "/api/v1/license/install",
+                json={"license_key": key, "action": "delete_all"},
+            )
+        assert resp.status_code == 400
+
+    @pytest.mark.asyncio
+    async def test_non_loopback_rejected(self, http_client):
+        key = _make_key(kid="k1")
+        with patch("routers.system_api.is_loopback_request", return_value=False):
+            resp = await http_client.post("/api/v1/license/install", json={"license_key": key})
+        assert resp.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_missing_key_rejected(self, http_client):
+        with patch("routers.system_api.is_loopback_request", return_value=True):
+            resp = await http_client.post("/api/v1/license/install", json={})
+        assert resp.status_code == 400
+
+
+class TestDeleteLicenseEndpointHTTP:
+    """DELETE /api/v1/license/{kid} via HTTP."""
+
+    @pytest.mark.asyncio
+    async def test_remove_existing_key(self, http_client):
+        agg = AggregatedLicense(edition=Edition.COMMUNITY)
+        with patch("routers.system_api.is_loopback_request", return_value=True), \
+             patch("server_settings_store.remove_server_license_key", return_value=True), \
+             patch("license.reset_license"), \
+             patch("license.load_all_licenses", return_value=agg), \
+             patch("license.set_current_license"):
+            resp = await http_client.delete("/api/v1/license/my-kid-123")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["status"] == "removed"
+        assert data["kid"] == "my-kid-123"
+
+    @pytest.mark.asyncio
+    async def test_remove_nonexistent_key_returns_404(self, http_client):
+        with patch("routers.system_api.is_loopback_request", return_value=True), \
+             patch("server_settings_store.remove_server_license_key", return_value=False):
+            resp = await http_client.delete("/api/v1/license/no-such-kid")
+        assert resp.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_non_loopback_rejected(self, http_client):
+        with patch("routers.system_api.is_loopback_request", return_value=False):
+            resp = await http_client.delete("/api/v1/license/any-kid")
+        assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# Desktop overage banner — headless unit test (no display required)
+# ---------------------------------------------------------------------------
+
+
+class TestOverageBannerLogic:
+    """Test _check_license_overage() and _dismiss_overage_banner() without Qt display.
+
+    We test the pure logic by patching out Qt widget calls so no QApplication
+    is needed.  Visual rendering is covered by the existing slow UI test suite.
+    """
+
+    def _make_mock_window(self):
+        """Build a minimal stand-in for MainWindow with just the banner attributes."""
+        win = MagicMock()
+        win._overage_dismissed = False
+        win._overage_banner = MagicMock()
+        win._overage_banner_text = MagicMock()
+        win.api_client = MagicMock()
+        # Bind the real method implementations to our mock object
+        from desktop_app.ui.main_window import MainWindow
+        win._check_license_overage = MainWindow._check_license_overage.__get__(win, type(win))
+        win._dismiss_overage_banner = MainWindow._dismiss_overage_banner.__get__(win, type(win))
+        return win
+
+    def test_banner_shown_when_overage(self):
+        win = self._make_mock_window()
+        win.api_client.get_license_usage.return_value = {
+            "overage": 3, "active_seats": 8, "licensed_seats": 5
+        }
+        win._check_license_overage()
+        win._overage_banner.setVisible.assert_called_with(True)
+
+    def test_banner_hidden_when_no_overage(self):
+        win = self._make_mock_window()
+        win.api_client.get_license_usage.return_value = {
+            "overage": 0, "active_seats": 4, "licensed_seats": 5
+        }
+        win._check_license_overage()
+        win._overage_banner.setVisible.assert_called_with(False)
+
+    def test_banner_not_shown_after_dismiss(self):
+        win = self._make_mock_window()
+        win._overage_dismissed = True
+        win.api_client.get_license_usage.return_value = {
+            "overage": 5, "active_seats": 10, "licensed_seats": 5
+        }
+        win._check_license_overage()
+        win._overage_banner.setVisible.assert_not_called()
+
+    def test_dismiss_sets_flag_and_hides(self):
+        win = self._make_mock_window()
+        win._dismiss_overage_banner()
+        assert win._overage_dismissed is True
+        win._overage_banner.setVisible.assert_called_with(False)
+
+    def test_api_error_does_not_raise(self):
+        win = self._make_mock_window()
+        win.api_client.get_license_usage.side_effect = RuntimeError("timeout")
+        win._check_license_overage()  # must not raise
+        win._overage_banner.setVisible.assert_not_called()
+
+    def test_banner_text_contains_seat_numbers(self):
+        win = self._make_mock_window()
+        win.api_client.get_license_usage.return_value = {
+            "overage": 3, "active_seats": 28, "licensed_seats": 25
+        }
+        win._check_license_overage()
+        call_args = win._overage_banner_text.setText.call_args[0][0]
+        assert "28" in call_args
+        assert "25" in call_args

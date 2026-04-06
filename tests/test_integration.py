@@ -212,18 +212,20 @@ class TestIndexAndRetrieve:
         query = "deep learning neural"
         query_embedding = embedding_service.encode(query)  # Single text returns 1D array
         
-        # Test cosine distance
+        # Test cosine distance — filter by document_id to isolate from other DB rows
         results_cosine = repository.search_similar(
             query_embedding=query_embedding,
             top_k=3,
-            distance_metric='cosine'
+            distance_metric='cosine',
+            filters={'document_id': indexed_document}
         )
         
-        # Test L2 distance
+        # Test L2 distance — filter by document_id to isolate from other DB rows
         results_l2 = repository.search_similar(
             query_embedding=query_embedding,
             top_k=3,
-            distance_metric='l2'
+            distance_metric='l2',
+            filters={'document_id': indexed_document}
         )
         
         assert len(results_cosine) > 0

@@ -593,7 +593,7 @@ def load_license(
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(frozen=True)
 class AggregatedLicense:
     """Result of validating and summing all stacked license keys.
 
@@ -689,6 +689,16 @@ def load_all_licenses(
             if is_expired(info.expiry_timestamp):
                 agg_warnings.append(f"Key {info.key_id or '?'}: expired")
                 continue
+
+            # Optional online revocation check (mirrors load_license behaviour)
+            revocation_url = os.environ.get(LICENSE_REVOCATION_URL_ENV, "")
+            if revocation_url and info.is_team and info.key_id:
+                reason = check_license_revocation(info.key_id, revocation_url)
+                if reason:
+                    logger.warning("License key %s revoked: %s", info.key_id, reason)
+                    agg_warnings.append(f"Key {info.key_id}: revoked — {reason}")
+                    continue
+
             total_seats += int(info.seats or 0)
             if _edition_rank.get(info.edition, 0) > _edition_rank.get(highest_edition, 0):
                 highest_edition = info.edition

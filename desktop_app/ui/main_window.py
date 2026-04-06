@@ -345,7 +345,7 @@ class MainWindow(QMainWindow):
         try:
             usage = self.api_client.get_license_usage()
             overage = usage.get("overage", 0)
-            if overage and overage > 0:
+            if overage > 0:
                 active = usage.get("active_seats", 0)
                 licensed = usage.get("licensed_seats", 0)
                 self._overage_banner_text.setText(
@@ -682,10 +682,11 @@ class MainWindow(QMainWindow):
         # Check seat overage (deferred so API is fully ready)
         QTimer.singleShot(2000, self._check_license_overage)
 
-        # Re-check every 10 minutes
-        self._overage_timer = QTimer(self)
-        self._overage_timer.timeout.connect(self._check_license_overage)
-        self._overage_timer.start(10 * 60 * 1000)
+        # Re-check every 10 minutes — guard against reconnect creating duplicate timers
+        if not hasattr(self, '_overage_timer') or not self._overage_timer.isActive():
+            self._overage_timer = QTimer(self)
+            self._overage_timer.timeout.connect(self._check_license_overage)
+            self._overage_timer.start(10 * 60 * 1000)
 
         # Register client identity (#8)
         self._register_client()

@@ -86,7 +86,6 @@ async def api_info():
         "health": "/health",
     }
     # DEMO_MODE check would need to be passed in or imported
-    import os
     if os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes"):
         info["demo"] = True
     return info
@@ -101,7 +100,6 @@ async def api_version():
         "min_client_version": MIN_CLIENT_VERSION,
         "max_client_version": MAX_CLIENT_VERSION,
     }
-    import os
     if os.environ.get("DEMO_MODE", "").lower() in ("1", "true", "yes"):
         info["demo"] = True
     return info
@@ -161,6 +159,10 @@ async def install_server_license(request: Request):
     new_agg = load_all_licenses()
     set_current_license(new_agg)
 
+    # Immediately reflect new seat count in the overage middleware
+    from license_overage import invalidate_overage_cache
+    invalidate_overage_cache()
+
     active_keys = get_server_license_keys()
     return {
         "status": "stored",
@@ -191,6 +193,11 @@ async def remove_server_license(kid: str, request: Request):
     reset_license()
     new_agg = load_all_licenses()
     set_current_license(new_agg)
+
+    # Immediately reflect seat reduction in the overage middleware
+    from license_overage import invalidate_overage_cache
+    invalidate_overage_cache()
+
     return {"status": "removed", "kid": kid, "total_licensed_seats": new_agg.seats}
 
 
@@ -217,7 +224,7 @@ async def get_license_usage():
     }
 
 
-@system_v1_router.post("/license/reload")
+@system_v1_router.post("/license/reload", dependencies=[Depends(require_api_key)])
 async def reload_license():
     """Force the server to reload the license from disk."""
     from license import reset_license, load_all_licenses, set_current_license

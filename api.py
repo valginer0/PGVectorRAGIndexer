@@ -207,6 +207,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-License-Overage", "X-License-Overage-Count", "Warning"],
 )
 
 # Add license overage shame middleware (no-op for Community edition)

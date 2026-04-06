@@ -49,7 +49,7 @@ New `AggregatedLicense` dataclass and `load_all_licenses()` function:
 
 ```
 AggregatedLicense
-  .licensed_seats: int       # SUM of seats from all valid, unexpired keys
+  .seats: int                # SUM of seats from all valid, unexpired keys
   .edition: Edition          # Highest edition (ORGANIZATION > TEAM > COMMUNITY)
   .org_name: str             # From first valid key
   .active_key_ids: List[str] # kid values of every accepted key
@@ -140,7 +140,7 @@ on startup when overage is detected. Tracked as a follow-up issue.
 3. `license.py` — `AggregatedLicense` + `load_all_licenses()`
 4. `routers/system_api.py` — `GET /api/v1/license/usage` + updated install endpoint
 5. `license_overage.py` — shame middleware
-6. Wire middleware into `app.py` / `main.py`
+6. Wire middleware into `api.py`
 7. Desktop `system_client.py` — `get_license_usage()`
 8. Desktop `main_window.py` — overage banner
 9. Tests

@@ -10,7 +10,7 @@ import json
 import os
 from contextlib import contextmanager, asynccontextmanager
 from typing import Optional, List, Dict, Any, Tuple, Union, Sequence
-from datetime import datetime
+from datetime import datetime, timezone
 
 import psycopg2
 from psycopg2 import pool, sql
@@ -252,14 +252,14 @@ class DatabaseManager:
                     "postgres_version": version,
                     "total_chunks": chunk_count,
                     "total_documents": doc_count,
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.now(timezone.utc).isoformat()
                 }
         except Exception as e:
             logger.error(f"Health check failed: {e}")
             return {
                 "status": "unhealthy",
                 "error": str(e),
-                "timestamp": datetime.utcnow().isoformat()
+                "timestamp": datetime.now(timezone.utc).isoformat()
             }
 
 

@@ -6,7 +6,7 @@ import logging
 import os
 import tempfile
 import hashlib
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request, Query
 
@@ -182,7 +182,7 @@ async def upload_and_index(
         encrypted_pdfs_encountered.append({
             "source_uri": source,
             "filename": file.filename,
-            "detected_at": datetime.utcnow().isoformat()
+            "detected_at": datetime.now(timezone.utc).isoformat()
         })
         
         complete_run(run_id, status="failed", files_scanned=1, files_failed=1,

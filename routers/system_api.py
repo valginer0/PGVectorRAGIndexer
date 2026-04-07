@@ -7,7 +7,7 @@ import logging
 import os
 import time
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
@@ -267,7 +267,7 @@ async def health_check():
             )
         return HealthResponse(
             status="initializing",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             database={"status": "initializing"},
             embedding_model={"status": "loading"},
             system=_get_system_metrics()
@@ -281,7 +281,7 @@ async def health_check():
         
         response = HealthResponse(
             status="healthy",
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             database=db_health,
             embedding_model=model_info,
             system=_get_system_metrics(),

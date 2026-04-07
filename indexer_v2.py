@@ -8,7 +8,7 @@ import argparse
 import logging
 import sys
 from typing import Optional, List, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
 from config import get_config
 from database import get_db_manager, DocumentRepository
@@ -43,7 +43,7 @@ class DocumentIndexer:
         """Log encrypted PDF to file for headless mode tracking."""
         from pathlib import Path
         log_file = Path("encrypted_pdfs.log")
-        timestamp = datetime.utcnow().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         try:
             with open(log_file, "a", encoding="utf-8") as f:
                 f.write(f"{timestamp}\t{source_uri}\n")

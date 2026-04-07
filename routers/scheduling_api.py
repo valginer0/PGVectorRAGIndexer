@@ -3,6 +3,7 @@ Watched Folder and Scheduler management routes for PGVectorRAGIndexer.
 """
 
 import logging
+import os
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from auth import require_api_key
@@ -51,8 +52,7 @@ async def add_watched_folder(request: Request):
         execution_scope = body.get("execution_scope", "client")
 
         if execution_scope == "server":
-            import os as _os
-            if not _os.path.isdir(folder_path):
+            if not os.path.isdir(folder_path):
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Server-scope root path does not exist or is not accessible: {folder_path}",
@@ -222,8 +222,7 @@ async def transition_folder_scope(folder_id: str, request: Request):
             from watched_folders import get_folder
             folder = get_folder(folder_id)
             if folder:
-                import os as _os
-                if not _os.path.isdir(folder["folder_path"]):
+                if not os.path.isdir(folder["folder_path"]):
                     raise HTTPException(
                         status_code=status.HTTP_400_BAD_REQUEST,
                         detail=f"Server-scope root path not accessible: {folder['folder_path']}",

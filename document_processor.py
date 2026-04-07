@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import mimetypes
@@ -789,7 +789,7 @@ class DocumentProcessor:
                 'chunk_overlap': self.config.chunking.overlap
             },
             'file_hash': file_hash,
-            'processed_at': datetime.utcnow().isoformat()
+            'processed_at': datetime.now(timezone.utc).isoformat()
         })
         
         # Add custom metadata
@@ -801,7 +801,7 @@ class DocumentProcessor:
             source_uri=source_uri,
             chunks=chunks,
             metadata=metadata,
-            processed_at=datetime.utcnow()
+            processed_at=datetime.now(timezone.utc)
         )
     
     def process_batch(

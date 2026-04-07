@@ -106,3 +106,63 @@ columns, `_row_to_dict()` silently produces wrong field mappings.
 `VALID_ROLES = {ROLE_ADMIN, ROLE_USER}` doesn't include custom roles.
 Nothing currently imports it (confirmed by grep), but it is a misleading
 export for future developers.
+
+---
+
+## Third Pass — Additional Findings (Apr 2026)
+
+### T1. `datetime.utcnow()` deprecated in Python 3.12+ [FIXED — commit dddab86]
+**Files:** `routers/system_api.py`, `routers/indexing_api.py`, `database.py`,
+`indexer_v2.py`, `document_processor.py`
+`datetime.utcnow()` is deprecated in Python 3.12+ and generates
+`DeprecationWarning` on every call. Replaced with `datetime.now(timezone.utc)`
+throughout all backend files.
+DeprecationWarning count in tests: 286 → 99 (-187).
+**Note:** Desktop app files (`source_open_manager.py`, `analytics.py`) also use
+`utcnow()` but are left for now — they're not part of the backend test suite.
+
+### T2. `import os as _os` inside function bodies [FIXED — commit dddab86]
+**File:** `routers/scheduling_api.py:54,225`
+`os` was re-imported inside two functions. Hoisted to module level.
+
+### T3. `v1_router` mounted twice in `api.py` [DOCUMENTED — INTENTIONAL]
+**File:** `api.py:363-364`
+```python
+app.include_router(v1_router, prefix="/api/v1")
+app.include_router(v1_router)  # backward compat: old unversioned paths
+```
+Every route is registered twice, doubling the router table.
+This is the backward-compatibility mechanism for pre-v1-prefix clients.
+Not a bug — removing the second mount would break unversioned callers.
+**Caution:** Any future large router additions will double the route count again.
+
+### T4. `(array_agg(...))[1]` non-deterministic in `document_visibility.py` [PENDING]
+**File:** `document_visibility.py:186-188` (`get_document_visibility`),
+`:247` (`list_user_documents`)
+Uses `(array_agg(owner_id))[1]` and `(array_agg(visibility))[1]` without
+`ORDER BY`. Same issue as findings #4 in pass 2.
+**Suggested fix:** `array_agg(visibility ORDER BY indexed_at ASC)[1]`
+
+### T5. `/license` and `/api` endpoints are unauthenticated [NOTED]
+**File:** `routers/system_api.py:116,75`
+`GET /license` exposes org name, edition, expiry, and seat count without
+any auth requirement. Currently by design (license info is semi-public),
+but in a corporate environment the org name and tier are sensitive.
+
+### T6. `_START_TIME` set at module import, not at server start [NOTED]
+**File:** `routers/system_api.py:16`
+`_START_TIME = time.time()` is set when the module is first imported
+(which can happen at test time). Uptime reported by `/health` will be
+slightly inaccurate. Low impact in production.
+
+### T7. Docker-mode detection uses hardcoded hostname `"db"` [NOTED]
+**File:** `api.py:64,109`
+`if os.environ.get("DB_HOST") == "db":` triggers auto-recovery and
+startup backup only in Docker mode. Any deployment with a DB service
+named differently will silently skip both features.
+
+### T8. `datetime.utcnow()` remains in desktop app files [PENDING]
+**Files:** `desktop_app/ui/source_open_manager.py` (×2),
+`desktop_app/utils/analytics.py` (×1)
+Same deprecation issue as T1 but in desktop-only code. Left for a
+separate desktop-app cleanup pass to avoid mixing server/client changes.

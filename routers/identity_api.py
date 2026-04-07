@@ -17,7 +17,7 @@ identity_router = APIRouter(tags=["Identity & Auth"])
 # API Key Management
 # ---------------------------------------------------------------------------
 
-@identity_router.post("/keys", dependencies=[Depends(require_permission("keys.manage"))])
+@identity_router.post("/keys", status_code=201, dependencies=[Depends(require_permission("keys.manage"))])
 async def create_key(name: str = Query(..., description="Human-readable name for the key")):
     """Create a new API key."""
     from auth import create_api_key_record
@@ -287,7 +287,7 @@ async def get_user_endpoint(user_id: str):
         )
 
 
-@identity_router.post("/users", dependencies=[Depends(require_team_edition), Depends(require_admin)])
+@identity_router.post("/users", status_code=201, dependencies=[Depends(require_team_edition), Depends(require_admin)])
 async def create_user_endpoint(request: Request):
     """Create a new user (admin only)."""
     from users import create_user
@@ -340,7 +340,7 @@ async def update_user_endpoint(user_id: str, request: Request):
         from activity_log import log_activity
         log_activity(
             "user.updated",
-            details={"user_id": user_id, "changes": body},
+            details={"user_id": user_id, "changed_fields": list(body.keys())},
         )
         return user
     except HTTPException:
@@ -532,14 +532,13 @@ async def list_scim_groups_admin():
     """List SCIM group-to-role mappings (admin only)."""
     from scim import _get_db_connection, _group_row_to_dict, get_group_members
     try:
-        conn = _get_db_connection()
-        with conn.cursor() as cur:
-            cur.execute(
-                "SELECT id, external_id, display_name, role_name, created_at, updated_at "
-                "FROM scim_groups ORDER BY display_name"
-            )
-            rows = cur.fetchall()
-        conn.close()
+        with _get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, external_id, display_name, role_name, created_at, updated_at "
+                    "FROM scim_groups ORDER BY display_name"
+                )
+                rows = cur.fetchall()
         groups = []
         for row in rows:
             g = _group_row_to_dict(row)

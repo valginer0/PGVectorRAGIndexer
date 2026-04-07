@@ -2,6 +2,11 @@ import json
 import logging
 from typing import Any, Optional
 
+try:
+    import jwt as _jwt
+except ImportError:
+    _jwt = None  # type: ignore[assignment]
+
 from database import get_db_manager
 
 logger = logging.getLogger(__name__)
@@ -90,9 +95,14 @@ def get_server_license_keys() -> list:
         old_key = old_value.strip() or None
 
     if old_key:
-        # Persist under the new key and return
+        # Persist under the new key and clean up the legacy entry
         try:
             set_server_setting(_LICENSE_KEYS_SETTING, [old_key])
+            # Remove the old single-key entry so it does not linger
+            with get_db_manager().get_cursor() as cursor:
+                cursor.execute(
+                    "DELETE FROM server_settings WHERE key = %s", (_LICENSE_KEY_SETTING,)
+                )
         except Exception:
             pass
         return [old_key]
@@ -112,22 +122,21 @@ def add_server_license_key(license_key: str) -> None:
 
     # Extract kid for dedup (best-effort — no verification here)
     new_kid: Optional[str] = None
-    try:
-        import jwt as _jwt
-        header = _jwt.get_unverified_header(license_key)
-        new_kid = header.get("kid") or _jwt.decode(
-            license_key,
-            options={"verify_signature": False},
-        ).get("kid")
-    except Exception:
-        pass
+    if _jwt is not None:
+        try:
+            header = _jwt.get_unverified_header(license_key)
+            new_kid = header.get("kid") or _jwt.decode(
+                license_key,
+                options={"verify_signature": False},
+            ).get("kid")
+        except Exception:
+            pass
 
     existing = get_server_license_keys()
 
-    if new_kid:
+    if new_kid and _jwt is not None:
         for existing_key in existing:
             try:
-                import jwt as _jwt
                 existing_header = _jwt.get_unverified_header(existing_key)
                 existing_kid = existing_header.get("kid") or _jwt.decode(
                     existing_key,
@@ -154,7 +163,8 @@ def remove_server_license_key(kid: str) -> bool:
 
     for key in existing:
         try:
-            import jwt as _jwt
+            if _jwt is None:
+                raise ImportError("PyJWT not available")
             header = _jwt.get_unverified_header(key)
             key_kid = header.get("kid") or _jwt.decode(
                 key, options={"verify_signature": False}

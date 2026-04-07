@@ -5,7 +5,7 @@ Document Visibility and Ownership management routes for PGVectorRAGIndexer.
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from auth import require_api_key, require_admin
+from auth import require_api_key, require_admin, is_auth_required
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +33,12 @@ async def get_document_visibility_endpoint(document_id: str):
 
 @visibility_router.put("/documents/{document_id}/visibility", dependencies=[Depends(require_api_key)])
 async def set_document_visibility_endpoint(document_id: str, request: Request):
-    """Set visibility for a document."""
+    """Set visibility for a document.
+
+    ``visibility`` can be changed by any authenticated key holder.
+    Changing ``owner_id`` requires admin privileges — use
+    ``POST /documents/{id}/transfer`` instead.
+    """
     from document_visibility import (
         set_document_visibility,
         set_document_owner_and_visibility, 
@@ -43,6 +48,12 @@ async def set_document_visibility_endpoint(document_id: str, request: Request):
         body = await request.json()
         visibility = body.get("visibility")
         owner_id = body.get("owner_id")
+
+        if owner_id and is_auth_required(request):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Changing owner_id requires admin privileges. Use POST /documents/{id}/transfer.",
+            )
 
         if visibility and owner_id:
             updated = set_document_owner_and_visibility(document_id, owner_id, visibility)

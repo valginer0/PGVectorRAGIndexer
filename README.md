@@ -91,6 +91,13 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ### 🆕 Latest Features (v2.13.0)
 
+- **✅ Large-Organization License Stacking**: Organizations with more than 25 users can now stack multiple Organization license keys on a single server to combine seat limits automatically — no enterprise negotiations, no configuration changes. Each key adds seats independently.
+- **✅ Admin Console — Licenses Panel**: New "Licenses" tab in the Organization Console lets admins add, inspect, and remove stacked license keys with client-side validation and clear per-key status (active / expired / invalid).
+- **✅ Role-Based Overage Banner**: When seat count exceeds licensed capacity, admins see an "Add Licenses" button navigating directly to the Licenses panel; non-admins see a contact-your-administrator message. Session-dismissible.
+- **✅ Deterministic Database Views**: Fixed non-deterministic `array_agg` ordering in `document_stats` view — consistent results across all queries and migrations.
+
+### Recent Features (v2.12)
+
 - **✅ Automatic Database Backups**: Startup and pre-migration pg_dump backups run automatically in Docker mode with rotation. Backups persist on the host via `./backups:/app/backups` volume mount.
 - **✅ Data-Loss Auto-Recovery**: Detects empty databases with existing backups (e.g., after Docker volume wipe) and auto-restores from the most recent pg_dump backup on startup.
 - **✅ Restore from Backup File**: New always-enabled button in the Manage tab to restore documents from a JSON backup file at any time.
@@ -173,8 +180,7 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 - **Multi-Format Support**: PDF, DOC, DOCX, XLSX, TXT, HTML, PPTX, CSV, and web URLs
 - **OCR Support**: Extract text from scanned PDFs and images (PNG, JPG, TIFF, BMP) using Tesseract
-- **Semantic Search**: Vector similarity search using sentence transformers
-- **Hybrid Search**: Combine vector and full-text search with configurable weights
+- **Meaning-Based Search**: Finds documents by concept, not just keywords — precise matches surface first, with automatic semantic fallback for natural language queries
 - **Document Management**: Full CRUD operations for indexed documents
 - **Bulk Operations**: Preview, export, delete, and restore multiple documents
 - **Backup/Restore**: Automatic pg_dump backups on startup with auto-recovery; export/restore documents as JSON via Manage tab
@@ -184,7 +190,7 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ### User Interface
 
-- **Search Interface**: Intuitive search with semantic and hybrid options
+- **Search Interface**: Intuitive search — precise matches first, automatic semantic fallback
 - **Drag & Drop Upload**: Easy file upload with progress tracking
 - **Document Browser**: View and manage all indexed documents
 - **Statistics Dashboard**: Real-time system health and metrics
@@ -204,6 +210,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 - **SSO/SAML**: Optional SAML login flow for enterprise deployments (Okta-oriented configuration)
 - **SCIM Provisioning**: SCIM 2.0 user provisioning endpoints for enterprise identity workflows
 - **Audit and Compliance Controls**: Audit events, data retention orchestration, and compliance export support
+- **Large-Organization License Stacking**: Combine multiple Organization licenses on one server to support 50, 75, or 100+ users without additional configuration
+- **Per-User Document Visibility**: Fine-grained access control — restrict which documents each user can see and search
+- **API Key Management**: Create, revoke, and rotate API keys with per-key last-used tracking and grace-period rotation
 
 ### 🔐 Encrypted PDF Handling
 
@@ -244,7 +253,7 @@ Password-protected PDFs cannot be indexed without decryption. Instead of crashin
 *(Includes detailed steps for Windows, macOS, and Linux)*
 
 **Windows Quick Install:**
-1. Download [`PGVectorRAGIndexer-Setup.exe`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/PGVectorRAGIndexer-Setup.exe)
+1. Download [`PGVectorRAGIndexer.msi`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/PGVectorRAGIndexer.msi)
 2. Double-click to install
 3. Done!
 
@@ -659,30 +668,18 @@ docker exec vector_rag_db psql -U rag_user -d rag_vector_db -c \
 
 ## 🔍 Advanced Features
 
-### Hybrid Search
+### Search
 
-Combine vector similarity with full-text search for better results:
+The search engine automatically picks the best strategy per query:
+- **Exact / keyword matches** are boosted to the top of results
+- **Semantic fallback** kicks in for conceptual or natural-language queries where no exact match exists
+- **Scales to 150K+ chunks** efficiently using HNSW vector indexes and GIN full-text indexes
 
-```python
-# CLI
-python retriever_v2.py "query" --hybrid --alpha 0.7
-
-# API
-{
-  "query": "machine learning",
-  "use_hybrid": true,
-  "alpha": 0.7  # 0.7 vector + 0.3 full-text
-}
+**Phrase support:** Mix quoted and unquoted terms in a single query:
 ```
-
-**v2.2.4+ Improvements:**
-- **Optimized for Large Databases**: Scales to 150K+ chunks efficiently
-- **Exact-Match Boost**: Full-text matches are automatically boosted to top of results
-- **Phrase Support**: Mix quoted and unquoted terms in your search:
-  ```
-  Master Card "Simplicity 9112"
-  ```
-  Quoted subphrases (`"Simplicity 9112"`) must match as adjacent words; other terms (`Master Card`) are matched individually.
+Master Card "Simplicity 9112"
+```
+Quoted subphrases (`"Simplicity 9112"`) must appear as adjacent words; other terms are matched individually.
 
 ### Metadata Filtering
 
@@ -759,50 +756,30 @@ DB_POOL_SIZE=20
 DB_MAX_OVERFLOW=40
 ```
 
-## 🔒 Security Considerations
+##  Monitoring
 
-1. **Database Credentials**: Store in `.env` file (gitignored)
-2. **API Authentication**: Add authentication middleware for production
-3. **Input Validation**: All inputs validated via Pydantic
-4. **SQL Injection**: Protected via parameterized queries
-5. **File Upload**: Validate file types and sizes
-
-## 🐛 Troubleshooting
-
-### Database Connection Issues
+### Health Checks
 
 ```bash
-# Check container status
-docker ps
+# API
+curl http://localhost:8000/health
 
-# Check logs
-docker logs vector_rag_db
-
-# Restart container
-docker compose restart
+# CLI
+python indexer_v2.py stats
 ```
 
-### Import Errors
+### Database Statistics
 
-```bash
-# Ensure virtual environment is activated
-source venv/bin/activate
+```sql
+-- View document statistics
+SELECT * FROM document_stats;
 
-# Reinstall dependencies
-pip install -r requirements.txt --upgrade
+-- Database size
+SELECT pg_size_pretty(pg_database_size(current_database()));
+
+-- Index usage
+SELECT * FROM pg_stat_user_indexes WHERE schemaname = 'public';
 ```
-
-### Memory Issues
-
-```bash
-# Clear embedding cache
-python -c "from embeddings import get_embedding_service; get_embedding_service().clear_cache()"
-
-# Reduce batch size
-export EMBEDDING_BATCH_SIZE=16
-```
-
-## 📈 Monitoring
 
 ## 🧪 Testing
 
@@ -835,11 +812,12 @@ pytest --cov=. --cov-report=html
 
 ```
 tests/
-├── __init__.py
-├── conftest.py           # Shared fixtures
-├── test_config.py        # Configuration tests
-├── test_database.py      # Database tests
-└── test_embeddings.py    # Embedding tests
+├── conftest.py                    # Shared fixtures and test database setup
+├── test_api_*.py                  # API endpoint tests (auth, search, upload, license, ...)
+├── test_large_org_licensing.py    # License stacking and overage tests
+├── test_document_stats_db.py      # Database view correctness
+├── test_organization_tab.py       # Admin Console UI tests
+└── ...                            # 1500+ tests total
 ```
 
 ## 🏗️ Architecture
@@ -896,111 +874,6 @@ CREATE INDEX idx_chunks_metadata ON document_chunks
 - **Factory Pattern**: Service instantiation
 - **Singleton Pattern**: Global configuration and services
 - **Strategy Pattern**: Pluggable document loaders
-
-
-## 📊 Performance Optimization
-
-### Database Tuning
-
-For production, consider these PostgreSQL settings:
-
-```sql
--- Increase work memory for vector operations
-SET work_mem = '256MB';
-
--- Tune HNSW index parameters
-CREATE INDEX ON document_chunks USING hnsw (embedding vector_cosine_ops)
-WITH (m = 32, ef_construction = 128);  -- Higher values = better recall, slower build
-```
-
-### Embedding Cache
-
-The system caches embeddings in memory. Monitor cache size:
-
-```python
-from embeddings import get_embedding_service
-
-service = get_embedding_service()
-print(f"Cache size: {service.get_cache_size()}")
-service.clear_cache()  # Clear if needed
-```
-
-### Connection Pooling
-
-Adjust pool size based on workload:
-
-```bash
-DB_POOL_SIZE=20
-DB_MAX_OVERFLOW=40
-```
-
-## 🔒 Security Considerations
-
-1. **Database Credentials**: Store in `.env` file (gitignored)
-2. **API Authentication**: Add authentication middleware for production
-3. **Input Validation**: All inputs validated via Pydantic
-4. **SQL Injection**: Protected via parameterized queries
-5. **File Upload**: Validate file types and sizes
-
-## 🐛 Troubleshooting
-
-### Database Connection Issues
-
-```bash
-# Check container status
-docker ps
-
-# Check logs
-docker logs vector_rag_db
-
-# Restart container
-docker compose restart
-```
-
-### Import Errors
-
-```bash
-# Ensure virtual environment is activated
-source venv/bin/activate
-
-# Reinstall dependencies
-pip install -r requirements.txt --upgrade
-```
-
-### Memory Issues
-
-```bash
-# Clear embedding cache
-python -c "from embeddings import get_embedding_service; get_embedding_service().clear_cache()"
-
-# Reduce batch size
-export EMBEDDING_BATCH_SIZE=16
-```
-
-## 📈 Monitoring
-
-### Health Checks
-
-```bash
-# CLI
-python indexer_v2.py stats
-
-# API
-curl http://localhost:8000/health
-```
-
-### Database Statistics
-
-```sql
--- View document statistics
-SELECT * FROM document_stats;
-
--- Check index usage
-SELECT * FROM pg_stat_user_indexes WHERE schemaname = 'public';
-
--- Database size
-SELECT pg_size_pretty(pg_database_size(current_database()));
-```
 
 ## 🔄 Migration from v1
 
@@ -1059,7 +932,7 @@ We welcome:
 - 🐛 **Bug reports** - Create an issue with details
 - 💡 **Feature suggestions** - Share your ideas via issues
 - 📝 **Feedback** - Let us know what could be better
-- 📧 **Direct contact** - valginer0@gmail.com for specific inquiries
+- 📧 **Direct contact** - hello@ragvault.net for specific inquiries
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to provide feedback.
 
@@ -1074,15 +947,14 @@ All development is maintained exclusively by the copyright holder to ensure code
 
 ## 📞 Support
 
-For issues and questions:
-- Check documentation
-- Review test examples
-- Check API docs at `/docs`
-- Review logs for error details
+- 🌐 **Website & pricing**: [ragvault.net](https://www.ragvault.net)
+- 📧 **Email**: hello@ragvault.net
+- 📖 **API docs**: `http://localhost:8000/docs` (when server is running)
+- 📋 **Logs**: Check Docker logs (`docker compose logs -f`) for runtime errors
 
 
 
-**Version**: 2.4.3  
+**Version**: 2.13.0  
 **Last Updated**: 2026  
 **Status**: Production Ready ✅
 

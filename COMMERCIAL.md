@@ -57,7 +57,7 @@ An **OEM / Agency License** is required and is typically scoped to:
 - non-transferable usage rights
 
 OEM / Agency licensing is handled on a case-by-case basis.
-Please contact **valginer0@gmail.com** with a description of the project and scope.
+Please contact **hello@ragvault.net** with a description of the project and scope.
 
 ---
 
@@ -66,9 +66,14 @@ Please contact **valginer0@gmail.com** with a description of the project and sco
 | Tier         | Annual     | One-time (perpetual) | Users    |
 |--------------|------------|----------------------|----------|
 | Community    | Free       | —                    | 1        |
-| Team         | $199/yr    | $349                 | Up to 5  |
-| Organization | $599/yr    | $999                 | Up to 25 |
+| Team         | $299/yr    | $499                 | Up to 5  |
+| Organization | $799/yr    | $1,299               | Up to 25 |
 | Enterprise   | Custom     | Custom               | Custom   |
+
+> **Need more than 25 users?**  
+> Buy multiple Organization licenses and load all keys into your server — seat limits are combined automatically.  
+> 50 users = 2 × $799/yr = $1,598/yr. 100 users = 4 × $799/yr = $3,196/yr.  
+> No enterprise negotiations, no configuration changes required.
 
 Perpetual licenses include updates for the major version purchased.
 Annual licenses include updates for the duration of the subscription.
@@ -94,7 +99,7 @@ No sales call, no waiting.
 
 For Enterprise licenses, OEM/agency use, or custom requirements, email:
 
-**valginer0@gmail.com**
+**hello@ragvault.net**
 
 Please include:
 - organization name

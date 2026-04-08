@@ -8,15 +8,20 @@ Get up and running in 5 minutes!
 
 ## 🆕 What's New in v2.13.0
 
-- **Complete Changelog**: We are constantly adding new features! Check the [`CHANGELOG.md`](CHANGELOG.md) or the [Releases page](https://github.com/valginer0/PGVectorRAGIndexer/releases) for the latest updates.
+- **Large-Organization License Stacking**: Stack multiple Organization licenses on one server to combine seat limits for 50, 75, or 100+ users — no configuration changes needed.
+- **Admin Console — Licenses Panel**: Admins can now add, view, and remove license keys directly in the Organization Console with client-side validation and per-key status.
+- **Role-Based Overage Banner**: When seat count exceeds licensed capacity, admins see an "Add Licenses" shortcut; non-admins see a contact-your-admin message.
+
+See the full [`CHANGELOG.md`](CHANGELOG.md) or [Releases page](https://github.com/valginer0/PGVectorRAGIndexer/releases) for all changes.
 
 ## ⚡ Desktop App Installation (Recommended)
 
 ### For Windows (Easiest):
 **One-Click Install:**
-1. Download [`PGVectorRAGIndexer-Setup.exe`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/PGVectorRAGIndexer-Setup.exe)
+1. Download [`PGVectorRAGIndexer.msi`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/PGVectorRAGIndexer.msi)
 2. Double-click the downloaded file
 3. Wait for the installer to complete
+4. On first launch, a **5-step Setup Wizard** guides you through connection, licensing, and indexing sample documents
 
 ### For macOS:
 1. Download [`install.command`](https://github.com/valginer0/PGVectorRAGIndexer/releases/latest/download/install.command)
@@ -304,7 +309,7 @@ docker compose up -d
 
 ## 🎉 You're Ready!
 
-Start indexing and searching your documents with semantic search powered by PostgreSQL and pgvector!
+Start indexing and searching your documents powered by PostgreSQL and pgvector!
 
 **Your deployment directory:** `~/pgvector-rag/`
 **API endpoint:** http://localhost:8000

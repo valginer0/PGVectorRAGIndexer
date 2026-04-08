@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.12.0
+# PGVectorRAGIndexer v2.13.0
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -87,9 +87,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ---
 
-## 🋹 What's New in v2.12.0
+## 🋹 What's New in v2.13.0
 
-### 🆕 Latest Features (v2.12.0)
+### 🆕 Latest Features (v2.13.0)
 
 - **✅ Automatic Database Backups**: Startup and pre-migration pg_dump backups run automatically in Docker mode with rotation. Backups persist on the host via `./backups:/app/backups` volume mount.
 - **✅ Data-Loss Auto-Recovery**: Detects empty databases with existing backups (e.g., after Docker volume wipe) and auto-restores from the most recent pg_dump backup on startup.

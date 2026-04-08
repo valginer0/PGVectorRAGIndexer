@@ -36,6 +36,12 @@ jobs:
         python-version: "3.10"
         cache: 'pip'
 
+    - name: Cache HuggingFace embedding model
+      uses: actions/cache@v4
+      with:
+        path: ~/.cache/huggingface/hub
+        key: hf-model-all-MiniLM-L6-v2
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
@@ -125,6 +131,19 @@ jobs:
           cat server.log
           exit 1
         fi
+        echo "::endgroup::"
+
+        # ── Warm up embedding model ──────────────────────────────
+        # The model loads lazily on first embedding request.  Fire a search
+        # now (before pytest) so the 120s test timeout is never at risk.
+        echo "::group::Warm up embedding model"
+        echo "Sending warm-up search to trigger model load (up to 300s)..."
+        curl -s -X POST http://127.0.0.1:9000/api/v1/search \
+          -H "X-API-Key: $API_KEY" \
+          -H "Content-Type: application/json" \
+          -d '{"query": "warmup", "top_k": 1}' \
+          --max-time 300 > /dev/null || echo "Warm-up request timed out (model may still be loading)"
+        echo "Warm-up complete"
         echo "::endgroup::"
 
         # ── Run E2E tests ───────────────────────────────────────────

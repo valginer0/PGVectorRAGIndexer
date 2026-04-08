@@ -117,19 +117,40 @@ On startup, after the initial health check succeeds, the desktop app calls
 `GET /api/v1/license/usage`. If `overage > 0`:
 
 - Shows a bold red banner **above the tab bar** (inserted after the existing
-  license-expiry banner, before the remote-mode banner):
-  ```
-  ⚠  License Non-Compliance: 28 active users on a 25-seat license.
-     Purchase additional Organization licenses at ragvault.net/pricing.  [Dismiss]
-  ```
+  license-expiry banner, before the remote-mode banner)
+- **Role-based messaging** — admins see an "Add Licenses" button that navigates
+  directly to the Licenses panel in the Admin Console; non-admins see a
+  "Contact your administrator" message with the button hidden
 - Dismiss button hides the banner for the current session only
 - Banner is never shown for Community edition (no seat concept)
 - Banner is refreshed if the usage changes (re-checked every 10 minutes)
 
-### 8. Admin Console Integration (future)
+### 8. License Keys Endpoint — `GET /api/v1/license/keys`
 
-Phase 2 (not in this sprint): navigate Admin directly to the License tab with a modal
-on startup when overage is detected. Tracked as a follow-up issue.
+Auth: `require_admin` (admin users only).
+
+Returns all stacked keys as decoded claims — raw JWT strings are never exposed:
+```json
+{
+  "keys": [
+    {"kid": "k1", "org_name": "Acme Corp", "edition": "organization",
+     "seats": 25, "expiry": 1893456000, "status": "active"},
+    {"kid": "k2", "org_name": "Acme Corp", "edition": "organization",
+     "seats": 25, "expiry": 1700000000, "status": "expired"}
+  ]
+}
+```
+`status` is one of `active`, `expired`, or `invalid`.
+
+### 9. Admin Console Licenses Panel — `admin_tab.py`
+
+A new "Licenses" sub-tab in the Organization Console (admin-only):
+
+- Table listing all stacked keys with columns: Org Name, Edition, Seats, Expiry, Status, Key ID, Remove
+- **Add License Key** dialog — paste JWT, client-side pre-validation warns if the token is
+  expired or malformed before sending to the server
+- **Inline Remove** button per row — calls `DELETE /api/v1/license/{kid}`
+- Seat total refreshes automatically after each add/remove operation
 
 ---
 
@@ -138,13 +159,15 @@ on startup when overage is detected. Tracked as a follow-up issue.
 1. `users.py` — `count_active_users()`
 2. `server_settings_store.py` — multi-key helpers
 3. `license.py` — `AggregatedLicense` + `load_all_licenses()`
-4. `routers/system_api.py` — `GET /api/v1/license/usage` + updated install endpoint
+4. `routers/system_api.py` — `GET /api/v1/license/usage` + updated install endpoint + `GET /api/v1/license/keys`
 5. `license_overage.py` — shame middleware
 6. Wire middleware into `api.py`
-7. Desktop `system_client.py` — `get_license_usage()`
-8. Desktop `main_window.py` — overage banner
-9. Tests
-10. Website FAQ
+7. Desktop `system_client.py` — `get_license_usage()`, `list_server_licenses()`, `install_server_license()`, `remove_server_license()`
+8. Desktop `main_window.py` — role-based overage banner
+9. Desktop `admin_tab.py` — Licenses panel (Add / Remove keys, client-side JWT pre-validation)
+10. `alembic/versions/019` — `array_agg ORDER BY` determinism fix in `document_stats` view
+11. Tests (`test_api_license.py`, `test_document_stats_db.py`)
+12. Website FAQ
 
 ---
 

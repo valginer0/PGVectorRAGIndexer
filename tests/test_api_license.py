@@ -175,3 +175,52 @@ async def test_install_server_license_endpoint_rejects_non_loopback(client):
     assert detail["details"]["loopback_required"] is True
     mock_validate.assert_not_called()
     mock_store.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_get_server_license_keys_endpoint(client):
+    from unittest.mock import patch
+    from tests.test_license import _make_key, TEST_SECRET, _make_expired_key
+
+    with patch("server_settings_store.get_server_license_keys") as mock_get_keys, \
+         patch("license.resolve_verification_context", return_value=(TEST_SECRET, ["HS256"])):
+        
+        valid_key = _make_key(secret=TEST_SECRET, extra_claims={"kid": "k1", "org_name": "Valid Org"})
+        expired_key = _make_expired_key(secret=TEST_SECRET) # kid is usually test-key-id or missing, let's just assert status
+        # Re-pack expired key to have specific kid and org_name if needed, or just let it use defaults
+        
+        invalid_key = "invalid.token.string"
+        
+        mock_get_keys.return_value = [valid_key, expired_key, invalid_key]
+        
+        response = await client.get("/api/v1/license/keys")
+    
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["keys"]) == 3
+    
+    assert data["keys"][0]["kid"] == "k1"
+    assert data["keys"][0]["status"] == "active"
+    assert data["keys"][0]["org_name"] == "Valid Org"
+    
+    # expired key from _make_expired_key doesn't set kid in header, so it will be unknown, status expired
+    assert data["keys"][1]["status"] == "expired"
+    
+    assert data["keys"][2]["status"] == "invalid"
+@pytest.mark.asyncio
+async def test_get_server_license_keys_endpoint_require_admin_403(client):
+    from unittest.mock import patch
+    from errors import ErrorCode
+
+    with patch("auth.is_auth_required", return_value=True), \
+         patch("auth.lookup_api_key") as mock_lookup, \
+         patch("users.count_admins", return_value=1), \
+         patch("users.get_user_by_api_key") as mock_get_user:
+        
+        # Valid key, but user is standard role (not admin)
+        mock_lookup.return_value = {"id": 1, "name": "test_key"}
+        mock_get_user.return_value = {"role": "user"}
+
+        response = await client.get("/api/v1/license/keys", headers={"X-API-Key": "pgv_sk_1234567890abcdef1234567890abcdef"})
+        assert response.status_code == 403
+        data = response.json()
+        assert data["error_code"] == ErrorCode.FORBIDDEN.value[0]

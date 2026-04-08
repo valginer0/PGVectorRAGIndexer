@@ -183,8 +183,8 @@ def get_document_visibility(document_id: str) -> Optional[Dict[str, Any]]:
             cursor.execute(
                 """
                 SELECT
-                    (array_agg(owner_id))[1] as owner_id,
-                    (array_agg(visibility))[1] as visibility,
+                    (array_agg(owner_id ORDER BY indexed_at ASC))[1] as owner_id,
+                    (array_agg(visibility ORDER BY indexed_at ASC))[1] as visibility,
                     COUNT(*) as chunk_count
                 FROM document_chunks
                 WHERE document_id = %s
@@ -244,7 +244,7 @@ def list_user_documents(
                     COUNT(*) as chunk_count,
                     MIN(indexed_at) as indexed_at,
                     MAX(updated_at) as last_updated,
-                    (array_agg(visibility))[1] as visibility
+                    (array_agg(visibility ORDER BY indexed_at ASC))[1] as visibility
                 FROM document_chunks
                 {where}
                 GROUP BY document_id, source_uri

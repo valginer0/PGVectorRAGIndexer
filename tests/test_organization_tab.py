@@ -262,7 +262,7 @@ class TestTabVisibilityStates:
                           side_effect=_make_probe_fn()), \
              patch("desktop_app.utils.edition.is_feature_available", return_value=True):
             org_tab.probe_and_refresh()
-        assert org_tab._sub_tabs.count() == 7  # Overview + 6 sub-tabs
+        assert org_tab._sub_tabs.count() == 8  # Overview + 7 sub-tabs
 
         # Second: only users available
         status_map = {k: CapabilityStatus.NOT_SUPPORTED for k in _PROBES}
@@ -273,7 +273,7 @@ class TestTabVisibilityStates:
              patch("desktop_app.utils.edition.is_feature_available", return_value=True):
             org_tab._on_refresh()
 
-        assert org_tab._sub_tabs.count() == 3  # Overview + Users & Roles + SCIM (always shown)
+        assert org_tab._sub_tabs.count() == 4  # Overview + Users & Roles + Licenses + SCIM
 
 
 # ---------------------------------------------------------------------------
@@ -1672,7 +1672,7 @@ class TestSubTabWiring:
             org_tab.probe_and_refresh()
 
         tab_titles = [org_tab._sub_tabs.tabText(i) for i in range(org_tab._sub_tabs.count())]
-        assert tab_titles == ["Overview", "Users & Roles", "Permissions", "API Keys", "Retention", "Activity", "SCIM"]
+        assert tab_titles == ["Overview", "Users & Roles", "Permissions", "API Keys", "Licenses", "Retention", "Activity", "SCIM"]
 
     def test_only_keys_and_scim_available(self, org_tab, api_client):
         """Tab shows only the sub-tabs whose capabilities are available."""
@@ -1685,7 +1685,7 @@ class TestSubTabWiring:
             org_tab.probe_and_refresh()
 
         tab_titles = [org_tab._sub_tabs.tabText(i) for i in range(org_tab._sub_tabs.count())]
-        assert tab_titles == ["Overview", "API Keys", "SCIM"]
+        assert tab_titles == ["Overview", "API Keys", "Licenses", "SCIM"]
 
 
 # ---------------------------------------------------------------------------

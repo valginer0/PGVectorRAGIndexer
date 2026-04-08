@@ -6,6 +6,7 @@ an Overview of server identity/capabilities. Always added to the tab
 bar; adapts content based on server probing + local license state.
 """
 
+import jwt
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -36,6 +37,7 @@ from PySide6.QtWidgets import (
     QDialogButtonBox,
     QMenu,
     QApplication,
+    QPlainTextEdit,
     QScrollArea,
 )
 import qtawesome as qta
@@ -1644,6 +1646,201 @@ class _ScimPanel(QWidget):
             self._events_table.setRowCount(0)
 
 
+class _LicensesPanel(QWidget):
+    """Server License Stacking sub-tab."""
+
+    def __init__(self, api_client: APIClient, capabilities: ServerCapabilities, parent=None):
+        super().__init__(parent)
+        self.api_client = api_client
+        self._caps = capabilities
+        self._setup_ui()
+
+    def _setup_ui(self):
+        self._stack = QStackedWidget()
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._stack)
+
+        self._msg_page = QWidget()
+        QVBoxLayout(self._msg_page)
+        self._stack.addWidget(self._msg_page)
+
+        self._content = QWidget()
+        content_layout = QVBoxLayout(self._content)
+        content_layout.setSpacing(16)
+        content_layout.setContentsMargins(20, 20, 20, 20)
+
+        # Header row
+        header_row = QHBoxLayout()
+        title = QLabel("Stacked Server Licenses")
+        title.setStyleSheet(f"color: {Theme.TEXT_PRIMARY}; font-size: 14px; font-weight: bold;")
+        header_row.addWidget(title)
+        header_row.addStretch()
+        self._add_btn = QPushButton("Add License Key")
+        self._add_btn.clicked.connect(self._on_add_key)
+        header_row.addWidget(self._add_btn)
+        content_layout.addLayout(header_row)
+
+        desc = QLabel(
+            "Large organizations can install multiple license tickets. "
+            "The server automatically aggregates seats across all active keys."
+        )
+        desc.setWordWrap(True)
+        desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
+        content_layout.addWidget(desc)
+
+        # Table
+        self._table = QTableWidget()
+        self._table.setColumnCount(7)
+        self._table.setHorizontalHeaderLabels(["Organization", "Edition", "Seats", "Expiry", "Status", "Key ID", "Action"])
+        self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        for col in range(1, 7):
+            self._table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
+        self._table.verticalHeader().setVisible(False)
+        self._table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self._table.setSelectionBehavior(QTableWidget.SelectRows)
+        content_layout.addWidget(self._table)
+
+        self._stack.addWidget(self._content)
+
+    def _show_message(self, text, icon="info", retry=None):
+        old = self._msg_page.layout().itemAt(0)
+        if old and old.widget():
+            old.widget().deleteLater()
+        panel = _MessagePanel(text, icon=icon, retry_callback=retry, parent=self._msg_page)
+        self._msg_page.layout().addWidget(panel)
+        self._stack.setCurrentWidget(self._msg_page)
+
+    def refresh(self):
+        if not self._caps.is_admin():
+            self._show_message("Admin permission required to manage licenses.", "warning")
+            return
+            
+        self._stack.setCurrentWidget(self._content)
+
+        try:
+            data = self.api_client._system.list_server_licenses()
+            keys = data.get("keys", [])
+            self._table.setRowCount(len(keys))
+            for i, k in enumerate(keys):
+                self._table.setItem(i, 0, QTableWidgetItem(k.get("org_name", "—")))
+                self._table.setItem(i, 1, QTableWidgetItem(k.get("edition", "—").title()))
+                self._table.setItem(i, 2, QTableWidgetItem(str(k.get("seats", 0))))
+                
+                exp_ts = k.get("expiry")
+                if exp_ts:
+                    dt = datetime.fromtimestamp(exp_ts, timezone.utc)
+                    exp_str = dt.strftime("%Y-%m-%d")
+                else:
+                    exp_str = "—"
+                self._table.setItem(i, 3, QTableWidgetItem(exp_str))
+                
+                status_val = k.get("status", "unknown").lower()
+                status_item = QTableWidgetItem(status_val.title())
+                if status_val == "active":
+                    status_item.setForeground(QColor(Theme.SUCCESS))
+                else:
+                    status_item.setForeground(QColor(Theme.ERROR))
+                self._table.setItem(i, 4, status_item)
+                
+                kid = k.get("kid", "—")
+                self._table.setItem(i, 5, QTableWidgetItem(kid))
+                
+                remove_btn = QPushButton("Remove")
+                remove_btn.clicked.connect(lambda checked=False, k_id=kid: self._on_remove_key(k_id))
+                self._table.setCellWidget(i, 6, remove_btn)
+
+        except APIConnectionError:
+            self._show_message("Server unreachable.", "error", retry=self.refresh)
+        except APIAuthenticationError:
+            self._show_message("Insufficient permissions.", "warning")
+        except APIError as e:
+            self._show_message(f"Error loading licenses: {e}", "error", retry=self.refresh)
+        except Exception as e:
+            self._show_message(f"Error: {str(e)}", "error", retry=self.refresh)
+
+    def _on_add_key(self):
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add License Key")
+        dialog.setMinimumWidth(520)
+        layout = QVBoxLayout(dialog)
+
+        layout.addWidget(QLabel("Paste your license key (JWT) from the email:"))
+        text_edit = QPlainTextEdit()
+        text_edit.setPlaceholderText("eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...")
+        text_edit.setFixedHeight(100)
+        layout.addWidget(text_edit)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() != QDialog.Accepted:
+            return
+
+        key_string = ''.join(text_edit.toPlainText().split())
+        if not key_string:
+            return
+
+        # Client-side pre-validation
+        try:
+            claims = jwt.decode(key_string, options={"verify_signature": False})
+            exp = claims.get("exp")
+            if exp and datetime.fromtimestamp(exp, timezone.utc) < datetime.now(timezone.utc):
+                reply = QMessageBox.warning(
+                    self, "Validation Warning", 
+                    "This key appears to be expired. Attempt to install anyway?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                )
+                if reply != QMessageBox.Yes:
+                    return
+        except Exception as e:
+            reply = QMessageBox.warning(
+                self, "Validation Error",
+                f"This does not look like a valid JWT token: {e}\n\nAttempt to install anyway?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+        try:
+            # Bypass license_service entirely
+            res = self.api_client._system.install_server_license(key_string, action="add")
+            QMessageBox.information(
+                self, "Success", 
+                f"License installed. Total licensed seats is now {res.get('total_licensed_seats', '?')}."
+            )
+            self.refresh()
+        except APIError as e:
+            QMessageBox.critical(self, "Installation Failed", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+    def _on_remove_key(self, kid):
+        if not kid or kid == "—":
+            return
+        reply = QMessageBox.warning(
+            self, "Confirm Remove",
+            f"Remove license key '{kid}'?\n\nThis will immediately reduce licensed seats.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        
+        try:
+            res = self.api_client._system.remove_server_license(kid)
+            QMessageBox.information(
+                self, "Success", 
+                f"License removed. Total licensed seats is now {res.get('total_licensed_seats', '?')}."
+            )
+            self.refresh()
+        except APIError as e:
+            QMessageBox.critical(self, "Removal Failed", str(e))
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+
+
 # ---------------------------------------------------------------------------
 # Main Organization Tab
 # ---------------------------------------------------------------------------
@@ -1706,6 +1903,7 @@ class OrganizationTab(QWidget):
         self._retention = _RetentionPanel(self.api_client, self._caps)
         self._activity = _ActivityPanel(self.api_client, self._caps)
         self._api_keys = _ApiKeysPanel(self.api_client, self._caps)
+        self._licenses = _LicensesPanel(self.api_client, self._caps)
         self._scim = _ScimPanel(self.api_client, self._caps)
 
         self._sub_tabs.addTab(self._overview, "Overview")
@@ -1904,6 +2102,8 @@ class OrganizationTab(QWidget):
             self._sub_tabs.addTab(self._permissions, "Permissions")
         if self._caps.is_available("keys"):
             self._sub_tabs.addTab(self._api_keys, "API Keys")
+        if self._caps.is_admin():
+            self._sub_tabs.addTab(self._licenses, "Licenses")
         if self._caps.is_available("retention"):
             self._sub_tabs.addTab(self._retention, "Retention")
         if self._caps.is_available("activity"):
@@ -1919,6 +2119,8 @@ class OrganizationTab(QWidget):
             self._permissions.refresh()
         if self._caps.is_available("keys"):
             self._api_keys.refresh()
+        if self._caps.is_admin():
+            self._licenses.refresh()
         if self._caps.is_available("retention"):
             self._retention.refresh()
         if self._caps.is_available("activity"):

@@ -322,12 +322,12 @@ class MainWindow(QMainWindow):
         self._overage_banner_text.setStyleSheet("color: #fee2e2; font-weight: 600;")
         banner_layout.addWidget(self._overage_banner_text, 1)
 
-        buy_btn = QPushButton("Add Licenses")
-        buy_btn.setFlat(True)
-        buy_btn.setCursor(Qt.PointingHandCursor)
-        buy_btn.setStyleSheet("color: white; text-decoration: underline; border: none;")
-        buy_btn.clicked.connect(self._open_pricing)
-        banner_layout.addWidget(buy_btn)
+        self._manage_license_btn = QPushButton("Manage Licenses")
+        self._manage_license_btn.setFlat(True)
+        self._manage_license_btn.setCursor(Qt.PointingHandCursor)
+        self._manage_license_btn.setStyleSheet("color: white; text-decoration: underline; border: none;")
+        self._manage_license_btn.clicked.connect(self._go_to_licenses)
+        banner_layout.addWidget(self._manage_license_btn)
 
         dismiss_btn = QPushButton("Dismiss")
         dismiss_btn.setFlat(True)
@@ -338,6 +338,15 @@ class MainWindow(QMainWindow):
 
         parent_layout.addWidget(self._overage_banner)
 
+    def _go_to_licenses(self):
+        """Navigate to Admin Console -> Licenses tab."""
+        self._navigate_to_tab("Organization")
+        if hasattr(self, 'org_tab'):
+            for i in range(self.org_tab._sub_tabs.count()):
+                if self.org_tab._sub_tabs.tabText(i) == "Licenses":
+                    self.org_tab._sub_tabs.setCurrentIndex(i)
+                    break
+
     def _check_license_overage(self):
         """Query /api/v1/license/usage and show/hide the overage banner."""
         if self._overage_dismissed:
@@ -346,13 +355,28 @@ class MainWindow(QMainWindow):
             usage = self.api_client.get_license_usage()
             overage = usage.get("overage", 0)
             if overage > 0:
+                is_admin = False
+                if hasattr(self, 'org_tab'):
+                    is_admin = self.org_tab._caps.is_admin()
+                    
                 active = usage.get("active_seats", 0)
                 licensed = usage.get("licensed_seats", 0)
-                self._overage_banner_text.setText(
-                    f"\u26a0\u00a0License Non-Compliance: {active} active users on a "
-                    f"{licensed}-seat license ({overage} over). "
-                    "Purchase additional Organization licenses."
-                )
+                
+                if is_admin:
+                    self._overage_banner_text.setText(
+                        f"\u26a0\u00a0License Non-Compliance: {active} active users on a "
+                        f"{licensed}-seat license ({overage} over). "
+                        "Add additional license keys to resolve."
+                    )
+                    self._manage_license_btn.setVisible(True)
+                else:
+                    self._overage_banner_text.setText(
+                        f"\u26a0\u00a0License Non-Compliance: {active} active users on a "
+                        f"{licensed}-seat license ({overage} over). "
+                        "Contact your administrator."
+                    )
+                    self._manage_license_btn.setVisible(False)
+                    
                 self._overage_banner.setVisible(True)
             else:
                 self._overage_banner.setVisible(False)

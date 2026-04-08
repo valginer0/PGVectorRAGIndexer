@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.0] - 2026-04-08
+
+### Added
+- **Admin Console — Licenses Panel**: New "Licenses" sub-tab in the Organization Console for managing stacked server license keys. Admins can add keys via a paste dialog (with client-side JWT pre-validation that warns on expired or malformed tokens) and remove individual keys inline with a per-row "Remove" button. Seat totals update automatically after each operation.
+- **GET /api/v1/license/keys**: New admin-only API endpoint returning all stacked license keys as decoded claims (no raw JWT exposed) with per-key status (`active`, `expired`, or `invalid`).
+- **Role-Based Overage Banner**: The license overage banner now adapts to the current user's role. Admins see an "Add Licenses" button that navigates directly to the Licenses panel; non-admins see a "Contact your administrator" message instead.
+
+### Fixed
+- **Non-Deterministic `array_agg` in `document_stats`**: The `document_stats` database view and all related inline queries in `database.py` and `document_visibility.py` now use `ORDER BY indexed_at ASC` inside `array_agg`, guaranteeing deterministic results regardless of physical row order. Alembic migration `019` applies this fix to existing deployments.
+
+### Changed
+- **Deprecated `datetime.utcnow()` removed**: Remaining calls to `datetime.utcnow()` in `desktop_app/utils/analytics.py` and `desktop_app/ui/source_open_manager.py` replaced with `datetime.now(timezone.utc)`.
+
 ## [2.12.0] - 2026-04-05
 
 ### Added

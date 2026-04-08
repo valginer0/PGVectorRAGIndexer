@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
@@ -209,14 +209,14 @@ class SourceOpenManager(QObject):
     def _track_recent(self, path: str) -> RecentEntry:
         existing = next((e for e in self._recent_entries if e.path == path), None)
         if existing:
-            existing.opened_at = datetime.utcnow()
+            existing.opened_at = datetime.now(timezone.utc)
             existing.reindexed = False if existing.queued else existing.reindexed
             self._recent_entries.remove(existing)
             self._recent_entries.insert(0, existing)
             self.entry_updated.emit(existing)
             return existing
 
-        entry = RecentEntry(path=path, opened_at=datetime.utcnow())
+        entry = RecentEntry(path=path, opened_at=datetime.now(timezone.utc))
         self._recent_entries.insert(0, entry)
         if len(self._recent_entries) > self.max_entries:
             self._recent_entries.pop()

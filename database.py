@@ -371,7 +371,7 @@ class DocumentRepository:
             source_uri,
             COUNT(*) as chunk_count,
             MIN(indexed_at) as indexed_at,
-            (array_agg(metadata))[1] as metadata
+            (array_agg(metadata ORDER BY indexed_at ASC))[1] as metadata
         FROM document_chunks
         WHERE document_id = %s
         GROUP BY document_id, source_uri
@@ -445,7 +445,7 @@ class DocumentRepository:
             "indexed_at": "MIN(indexed_at)",
             "last_updated": "MAX(updated_at)",
             "source_uri": "source_uri",
-            "document_type": "(array_agg(metadata->>'type'))[1]",
+            "document_type": "(array_agg(metadata->>'type' ORDER BY indexed_at ASC))[1]",
             "chunk_count": "COUNT(*)",
             "document_id": "document_id",
         }
@@ -501,7 +501,7 @@ class DocumentRepository:
             COUNT(*) as chunk_count,
             MIN(indexed_at) as indexed_at,
             MAX(updated_at) as last_updated,
-            (array_agg(metadata->>'type'))[1] as document_type
+            (array_agg(metadata->>'type' ORDER BY indexed_at ASC))[1] as document_type
         FROM document_chunks
         {prefix_clause}
         GROUP BY document_id, source_uri
@@ -757,7 +757,7 @@ class DocumentRepository:
         sample_query = f"""
         SELECT document_id,
                source_uri,
-               (array_agg(metadata))[1] AS metadata
+               (array_agg(metadata ORDER BY indexed_at ASC))[1] AS metadata
         FROM document_chunks
         {where_sql}
         GROUP BY document_id, source_uri

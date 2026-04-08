@@ -31,7 +31,7 @@ The dedicated `POST /documents/{id}/transfer` correctly requires admin.
 **Fix:** When auth is required, reject `owner_id` in this endpoint and
 direct callers to use `/transfer` instead. Loopback mode is unaffected.
 
-### 4. `(array_agg(...))[1]` is non-deterministic [PENDING]
+### 4. `(array_agg(...))[1]` is non-deterministic [FIXED]
 **Files:**
 - `database.py:374` — `get_document_by_id`: `(array_agg(metadata))[1]`
 - `database.py:504` — `list_documents`: `(array_agg(metadata->>'type'))[1]`
@@ -59,23 +59,23 @@ names ever contain apostrophes.
 
 ## 🟠 Inconsistencies
 
-### 6. `import jwt as _jwt` called multiple times in same function [PENDING]
+### 6. `import jwt as _jwt` called multiple times in same function [FIXED]
 **File:** `server_settings_store.py:116,130,157`
 `add_server_license_key()` and `remove_server_license_key()` each import
 `_jwt` inside loops/branches rather than once at the top of the function.
 Python caches module imports (no performance impact), but it is poor style.
 
-### 7. Legacy `license_key` DB row never deleted after migration [PENDING]
+### 7. Legacy `license_key` DB row never deleted after migration [FIXED]
 **File:** `server_settings_store.py:84`
 `get_server_license_keys()` migrates the old single `license_key` entry
 to the new `license_keys` array, persists the new entry, but never
 deletes the old one. The stale row stays in `server_settings` forever.
 
-### 8. `POST /users` and `POST /keys` return HTTP 200 instead of 201 [PENDING]
+### 8. `POST /users` and `POST /keys` return HTTP 200 instead of 201 [FIXED]
 **File:** `routers/identity_api.py:291` (`POST /users`) and `:20` (`POST /keys`)
 Standard REST semantics for resource creation is `201 Created`.
 
-### 9. `update_user_endpoint` logs raw request body [PENDING]
+### 9. `update_user_endpoint` logs raw request body [FIXED]
 **File:** `routers/identity_api.py:343`
 `log_activity(..., details={"changes": body})` — any future sensitive
 body field would appear verbatim in the audit log.
@@ -136,7 +136,7 @@ This is the backward-compatibility mechanism for pre-v1-prefix clients.
 Not a bug — removing the second mount would break unversioned callers.
 **Caution:** Any future large router additions will double the route count again.
 
-### T4. `(array_agg(...))[1]` non-deterministic in `document_visibility.py` [PENDING]
+### T4. `(array_agg(...))[1]` non-deterministic in `document_visibility.py` [FIXED]
 **File:** `document_visibility.py:186-188` (`get_document_visibility`),
 `:247` (`list_user_documents`)
 Uses `(array_agg(owner_id))[1]` and `(array_agg(visibility))[1]` without
@@ -161,7 +161,7 @@ slightly inaccurate. Low impact in production.
 startup backup only in Docker mode. Any deployment with a DB service
 named differently will silently skip both features.
 
-### T8. `datetime.utcnow()` remains in desktop app files [PENDING]
+### T8. `datetime.utcnow()` remains in desktop app files [FIXED]
 **Files:** `desktop_app/ui/source_open_manager.py` (×2),
 `desktop_app/utils/analytics.py` (×1)
 Same deprecation issue as T1 but in desktop-only code. Left for a

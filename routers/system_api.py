@@ -7,6 +7,7 @@ import logging
 import os
 import time
 import sys
+import jwt
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
@@ -60,7 +61,7 @@ from api_models import (
 from services import get_indexer, init_complete, init_error
 from database import get_db_manager
 from embeddings import get_embedding_service
-from auth import require_api_key
+from auth import require_api_key, require_admin
 from license import get_current_license
 
 logger = logging.getLogger(__name__)
@@ -222,6 +223,51 @@ async def get_license_usage():
         "overage": overage,
         "edition": lic.edition.value,
     }
+
+
+@system_v1_router.get("/license/keys", dependencies=[Depends(require_admin)])
+async def get_server_license_keys_endpoint():
+    """List all stacked license keys, decoded, with status."""
+    from server_settings_store import get_server_license_keys
+    from license import validate_license_key, resolve_verification_context, LicenseExpiredError, LicenseInvalidError, LicenseError
+
+    keys = get_server_license_keys()
+    signing_secret, algorithms = resolve_verification_context()
+
+    results = []
+    for key_string in keys:
+        try:
+            # Decode payload without verification to get claims
+            header = jwt.get_unverified_header(key_string)
+            claims = jwt.decode(key_string, options={"verify_signature": False})
+
+            # Run validation to determine status
+            status_val = "active"
+            try:
+                validate_license_key(key_string, signing_secret, algorithms)
+            except LicenseExpiredError:
+                status_val = "expired"
+            except (LicenseInvalidError, LicenseError, Exception):
+                status_val = "invalid"
+
+            # Reconstruct the expected response
+            kid = header.get("kid") or claims.get("kid") or claims.get("jti", "unknown")
+            results.append({
+                "kid": kid,
+                "edition": claims.get("edition", "community"),
+                "org_name": claims.get("org_name", ""),
+                "seats": claims.get("seats", 0),
+                "expiry": claims.get("exp"),
+                "status": status_val
+            })
+        except Exception as e:
+            logger.warning(f"Failed to parse a stacked license key: {e}")
+            results.append({
+                "kid": "unknown",
+                "status": "invalid"
+            })
+
+    return {"keys": results}
 
 
 @system_v1_router.post("/license/reload", dependencies=[Depends(require_api_key)])

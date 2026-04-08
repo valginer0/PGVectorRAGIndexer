@@ -12,7 +12,7 @@ import json
 import logging
 import platform
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -87,7 +87,7 @@ class AnalyticsClient:
         """
         record = {
             "event": event,
-            "ts": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+            "ts": datetime.now(timezone.utc).isoformat(timespec="seconds") + "Z",
             "session": self._session_id,
             "install_id": self._install_id,
             "app_version": self._app_version,

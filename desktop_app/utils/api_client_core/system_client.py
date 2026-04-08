@@ -105,3 +105,31 @@ class SystemClient:
         except Exception as e:
             logger.debug("get_license_usage failed: %s", e)
             return {}
+
+    def install_server_license(self, license_key: str, action: str = "add") -> Dict[str, Any]:
+        """Installs a license key on the server (`action` = "add" or "replace")."""
+        response = self._base.request(
+            "POST",
+            f"{self._base.api_base}/license/install",
+            json={"license_key": license_key, "action": action},
+            timeout=10,
+        )
+        return response.json()
+
+    def list_server_licenses(self) -> Dict[str, Any]:
+        """List all stacked server license keys (requires admin)."""
+        response = self._base.request(
+            "GET",
+            f"{self._base.api_base}/license/keys",
+            timeout=10,
+        )
+        return response.json()
+
+    def remove_server_license(self, kid: str) -> Dict[str, Any]:
+        """Removes a server license key by its kid."""
+        response = self._base.request(
+            "DELETE",
+            f"{self._base.api_base}/license/{kid}",
+            timeout=10,
+        )
+        return response.json()

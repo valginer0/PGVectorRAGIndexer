@@ -2054,25 +2054,31 @@ class OrganizationTab(QWidget):
         if has_edition_denial:
             if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
                 self._show_placeholder("Loading organization features...")
+                self._schedule_auto_retry()
             else:
                 self._show_placeholder(
                     "Organization Console features are available with a Team or Organization license.",
                     show_learn_more=True,
                 )
-            self._schedule_auto_retry()
+                # Terminal state — stop retries and health-poll reprobe cycle
+                self._transient_retry_window_active = False
+                self._awaiting_backend_healthy_reprobe = False
             return
 
         # Generic Auth failures take priority — server is reachable but rejecting us for permission
         if not has_any and has_auth_issue:
             if self._transient_retry_window_active and self._auto_retry_attempts < self.MAX_AUTO_RETRY_ATTEMPTS:
                 self._show_placeholder("Loading organization features...")
+                self._schedule_auto_retry()
             else:
                 self._show_placeholder(
                     "Authentication required. Check your API key in Settings, "
                     "or contact your administrator if permissions are insufficient.",
                     show_retry=True,
                 )
-            self._schedule_auto_retry()
+                # Terminal state — stop retries and health-poll reprobe cycle
+                self._transient_retry_window_active = False
+                self._awaiting_backend_healthy_reprobe = False
             return
 
         # Connectivity / Support failures
@@ -2082,16 +2088,21 @@ class OrganizationTab(QWidget):
                     # Still in startup — show a gentle loading message instead of
                     # flashing a scary "Cannot connect" error with a Retry button.
                     self._show_placeholder("Loading organization features...")
+                    self._schedule_auto_retry()
                 else:
                     self._show_placeholder(
                         "Cannot connect to server. Organization features will appear once the server is running.",
                         show_retry=True,
                     )
-                self._schedule_auto_retry()
+                    # Terminal state — stop retries and health-poll reprobe cycle
+                    self._transient_retry_window_active = False
+                    self._awaiting_backend_healthy_reprobe = False
             else:
                 self._show_placeholder(
                     "This server version does not support organization management features.",
                 )
+                self._transient_retry_window_active = False
+                self._awaiting_backend_healthy_reprobe = False
             return
 
         # At least one capability available — show tabs

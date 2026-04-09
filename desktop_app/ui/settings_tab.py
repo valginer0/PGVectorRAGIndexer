@@ -789,6 +789,15 @@ class SettingsTab(QWidget):
             return False, None  # Not a git checkout (e.g. dev install) — skip silently
 
         try:
+            # Skip silently when HEAD is detached (e.g. tag checkout, installer bundle).
+            # git pull requires a tracked branch; detached HEAD cannot be updated this way.
+            branch_check = subprocess.run(
+                ["git", "symbolic-ref", "--short", "HEAD"],
+                cwd=str(repo_dir), capture_output=True, text=True, timeout=5,
+            )
+            if branch_check.returncode != 0:
+                return False, None
+
             old_head = subprocess.run(
                 ["git", "rev-parse", "HEAD"],
                 cwd=str(repo_dir), capture_output=True, text=True, timeout=15,

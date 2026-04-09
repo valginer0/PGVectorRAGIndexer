@@ -84,7 +84,10 @@ def invalidate_overage_cache() -> None:
 
     Call this after installing/removing a license key or changing user counts.
     """
-    _cache._last_refresh = 0.0
+    # Set far enough in the past to guarantee is_stale() returns True
+    # regardless of system uptime (time.monotonic() could be < TTL on
+    # freshly booted machines).
+    _cache._last_refresh = time.monotonic() - OVERAGE_CACHE_TTL_SECONDS - 1
 
 
 class LicenseOverageMiddleware(BaseHTTPMiddleware):

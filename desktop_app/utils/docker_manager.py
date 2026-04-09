@@ -284,30 +284,40 @@ class DockerManager:
         
         return False, "Could not find Rancher Desktop or Docker Desktop executable."
 
-    def pull_images(self) -> Tuple[bool, str]:
+    def pull_images(self, retries: int = 3, retry_delay: int = 10) -> Tuple[bool, str]:
         """
         Pull latest Docker images from the registry.
-        
+        Retries up to `retries` times with `retry_delay` seconds between attempts.
+
         Returns:
             Tuple of (success, message)
         """
-        try:
-            logger.info("Pulling latest Docker images...")
-            result = self._run_compose_command(["pull"], timeout=300)
-            
-            if result.returncode == 0:
-                logger.info("Images pulled successfully")
-                return True, "Docker images updated successfully."
-            else:
-                error_msg = result.stderr or "Unknown error"
-                logger.error(f"Failed to pull images: {error_msg}")
-                return False, f"Failed to pull images: {error_msg}"
-                
-        except subprocess.TimeoutExpired:
-            return False, "Timeout pulling images"
-        except Exception as e:
-            logger.error(f"Error pulling images: {e}")
-            return False, str(e)
+        last_error = "Unknown error"
+        for attempt in range(1, retries + 1):
+            try:
+                logger.info(f"Pulling latest Docker images (attempt {attempt}/{retries})...")
+                result = self._run_compose_command(["pull"], timeout=300)
+
+                if result.returncode == 0:
+                    logger.info("Images pulled successfully")
+                    return True, "Docker images updated successfully."
+
+                last_error = (result.stderr or result.stdout or "Unknown error").strip()
+                logger.warning(f"Pull attempt {attempt} failed: {last_error}")
+
+            except subprocess.TimeoutExpired:
+                last_error = "Timed out waiting for image download"
+                logger.warning(f"Pull attempt {attempt} timed out")
+            except Exception as e:
+                last_error = str(e)
+                logger.warning(f"Pull attempt {attempt} raised: {e}")
+
+            if attempt < retries:
+                logger.info(f"Retrying in {retry_delay}s...")
+                time.sleep(retry_delay)
+
+        logger.error(f"All {retries} pull attempts failed. Last error: {last_error}")
+        return False, last_error
 
     def start_containers(self, force_pull: bool = False) -> Tuple[bool, str]:
         """
@@ -360,8 +370,7 @@ class DockerManager:
                     _pull_warning = (
                         f"⚠ Could not download the latest image:\n{pull_msg}\n\n"
                         "Containers restarted on the locally cached image.\n"
-                        "If License Management still shows an error, ensure Docker\n"
-                        "can reach ghcr.io and try again.\n\n"
+                        "Please check your internet connection and try again.\n\n"
                     )
 
             # Check if containers are already running

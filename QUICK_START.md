@@ -1,4 +1,4 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.13.0
+# Quick Start Guide - PGVectorRAGIndexer v2.13.1
 
 Get up and running in 5 minutes!
 > 🔒 **Network safety tip**
@@ -6,7 +6,7 @@ Get up and running in 5 minutes!
 > This helps prevent other users on the same network from accessing local services.
 > For home or private networks, this is not a concern.
 
-## 🆕 What's New in v2.13.0
+## 🆕 What's New in v2.13.1
 
 - **Large-Organization License Stacking**: Stack multiple Organization licenses on one server to combine seat limits for 50, 75, or 100+ users — no configuration changes needed.
 - **Admin Console — Licenses Panel**: Admins can now add, view, and remove license keys directly in the Organization Console with client-side validation and per-key status.

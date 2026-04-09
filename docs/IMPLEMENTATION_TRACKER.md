@@ -2,13 +2,13 @@
 
 Derived from [FEATURE_IDEAS_V5.md](./FEATURE_IDEAS_V5.md). Each task maps to a feature number in V5.
 
-Last updated: 2026-04-08 (v2.13.0)
+Last updated: 2026-04-09 (v2.13.1)
 
 ---
 
 ## Current State
 
-All roadmap features are **implemented and shipping** as of v2.13.0 The codebase includes:
+All roadmap features are **implemented and shipping** as of v2.13.1 The codebase includes:
 
 - **Server**: Modular FastAPI routers (11 domain routers + `/me` identity endpoint), Alembic migrations (001–018), pgvector search, structured JSON logging, `/health` system metrics, **automatic pg_dump backups with auto-recovery**
 - **Desktop**: Qt6 app with `APIClient` facade (10 domain clients), controller pattern (Settings), analytics, watched folders, **Organization Console** (7 sub-panels with server capability detection, admin write operations, permission-aware UI gating), **Manage tab restore from backup file**

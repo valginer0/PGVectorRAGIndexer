@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.13.0
+# PGVectorRAGIndexer v2.13.1
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -87,9 +87,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ---
 
-## 🋹 What's New in v2.13.0
+## 🋹 What's New in v2.13.1
 
-### 🆕 Latest Features (v2.13.0)
+### 🆕 Latest Features (v2.13.1)
 
 - **✅ Large-Organization License Stacking**: Organizations with more than 25 users can now stack multiple Organization license keys on a single server to combine seat limits automatically — no enterprise negotiations, no configuration changes. Each key adds seats independently.
 - **✅ Admin Console — Licenses Panel**: New "Licenses" tab in the Organization Console lets admins add, inspect, and remove stacked license keys with client-side validation and clear per-key status (active / expired / invalid).

@@ -855,11 +855,10 @@ class SettingsTab(QWidget):
                     if code_updated:
                         QMessageBox.information(
                             self, "Update Complete",
-                            "App code and backend updated successfully.\n\n"
-                            "Please restart the application to use the new version."
+                            message + "\n\nApp code updated — please restart the application."
                         )
                     else:
-                        QMessageBox.information(self, "Success", "Backend updated and restarted successfully.")
+                        QMessageBox.information(self, "Update Complete", message)
                 else:
                     QMessageBox.critical(self, "Update Failed", message)
             finally:

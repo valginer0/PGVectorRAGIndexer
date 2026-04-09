@@ -351,11 +351,18 @@ class DockerManager:
                     return False, daemon_error
 
             # Optional: Pull latest images
+            _pull_warning = ""
             if force_pull:
                 logger.info("Forcing image pull before start...")
                 pull_success, pull_msg = self.pull_images()
                 if not pull_success:
                     logger.warning(f"Forced pull failed: {pull_msg}. Attempting to start with local images.")
+                    _pull_warning = (
+                        f"⚠ Could not download the latest image:\n{pull_msg}\n\n"
+                        "Containers restarted on the locally cached image.\n"
+                        "If License Management still shows an error, ensure Docker\n"
+                        "can reach ghcr.io and try again.\n\n"
+                    )
 
             # Check if containers are already running
             db_running, app_running = self.get_container_status()
@@ -385,16 +392,16 @@ class DockerManager:
                         # Give API a bit more time to be ready
                         if i >= 3:  # After 15+ seconds, containers should be stable
                             logger.info("Containers started successfully")
-                            return True, "Containers started successfully!\n\nThe API should be ready shortly.\n\nIf the API status doesn't turn green, please wait another moment and click 'Refresh Status'."
+                            return True, _pull_warning + "Containers started successfully!\n\nThe API should be ready shortly.\n\nIf the API status doesn't turn green, please wait another moment and click 'Refresh Status'."
                     
                     logger.info(f"Waiting... ({(i+1)*5}s)")
                 
                 # Final check
                 db_running, app_running = self.get_container_status()
                 if db_running and app_running:
-                    return True, "Containers are running!\n\nThe API may still be initializing.\nPlease wait a moment and click 'Refresh Status' in the main window."
+                    return True, _pull_warning + "Containers are running!\n\nThe API may still be initializing.\nPlease wait a moment and click 'Refresh Status' in the main window."
                 elif db_running:
-                    return True, "Database started. Application is still starting up.\n\nPlease wait a moment and click 'Refresh Status'."
+                    return True, _pull_warning + "Database started. Application is still starting up.\n\nPlease wait a moment and click 'Refresh Status'."
                 else:
                     return False, "Containers started but not healthy after 90 seconds.\n\nTry running: docker ps\nAnd check logs with: docker logs vector_rag_app"
             else:

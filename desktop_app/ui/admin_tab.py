@@ -1755,7 +1755,16 @@ class _LicensesPanel(QWidget):
         except APIAuthenticationError:
             self._show_message("Insufficient permissions.", "warning")
         except APIError as e:
-            self._show_message(f"Error loading licenses: {e}", "error", retry=self.refresh)
+            if getattr(e, "status_code", None) == 404:
+                self._show_message(
+                    "License Management requires backend v2.13.0+.\n\n"
+                    "Your Docker container is running an older version.\n\n"
+                    "To update: stop your containers, then click\n"
+                    "\"Update & Start Containers\" in the top toolbar.",
+                    "warning",
+                )
+            else:
+                self._show_message(f"Error loading licenses: {e}", "error", retry=self.refresh)
         except Exception as e:
             self._show_message(f"Error: {str(e)}", "error", retry=self.refresh)
 

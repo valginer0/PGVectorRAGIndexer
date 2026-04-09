@@ -217,7 +217,17 @@ class MainWindow(QMainWindow):
         self.docker_control_btn.setProperty("class", "primary")
         self.docker_control_btn.clicked.connect(self.toggle_docker)
         status_layout.addWidget(self.docker_control_btn)
-        
+
+        # Update & Start button (pulls latest image before starting)
+        self.docker_update_btn = QPushButton("Update & Start Containers")
+        self.docker_update_btn.setIcon(qta.icon('fa5s.download', color='white'))
+        self.docker_update_btn.setToolTip(
+            "Pull the latest backend image from the registry, then start containers.\n"
+            "Use this when a new version is available or features are missing."
+        )
+        self.docker_update_btn.clicked.connect(self.start_docker_with_pull)
+        status_layout.addWidget(self.docker_update_btn)
+
         # Refresh button
         refresh_btn = QPushButton("Refresh Status")
         refresh_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
@@ -492,6 +502,7 @@ class MainWindow(QMainWindow):
             self.docker_status_label.setText("Docker: N/A (Remote)")
             self.docker_status_icon.setPixmap(qta.icon('fa5s.server', color='#94a3b8').pixmap(16, 16))
             self.docker_control_btn.setVisible(False)
+            self.docker_update_btn.setVisible(False)
         elif db_running:
             self.docker_status_label.setText("Docker: Running")
             self.docker_status_icon.setPixmap(qta.icon('fa5s.check-circle', color='#10b981').pixmap(16, 16))
@@ -499,6 +510,7 @@ class MainWindow(QMainWindow):
             self.docker_control_btn.setIcon(qta.icon('fa5s.stop', color='white'))
             self.docker_control_btn.setProperty("class", "danger")
             self.docker_control_btn.setVisible(True)
+            self.docker_update_btn.setVisible(False)
         else:
             self.docker_status_label.setText("Docker: Stopped")
             self.docker_status_icon.setPixmap(qta.icon('fa5s.stop-circle', color='#ef4444').pixmap(16, 16))
@@ -506,6 +518,7 @@ class MainWindow(QMainWindow):
             self.docker_control_btn.setIcon(qta.icon('fa5s.play', color='white'))
             self.docker_control_btn.setProperty("class", "primary")
             self.docker_control_btn.setVisible(True)
+            self.docker_update_btn.setVisible(True)
 
             # Trigger "Start Containers?" prompt only once on initial startup check
             if not self._prompted_start_containers and not self._remote_mode:

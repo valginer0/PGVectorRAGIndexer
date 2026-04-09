@@ -1926,15 +1926,30 @@ class OrganizationTab(QWidget):
         self._refresh_btn.setEnabled(False)
         self._refresh_btn.setText("Loading...")
         try:
-            # Force the backend to re-read its license from disk before we probe.
-            # This ensures the Organization tab reflects the *current* license state
-            # even if the backend server process wasn't restarted.
+            # Ensure the backend knows about the desktop's license key.
+            # After a Docker volume wipe the DB-stored key is lost, so the
+            # backend falls back to Community.  Push the local key first,
+            # then reload, so Organization endpoints pass the edition check.
             try:
+                from license import get_license_file_path, reset_license
+                key_path = get_license_file_path()
+                if key_path.exists():
+                    local_key = key_path.read_text(encoding="utf-8").strip()
+                    if local_key:
+                        try:
+                            install_url = f"{self.api_client._base.api_base}/license/install"
+                            self.api_client._base.request(
+                                "POST", install_url,
+                                json={"license_key": local_key, "action": "add"},
+                            )
+                            logger.info("Pushed local license key to backend")
+                        except Exception as e:
+                            logger.debug("License install to backend failed (non-fatal): %s", e)
+
                 reload_url = f"{self.api_client._base.api_base}/license/reload"
                 self.api_client._base.request("POST", reload_url)
                 # Also clear the desktop app's own in-process license cache
                 # so the Settings tab reads fresh data from disk
-                from license import reset_license
                 reset_license()
                 logger.info("Backend + local license cache refreshed before probe")
             except Exception as e:

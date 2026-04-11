@@ -141,6 +141,19 @@ class LicenseService:
         except Exception as e:
             logger.warning(f"Could not secure license file permissions: {e}")
 
+        # 4b. On Windows, also write to the Docker mount path (~/.pgvector-license/)
+        #     so the backend container can read the key from its filesystem mount.
+        import platform
+        if platform.system() == "Windows":
+            try:
+                docker_license_dir = Path.home() / ".pgvector-license"
+                docker_license_dir.mkdir(parents=True, exist_ok=True)
+                docker_license_file = docker_license_dir / "license.key"
+                docker_license_file.write_text(key_string, encoding="utf-8")
+                logger.info("Synced license to Docker mount path: %s", docker_license_file)
+            except Exception as e:
+                logger.warning("Could not sync license to Docker mount: %s", e)
+
         # 5. Reload license locally
         reset_license()
         current = get_current_license()

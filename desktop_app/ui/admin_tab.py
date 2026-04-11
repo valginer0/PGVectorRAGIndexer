@@ -9,6 +9,7 @@ bar; adapts content based on server probing + local license state.
 import jwt
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, QTimer
@@ -1926,34 +1927,33 @@ class OrganizationTab(QWidget):
         self._refresh_btn.setEnabled(False)
         self._refresh_btn.setText("Loading...")
         try:
-            # Ensure the backend knows about the desktop's license key.
-            # After a Docker volume wipe the DB-stored key is lost, so the
-            # backend falls back to Community.  Push the local key first,
-            # then reload, so Organization endpoints pass the edition check.
+            # Ensure the backend container can read the desktop's license key.
+            # On Windows the desktop stores the key at %APPDATA%\...\license.key
+            # but Docker mounts ~/.pgvector-license/ into the container.  After a
+            # volume wipe the DB copy is gone, so we sync the file to the mount
+            # path and tell the backend to reload from disk.
             try:
+                import platform
                 from license import get_license_file_path, reset_license
                 key_path = get_license_file_path()
                 if key_path.exists():
                     local_key = key_path.read_text(encoding="utf-8").strip()
-                    if local_key:
+                    if local_key and platform.system() == "Windows":
+                        docker_license_dir = Path.home() / ".pgvector-license"
+                        docker_license_file = docker_license_dir / "license.key"
                         try:
-                            install_url = f"{self.api_client._base.api_base}/license/install"
-                            self.api_client._base.request(
-                                "POST", install_url,
-                                json={"license_key": local_key, "action": "add"},
-                            )
-                            logger.info("Pushed local license key to backend")
+                            docker_license_dir.mkdir(parents=True, exist_ok=True)
+                            docker_license_file.write_text(local_key, encoding="utf-8")
+                            logger.info("Synced license to Docker mount path: %s", docker_license_file)
                         except Exception as e:
-                            logger.debug("License install to backend failed (non-fatal): %s", e)
+                            logger.warning("Could not sync license to Docker mount: %s", e)
 
                 reload_url = f"{self.api_client._base.api_base}/license/reload"
                 self.api_client._base.request("POST", reload_url)
-                # Also clear the desktop app's own in-process license cache
-                # so the Settings tab reads fresh data from disk
                 reset_license()
-                logger.info("Backend + local license cache refreshed before probe")
+                logger.info("Backend license cache reloaded before probe")
             except Exception as e:
-                logger.debug("License reload before probe failed (non-fatal): %s", e)
+                logger.debug("License sync before probe failed (non-fatal): %s", e)
             
             self._caps.probe_all()
             logger.info("probe_and_refresh: probe complete, updating visibility")

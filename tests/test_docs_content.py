@@ -72,8 +72,9 @@ class TestQuickStartMd:
             "Old .exe installer reference must be removed"
 
     def test_current_version_in_whats_new(self):
-        assert "v2.13.0" in _read("QUICK_START.md"), \
-            "What's New section must reference v2.13.0"
+        from version import __version__
+        assert f"v{__version__}" in _read("QUICK_START.md"), \
+            f"What's New section must reference v{__version__}"
 
     def test_license_stacking_in_whats_new(self):
         assert "License Stacking" in _read("QUICK_START.md"), \

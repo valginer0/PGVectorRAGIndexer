@@ -36,7 +36,7 @@ class Installer:
     INSTALL_DIR = os.path.join(os.environ.get('USERPROFILE', ''), 'PGVectorRAGIndexer')
     GITHUB_REPO = "valginer0/PGVectorRAGIndexer"
     DEFAULT_REPO_REF = "main"
-    DEFAULT_APP_IMAGE = "ghcr.io/valginer0/pgvectorragindexer:latest"
+    _IMAGE_REPO = "ghcr.io/valginer0/pgvectorragindexer"
     INSTALLER_VERSION = INSTALLER_VERSION  # From version module
     STATE_MAX_AGE_HOURS = 24  # Ignore state files older than this
 
@@ -123,8 +123,20 @@ class Installer:
             return override
         return self.DEFAULT_REPO_REF
 
+    def _default_app_image(self) -> str:
+        """Return version-pinned image tag read from the VERSION file."""
+        try:
+            version_file = Path(self.INSTALL_DIR) / "VERSION"
+            if version_file.exists():
+                ver = version_file.read_text(encoding="utf-8").strip()
+                if ver:
+                    return f"{self._IMAGE_REPO}:{ver}"
+        except Exception:
+            pass
+        return f"{self._IMAGE_REPO}:latest"
+
     def _resolve_app_image(self) -> str:
-        return self._resolve_override("APP_IMAGE", self.DEFAULT_APP_IMAGE)
+        return self._resolve_override("APP_IMAGE", self._default_app_image())
 
     def _log_repo_ref(self):
         self._log(f"Backend source ref: {self.repo_ref}", "info")

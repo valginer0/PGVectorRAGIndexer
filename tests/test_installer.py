@@ -505,8 +505,8 @@ def test_installer_ps1_honors_repo_ref_override_textually():
 
 def test_installer_logic_logs_backend_image_textually():
     content = (PROJECT_ROOT / "windows_installer" / "installer_logic.py").read_text()
-    assert 'DEFAULT_APP_IMAGE = "ghcr.io/valginer0/pgvectorragindexer:latest"' in content
+    assert '_IMAGE_REPO = "ghcr.io/valginer0/pgvectorragindexer"' in content
     assert 'with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Environment", 0, winreg.KEY_READ) as key:' in content
-    assert 'return self._resolve_override("APP_IMAGE", self.DEFAULT_APP_IMAGE)' in content
+    assert 'return self._resolve_override("APP_IMAGE", self._default_app_image())' in content
     assert 'self._log(f"Backend image: {self.app_image}", "info")' in content
     assert 'compose_base = f\'docker compose --file "docker-compose.yml" --env-file "{env_file}"\'' in content

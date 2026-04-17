@@ -16,7 +16,12 @@ logger = logging.getLogger(__name__)
 
 class DockerManager:
     """Manages Docker containers for the application."""
-    DEFAULT_APP_IMAGE = "ghcr.io/valginer0/pgvectorragindexer:latest"
+    _IMAGE_REPO = "ghcr.io/valginer0/pgvectorragindexer"
+
+    @staticmethod
+    def _default_app_image() -> str:
+        from desktop_app import __version__
+        return f"{DockerManager._IMAGE_REPO}:{__version__}"
     
     def __init__(self, project_path: Path):
         """
@@ -79,7 +84,7 @@ class DockerManager:
         return default
 
     def _resolve_app_image(self) -> str:
-        return self._resolve_override("APP_IMAGE", self.DEFAULT_APP_IMAGE)
+        return self._resolve_override("APP_IMAGE", self._default_app_image())
 
     def _run_compose_command(self, compose_args: list, timeout: int) -> subprocess.CompletedProcess:
         env_file_path = None

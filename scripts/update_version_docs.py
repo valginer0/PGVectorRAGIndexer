@@ -137,13 +137,62 @@ def main():
     
     updated_count = 0
     
-    # 1. Update main repo docs
+    # 1. Update changelog natively
+    print(f"\n[Changelog Auto-Generation]")
+    import subprocess
+    def update_changelog(version_info, base_dir, dry_run=False):
+        changelog_path = os.path.join(base_dir, 'CHANGELOG.md')
+        if not os.path.exists(changelog_path):
+            return False
+            
+        try:
+            tag_result = subprocess.run(['git', 'describe', '--tags', '--abbrev=0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            if tag_result.returncode != 0: return False
+            last_tag = tag_result.stdout.strip()
+            log_result = subprocess.run(['git', 'log', f'{last_tag}..HEAD', '--pretty=format:%s'], stdout=subprocess.PIPE, text=True)
+            commits = [line.strip() for line in log_result.stdout.split('\n') if line.strip()]
+        except Exception:
+            return False
+            
+        with open(changelog_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+            
+        if f"## [{version_info['full']}]" in content:
+            print(f"  - CHANGELOG.md: entry for {version_info['full']} already exists")
+            return False
+            
+        added, fixed, changed = [], [], []
+        for msg in commits:
+            ml = msg.lower()
+            if ml.startswith('feat') or ml.startswith('add'): added.append(f"- {msg}")
+            elif ml.startswith('fix') or ml.startswith('bug'): fixed.append(f"- {msg}")
+            elif "bump version" not in ml: changed.append(f"- {msg}")
+            
+        lines = [f"## [{version_info['full']}] - {version_info['date']}\n"]
+        if added: lines.extend(["### Added"] + added + [""])
+        if fixed: lines.extend(["### Fixed"] + fixed + [""])
+        if changed: lines.extend(["### Changed"] + changed + [""])
+        if not added and not fixed and not changed: lines.extend(["- Internal improvements and fixes.", ""])
+            
+        match = re.search(r'^## \[\d+\.\d+\.\d+\]', content, re.MULTILINE)
+        if match:
+            new_content = content[:match.start()] + "\n".join(lines) + "\n" + content[match.start():]
+            if not dry_run:
+                with open(changelog_path, 'w', encoding='utf-8') as f: f.write(new_content)
+            print("  ✓ CHANGELOG.md: injected auto-generated patch notes")
+            return True
+        return False
+        
+    if update_changelog(version_info, main_dir, dry_run):
+        updated_count += 1
+    
+    # 2. Update main repo docs
     print(f"\n[Main Repository: {main_dir}]")
     for file_path, patterns in MAIN_DOC_PATTERNS:
         if update_file(file_path, patterns, version_info, main_dir, dry_run):
             updated_count += 1
             
-    # 2. Update website repo if it exists
+    # 3. Update website repo if it exists
     print(f"\n[Website Repository: {website_dir}]")
     if os.path.exists(website_dir):
         for file_path, patterns in WEBSITE_PATTERNS:

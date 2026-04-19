@@ -111,13 +111,15 @@ class Installer:
     def _resolve_repo_ref(self) -> str:
         env_val = os.environ.get("PGVECTOR_REPO_REF", "").strip()
         reg_val = self._read_windows_user_env("PGVECTOR_REPO_REF")
+        default = "main" if self.DEFAULT_REPO_REF == "main" else self.DEFAULT_REPO_REF
         
-        if env_val:
-            if self.DEFAULT_REPO_REF != "main" and env_val == reg_val:
-                # Persistent registry override propagated to process env -> ignore in pinned releases
-                return self.DEFAULT_REPO_REF
-            return env_val
-        return self.DEFAULT_REPO_REF
+        override = env_val if env_val else reg_val
+        if override:
+            if self.DEFAULT_REPO_REF != "main" and override == reg_val:
+                # Persistent registry override (or propagated) -> ignore in pinned releases
+                return default
+            return override
+        return default
 
     def _default_app_image(self) -> str:
         """Return version-pinned image tag read from the VERSION file."""
@@ -136,11 +138,12 @@ class Installer:
         reg_val = self._read_windows_user_env("APP_IMAGE")
         default = self._default_app_image()
         
-        if env_val:
-            if self.DEFAULT_REPO_REF != "main" and env_val == reg_val:
-                # Persistent registry override propagated to process env -> ignore in pinned releases
+        override = env_val if env_val else reg_val
+        if override:
+            if self.DEFAULT_REPO_REF != "main" and override == reg_val:
+                # Persistent registry override (or propagated) -> ignore in pinned releases
                 return default
-            return env_val
+            return override
             
         return default
 

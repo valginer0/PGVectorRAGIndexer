@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.6] - 2026-04-18
+
+### Fixed
+- **Docker Compose Precedence Bug**: Refactored `installer_logic.py`, `manage.ps1`, and `manage.sh` to forcefully overwrite the host OS `APP_IMAGE` process environment variable immediately prior to invoking Docker Compose. This completely mitigates a bug where Docker Compose would silently prioritize stale Windows Registry legacy environment variables over the painstakingly written `--env-file` overrides, ensuring pinned releases pull correctly.
+
+## [2.13.5] - 2026-04-18
+
+### Fixed
+- **OS Environment Defenses**: Refactored the installer registry override detection to correctly compare `os.environ` against the raw Registry string, outsmarting a silent OS behavior where Windows native `explorer.exe` permanently injects stale `[Environment]::SetEnvironmentVariable` legacy values into Python's startup context.
+
+## [2.13.4] - 2026-04-18
+
+### Fixed
+- **Syntax**: Fixed minor syntax edge cases introduced during the initial registry override detection implementation.
+
+## [2.13.3] - 2026-04-18
+
+### Fixed
+- **Installer Stale Caching Bug**: Implemented registry checks inside the MSI Installer to accurately detect and neutralize legacy `APP_IMAGE` local debugging overrides, enforcing targeted `v2.x.x` release images.
+
+## [2.13.2] - 2026-04-17
+
+### Fixed
+- **Admin Console State Sync**: Addressed regressions in the Admin Console where Large-Organization stacked licenses occasionally failed to accurately immediately recalculate and reflect the total seat capacity remaining after inline addition or key revocation.
+
+## [2.13.1] - 2026-04-17
+
+### Fixed
+- **Licensing Role Fallbacks**: Ensured standard non-admin users in large organizations cleanly default to the "Contact your administrator" gating panel when attempting to modify licenses, rather than experiencing application route timeouts.
+
 ## [2.13.0] - 2026-04-08
 
 ### Added

@@ -162,6 +162,13 @@ class Installer:
 
     def _write_compose_env_file(self) -> str:
         env_file = os.path.join(self.INSTALL_DIR, ".env.installer.tmp")
+        
+        # CRUCIAL FIX: Docker Compose strongly prefers host environment variables over --env-file.
+        # If the user's OS has a stale APP_IMAGE globally (e.g. from Windows Registry),
+        # docker compose will silently ignore our env_file and forcefully pull the old image!
+        # We MUST manually overwrite the local Python process environment before spawning the subprocess.
+        os.environ["APP_IMAGE"] = self.app_image
+        
         with open(env_file, "w", encoding="utf-8") as handle:
             handle.write(f"APP_IMAGE={self.app_image}\n")
         return env_file

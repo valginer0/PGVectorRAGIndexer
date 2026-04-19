@@ -89,6 +89,12 @@ function Invoke-ComposeUpdate {
 
     try {
         $envContent | Set-Content -Path $envFile -Encoding UTF8
+        
+        # CRITICAL FIX: Docker Compose strongly prefers host environment variables over --env-file.
+        # If the user has a globally persisting registry variable, Docker will silently ignore our .env file!
+        # We must forcefully override the process environment here prior to forking the subprocess.
+        $env:APP_IMAGE = $image
+
         docker compose --file "docker-compose.yml" --env-file $envFile pull
         # Add --remove-orphans to clean up any leftover containers
         docker compose --file "docker-compose.yml" --env-file $envFile down --remove-orphans

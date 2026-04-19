@@ -85,6 +85,11 @@ EOF
             rm -f "$env_file"
             return
         fi
+        
+        # CRITICAL FIX: Docker Compose prioritizes process environment over --env-file.
+        # Exporting this explicitly safeguards against legacy variables.
+        export APP_IMAGE="$image"
+        
         docker compose --file docker-compose.yml --env-file "$env_file" pull
         docker compose --file docker-compose.yml --env-file "$env_file" down
         docker compose --file docker-compose.yml --env-file "$env_file" up -d

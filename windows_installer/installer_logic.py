@@ -136,7 +136,18 @@ class Installer:
         return f"{self._IMAGE_REPO}:latest"
 
     def _resolve_app_image(self) -> str:
-        return self._resolve_override("APP_IMAGE", self._default_app_image())
+        override = os.environ.get("APP_IMAGE", "").strip()
+        if not override:
+            override = self._read_windows_user_env("APP_IMAGE")
+        default = self._default_app_image()
+        
+        if override:
+            if self.DEFAULT_REPO_REF != "main" and not os.environ.get("APP_IMAGE", "").strip():
+                # Pinned release build + registry-only override → ignore stale override
+                return default
+            return override
+            
+        return default
 
     def _log_repo_ref(self):
         self._log(f"Backend source ref: {self.repo_ref}", "info")

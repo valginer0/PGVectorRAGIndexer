@@ -114,13 +114,13 @@ Restart app/backend and verify:
 
 ---
 
-## Negative Control
+## Negative Control / Cleanup
 
-To confirm defaults still behave correctly, unset the overrides:
+To confirm defaults still behave correctly (and to ensure you don't break future official standard installations), you **must** wipe the override variables from your Windows Registry once you are done debugging:
 
 ```powershell
-Remove-Item Env:PGVECTOR_REPO_REF -ErrorAction SilentlyContinue
-Remove-Item Env:APP_IMAGE -ErrorAction SilentlyContinue
+[Environment]::SetEnvironmentVariable("PGVECTOR_REPO_REF", $null, "User")
+[Environment]::SetEnvironmentVariable("APP_IMAGE", $null, "User")
 ```
 
 Then run the MSI again and verify:

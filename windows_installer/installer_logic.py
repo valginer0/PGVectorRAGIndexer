@@ -109,18 +109,14 @@ class Installer:
         return default
 
     def _resolve_repo_ref(self) -> str:
-        override = os.environ.get("PGVECTOR_REPO_REF", "").strip()
-        if not override:
-            override = self._read_windows_user_env("PGVECTOR_REPO_REF")
-        if override:
-            # Only honour the override if it differs from the pinned default
-            # AND the user explicitly set it in the current session (env var).
-            # Registry overrides are likely stale debug leftovers — ignore them
-            # when a pinned release ref is present.
-            if self.DEFAULT_REPO_REF != "main" and not os.environ.get("PGVECTOR_REPO_REF", "").strip():
-                # Pinned release build + registry-only override → ignore stale override
+        env_val = os.environ.get("PGVECTOR_REPO_REF", "").strip()
+        reg_val = self._read_windows_user_env("PGVECTOR_REPO_REF")
+        
+        if env_val:
+            if self.DEFAULT_REPO_REF != "main" and env_val == reg_val:
+                # Persistent registry override propagated to process env -> ignore in pinned releases
                 return self.DEFAULT_REPO_REF
-            return override
+            return env_val
         return self.DEFAULT_REPO_REF
 
     def _default_app_image(self) -> str:
@@ -136,16 +132,15 @@ class Installer:
         return f"{self._IMAGE_REPO}:latest"
 
     def _resolve_app_image(self) -> str:
-        override = os.environ.get("APP_IMAGE", "").strip()
-        if not override:
-            override = self._read_windows_user_env("APP_IMAGE")
+        env_val = os.environ.get("APP_IMAGE", "").strip()
+        reg_val = self._read_windows_user_env("APP_IMAGE")
         default = self._default_app_image()
         
-        if override:
-            if self.DEFAULT_REPO_REF != "main" and not os.environ.get("APP_IMAGE", "").strip():
-                # Pinned release build + registry-only override → ignore stale override
+        if env_val:
+            if self.DEFAULT_REPO_REF != "main" and env_val == reg_val:
+                # Persistent registry override propagated to process env -> ignore in pinned releases
                 return default
-            return override
+            return env_val
             
         return default
 

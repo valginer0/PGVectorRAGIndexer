@@ -472,6 +472,10 @@ class MainWindow(QMainWindow):
                 config_set("client_id", client_id)
                 logger.info("Generated new client_id: %s", client_id)
 
+            # Make client_id available to SourceOpenManager for virtual root
+            # resolution, even if the registration API call below fails.
+            self.source_manager.client_id = client_id
+
             display_name = get("client_display_name") or get_default_display_name()
             os_type = get_os_type()
 

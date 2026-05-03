@@ -57,7 +57,7 @@ Share your thoughts via GitHub issues or email.
 - **Check documentation** - README.md, DEPLOYMENT.md, TESTING_GUIDE.md
 - **Search existing issues** - Your question may already be answered
 - **Create a new issue** - For questions not covered in docs
-- **Contact directly** - valginer0@gmail.com for specific inquiries
+- **Contact directly** - hello@ragvault.net for specific inquiries
 
 ## 🧪 Testing and Development Rules
 
@@ -85,7 +85,7 @@ If you find this project valuable:
 
 ## 📞 Contact
 
-**Email**: valginer0@gmail.com  
+**Email**: hello@ragvault.net  
 **GitHub**: https://github.com/valginer0/PGVectorRAGIndexer
 
 For commercial licensing or custom development, please contact via email.

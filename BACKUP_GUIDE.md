@@ -407,7 +407,7 @@ For backup issues:
 - Check logs in `./backups/backup.log`
 - Review Docker container logs
 - Verify disk space and permissions
-- Contact: valginer0@gmail.com
+- Contact: hello@ragvault.net
 
 ---
 

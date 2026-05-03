@@ -4,7 +4,7 @@ This Commercial License Agreement (“Agreement”) is entered into between:
 
 **Licensor:**  
 Valery Giner  
-Email: valginer0@gmail.com  
+Email: hello@ragvault.net  
 
 and
 

@@ -2,7 +2,7 @@
 
 This FAQ is intended to clarify common questions about commercial licensing.
 
-If you are unsure about your specific use case, email: valginer0@gmail.com
+If you are unsure about your specific use case, email: hello@ragvault.net
 
 ---
 
@@ -54,7 +54,7 @@ with your use case and scope.
 Redistribution, OEM usage, or bundling into a product generally requires additional
 terms and must be explicitly agreed in writing.
 
-Contact: valginer0@gmail.com
+Contact: hello@ragvault.net
 
 ---
 
@@ -71,7 +71,7 @@ OEM / Agency licenses are typically scoped to:
 - a defined project or engagement
 - non-transferable usage rights
 
-Please contact valginer0@gmail.com with a brief description of the project
+Please contact hello@ragvault.net with a brief description of the project
 and deployment scope to discuss appropriate terms.
 
 ---
@@ -81,7 +81,7 @@ and deployment scope to discuss appropriate terms.
 Hosted/managed service use cases typically require additional terms and must be
 explicitly agreed in writing.
 
-Contact: valginer0@gmail.com
+Contact: hello@ragvault.net
 
 ---
 
@@ -107,6 +107,6 @@ Template: [COMMERCIAL_LICENSE_REQUEST_TEMPLATE.md](./COMMERCIAL_LICENSE_REQUEST_
 ## 10) What if we are unsure whether our use case is commercial?
 
 If you are unsure, email a short description of your usage and scope to:
-valginer0@gmail.com
+hello@ragvault.net
 
 We aim to keep licensing simple and respond promptly.

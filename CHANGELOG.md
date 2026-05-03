@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.13.7] - 2026-05-03
+
+### Added
+- feat: cloud-path resolution for Windows virtual filesystem paths
+- feat: Auto-generate CHANGELOG.md entries from git commits during release process
+
+### Changed
+- Merge feature/cloud-path-resolution: cloud-path fallback, virtual root resolution, email decoupling
+- docs: Decouple personal email for IP sale preparation
+- docs: backfill CHANGELOG.md with v2.13.1 through v2.13.6 entries
+
 ## [2.13.6] - 2026-04-18
 
 ### Fixed

@@ -6,7 +6,7 @@ Use the template below to request a PGVectorRAGIndexer commercial license.
 
 ## Email
 
-**To:** valginer0@gmail.com  
+**To:** hello@ragvault.net  
 **Subject:** PGVectorRAGIndexer Commercial License Request — <Company Name>
 
 Hello Valery,

@@ -35,16 +35,36 @@ class SourceOpenManager(QObject):
     entry_removed = Signal(object)
     entries_cleared = Signal()
 
+    # Known cloud-storage marker substrings (case-insensitive match).
+    _CLOUD_MARKERS = ("my drive", "onedrive", "dropbox", "icloud", "iclouddrive", "google drive")
+
     def __init__(self, api_client, parent=None, max_entries: int = 20, project_root: Optional[Path] = None):
         super().__init__(parent)
         self.api_client = api_client
         self.max_entries = max_entries
         self.project_root = project_root
+        self.client_id: Optional[str] = None
         self._recent_entries: List[RecentEntry] = []
 
     # ... (existing methods) ...
 
-    def _normalize_path(self, path: str, warn: bool = True) -> Optional[Path]:
+    @staticmethod
+    def _is_cloud_candidate(path: str) -> bool:
+        """Check if *path* looks like a Windows cloud-storage virtual path.
+
+        Returns ``True`` when the path has a drive letter **and** contains a
+        known cloud-provider marker substring (e.g. ``My Drive``,
+        ``OneDrive``).  These paths are valid on Windows but invisible to
+        Python's ``Path.exists()``.
+        """
+        if sys.platform != "win32":
+            return False
+        if len(path) < 3 or path[1:3] not in (":\\", ":/"):
+            return False
+        lower = path.lower()
+        return any(marker in lower for marker in SourceOpenManager._CLOUD_MARKERS)
+
+    def _normalize_path(self, path: str, warn: bool = True, allow_unverified: bool = False) -> Optional[Path]:
         if not path:
             if warn:
                 QMessageBox.warning(
@@ -61,7 +81,17 @@ class SourceOpenManager(QObject):
             resolved = self._resolve_path_mismatch(path)
             if resolved:
                 return resolved
-                
+
+            # Cloud-path fallback: on Windows, cloud-storage virtual paths
+            # (Google Drive, OneDrive, etc.) are invisible to Path.exists()
+            # but can still be opened via the Windows shell.
+            if allow_unverified and self._is_cloud_candidate(path):
+                logger.warning(
+                    "Path does not exist locally but looks like a cloud-storage "
+                    "virtual path — returning unverified: %s", path
+                )
+                return normalized
+
             if warn:
                 QMessageBox.warning(
                     self._parent_widget(),
@@ -78,7 +108,8 @@ class SourceOpenManager(QObject):
 
         Handles:
         1. Windows paths on WSL  (C:\\Users\\... → /mnt/c/Users/...)
-        2. Fallback search by filename in project documents directory
+        2. Virtual root resolution via server-side path mapping
+        3. Fallback search by filename in project documents directory
         """
         logger.info(f"Attempting to resolve path mismatch for: {original_path}")
 
@@ -91,7 +122,27 @@ class SourceOpenManager(QObject):
                 logger.info(f"Resolved Windows path to WSL: {wsl_path}")
                 return wsl_path
 
-        # 2. Fallback: search by filename in project documents dir
+        # 2. Virtual root resolution — translate cross-client paths
+        if self.client_id and self.api_client:
+            try:
+                result = self.api_client.resolve_virtual_path(
+                    original_path, self.client_id
+                )
+                local_path = result.get("local_path")
+                if local_path:
+                    resolved = Path(local_path)
+                    if resolved.exists():
+                        logger.info(f"Resolved via virtual root: {resolved}")
+                        return resolved
+                    else:
+                        logger.debug(
+                            "Virtual root resolved to %s but path does not exist",
+                            resolved,
+                        )
+            except Exception as e:
+                logger.debug(f"Virtual root resolution failed (non-fatal): {e}")
+
+        # 3. Fallback: search by filename in project documents dir
         if not self.project_root:
             logger.warning("Project root not set in SourceOpenManager")
             return None
@@ -134,7 +185,11 @@ class SourceOpenManager(QObject):
         return next((e for e in self._recent_entries if e.path == str(normalized)), None)
 
     def open_path(self, path: str, mode: str = "default", auto_queue: bool = True) -> None:
-        normalized = self._normalize_path(path, warn=mode not in {"copy_path"})
+        normalized = self._normalize_path(
+            path,
+            warn=mode not in {"copy_path"},
+            allow_unverified=True,
+        )
         if normalized is None:
             return
 

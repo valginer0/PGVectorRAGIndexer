@@ -431,5 +431,227 @@ def test_set_entry_queued_no_change(source_manager):
         mock_signal.emit.assert_not_called()
 
 
+# ===========================================================================
+# Fix A: Cloud-path candidate detection & unverified fallback
+# ===========================================================================
 
+
+class TestIsCloudCandidate:
+    """Tests for SourceOpenManager._is_cloud_candidate (static method)."""
+
+    def test_google_drive_my_drive(self):
+        """Google Drive 'My Drive' path is a cloud candidate on Windows."""
+        with patch("sys.platform", "win32"):
+            assert SourceOpenManager._is_cloud_candidate(
+                r"C:\Users\v_ale\My Drive (zarnica@gmail.com)\docs\file.txt"
+            )
+
+    def test_onedrive_path(self):
+        """OneDrive path is a cloud candidate on Windows."""
+        with patch("sys.platform", "win32"):
+            assert SourceOpenManager._is_cloud_candidate(
+                r"C:\Users\john\OneDrive\Documents\report.pdf"
+            )
+
+    def test_dropbox_path(self):
+        """Dropbox path is a cloud candidate on Windows."""
+        with patch("sys.platform", "win32"):
+            assert SourceOpenManager._is_cloud_candidate(
+                r"C:\Users\john\Dropbox\shared\file.docx"
+            )
+
+    def test_google_drive_letter(self):
+        """Google Drive mapped to G:\\ with 'My Drive' is a cloud candidate."""
+        with patch("sys.platform", "win32"):
+            assert SourceOpenManager._is_cloud_candidate(
+                r"G:\My Drive\Finance\natural_gas.txt"
+            )
+
+    def test_regular_windows_path_not_candidate(self):
+        """Regular Windows path without cloud markers is NOT a candidate."""
+        with patch("sys.platform", "win32"):
+            assert not SourceOpenManager._is_cloud_candidate(
+                r"C:\Users\john\Desktop\file.txt"
+            )
+
+    def test_linux_path_not_candidate(self):
+        """Any path on Linux is NOT a cloud candidate."""
+        with patch("sys.platform", "linux"):
+            assert not SourceOpenManager._is_cloud_candidate(
+                r"C:\Users\john\OneDrive\file.txt"
+            )
+
+    def test_no_drive_letter(self):
+        """Relative path is NOT a cloud candidate."""
+        with patch("sys.platform", "win32"):
+            assert not SourceOpenManager._is_cloud_candidate(
+                "My Drive/file.txt"
+            )
+
+    def test_case_insensitive(self):
+        """Cloud marker matching is case-insensitive."""
+        with patch("sys.platform", "win32"):
+            assert SourceOpenManager._is_cloud_candidate(
+                r"C:\Users\john\MY DRIVE\file.txt"
+            )
+
+    def test_forward_slash_drive(self):
+        """Drive letter with forward slash is also recognized."""
+        with patch("sys.platform", "win32"):
+            assert SourceOpenManager._is_cloud_candidate(
+                "C:/Users/john/OneDrive/file.txt"
+            )
+
+
+class TestNormalizePathCloudFallback:
+    """Tests for _normalize_path with allow_unverified=True."""
+
+    def test_cloud_path_returned_when_unverified_allowed(self, source_manager):
+        """Cloud candidate path is returned when allow_unverified=True."""
+        path = r"C:\Users\v_ale\My Drive (zarnica@gmail.com)\docs\file.txt"
+        with patch("sys.platform", "win32"), \
+             patch("pathlib.Path.exists", return_value=False), \
+             patch.object(source_manager, "_resolve_path_mismatch", return_value=None):
+
+            result = source_manager._normalize_path(path, warn=False, allow_unverified=True)
+            assert result is not None
+            assert result == Path(path).expanduser()
+
+    def test_cloud_path_blocked_when_unverified_not_allowed(self, source_manager):
+        """Cloud candidate path returns None when allow_unverified=False."""
+        path = r"C:\Users\v_ale\My Drive (zarnica@gmail.com)\docs\file.txt"
+        with patch("sys.platform", "win32"), \
+             patch("pathlib.Path.exists", return_value=False), \
+             patch.object(source_manager, "_resolve_path_mismatch", return_value=None), \
+             patch("PySide6.QtWidgets.QMessageBox.warning"):
+
+            result = source_manager._normalize_path(path, warn=True, allow_unverified=False)
+            assert result is None
+
+    def test_non_cloud_path_still_fails(self, source_manager):
+        """Non-cloud Windows path still returns None even with allow_unverified=True."""
+        path = r"C:\Users\john\Desktop\missing.txt"
+        with patch("sys.platform", "win32"), \
+             patch("pathlib.Path.exists", return_value=False), \
+             patch.object(source_manager, "_resolve_path_mismatch", return_value=None), \
+             patch("PySide6.QtWidgets.QMessageBox.warning"):
+
+            result = source_manager._normalize_path(path, warn=True, allow_unverified=True)
+            assert result is None
+
+    def test_linux_cloud_path_not_returned(self, source_manager):
+        """On Linux, cloud-marker path still returns None (no cloud fallback)."""
+        path = r"C:\Users\john\OneDrive\file.txt"
+        with patch("sys.platform", "linux"), \
+             patch("pathlib.Path.exists", return_value=False), \
+             patch.object(source_manager, "_resolve_path_mismatch", return_value=None), \
+             patch("PySide6.QtWidgets.QMessageBox.warning"):
+
+            result = source_manager._normalize_path(path, warn=True, allow_unverified=True)
+            assert result is None
+
+    def test_reindex_rejects_cloud_path(self, source_manager, mock_api_client):
+        """trigger_reindex_path should fail for unverified cloud paths."""
+        path = r"C:\Users\v_ale\My Drive (zarnica@gmail.com)\file.txt"
+        with patch("sys.platform", "win32"), \
+             patch("pathlib.Path.exists", return_value=False), \
+             patch.object(source_manager, "_resolve_path_mismatch", return_value=None), \
+             patch("PySide6.QtWidgets.QMessageBox.warning"):
+
+            # trigger_reindex_path does NOT pass allow_unverified, so it stays False
+            result = source_manager.trigger_reindex_path(path)
+            assert result is False
+
+
+# ===========================================================================
+# Fix B: Virtual root resolution
+# ===========================================================================
+
+
+class TestResolveViaVirtualRoot:
+    """Tests for virtual root resolution in _resolve_path_mismatch."""
+
+    def test_resolve_via_virtual_root_success(self, source_manager, mock_api_client):
+        """Virtual root returns a local path that exists → resolved."""
+        source_manager.client_id = "client-abc"
+        original = "FinanceDocs/reports/q1.pdf"
+        local = Path("/local/finance/reports/q1.pdf")
+
+        mock_api_client.resolve_virtual_path.return_value = {
+            "virtual_path": original,
+            "local_path": str(local),
+        }
+
+        def selective_exists(self):
+            return str(self) == str(local)
+
+        with patch("pathlib.Path.exists", selective_exists):
+            result = source_manager._resolve_path_mismatch(original)
+            assert result == local
+
+        mock_api_client.resolve_virtual_path.assert_called_once_with(original, "client-abc")
+
+    def test_resolve_virtual_root_path_not_exist(self, source_manager, mock_api_client):
+        """Virtual root returns a path but it doesn't exist → falls through to rglob."""
+        source_manager.client_id = "client-abc"
+        original = "FinanceDocs/reports/q1.pdf"
+
+        mock_api_client.resolve_virtual_path.return_value = {
+            "virtual_path": original,
+            "local_path": "/nonexistent/path/q1.pdf",
+        }
+
+        expected_rglob = Path("/mock/project/documents/q1.pdf")
+
+        def selective_exists(self):
+            s = str(self)
+            if s == str(source_manager.project_root / "documents"):
+                return True
+            return False
+
+        with patch("pathlib.Path.exists", selective_exists), \
+             patch("pathlib.Path.rglob", return_value=[expected_rglob]):
+
+            result = source_manager._resolve_path_mismatch(original)
+            # Should fall through to rglob since virtual root path doesn't exist
+            assert result == expected_rglob
+
+    def test_resolve_no_client_id_skips_virtual_root(self, source_manager, mock_api_client):
+        """No client_id set → virtual root lookup is skipped entirely."""
+        source_manager.client_id = None
+        original = "FinanceDocs/reports/q1.pdf"
+
+        def selective_exists(self):
+            s = str(self)
+            if s == str(source_manager.project_root / "documents"):
+                return True
+            return False
+
+        with patch("pathlib.Path.exists", selective_exists), \
+             patch("pathlib.Path.rglob", return_value=[]):
+
+            source_manager._resolve_path_mismatch(original)
+
+        # Verify the virtual root API was never called
+        mock_api_client.resolve_virtual_path.assert_not_called()
+
+    def test_resolve_virtual_root_api_error(self, source_manager, mock_api_client):
+        """API error during virtual root resolution → logged, falls through gracefully."""
+        source_manager.client_id = "client-abc"
+        original = "FinanceDocs/reports/q1.pdf"
+
+        mock_api_client.resolve_virtual_path.side_effect = Exception("Connection refused")
+
+        def selective_exists(self):
+            s = str(self)
+            if s == str(source_manager.project_root / "documents"):
+                return True
+            return False
+
+        with patch("pathlib.Path.exists", selective_exists), \
+             patch("pathlib.Path.rglob", return_value=[]):
+
+            # Should not raise — graceful fallthrough
+            result = source_manager._resolve_path_mismatch(original)
+            assert result is None
 

@@ -43,6 +43,11 @@ class TestCommercialMd:
         assert "valginer0@gmail.com" not in _read("COMMERCIAL.md"), \
             "Old personal email must not appear in COMMERCIAL.md"
 
+    def test_community_license_contact_is_generic(self):
+        content = _read("LICENSE_COMMUNITY.txt")
+        assert "hello@ragvault.net" in content
+        assert "valginer0@gmail.com" not in content
+
     def test_license_stacking_documented(self):
         content = _read("COMMERCIAL.md").lower()
         assert "multiple organization licenses" in content or "license stacking" in content, \

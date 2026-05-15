@@ -155,6 +155,12 @@ class TestAPIConfig:
             config = APIConfig(log_level=level)
             assert config.log_level == level
 
+    def test_rate_limit_must_be_non_negative(self):
+        """Test validation for rate limit configuration."""
+        assert APIConfig(rate_limit_per_minute=0).rate_limit_per_minute == 0
+        with pytest.raises(ValidationError):
+            APIConfig(rate_limit_per_minute=-1)
+
 
 class TestAppConfig:
     """Tests for AppConfig."""

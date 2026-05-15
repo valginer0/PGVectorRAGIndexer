@@ -437,24 +437,16 @@ echo ".env" >> .gitignore
 
 ### 4. Rate Limiting
 
-Install and configure:
+PGVectorRAGIndexer includes in-process API rate limiting. Configure it with:
 
 ```bash
-pip install slowapi
-
-# In api.py:
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
-
-limiter = Limiter(key_func=get_remote_address)
-app.state.limiter = limiter
-app.add_exception_handler(429, _rate_limit_exceeded_handler)
-
-@app.post("/search")
-@limiter.limit("10/minute")
-async def search_documents(request: Request, search_req: SearchRequest):
-    ...
+API_RATE_LIMIT_PER_MINUTE=60
 ```
+
+Set `API_RATE_LIMIT_PER_MINUTE=0` only when an upstream reverse proxy or API
+gateway is enforcing equivalent limits. Multi-worker or horizontally scaled
+deployments should also add shared-store or reverse-proxy rate limiting because
+the built-in limiter is per-process.
 
 ## 📊 Monitoring & Logging
 

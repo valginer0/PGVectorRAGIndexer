@@ -34,6 +34,7 @@ All 18 features from v5 (#0–#17) are **shipped and tested**:
 - Desktop admin console with full CRUD (users, API keys, groups, retention, compliance)
 - Organization edition with 3-tier licensing (Community/Team/Organization)
 - Admin console capability probing and permission-aware UI gating
+- Server-side rate limiting with `API_RATE_LIMIT_PER_MINUTE` and `X-RateLimit-*` response headers
 - 1527+ automated tests across 106 test files
 
 ---
@@ -58,7 +59,7 @@ Revised based on external review and internal analysis.
 | # | Feature | Effort | Why now |
 |---|---------|--------|---------|
 | 18 | First-Run Onboarding Wizard | 8–12h | Reduces time-to-value from hours to minutes |
-| 19 | Server-Side Rate Limiting | 4–6h | Checks critical security box |
+| 19 | Server-Side Rate Limiting | ✅ Done | Checks critical security box |
 | 20 | Seat Enforcement | 3–5h | Enforces what we sell |
 
 ### Phase 2: Enterprise Readiness
@@ -113,24 +114,24 @@ Key deliverables:
 ---
 
 ### 19. Server-Side Rate Limiting
-**Effort**: ~4–6h | **Dependencies**: None | **Edition**: Both
+**Status**: ✅ Done | **Dependencies**: None | **Edition**: Both
 
-**Problem**: Any enterprise security review will ask "what prevents API abuse?" The config field `rate_limit_per_minute` exists but isn't enforced. Client-side 429 handling exists but the server never sends 429.
+**Problem**: Any enterprise security review will ask "what prevents API abuse?" The server now enforces `API_RATE_LIMIT_PER_MINUTE` with an in-process fixed-window limiter. Larger multi-worker deployments should still add reverse-proxy or shared-store limits.
 
-Key deliverables:
-- SlowAPI middleware on FastAPI (or equivalent)
-- Per-API-key rate limiting (configurable via env var, default: 60 req/min)
-- `429 Too Many Requests` response with `Retry-After` header
-- Rate limit headers on every response: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+Shipped:
+- In-process FastAPI middleware
+- Per-API-key or client-IP rate limiting (configurable via env var, default: 60 req/min)
+- `429 Too Many Requests` response
+- Rate limit headers on every limited API response: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+
+Future extensions if customers need stricter controls:
 - Separate limits for read vs write endpoints (searches vs indexing)
 - Admin endpoints exempt (or higher limit)
 - Activity log entry on rate limit triggers
 
 Configuration:
 ```
-RATE_LIMIT_DEFAULT=60/minute
-RATE_LIMIT_SEARCH=120/minute
-RATE_LIMIT_INDEX=30/minute
+API_RATE_LIMIT_PER_MINUTE=60
 ```
 
 **What it does NOT do**: Per-user quotas (document count, storage) — that's a separate feature if demand exists.

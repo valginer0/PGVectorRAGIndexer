@@ -230,6 +230,14 @@ class APIConfig(BaseSettings):
         description='Allowed Host headers (TrustedHostMiddleware). Set to specific hostnames in production.'
     )
 
+    @field_validator('rate_limit_per_minute')
+    @classmethod
+    def validate_rate_limit(cls, v: int) -> int:
+        """Validate rate limit; 0 disables in-process enforcement."""
+        if v < 0:
+            raise ValueError('rate_limit_per_minute must be 0 or greater')
+        return v
+
 
 class AppConfig(BaseSettings):
     """Main application configuration."""

@@ -20,6 +20,7 @@ os.environ['POSTGRES_PASSWORD'] = 'rag_password'
 # Disable auth for all tests by default
 os.environ.pop('API_AUTH_FORCE_ALL', None)
 os.environ['API_REQUIRE_AUTH'] = 'false'
+os.environ['API_RATE_LIMIT_PER_MINUTE'] = '0'
 
 
 @pytest.fixture(scope='session')

@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, UploadF
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
+from rate_limit import RateLimitMiddleware
 from api_models import (
     IndexRequest, IndexResponse, SearchRequest, SearchResultModel, 
     SearchResponse, DocumentInfo, DocumentListResponse, HealthResponse, 
@@ -207,10 +208,25 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["X-License-Overage", "X-License-Overage-Count", "Warning"],
+    expose_headers=[
+        "X-License-Overage",
+        "X-License-Overage-Count",
+        "Warning",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Reset",
+    ],
 )
 
-# Add license overage shame middleware (no-op for Community edition)
+# Add in-process API rate limiting. Set API_RATE_LIMIT_PER_MINUTE=0 to disable
+# and use reverse-proxy or shared-store limits for large multi-worker installs.
+if config.api.rate_limit_per_minute > 0:
+    app.add_middleware(
+        RateLimitMiddleware,
+        limit_per_minute=config.api.rate_limit_per_minute,
+    )
+
+# Add license overage warning middleware (no-op for Community edition)
 from license_overage import LicenseOverageMiddleware
 app.add_middleware(LicenseOverageMiddleware)
 

@@ -99,7 +99,7 @@ fi
 echo -e "  2. Run tests"
 echo -e "  3. Create git tag ${GREEN}v$NEW_VERSION${NC}"
 echo -e "  4. Push tag to GitHub"
-echo -e "  5. Trigger Docker build and publish to GitHub Container Registry"
+echo -e "  5. Build and publish Docker image to GitHub Container Registry"
 echo ""
 
 if [ "$CONFIRM" = true ]; then
@@ -205,7 +205,7 @@ if [ "$NEW_VERSION" != "$CURRENT_VERSION" ]; then
     # Since we enforced a clean tree at the start, this safely captures all newly bumped version files
     # without needing a hardcoded list, though it will catch side-effects if any exist.
     git add -u
-    git commit -m "chore: Bump version to v$NEW_VERSION [skip ci]"
+    git commit -m "chore: Bump version to v$NEW_VERSION"
     echo -e "${GREEN}✓ Committed version bump${NC}"
     
     # Also commit and push website changes if they exist

@@ -94,6 +94,7 @@ echo -e "  3. Push tag to GitHub"
 echo ""
 echo -e "${YELLOW}⚠ Note: Docker image will NOT be rebuilt.${NC}"
 echo -e "${YELLOW}  Use ./release.sh for full releases with Docker.${NC}"
+echo -e "${YELLOW}  If the tag has no matching GHCR image, release installer upload will fail by design.${NC}"
 echo ""
 
 if [ "$CONFIRM" = true ]; then
@@ -149,4 +150,5 @@ echo -e "  3. ✓ Pushed to GitHub"
 echo ""
 echo -e "${YELLOW}Note: Docker image was NOT rebuilt.${NC}"
 echo -e "${YELLOW}      The latest Docker image is still the previous version.${NC}"
+echo -e "${YELLOW}      Windows installer release upload requires a matching GHCR image tag.${NC}"
 echo ""

@@ -69,6 +69,90 @@ jobs:
 
         print(f"Pinned DEFAULT_REPO_REF and $Branch to {tag}")
 
+    - name: Verify release Docker image pin
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: python
+      run: |
+        import os
+        import tempfile
+        import sys
+
+        tag = os.environ["GITHUB_REF"].replace("refs/tags/", "")
+        expected_version = tag.removeprefix("v")
+        expected_image = f"ghcr.io/valginer0/pgvectorragindexer:{expected_version}"
+
+        os.environ.pop("APP_IMAGE", None)
+        os.environ.pop("PGVECTOR_REPO_REF", None)
+        sys.path.insert(0, "windows_installer")
+
+        from installer_logic import Installer
+
+        with tempfile.TemporaryDirectory() as install_dir:
+            with open(os.path.join(install_dir, "VERSION"), "w", encoding="utf-8") as handle:
+                handle.write("0.0.0")
+            installer = Installer(install_dir=install_dir)
+
+        assert installer.repo_ref == tag, f"expected release ref {tag}, got {installer.repo_ref}"
+        assert installer.app_image == expected_image, (
+            f"expected release image {expected_image}, got {installer.app_image}"
+        )
+
+    - name: Verify release Docker image is published
+      if: startsWith(github.ref, 'refs/tags/v')
+      shell: python
+      run: |
+        import json
+        import os
+        import time
+        import urllib.error
+        import urllib.request
+
+        package = "valginer0/pgvectorragindexer"
+        tag = os.environ["GITHUB_REF"].replace("refs/tags/v", "")
+        manifest_url = f"https://ghcr.io/v2/{package}/manifests/{tag}"
+        token_url = f"https://ghcr.io/token?service=ghcr.io&scope=repository:{package}:pull"
+        accept = (
+            "application/vnd.oci.image.index.v1+json, "
+            "application/vnd.docker.distribution.manifest.list.v2+json, "
+            "application/vnd.oci.image.manifest.v1+json, "
+            "application/vnd.docker.distribution.manifest.v2+json"
+        )
+
+        def get_token():
+            with urllib.request.urlopen(token_url, timeout=30) as response:
+                return json.load(response)["token"]
+
+        def image_exists():
+            token = get_token()
+            request = urllib.request.Request(
+                manifest_url,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": accept,
+                    "User-Agent": "PGVectorRAGIndexer-release-check",
+                },
+                method="HEAD",
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=30) as response:
+                    return response.status == 200
+            except urllib.error.HTTPError as exc:
+                if exc.code == 404:
+                    return False
+                raise
+
+        for attempt in range(30):
+            if image_exists():
+                print(f"Found GHCR release image ghcr.io/{package}:{tag}")
+                break
+            print(f"Waiting for GHCR release image {tag} ({attempt + 1}/30)...")
+            time.sleep(20)
+        else:
+            raise SystemExit(
+                f"Release image ghcr.io/{package}:{tag} was not published; "
+                "refusing to upload an installer that could pull an older backend."
+            )
+
     - name: Build installer (onedir, no UPX)
       working-directory: windows_installer
       run: |

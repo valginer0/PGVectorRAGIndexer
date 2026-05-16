@@ -23,6 +23,30 @@ def test_docker_manager_resolves_app_image_from_windows_user_env(monkeypatch):
         assert manager._resolve_app_image() == "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
 
 
+def test_docker_manager_ignores_stale_release_image_from_windows_user_env(monkeypatch):
+    monkeypatch.delenv("APP_IMAGE", raising=False)
+    manager = DockerManager(PROJECT_ROOT)
+
+    with patch.object(manager, "_read_windows_user_env", return_value="ghcr.io/valginer0/pgvectorragindexer:2.14.4"):
+        assert manager._resolve_app_image() == DockerManager._default_app_image()
+
+
+def test_docker_manager_ignores_stale_release_image_inherited_from_windows_user_env(monkeypatch):
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:2.14.4")
+    manager = DockerManager(PROJECT_ROOT)
+
+    with patch.object(manager, "_read_windows_user_env", return_value="ghcr.io/valginer0/pgvectorragindexer:2.14.4"):
+        assert manager._resolve_app_image() == DockerManager._default_app_image()
+
+
+def test_docker_manager_ignores_stale_release_image_from_process_env(monkeypatch):
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:2.14.4")
+    manager = DockerManager(PROJECT_ROOT)
+
+    with patch.object(manager, "_read_windows_user_env", return_value=""):
+        assert manager._resolve_app_image() == DockerManager._default_app_image()
+
+
 def test_run_compose_command_uses_env_file_and_cleans_up(monkeypatch, tmp_path):
     manager = DockerManager(tmp_path)
     monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab")

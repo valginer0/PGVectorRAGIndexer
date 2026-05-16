@@ -18,7 +18,7 @@ MAIN_DOC_PATTERNS = [
     ("README.md", [
         (r'^# PGVectorRAGIndexer v[\d.]+', '# PGVectorRAGIndexer v{full}'),
         (r"^## 🋹 What's New in v[\d.]+", "## 🋹 What's New in v{full}"),
-        (r'^### 🆕 Latest Features \(v[\d.]+\)', '### 🆕 Latest Features (v{full})'),
+        (r'^### 🆕 Latest (Features|Fixes) \(v[\d.]+\)', r'### 🆕 Latest \1 (v{full})'),
     ]),
     ("QUICK_START.md", [
         (r'^# Quick Start Guide - PGVectorRAGIndexer v[\d.]+', 

@@ -8,20 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- PowerPoint `.pptx` indexing no longer depends on unstructured's optional PPTX extras; decks are extracted with `python-pptx` when available and a built-in OpenXML fallback otherwise.
-- Image OCR now normalizes phone/camera image formats to an OCR-safe PNG before calling Tesseract, preventing valid `.jpg` files from failing as `Unsupported image format/type`.
+- Windows release installers and the desktop Docker manager now ignore stale same-project `APP_IMAGE` release-tag overrides that point to an older backend image; non-version debug/custom image tags still work.
+- Full releases no longer mark the version bump commit as `[skip ci]`, and the Windows installer release workflow now refuses to upload an MSI unless the matching GHCR release image tag exists.
 - Windows drive path bulk-delete filters now normalize backslashes consistently and accept glob-style patterns such as `G:\*` and `*G*`.
 - The Documents tree now offers folder-level indexed-document deletion for stale paths such as missing Google Drive `G:` mounts.
 
 ## [2.14.5] - 2026-05-16
 
 ### Fixed
-- Fix PPTX indexing and image OCR format handling
+- PowerPoint `.pptx` indexing no longer depends on unstructured's optional PPTX extras; decks are extracted with `python-pptx` when available and a built-in OpenXML fallback otherwise.
+- Image OCR now normalizes phone/camera image formats to an OCR-safe PNG before calling Tesseract, preventing valid `.jpg` files from failing as `Unsupported image format/type`.
 
 ### Changed
-- chore: restructure documentation for release
-- Restore unreleased indexing fix docs
-- Revert manual visible version bump
+- Restructured documentation for release readiness.
 
 ## [2.14.4] - 2026-05-16
 

@@ -6,6 +6,7 @@ import subprocess
 import logging
 import time
 import platform
+import re
 from typing import Optional, Tuple
 from pathlib import Path
 import os
@@ -83,8 +84,52 @@ class DockerManager:
             return value
         return default
 
+    @classmethod
+    def _split_project_image(cls, image: str) -> Tuple[str, str]:
+        image = image.strip()
+        if ":" not in image:
+            return image, ""
+        repo, tag = image.rsplit(":", 1)
+        return repo.lower(), tag
+
+    @classmethod
+    def _is_stale_release_image_override(cls, override: str, default: str) -> bool:
+        override_repo, override_tag = cls._split_project_image(override)
+        default_repo, default_tag = cls._split_project_image(default)
+        if override_repo != default_repo or override_repo != cls._IMAGE_REPO:
+            return False
+        if not re.fullmatch(r"\d+\.\d+\.\d+", override_tag):
+            return False
+        if not re.fullmatch(r"\d+\.\d+\.\d+", default_tag):
+            return False
+        return override_tag != default_tag
+
     def _resolve_app_image(self) -> str:
-        return self._resolve_override("APP_IMAGE", self._default_app_image())
+        default = self._default_app_image()
+        env_val = os.environ.get("APP_IMAGE", "").strip()
+        reg_val = self._read_windows_user_env("APP_IMAGE")
+
+        if env_val:
+            if self._is_stale_release_image_override(env_val, default):
+                logger.warning(
+                    "Ignoring stale APP_IMAGE environment value %s; using %s",
+                    env_val,
+                    default,
+                )
+                return default
+            return env_val
+
+        if reg_val:
+            if self._is_stale_release_image_override(reg_val, default):
+                logger.warning(
+                    "Ignoring stale APP_IMAGE Windows user environment value %s; using %s",
+                    reg_val,
+                    default,
+                )
+                return default
+            return reg_val
+
+        return default
 
     def _run_compose_command(self, compose_args: list, timeout: int) -> subprocess.CompletedProcess:
         env_file_path = None

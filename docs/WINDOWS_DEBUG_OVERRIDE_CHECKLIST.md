@@ -15,6 +15,10 @@ Primary debug image:
 
 - `ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab`
 
+Use a non-version image tag for debug work. Public release installers and the desktop app
+ignore stale same-project semver image overrides such as `ghcr.io/valginer0/pgvectorragindexer:2.14.4`
+when the installed app expects a newer release.
+
 ---
 
 ## GitHub Actions
@@ -121,7 +125,11 @@ To confirm defaults still behave correctly (and to ensure you don't break future
 ```powershell
 [Environment]::SetEnvironmentVariable("PGVECTOR_REPO_REF", $null, "User")
 [Environment]::SetEnvironmentVariable("APP_IMAGE", $null, "User")
+[Environment]::SetEnvironmentVariable("APP_IMAGE", $null, "Machine")
 ```
+
+The `Machine` cleanup requires an elevated PowerShell window; skip it if no machine-level
+override was created.
 
 Then run the MSI again and verify:
 

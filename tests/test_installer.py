@@ -11,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'windows_installer')))
 
 from installer_logic import Installer, InstallStep
+sys.modules.pop("version", None)
 
 PROJECT_ROOT = Path(__file__).parent.parent
 
@@ -342,10 +343,59 @@ def test_resolve_app_image_defaults_to_latest(monkeypatch, tmp_path):
     assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:latest"
 
 
+def test_resolve_app_image_prefers_release_ref_over_old_install_version(monkeypatch, tmp_path):
+    monkeypatch.delenv("APP_IMAGE", raising=False)
+    monkeypatch.delenv("PGVECTOR_REPO_REF", raising=False)
+    monkeypatch.setattr(Installer, "DEFAULT_REPO_REF", "v2.14.5")
+    install_dir = tmp_path / "install-image-pinned-release"
+    install_dir.mkdir()
+    (install_dir / "VERSION").write_text("2.14.4", encoding="utf-8")
+
+    installer = Installer(install_dir=str(install_dir))
+    installer._log = MagicMock()
+
+    assert installer.repo_ref == "v2.14.5"
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:2.14.5"
+
+
+def test_resolve_app_image_tracks_explicit_tag_ref_override(monkeypatch, tmp_path):
+    monkeypatch.delenv("APP_IMAGE", raising=False)
+    monkeypatch.setenv("PGVECTOR_REPO_REF", "v2.14.4")
+    install_dir = tmp_path / "install-image-ref-override"
+    install_dir.mkdir()
+    (install_dir / "VERSION").write_text("2.14.5", encoding="utf-8")
+
+    installer = Installer(install_dir=str(install_dir))
+    installer._log = MagicMock()
+
+    assert installer.repo_ref == "v2.14.4"
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:2.14.4"
+
+
 def test_resolve_app_image_uses_override(monkeypatch, tmp_path):
     monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab")
     installer = Installer(install_dir=str(tmp_path / "install-image-override"))
     installer._log = MagicMock()
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
+
+
+def test_resolve_app_image_ignores_stale_project_release_override_for_pinned_release(monkeypatch, tmp_path):
+    monkeypatch.setattr(Installer, "DEFAULT_REPO_REF", "v2.14.5")
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:2.14.4")
+
+    installer = Installer(install_dir=str(tmp_path / "install-image-stale-override"))
+    installer._log = MagicMock()
+
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:2.14.5"
+
+
+def test_resolve_app_image_allows_debug_override_for_pinned_release(monkeypatch, tmp_path):
+    monkeypatch.setattr(Installer, "DEFAULT_REPO_REF", "v2.14.5")
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab")
+
+    installer = Installer(install_dir=str(tmp_path / "install-image-debug-override"))
+    installer._log = MagicMock()
+
     assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
 
 

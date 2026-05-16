@@ -5,6 +5,7 @@ Contains all installation functions: prerequisite checking, downloads, setup.
 
 import os
 import sys
+import re
 import subprocess
 import shutil
 import urllib.request
@@ -108,6 +109,31 @@ class Installer:
 
         return default
 
+    @staticmethod
+    def _version_from_ref(repo_ref: str) -> str:
+        match = re.fullmatch(r"v?(\d+\.\d+\.\d+)", (repo_ref or "").strip())
+        return match.group(1) if match else ""
+
+    @classmethod
+    def _split_project_image(cls, image: str) -> tuple[str, str]:
+        image = image.strip()
+        if ":" not in image:
+            return image.lower(), ""
+        repo, tag = image.rsplit(":", 1)
+        return repo.lower(), tag
+
+    @classmethod
+    def _is_stale_release_image_override(cls, override: str, default: str) -> bool:
+        override_repo, override_tag = cls._split_project_image(override)
+        default_repo, default_tag = cls._split_project_image(default)
+        if override_repo != default_repo or override_repo != cls._IMAGE_REPO:
+            return False
+        if not re.fullmatch(r"\d+\.\d+\.\d+", override_tag):
+            return False
+        if not re.fullmatch(r"\d+\.\d+\.\d+", default_tag):
+            return False
+        return override_tag != default_tag
+
     def _resolve_repo_ref(self) -> str:
         env_val = os.environ.get("PGVECTOR_REPO_REF", "").strip()
         reg_val = self._read_windows_user_env("PGVECTOR_REPO_REF")
@@ -122,7 +148,11 @@ class Installer:
         return default
 
     def _default_app_image(self) -> str:
-        """Return version-pinned image tag read from the VERSION file."""
+        """Return the Docker image tag that matches the selected backend ref."""
+        repo_version = self._version_from_ref(getattr(self, "repo_ref", ""))
+        if repo_version:
+            return f"{self._IMAGE_REPO}:{repo_version}"
+
         try:
             version_file = Path(self.INSTALL_DIR) / "VERSION"
             if version_file.exists():
@@ -142,6 +172,10 @@ class Installer:
         if override:
             if self.DEFAULT_REPO_REF != "main" and override == reg_val:
                 # Persistent registry override (or propagated) -> ignore in pinned releases
+                return default
+            if self.DEFAULT_REPO_REF != "main" and self._is_stale_release_image_override(override, default):
+                # Stale user, machine, or inherited APP_IMAGE should not move a release installer
+                # back to a previous project release image. Non-version debug/custom tags still work.
                 return default
             return override
             

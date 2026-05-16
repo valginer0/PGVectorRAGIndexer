@@ -8,8 +8,8 @@ Get up and running in 5 minutes!
 
 ## 🆕 What's New in v2.14.5
 
-- **PowerPoint Indexing Robustness**: `.pptx` files no longer fail when unstructured's optional PPTX extras are missing.
-- **Image OCR Format Normalization**: Phone/camera `.jpg` files are normalized before OCR so valid images are not rejected by Tesseract's helper.
+- **PowerPoint Indexing Robustness**: `.pptx` files no longer fail when unstructured's optional PPTX extras are missing; supported decks use native extraction with a built-in OpenXML fallback.
+- **Image OCR Format Normalization**: Phone/camera images that open as special Pillow formats are normalized before OCR so valid `.jpg` files are not rejected by Tesseract's helper.
 
 ### Recent Fixes (v2.14.4)
 

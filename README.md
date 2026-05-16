@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.14.5
+# PGVectorRAGIndexer v2.14.4
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -87,14 +87,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ---
 
-## 🋹 What's New in v2.14.5
+## 🋹 What's New in v2.14.4
 
-### 🆕 Latest Fixes (v2.14.5)
-
-- **✅ PowerPoint Indexing Robustness**: `.pptx` files no longer fail when unstructured's optional PPTX extras are missing; native extraction and a built-in OpenXML fallback cover supported decks.
-- **✅ Image OCR Format Normalization**: Phone/camera images that open as special Pillow formats are normalized before OCR, preventing valid `.jpg` files from failing as unsupported.
-
-### Recent Fixes (v2.14.4)
+### 🆕 Latest Fixes (v2.14.4)
 
 - **✅ Database Pool Backpressure**: Burst indexing now waits for available PostgreSQL pool capacity and uses configured overflow slots instead of failing immediately with connection pool exhaustion.
 

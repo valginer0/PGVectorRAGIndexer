@@ -1,6 +1,13 @@
 # PGVectorRAGIndexer — Team & Organization Deployment Guide
 
 > **For teams and organizations: deploy one shared server and connect desktop clients from any machine on your network. Your data stays on your infrastructure.**
+>
+> **Which deployment guide is this?**
+> This `docs/DEPLOYMENT.md` guide is the team/organization overview for shared
+> server mode, desktop client remote setup, server-first automation, and
+> platform support. For the deeper production operations runbook covering
+> Docker/Kubernetes, reverse proxies, security, backups, monitoring, and
+> troubleshooting, see the top-level [DEPLOYMENT.md](../DEPLOYMENT.md).
 
 ## Architecture Overview
 

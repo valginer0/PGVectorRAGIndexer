@@ -48,7 +48,7 @@ The default configuration uses local embedding models. No external API calls are
 
 ### Can I use this for commercial purposes?
 
-Yes. Commercial licensing is available for teams and organizations. See [DEPLOYMENT.md](DEPLOYMENT.md) for team deployment options.
+Yes. Commercial licensing is available for teams and organizations. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for team deployment options.
 
 ---
 

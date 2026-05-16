@@ -1,4 +1,11 @@
-# Deployment Guide - PGVectorRAGIndexer v2.14.1
+# Advanced Production Deployment Guide - PGVectorRAGIndexer v2.14.1
+
+> **Which deployment guide is this?**
+> This top-level `DEPLOYMENT.md` is the advanced production runbook for
+> server administration, Docker/Kubernetes, reverse proxies, security,
+> backups, monitoring, and troubleshooting. For the shorter team/organization
+> guide focused on one shared server plus many desktop clients, see
+> [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 > **📌 Note:** For quick Docker-only deployment (recommended for most users), see:
 > - **Linux/WSL Setup**: [QUICK_START.md](QUICK_START.md)

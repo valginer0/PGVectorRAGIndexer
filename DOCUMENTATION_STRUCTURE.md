@@ -19,6 +19,7 @@ This document explains the purpose of each documentation file and when to use th
 | Document | Purpose | Audience |
 |----------|---------|----------|
 | **[DEPLOYMENT.md](DEPLOYMENT.md)** | Production deployment (systemd, nginx, cloud) | DevOps, production deployments |
+| **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** | Team/organization shared-server deployment | Teams, organizations, desktop clients using a shared server |
 | **[BACKUP_GUIDE.md](BACKUP_GUIDE.md)** | Database backup and recovery | System administrators |
 | **[TESTING_GUIDE.md](TESTING_GUIDE.md)** | Running tests, test structure | Developers, QA |
 
@@ -67,6 +68,7 @@ This document explains the purpose of each documentation file and when to use th
 - **"...get started quickly (Docker)"** → [QUICK_START.md](QUICK_START.md)
 
 - **"...deploy to production"** → [DEPLOYMENT.md](DEPLOYMENT.md)
+- **"...deploy for a team or organization"** → [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 - **"...backup my data"** → [BACKUP_GUIDE.md](BACKUP_GUIDE.md)
 - **"...run tests"** → [TESTING_GUIDE.md](TESTING_GUIDE.md)
 - **"...see what changed"** → [CHANGELOG.md](CHANGELOG.md)

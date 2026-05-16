@@ -1,4 +1,5 @@
 import pytest
+import json
 from fastapi.testclient import TestClient
 from api import app
 
@@ -59,3 +60,58 @@ class TestManagePreviewPathFilter:
         assert resp.status_code == 200
         data = resp.json()
         assert data["document_count"] >= 1
+
+    def test_bulk_delete_matches_missing_google_drive_patterns(self, client, db_manager):
+        rows = [
+            (
+                "g-doc-1",
+                r"G:\My Drive\Obsolete\fileA.txt",
+                {"type": "cloud", "custom_source_uri": r"G:\My Drive\Obsolete\fileA.txt"},
+            ),
+            (
+                "g-doc-2",
+                r"G:\Shared drives\Archive\fileB.txt",
+                {"type": "cloud", "custom_source_uri": r"G:\Shared drives\Archive\fileB.txt"},
+            ),
+            (
+                "c-doc-1",
+                r"C:\Users\me\Documents\keep.txt",
+                {"type": "local", "custom_source_uri": r"C:\Users\me\Documents\keep.txt"},
+            ),
+        ]
+        with db_manager.get_cursor() as cursor:
+            for doc_id, source_uri, metadata in rows:
+                cursor.execute(
+                    """
+                    INSERT INTO document_chunks
+                    (document_id, chunk_index, text_content, source_uri, metadata)
+                    VALUES (%s, 0, %s, %s, %s::jsonb)
+                    """,
+                    (doc_id, f"content for {doc_id}", source_uri, json.dumps(metadata)),
+                )
+
+        for pattern, expected_count in [
+            (r"G:\*", 2),
+            ("*G*", 2),
+            (r"G:\My Drive\Obsolete\fileA.txt", 1),
+            ("G:/My Drive/%", 1),
+        ]:
+            resp = client.post(
+                "/documents/bulk-delete",
+                json={"filters": {"source_uri_like": pattern}, "preview": True},
+            )
+
+            assert resp.status_code == 200
+            assert resp.json()["document_count"] == expected_count
+
+        delete_resp = client.post(
+            "/documents/bulk-delete",
+            json={"filters": {"source_uri_like": r"G:\*"}, "preview": False},
+        )
+
+        assert delete_resp.status_code == 200
+        assert delete_resp.json()["chunks_deleted"] == 2
+
+        with db_manager.get_cursor() as cursor:
+            cursor.execute("SELECT document_id FROM document_chunks ORDER BY document_id")
+            assert [row[0] for row in cursor.fetchall()] == ["c-doc-1"]

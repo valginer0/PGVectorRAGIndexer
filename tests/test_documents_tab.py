@@ -266,6 +266,26 @@ def test_delete_finished_failure(documents_tab):
         mock_crit.assert_called_once()
         assert "failed" in documents_tab.status_label.text()
 
+def test_folder_source_uri_like_pattern_normalizes_windows_drive(documents_tab):
+    assert documents_tab._folder_source_uri_like_pattern(r"G:\My Drive") == "G:/My Drive/%"
+    assert documents_tab._folder_source_uri_like_pattern("G:") == "G:/%"
+
+def test_delete_folder_documents_uses_exact_tree_prefix(documents_tab, mock_api_client):
+    mock_api_client.bulk_delete_preview.return_value = {"document_count": 2}
+    mock_api_client.bulk_delete.return_value = {"chunks_deleted": 8}
+
+    with patch("PySide6.QtWidgets.QMessageBox.question", return_value=QMessageBox.Yes), \
+         patch("PySide6.QtWidgets.QMessageBox.information") as mock_info, \
+         patch.object(documents_tab, "_refresh_current_view") as mock_refresh:
+
+        documents_tab.delete_folder_documents(r"G:\My Drive", "My Drive")
+
+    expected_filters = {"source_uri_like": "G:/My Drive/%"}
+    mock_api_client.bulk_delete_preview.assert_called_once_with(expected_filters)
+    mock_api_client.bulk_delete.assert_called_once_with(expected_filters)
+    mock_info.assert_called_once()
+    mock_refresh.assert_called_once()
+
 def test_pagination_limits(documents_tab):
     """Test pagination boundary limits."""
     documents_tab.total_documents = 50

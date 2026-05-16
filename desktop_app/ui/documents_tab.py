@@ -669,43 +669,127 @@ class DocumentsTab(QWidget):
 
     def _show_tree_context_menu(self, pos) -> None:
         """Context menu for tree view items."""
-        if not self.source_manager:
-            return
         index = self._doc_tree.indexAt(pos)
         if not index.isValid():
             return
         node = self._tree_model.node_for_index(index)
-        if node.node_type != "file" or not node.path:
+        if node.node_type not in ("file", "folder") or not node.path:
             return
 
         source_uri = node.path
         menu = QMenu(self)
-        open_action = menu.addAction("Open")
-        open_with_action = menu.addAction("Open with…")
-        show_in_folder_action = menu.addAction("Show in Folder")
         copy_path_action = menu.addAction("Copy Path")
+        delete_folder_action = None
 
-        entry = self.source_manager.find_entry(source_uri)
-        queued = entry.queued if entry else False
-        queue_label = "Unqueue from Reindex" if queued else "Queue for Reindex"
-        queue_action = menu.addAction(queue_label)
-        reindex_action = menu.addAction("Reindex Now")
-        remove_action = menu.addAction("Remove from Recent")
+        if node.node_type == "folder":
+            delete_folder_action = menu.addAction("Delete Folder Documents...")
+
+        open_action = open_with_action = show_in_folder_action = None
+        queue_action = reindex_action = remove_action = None
+        if node.node_type == "file" and self.source_manager:
+            open_action = menu.addAction("Open")
+            open_with_action = menu.addAction("Open with…")
+            show_in_folder_action = menu.addAction("Show in Folder")
+
+            entry = self.source_manager.find_entry(source_uri)
+            queued = entry.queued if entry else False
+            queue_label = "Unqueue from Reindex" if queued else "Queue for Reindex"
+            queue_action = menu.addAction(queue_label)
+            reindex_action = menu.addAction("Reindex Now")
+            remove_action = menu.addAction("Remove from Recent")
 
         action = menu.exec(self._doc_tree.viewport().mapToGlobal(pos))
         if action is None:
             return
-        if action == open_action:
+        if action == copy_path_action:
+            if node.node_type == "file" and self.source_manager:
+                self.source_manager.open_path(source_uri, mode="copy_path", auto_queue=False)
+            else:
+                from PySide6.QtWidgets import QApplication
+                QApplication.clipboard().setText(source_uri)
+        elif action == delete_folder_action:
+            self.delete_folder_documents(source_uri, node.name)
+        elif action == open_action:
             self.source_manager.open_path(source_uri)
         elif action == open_with_action:
             self.source_manager.open_path(source_uri, mode="open_with")
         elif action == show_in_folder_action:
             self.source_manager.open_path(source_uri, mode="show_in_folder", auto_queue=False)
-        elif action == copy_path_action:
-            self.source_manager.open_path(source_uri, mode="copy_path", auto_queue=False)
         elif action == queue_action:
             self.source_manager.queue_entry(source_uri, not queued)
         elif action == reindex_action:
             self.source_manager.trigger_reindex_path(source_uri)
         elif action == remove_action:
             self.source_manager.remove_entry(source_uri)
+
+    def delete_folder_documents(self, folder_path: str, folder_name: Optional[str] = None) -> None:
+        """Delete all documents below a tree folder path."""
+        pattern = self._folder_source_uri_like_pattern(folder_path)
+        filters = {"source_uri_like": pattern}
+        display_name = folder_name or folder_path
+
+        try:
+            preview = self.api_client.bulk_delete_preview(filters)
+            document_count = int(preview.get("document_count", 0))
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Preview Failed",
+                f"Failed to preview folder delete:\n{exc}",
+            )
+            return
+
+        if document_count <= 0:
+            QMessageBox.information(
+                self,
+                "No Documents Found",
+                f"No indexed documents were found under:\n\n{folder_path}",
+            )
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Confirm Folder Delete",
+            f"Delete {document_count} indexed document(s) under:\n\n"
+            f"{display_name}\n\n"
+            "This removes the indexed chunks from the database, not files on disk.",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        try:
+            response = self.api_client.bulk_delete(filters)
+            chunks_deleted = response.get("chunks_deleted", 0)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Delete Failed",
+                f"Failed to delete folder documents:\n{exc}",
+            )
+            return
+
+        QMessageBox.information(
+            self,
+            "Delete Complete",
+            f"Deleted {chunks_deleted} indexed chunk(s) under:\n\n{folder_path}",
+        )
+        self._refresh_current_view()
+
+    @staticmethod
+    def _folder_source_uri_like_pattern(folder_path: str) -> str:
+        """Build a normalized LIKE pattern for all documents below a folder."""
+        normalized = (
+            folder_path
+            .replace('\\', '/')
+            .replace('\t', '/')
+            .replace('\n', '/')
+            .replace('\r', '/')
+        )
+        while '//' in normalized:
+            normalized = normalized.replace('//', '/')
+        normalized = normalized.rstrip("/")
+        if not normalized:
+            return "%"
+        return f"{normalized}/%"

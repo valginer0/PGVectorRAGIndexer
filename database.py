@@ -278,7 +278,30 @@ class DocumentRepository:
         normalized = pattern.replace('\\', '/').replace('\t', '/').replace('\n', '/').replace('\r', '/')
         while '//' in normalized:
             normalized = normalized.replace('//', '/')
+        normalized = normalized.replace('*', '%').replace('?', '_')
+        if '%' not in normalized and '_' not in normalized:
+            normalized = f"%{normalized}%"
         return normalized
+
+    def _source_uri_like_clause(self) -> str:
+        """Return SQL matching source URI filters across canonical URI fields."""
+        normalized_metadata_source_uri_sql = (
+            "REPLACE(REPLACE(REPLACE(REPLACE("
+            "COALESCE(metadata->>'source_uri', ''), E'\\\\', '/'), "
+            "E'\\t', '/'), E'\\n', '/'), E'\\r', '/')"
+        )
+        normalized_custom_source_uri_sql = (
+            "REPLACE(REPLACE(REPLACE(REPLACE("
+            "COALESCE(metadata->>'custom_source_uri', ''), E'\\\\', '/'), "
+            "E'\\t', '/'), E'\\n', '/'), E'\\r', '/')"
+        )
+        return (
+            "("
+            f"{NORMALIZED_URI_SQL} ILIKE %s OR "
+            f"{normalized_metadata_source_uri_sql} ILIKE %s OR "
+            f"{normalized_custom_source_uri_sql} ILIKE %s"
+            ")"
+        )
     
     def _should_run_analyze(self) -> bool:
         """Determine whether ANALYZE should run based on recency."""
@@ -732,19 +755,9 @@ class DocumentRepository:
                 params.append(value)
             elif key == 'source_uri_like':
                 # Case-insensitive matching tolerant to Windows backslashes and control characters.
-                # If no SQL wildcards provided, treat as substring match by wrapping with %...%
-                pattern = value
-                if '%' not in pattern and '_' not in pattern:
-                    pattern = f"%{pattern}%"
-                normalized = self._normalize_source_uri_like(pattern)
-                # Build SQL using normalized expressions on fields
-                where_clauses.append(
-                    "(" 
-                    + f"REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
-                    + f"REPLACE(REPLACE(REPLACE(metadata->>'source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
-                    + f"REPLACE(REPLACE(REPLACE(metadata->>'custom_source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s"
-                    + ")"
-                )
+                # Accept both SQL LIKE wildcards and UI glob wildcards (*, ?).
+                normalized = self._normalize_source_uri_like(value)
+                where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
             else:
                 where_clauses.append(f"{key} = %s")
@@ -804,17 +817,8 @@ class DocumentRepository:
                 params.append(value)
             elif key == 'source_uri_like':
                 # Case-insensitive matching consistent with preview_delete
-                pattern = value
-                if '%' not in pattern and '_' not in pattern:
-                    pattern = f"%{pattern}%"
-                normalized = self._normalize_source_uri_like(pattern)
-                where_clauses.append(
-                    "(" 
-                    + f"REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
-                    + f"REPLACE(REPLACE(REPLACE(metadata->>'source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
-                    + f"REPLACE(REPLACE(REPLACE(metadata->>'custom_source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s"
-                    + ")"
-                )
+                normalized = self._normalize_source_uri_like(value)
+                where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
             else:
                 where_clauses.append(f"{key} = %s")
@@ -861,17 +865,8 @@ class DocumentRepository:
                 params.append(value)
             elif key == 'source_uri_like':
                 # LIKE pattern matching for source_uri
-                pattern = value
-                if '%' not in pattern and '_' not in pattern:
-                    pattern = f"%{pattern}%"
-                normalized = self._normalize_source_uri_like(pattern)
-                where_clauses.append(
-                    "("
-                    + "REPLACE(REPLACE(REPLACE(source_uri, '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
-                    + "REPLACE(REPLACE(REPLACE(metadata->>'source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s OR "
-                    + "REPLACE(REPLACE(REPLACE(metadata->>'custom_source_uri', '\\', '/'), E'\t', '/'), E'\n', '/') ILIKE %s"
-                    + ")"
-                )
+                normalized = self._normalize_source_uri_like(value)
+                where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
             else:
                 where_clauses.append(f"{key} = %s")

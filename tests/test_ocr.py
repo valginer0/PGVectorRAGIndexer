@@ -115,6 +115,32 @@ class TestImageDocumentLoader:
         loader = ImageDocumentLoader()
         result = loader.load('fake_image.jpg', ocr_mode='skip')
         assert result == []
+
+    def test_load_normalizes_unsupported_pillow_format_for_tesseract(self, monkeypatch):
+        """Images such as MPO-backed .jpg files should be OCRed as transient PNG."""
+        from PIL import Image as PILImage
+        import document_processor
+        from document_processor import ImageDocumentLoader
+
+        img = PILImage.new("RGB", (20, 20), color="white")
+        img.format = "MPO"
+
+        monkeypatch.setattr(document_processor.Image, "open", lambda _path: img)
+
+        seen = {}
+
+        def fake_image_to_string(image, lang, timeout):
+            seen["format"] = image.format
+            seen["mode"] = image.mode
+            return "plate number"
+
+        monkeypatch.setattr(document_processor.pytesseract, "image_to_string", fake_image_to_string)
+
+        loader = ImageDocumentLoader()
+        result = loader.load("phone_photo.jpg", ocr_mode="auto")
+
+        assert seen == {"format": "PNG", "mode": "RGB"}
+        assert result[0].page_content == "plate number"
     
     @pytest.mark.skipif(
         True,  # Skip by default - requires Tesseract installed

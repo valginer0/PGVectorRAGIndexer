@@ -11,6 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows drive path bulk-delete filters now normalize backslashes consistently and accept glob-style patterns such as `G:\*` and `*G*`.
 - The Documents tree now offers folder-level indexed-document deletion for stale paths such as missing Google Drive `G:` mounts.
 
+## [2.14.5] - 2026-05-16
+
+### Fixed
+- PowerPoint `.pptx` indexing no longer depends on unstructured's optional PPTX extras; decks are extracted with `python-pptx` when available and a built-in OpenXML fallback otherwise.
+- Image OCR now normalizes phone/camera image formats to an OCR-safe PNG before calling Tesseract, preventing valid `.jpg` files from failing as `Unsupported image format/type`.
+
 ## [2.14.4] - 2026-05-16
 
 ### Fixed

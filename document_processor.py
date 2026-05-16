@@ -8,14 +8,17 @@ import hashlib
 import inspect
 import logging
 import os
+import re
 import shutil
 import subprocess
 import tempfile
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
 import mimetypes
+from xml.etree import ElementTree as ET
 
 import pandas as pd
 from langchain_community.document_loaders import (
@@ -31,16 +34,22 @@ from langchain_core.documents import Document
 
 from config import get_config
 
+try:
+    from pptx import Presentation
+except ImportError:
+    Presentation = None
+
 # OCR support (optional - graceful fallback if not installed)
 try:
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageOps
     from pdf2image import convert_from_path
     OCR_AVAILABLE = True
 except ImportError:
     OCR_AVAILABLE = False
     pytesseract = None
     Image = None
+    ImageOps = None
     convert_from_path = None
 
 try:
@@ -299,7 +308,7 @@ class ImageDocumentLoader(DocumentLoader):
         
         try:
             config = get_config()
-            image = Image.open(source_uri)
+            image = self._open_image_for_ocr(source_uri)
             
             # Run OCR
             text = pytesseract.image_to_string(
@@ -325,6 +334,19 @@ class ImageDocumentLoader(DocumentLoader):
         except Exception as e:
             logger.error(f"Failed to OCR image {source_uri}: {e}")
             raise LoaderError(f"Image OCR failed: {e}")
+
+    def _open_image_for_ocr(self, source_uri: str):
+        """Open and normalize image data to a tesseract-safe in-memory PNG."""
+        image = Image.open(source_uri)
+        image = ImageOps.exif_transpose(image)
+
+        if image.mode not in ("RGB", "L"):
+            image = image.convert("RGB")
+
+        # pytesseract rejects some Pillow formats (for example MPO) even when
+        # the file extension is .jpg, so normalize the transient format.
+        image.format = "PNG"
+        return image
     
     def get_metadata(self, source_uri: str) -> Dict[str, Any]:
         """Get image metadata."""
@@ -383,9 +405,127 @@ class OfficeDocumentLoader(DocumentLoader):
         if lowered.endswith('.html'):
             return self._load_doc_with_unstructured(source_uri)
         if lowered.endswith('.pptx'):
-            loader = UnstructuredFileLoader(source_uri)
-            return loader.load()
+            return self._load_pptx_document(source_uri)
         raise UnsupportedFormatError(f"Unsupported office extension for loader: {source_uri}")
+
+    def _load_pptx_document(self, source_uri: str) -> List[Document]:
+        if Presentation is None:
+            return self._load_pptx_with_zip(source_uri)
+
+        try:
+            return self._load_pptx_with_python_pptx(source_uri)
+        except Exception as exc:
+            logger.warning(
+                "python-pptx load failed for %s; trying OpenXML fallback: %s",
+                source_uri,
+                exc,
+            )
+            try:
+                return self._load_pptx_with_zip(source_uri)
+            except LoaderError as fallback_exc:
+                raise LoaderError(
+                    f"PowerPoint document loading failed: {exc}; "
+                    f"OpenXML fallback failed: {fallback_exc}"
+                ) from fallback_exc
+
+    def _load_pptx_with_python_pptx(self, source_uri: str) -> List[Document]:
+        try:
+            presentation = Presentation(source_uri)
+        except Exception as exc:
+            logger.error(f"Failed to load PowerPoint document {source_uri}: {exc}")
+            raise LoaderError(f"PowerPoint document loading failed: {exc}")
+
+        documents: List[Document] = []
+        for slide_index, slide in enumerate(presentation.slides, start=1):
+            segments = self._extract_pptx_shape_text(slide.shapes)
+
+            try:
+                notes_frame = slide.notes_slide.notes_text_frame
+                if notes_frame and notes_frame.text.strip():
+                    segments.append(f"Speaker notes: {notes_frame.text.strip()}")
+            except Exception:
+                pass
+
+            slide_text = "\n".join(segment for segment in segments if segment.strip()).strip()
+            if slide_text:
+                documents.append(Document(
+                    page_content=slide_text,
+                    metadata={"source": source_uri, "slide": slide_index},
+                ))
+
+        if not documents:
+            raise LoaderError("No textual content could be extracted from the PowerPoint document.")
+        return documents
+
+    def _load_pptx_with_zip(self, source_uri: str) -> List[Document]:
+        """Extract PPTX text directly from OpenXML parts if python-pptx is unavailable."""
+        documents: List[Document] = []
+        try:
+            with zipfile.ZipFile(source_uri) as archive:
+                names = set(archive.namelist())
+                slide_names = sorted(
+                    (
+                        name for name in names
+                        if name.startswith("ppt/slides/slide") and name.endswith(".xml")
+                    ),
+                    key=self._pptx_part_sort_key,
+                )
+
+                for slide_index, slide_name in enumerate(slide_names, start=1):
+                    slide_text = self._extract_pptx_xml_text(archive.read(slide_name))
+                    notes_name = f"ppt/notesSlides/notesSlide{self._pptx_part_number(slide_name)}.xml"
+                    if notes_name in names:
+                        notes_text = self._extract_pptx_xml_text(archive.read(notes_name))
+                        if notes_text:
+                            slide_text = f"{slide_text}\nSpeaker notes: {notes_text}".strip()
+
+                    if slide_text:
+                        documents.append(Document(
+                            page_content=slide_text,
+                            metadata={"source": source_uri, "slide": slide_index},
+                        ))
+        except Exception as exc:
+            logger.error(f"Failed to load PowerPoint document {source_uri}: {exc}")
+            raise LoaderError(f"PowerPoint document loading failed: {exc}")
+
+        if not documents:
+            raise LoaderError("No textual content could be extracted from the PowerPoint document.")
+        return documents
+
+    def _extract_pptx_xml_text(self, xml_bytes: bytes) -> str:
+        root = ET.fromstring(xml_bytes)
+        segments = [
+            elem.text.strip()
+            for elem in root.iter()
+            if elem.tag.endswith("}t") and elem.text and elem.text.strip()
+        ]
+        return "\n".join(segments).strip()
+
+    def _pptx_part_sort_key(self, name: str) -> int:
+        return self._pptx_part_number(name)
+
+    def _pptx_part_number(self, name: str) -> int:
+        match = re.search(r"(\d+)\.xml$", name)
+        return int(match.group(1)) if match else 0
+
+    def _extract_pptx_shape_text(self, shapes) -> List[str]:
+        segments: List[str] = []
+        for shape in shapes:
+            if getattr(shape, "has_text_frame", False):
+                text = shape.text.strip()
+                if text:
+                    segments.append(text)
+
+            if getattr(shape, "has_table", False):
+                for row in shape.table.rows:
+                    cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                    if cells:
+                        segments.append("\t".join(cells))
+
+            nested_shapes = getattr(shape, "shapes", None)
+            if nested_shapes:
+                segments.extend(self._extract_pptx_shape_text(nested_shapes))
+        return segments
     
     def _load_doc_with_unstructured(self, source_uri: str) -> List[Document]:
         try:

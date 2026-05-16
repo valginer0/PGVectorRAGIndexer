@@ -87,6 +87,11 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ---
 
+## Unreleased Fixes
+
+- **✅ PowerPoint Indexing Robustness**: `.pptx` files no longer fail when unstructured's optional PPTX extras are missing; native extraction and a built-in OpenXML fallback cover supported decks.
+- **✅ Image OCR Format Normalization**: Phone/camera images that open as special Pillow formats are normalized before OCR, preventing valid `.jpg` files from failing as unsupported.
+
 ## 🋹 What's New in v2.14.4
 
 ### 🆕 Latest Fixes (v2.14.4)

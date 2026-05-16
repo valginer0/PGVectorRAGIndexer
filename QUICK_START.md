@@ -6,6 +6,11 @@ Get up and running in 5 minutes!
 > This helps prevent other users on the same network from accessing local services.
 > For home or private networks, this is not a concern.
 
+## Unreleased Fixes
+
+- **PowerPoint Indexing Robustness**: `.pptx` files no longer fail when unstructured's optional PPTX extras are missing.
+- **Image OCR Format Normalization**: Phone/camera `.jpg` files are normalized before OCR so valid images are not rejected by Tesseract's helper.
+
 ## 🆕 What's New in v2.14.4
 
 - **Database Pool Backpressure**: Burst indexing now waits for available PostgreSQL pool capacity and uses configured overflow slots instead of failing immediately with connection pool exhaustion.

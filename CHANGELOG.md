@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Windows drive path bulk-delete filters now normalize backslashes consistently and accept glob-style patterns such as `G:\*` and `*G*`.
 - The Documents tree now offers folder-level indexed-document deletion for stale paths such as missing Google Drive `G:` mounts.
 
+## [2.14.3] - 2026-05-16
+
+### Changed
+- Make bulk indexing resilient to rate limits
+
 ## [2.14.2] - 2026-05-16
 
 ### Changed

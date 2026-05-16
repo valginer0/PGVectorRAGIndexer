@@ -1,4 +1,4 @@
-# Advanced Production Deployment Guide - PGVectorRAGIndexer v2.14.3
+# Advanced Production Deployment Guide - PGVectorRAGIndexer v2.14.1
 
 > **Which deployment guide is this?**
 > This top-level `DEPLOYMENT.md` is the advanced production runbook for

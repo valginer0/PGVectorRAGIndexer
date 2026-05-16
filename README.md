@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.14.3
+# PGVectorRAGIndexer v2.14.4
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -87,9 +87,13 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ---
 
-## 🋹 What's New in v2.14.3
+## 🋹 What's New in v2.14.4
 
-### 🆕 Latest Features (v2.14.3)
+### 🆕 Latest Fixes (v2.14.4)
+
+- **✅ Database Pool Backpressure**: Burst indexing now waits for available PostgreSQL pool capacity and uses configured overflow slots instead of failing immediately with connection pool exhaustion.
+
+### Recent Features (v2.14.3)
 
 - **✅ Large-Organization License Stacking**: Organizations with more than 25 users can now stack multiple Organization license keys on a single server to combine seat limits automatically — no enterprise negotiations, no configuration changes. Each key adds seats independently.
 - **✅ Admin Console — Licenses Panel**: New "Licenses" tab in the Organization Console lets admins add, inspect, and remove stacked license keys with client-side validation and clear per-key status (active / expired / invalid).
@@ -759,6 +763,7 @@ Adjust pool size based on workload:
 ```bash
 DB_POOL_SIZE=20
 DB_MAX_OVERFLOW=40
+DB_POOL_TIMEOUT=30
 ```
 
 ##  Monitoring

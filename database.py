@@ -8,6 +8,7 @@ for the PGVectorRAGIndexer system.
 import logging
 import json
 import os
+import threading
 from contextlib import contextmanager, asynccontextmanager
 from typing import Optional, List, Dict, Any, Tuple, Union, Sequence
 from datetime import datetime, timezone
@@ -46,17 +47,25 @@ class _PooledConnection:
     to the real connection but overrides ``close()`` to call ``putconn()``.
     """
 
-    def __init__(self, conn, pool):
+    def __init__(self, conn, pool, release_slot=None):
         self._conn = conn
         self._pool = pool
+        self._release_slot = release_slot
+        self._closed = False
 
     # --- public override ---------------------------------------------------
     def close(self):
         """Return the connection to the pool instead of closing it."""
+        if self._closed:
+            return
+        self._closed = True
         try:
             self._pool.putconn(self._conn)
         except Exception:
             pass
+        finally:
+            if self._release_slot:
+                self._release_slot()
 
     # --- delegate everything else to the real connection --------------------
     def __getattr__(self, name):
@@ -81,6 +90,8 @@ class DatabaseManager:
         """Initialize database manager."""
         self.config = get_config().database
         self._pool: Optional[pool.ThreadedConnectionPool] = None
+        self._pool_semaphore: Optional[threading.BoundedSemaphore] = None
+        self._pool_capacity = 0
         self._initialized = False
     
     def initialize(self) -> None:
@@ -101,15 +112,21 @@ class DatabaseManager:
             )
             if self.config.sslmode:
                 conn_kwargs['sslmode'] = self.config.sslmode
+            self._pool_capacity = max(
+                1,
+                int(self.config.pool_size) + max(0, int(self.config.max_overflow)),
+            )
             self._pool = pool.ThreadedConnectionPool(
                 minconn=1,
-                maxconn=self.config.pool_size,
+                maxconn=self._pool_capacity,
                 **conn_kwargs,
             )
+            self._pool_semaphore = threading.BoundedSemaphore(self._pool_capacity)
             self._initialized = True
             logger.info(
                 f"Database connection pool initialized "
-                f"(host={self.config.host}, db={self.config.name})"
+                f"(host={self.config.host}, db={self.config.name}, "
+                f"maxconn={self._pool_capacity})"
             )
         except Exception as e:
             logger.error(f"Failed to initialize connection pool: {e}")
@@ -119,8 +136,23 @@ class DatabaseManager:
         """Close all connections in the pool."""
         if self._pool:
             self._pool.closeall()
+            self._pool_semaphore = None
+            self._pool_capacity = 0
             self._initialized = False
             logger.info("Database connection pool closed")
+
+    def _acquire_pool_slot(self) -> bool:
+        if self._pool_semaphore is None:
+            raise ConnectionPoolError("Connection pool is not initialized")
+        return self._pool_semaphore.acquire(timeout=max(0, int(self.config.pool_timeout)))
+
+    def _release_pool_slot(self) -> None:
+        if self._pool_semaphore is None:
+            return
+        try:
+            self._pool_semaphore.release()
+        except ValueError:
+            logger.warning("Attempted to release an unacquired database pool slot")
     
     @contextmanager
     def get_connection(self):
@@ -137,7 +169,13 @@ class DatabaseManager:
             self.initialize()
         
         conn = None
+        acquired = False
         try:
+            acquired = self._acquire_pool_slot()
+            if not acquired:
+                raise ConnectionPoolError(
+                    "Connection pool timed out waiting for an available slot"
+                )
             conn = self._pool.getconn()
             register_vector(conn)
             yield conn
@@ -149,6 +187,8 @@ class DatabaseManager:
         finally:
             if conn:
                 self._pool.putconn(conn)
+            if acquired:
+                self._release_pool_slot()
     
     def get_connection_raw(self):
         """Get a raw connection from the pool.
@@ -159,9 +199,19 @@ class DatabaseManager:
         """
         if not self._initialized:
             self.initialize()
-        conn = self._pool.getconn()
-        register_vector(conn)
-        return _PooledConnection(conn, self._pool)
+        acquired = self._acquire_pool_slot()
+        if not acquired:
+            raise ConnectionPoolError(
+                "Connection pool timed out waiting for an available slot"
+            )
+        try:
+            conn = self._pool.getconn()
+            register_vector(conn)
+            return _PooledConnection(conn, self._pool, self._release_pool_slot)
+        except Exception as e:
+            self._release_pool_slot()
+            logger.error(f"Database connection error: {e}")
+            raise ConnectionPoolError(f"Connection error: {e}")
 
     @contextmanager
     def get_cursor(self, dict_cursor: bool = False):

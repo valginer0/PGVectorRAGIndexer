@@ -1,4 +1,4 @@
-# Advanced Production Deployment Guide - PGVectorRAGIndexer v2.14.1
+# Advanced Production Deployment Guide - PGVectorRAGIndexer v2.14.4
 
 > **Which deployment guide is this?**
 > This top-level `DEPLOYMENT.md` is the advanced production runbook for
@@ -572,6 +572,7 @@ max_parallel_workers_per_gather = 4
 # Increase connection pool
 DB_POOL_SIZE=20
 DB_MAX_OVERFLOW=40
+DB_POOL_TIMEOUT=30
 
 # Adjust batch sizes
 EMBEDDING_BATCH_SIZE=64
@@ -599,9 +600,10 @@ CHUNK_SIZE=1000
 
 **Issue**: Connection pool exhausted
 ```bash
-# Solution: Increase pool size
+# Solution: upgrade to v2.14.4+ so bursts wait for pool capacity, then tune if needed
 DB_POOL_SIZE=50
 DB_MAX_OVERFLOW=100
+DB_POOL_TIMEOUT=60
 ```
 
 **Issue**: Slow vector search

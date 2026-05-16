@@ -119,6 +119,8 @@ async def test_health_check_remains_responsive_during_slow_db():
 def test_database_manager_timeouts():
     """Verify that DatabaseManager correctly applies connect and statement timeouts."""
     config_obj = AppConfig()
+    config_obj.database.pool_size = 10
+    config_obj.database.max_overflow = 5
     config_obj.database.connect_timeout = 5
     config_obj.database.statement_timeout = 15
     
@@ -128,6 +130,7 @@ def test_database_manager_timeouts():
         with patch("psycopg2.pool.ThreadedConnectionPool") as mock_pool:
             dm.initialize()
             args, kwargs = mock_pool.call_args
+            assert kwargs["maxconn"] == 15
             assert kwargs["connect_timeout"] == 5
             assert "statement_timeout=15000" in kwargs["options"]
 

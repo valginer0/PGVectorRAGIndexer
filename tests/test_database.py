@@ -3,7 +3,9 @@ Tests for database operations.
 """
 
 import pytest
+import threading
 from datetime import datetime
+from unittest.mock import MagicMock, patch
 
 from database import (
     DatabaseManager,
@@ -278,3 +280,55 @@ class TestConnectionPooling:
         # Both connections should work
         assert conn1_id is not None
         assert conn2_id is not None
+
+    def test_pool_slot_timeout_raises_clear_error(self):
+        """Pool requests wait for a slot instead of calling getconn immediately."""
+        db_manager = DatabaseManager()
+        db_manager._initialized = True
+        db_manager._pool = MagicMock()
+        db_manager._pool_semaphore = threading.BoundedSemaphore(1)
+        db_manager.config.pool_timeout = 0
+        assert db_manager._pool_semaphore.acquire(blocking=False)
+
+        with pytest.raises(ConnectionPoolError, match="timed out"):
+            with db_manager.get_connection():
+                pass
+
+        db_manager._pool.getconn.assert_not_called()
+        db_manager._pool_semaphore.release()
+
+    def test_get_connection_releases_slot_when_getconn_fails(self):
+        """Failed getconn attempts must not leak the semaphore slot."""
+        db_manager = DatabaseManager()
+        db_manager._initialized = True
+        db_manager._pool = MagicMock()
+        db_manager._pool.getconn.side_effect = RuntimeError("boom")
+        db_manager._pool_semaphore = threading.BoundedSemaphore(1)
+        db_manager.config.pool_timeout = 0
+
+        with pytest.raises(ConnectionPoolError, match="boom"):
+            with db_manager.get_connection():
+                pass
+
+        assert db_manager._pool_semaphore.acquire(blocking=False)
+        db_manager._pool_semaphore.release()
+
+    def test_raw_connection_close_returns_pool_slot_once(self):
+        """Raw pooled connections release their semaphore slot on close."""
+        db_manager = DatabaseManager()
+        db_manager._initialized = True
+        db_manager._pool = MagicMock()
+        db_manager._pool.getconn.return_value = MagicMock()
+        db_manager._pool_semaphore = threading.BoundedSemaphore(1)
+        db_manager.config.pool_timeout = 0
+
+        with patch("database.register_vector"):
+            conn = db_manager.get_connection_raw()
+        assert not db_manager._pool_semaphore.acquire(blocking=False)
+
+        conn.close()
+        conn.close()
+
+        assert db_manager._pool_semaphore.acquire(blocking=False)
+        db_manager._pool_semaphore.release()
+        db_manager._pool.putconn.assert_called_once()

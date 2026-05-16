@@ -8,14 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
-- Desktop App bulk folder indexing no longer fails with `429 Rate limit exceeded`; trusted indexing/probe/scan calls bypass the generic API limiter, and residual 429 responses are retried with multipart body rewind.
 - Windows drive path bulk-delete filters now normalize backslashes consistently and accept glob-style patterns such as `G:\*` and `*G*`.
 - The Documents tree now offers folder-level indexed-document deletion for stale paths such as missing Google Drive `G:` mounts.
 
+## [2.14.4] - 2026-05-16
+
+### Fixed
+- Database connection pooling now honors configured overflow capacity and waits up to `DB_POOL_TIMEOUT` for an available slot, preventing burst indexing from failing immediately with `connection pool exhausted`.
+
 ## [2.14.3] - 2026-05-16
 
-### Changed
-- Make bulk indexing resilient to rate limits
+### Fixed
+- Desktop App bulk folder indexing no longer fails with `429 Rate limit exceeded`; trusted indexing/probe/scan calls bypass the generic API limiter, and residual 429 responses are retried with multipart body rewind.
 
 ## [2.14.2] - 2026-05-16
 

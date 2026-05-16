@@ -1,7 +1,11 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from rate_limit import RateLimitMiddleware
+from rate_limit import (
+    RateLimitMiddleware,
+    TRUSTED_BULK_INDEXING_OPERATION,
+    TRUSTED_OPERATION_HEADER,
+)
 
 
 def _make_client(limit: int) -> TestClient:
@@ -40,3 +44,45 @@ def test_rate_limit_can_be_disabled():
         response = client.get("/ping")
         assert response.status_code == 200
         assert "X-RateLimit-Limit" not in response.headers
+
+
+def test_trusted_bulk_indexing_upload_bypasses_rate_limit():
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware, limit_per_minute=1)
+
+    @app.post("/api/v1/upload-and-index")
+    async def upload_and_index():
+        return {"ok": True}
+
+    client = TestClient(app)
+    headers = {TRUSTED_OPERATION_HEADER: TRUSTED_BULK_INDEXING_OPERATION}
+
+    for _ in range(3):
+        response = client.post("/api/v1/upload-and-index", headers=headers)
+        assert response.status_code == 200
+        assert "X-RateLimit-Limit" not in response.headers
+
+
+def test_trusted_bulk_indexing_metadata_probe_bypasses_rate_limit():
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware, limit_per_minute=1)
+
+    @app.get("/api/v1/documents/{document_id}")
+    async def get_document(document_id: str):
+        return {"id": document_id}
+
+    client = TestClient(app)
+    headers = {TRUSTED_OPERATION_HEADER: TRUSTED_BULK_INDEXING_OPERATION}
+
+    for _ in range(3):
+        response = client.get("/api/v1/documents/source-id", headers=headers)
+        assert response.status_code == 200
+        assert "X-RateLimit-Limit" not in response.headers
+
+
+def test_trusted_bulk_header_does_not_bypass_unrelated_endpoints():
+    client = _make_client(limit=1)
+    headers = {TRUSTED_OPERATION_HEADER: TRUSTED_BULK_INDEXING_OPERATION}
+
+    assert client.get("/ping", headers=headers).status_code == 200
+    assert client.get("/ping", headers=headers).status_code == 429

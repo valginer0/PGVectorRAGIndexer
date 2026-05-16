@@ -7,6 +7,11 @@ from desktop_app.utils.api_client_core.base_client import BaseAPIClient
 
 logger = logging.getLogger(__name__)
 
+_BULK_INDEXING_HEADERS = {
+    "X-PGVectorRAGIndexer-Operation": "bulk-indexing",
+}
+
+
 class DocumentClient:
     """Domain client for document CRUD, tree management, and locks."""
     
@@ -21,10 +26,15 @@ class DocumentClient:
         """Get metadata for a document by source URI."""
         try:
             document_id = calculate_source_id(source_uri)
-            # `request` throws APIError on 404, we must catch it specifically
-            return self.get_document(document_id)
+            # `request` throws APIError on 404, we must catch it specifically.
+            response = self._base.request(
+                "GET",
+                f"{self._base.api_base}/documents/{document_id}",
+                headers=_BULK_INDEXING_HEADERS,
+            )
+            return response.json()
         except Exception as e:
-            # Safely check the underling HTTP status instead of string matching
+            # Safely check the underlying HTTP status instead of string matching
             if getattr(e, "status_code", None) == 404:
                 return None
             logger.error(f"Error checking document status: {e}")
@@ -56,7 +66,8 @@ class DocumentClient:
                 "POST",
                 f"{self._base.api_base}/upload-and-index",
                 files=files,
-                data=data
+                data=data,
+                headers=_BULK_INDEXING_HEADERS,
             )
             return response.json()
     

@@ -54,6 +54,9 @@ def test_upload_document_success(api_client):
         assert call_args[1]["data"]["force_reindex"] == "true"
         assert call_args[1]["data"]["custom_source_uri"] == "/full/path/test.txt"
         assert call_args[1]["data"]["document_type"] == "resume"
+        assert call_args[1]["headers"] == {
+            "X-PGVectorRAGIndexer-Operation": "bulk-indexing"
+        }
 
 def test_search_success(api_client):
     """Test search functionality."""
@@ -128,6 +131,9 @@ def test_check_document_exists_true(api_client):
         args = mock_request.call_args
         assert args[0][0] == "GET"
         assert "/documents/" in args[0][1]
+        assert args[1]["headers"] == {
+            "X-PGVectorRAGIndexer-Operation": "bulk-indexing"
+        }
 
 def test_check_document_exists_false(api_client):
     """Test check_document_exists returns False when not found."""
@@ -374,4 +380,3 @@ def test_close(api_client):
     with patch.object(api_client._base, "close") as mock_close:
         api_client.close()
         mock_close.assert_called_once()
-

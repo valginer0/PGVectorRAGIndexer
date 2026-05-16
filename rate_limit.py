@@ -22,6 +22,8 @@ from starlette.responses import JSONResponse, Response
 RATE_LIMIT_HEADER = "X-RateLimit-Limit"
 RATE_LIMIT_REMAINING_HEADER = "X-RateLimit-Remaining"
 RATE_LIMIT_RESET_HEADER = "X-RateLimit-Reset"
+TRUSTED_OPERATION_HEADER = "X-PGVectorRAGIndexer-Operation"
+TRUSTED_BULK_INDEXING_OPERATION = "bulk-indexing"
 
 
 @dataclass(frozen=True)
@@ -92,7 +94,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         )
 
     async def dispatch(self, request: Request, call_next) -> Response:
-        if request.method.upper() == "OPTIONS" or self._limiter.limit <= 0:
+        if (
+            request.method.upper() == "OPTIONS"
+            or self._limiter.limit <= 0
+            or _is_trusted_bulk_indexing_request(request)
+        ):
             return await call_next(request)
 
         decision = self._limiter.check(_rate_limit_key(request))
@@ -126,6 +132,28 @@ def _rate_limit_key(request: Request) -> str:
 
     client_host = request.client.host if request.client else "unknown"
     return f"ip:{client_host}"
+
+
+def _is_trusted_bulk_indexing_request(request: Request) -> bool:
+    """Skip throttling for first-party bulk indexing/probe calls."""
+    if request.headers.get(TRUSTED_OPERATION_HEADER) != TRUSTED_BULK_INDEXING_OPERATION:
+        return False
+
+    method = request.method.upper()
+    path = request.url.path.rstrip("/")
+
+    if method == "POST" and path in {
+        "/index",
+        "/api/v1/index",
+        "/upload-and-index",
+        "/api/v1/upload-and-index",
+    }:
+        return True
+
+    if method == "GET":
+        return path.startswith("/documents/") or path.startswith("/api/v1/documents/")
+
+    return False
 
 
 def _rate_limit_headers(decision: RateLimitDecision) -> dict[str, str]:

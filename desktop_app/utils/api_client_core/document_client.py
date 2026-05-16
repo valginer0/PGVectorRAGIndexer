@@ -4,12 +4,9 @@ from pathlib import Path
 
 from desktop_app.utils.hashing import calculate_source_id
 from desktop_app.utils.api_client_core.base_client import BaseAPIClient
+from desktop_app.utils.api_client_core.request_headers import BULK_INDEXING_HEADERS
 
 logger = logging.getLogger(__name__)
-
-_BULK_INDEXING_HEADERS = {
-    "X-PGVectorRAGIndexer-Operation": "bulk-indexing",
-}
 
 
 class DocumentClient:
@@ -30,7 +27,8 @@ class DocumentClient:
             response = self._base.request(
                 "GET",
                 f"{self._base.api_base}/documents/{document_id}",
-                headers=_BULK_INDEXING_HEADERS,
+                headers=BULK_INDEXING_HEADERS,
+                retry_on_rate_limit=True,
             )
             return response.json()
         except Exception as e:
@@ -67,7 +65,8 @@ class DocumentClient:
                 f"{self._base.api_base}/upload-and-index",
                 files=files,
                 data=data,
-                headers=_BULK_INDEXING_HEADERS,
+                headers=BULK_INDEXING_HEADERS,
+                retry_on_rate_limit=True,
             )
             return response.json()
     

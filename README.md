@@ -200,7 +200,7 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 - **RESTful API**: FastAPI-based HTTP API with automatic OpenAPI documentation
 - **CORS Support**: Configurable CORS for web applications
-- **Rate Limiting**: Built-in per-minute API rate limiting with `X-RateLimit-*` headers; Desktop App bulk indexing is not throttled
+- **Rate Limiting**: Built-in per-minute API rate limiting with `X-RateLimit-*` and `Retry-After` headers; Desktop App bulk indexing is not throttled
 - **Error Handling**: Comprehensive error responses with detailed messages
 - **Async Support**: Asynchronous operations for better performance
 

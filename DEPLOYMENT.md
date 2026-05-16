@@ -453,11 +453,15 @@ API_RATE_LIMIT_PER_MINUTE=60
 Set `API_RATE_LIMIT_PER_MINUTE=0` only when an upstream reverse proxy or API
 gateway is enforcing equivalent limits. Multi-worker or horizontally scaled
 deployments should also add shared-store or reverse-proxy rate limiting because
-the built-in limiter is per-process.
+the built-in limiter is per-process. Rate-limited responses include
+`X-RateLimit-*` and `Retry-After` headers.
 
-The official Desktop App marks its own bulk indexing and metadata-probe calls so
-large folder imports are not throttled by this generic API limiter. Normal API
-traffic, including search and ad hoc integrations, remains rate-limited.
+The official Desktop App marks its own bulk indexing, metadata-probe, and
+watched-folder scan calls so large folder imports are not throttled by this
+generic API limiter. It also retries residual 429 responses for those bulk
+operations, which protects imports when an older backend or upstream proxy still
+returns a rate-limit response. Normal API traffic, including search and ad hoc
+integrations, remains rate-limited.
 Server-side scheduled scans run inside the backend scheduler rather than through
 HTTP request handling, so organization nightly indexing jobs are not constrained
 by `API_RATE_LIMIT_PER_MINUTE`.

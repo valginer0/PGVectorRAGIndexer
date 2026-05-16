@@ -1,6 +1,7 @@
 from typing import Dict, Any, List, Optional
 
 from desktop_app.utils.api_client_core.base_client import BaseAPIClient
+from desktop_app.utils.api_client_core.request_headers import BULK_INDEXING_HEADERS
 
 class WatchedFoldersClient:
     """Domain client for watched folders and virtual roots management."""
@@ -78,7 +79,9 @@ class WatchedFoldersClient:
         response = self._base.request(
             "POST",
             f"{self._base.api_base}/watched-folders/{folder_id}/scan",
-            json=body
+            json=body,
+            headers=BULK_INDEXING_HEADERS,
+            retry_on_rate_limit=True,
         )
         return response.json()
 

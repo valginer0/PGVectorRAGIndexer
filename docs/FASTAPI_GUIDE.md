@@ -19,7 +19,7 @@ Middleware is used in `api.py` (and specifically defined in places like `license
 
 *   **`CORSMiddleware`**: Handles Cross-Origin Resource Sharing.
 *   **`TrustedHostMiddleware`**: Restricts allowed `Host` headers for security.
-*   **`RateLimitMiddleware`**: Enforces the configured per-minute API rate limit and adds `X-RateLimit-*` headers. Trusted bulk indexing/probe calls bypass this generic limiter so large imports are not throttled; server-side scheduled scans run inside the backend scheduler rather than through the HTTP limiter.
+*   **`RateLimitMiddleware`**: Enforces the configured per-minute API rate limit and adds `X-RateLimit-*` and `Retry-After` headers. Trusted bulk indexing/probe/scan calls bypass this generic limiter so large imports are not throttled; the Desktop App also retries residual 429 responses for those bulk operations. Server-side scheduled scans run inside the backend scheduler rather than through the HTTP limiter.
 *   **`LicenseOverageMiddleware`**: A custom seat-overage warning middleware that injects specific headers if a large organization exceeds their allowed seat count.
 *   **`DemoModeMiddleware`**: Intercepts and blocks write operations when the application is running in a read-only demo mode (`DEMO_MODE=1`).
 

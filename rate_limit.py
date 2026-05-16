@@ -22,6 +22,7 @@ from starlette.responses import JSONResponse, Response
 RATE_LIMIT_HEADER = "X-RateLimit-Limit"
 RATE_LIMIT_REMAINING_HEADER = "X-RateLimit-Remaining"
 RATE_LIMIT_RESET_HEADER = "X-RateLimit-Reset"
+RETRY_AFTER_HEADER = "Retry-After"
 TRUSTED_OPERATION_HEADER = "X-PGVectorRAGIndexer-Operation"
 TRUSTED_BULK_INDEXING_OPERATION = "bulk-indexing"
 
@@ -105,6 +106,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         headers = _rate_limit_headers(decision)
 
         if not decision.allowed:
+            headers[RETRY_AFTER_HEADER] = str(
+                max(0, decision.reset_at - int(time.time()))
+            )
             return JSONResponse(
                 status_code=429,
                 content={
@@ -140,20 +144,64 @@ def _is_trusted_bulk_indexing_request(request: Request) -> bool:
         return False
 
     method = request.method.upper()
-    path = request.url.path.rstrip("/")
+    path = _without_api_prefix(request.url.path.rstrip("/"))
 
     if method == "POST" and path in {
         "/index",
-        "/api/v1/index",
         "/upload-and-index",
-        "/api/v1/upload-and-index",
     }:
         return True
 
-    if method == "GET":
-        return path.startswith("/documents/") or path.startswith("/api/v1/documents/")
+    if method == "POST" and _is_bulk_scan_path(path):
+        return True
+
+    if method in {"GET", "POST"} and _is_document_lock_path(path):
+        return True
+
+    if method == "GET" and _is_document_metadata_probe_path(path):
+        return True
 
     return False
+
+
+def _without_api_prefix(path: str) -> str:
+    if path == "/api/v1":
+        return ""
+    if path.startswith("/api/v1/"):
+        return path[len("/api/v1"):]
+    return path
+
+
+def _is_bulk_scan_path(path: str) -> bool:
+    return (
+        path.startswith("/watched-folders/")
+        and path.endswith("/scan")
+        and len(path.split("/")) == 4
+    ) or (
+        path.startswith("/scheduler/roots/")
+        and path.endswith("/scan-now")
+        and len(path.split("/")) == 5
+    )
+
+
+def _is_document_lock_path(path: str) -> bool:
+    if path == "/documents/locks":
+        return True
+    if not path.startswith("/documents/locks/"):
+        return False
+    action = path.rsplit("/", 1)[-1]
+    return action in {"acquire", "release", "check", "cleanup"}
+
+
+def _is_document_metadata_probe_path(path: str) -> bool:
+    if not path.startswith("/documents/"):
+        return False
+    document_id = path[len("/documents/"):]
+    return bool(document_id) and "/" not in document_id and document_id not in {
+        "encrypted",
+        "locks",
+        "tree",
+    }
 
 
 def _rate_limit_headers(decision: RateLimitDecision) -> dict[str, str]:

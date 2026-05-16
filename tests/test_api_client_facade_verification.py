@@ -8,6 +8,7 @@ error detail preservation, and domain client routing completeness.
 
 import pytest
 import requests
+from io import BytesIO
 from unittest.mock import MagicMock, patch
 
 from desktop_app.utils.api_client import APIClient
@@ -96,6 +97,7 @@ class TestErrorTranslation:
         resp = MagicMock(spec=requests.Response)
         resp.status_code = status_code
         resp.text = text
+        resp.headers = {}
         if json_body is not None:
             resp.json.return_value = json_body
         else:
@@ -122,6 +124,54 @@ class TestErrorTranslation:
         with pytest.raises(APIRateLimitError, match="Too many requests") as exc_info:
             base_client._handle_response_errors(resp)
         assert exc_info.value.status_code == 429
+
+    def test_request_retries_rate_limit_when_enabled(self, base_client):
+        """Bulk requests can wait for a 429 reset and retry."""
+        limited = self._mock_response(429, {"detail": "Too many requests"})
+        limited.headers = {"Retry-After": "0"}
+        ok = self._mock_response(200, {"ok": True})
+
+        with patch.object(
+            base_client._session, "request", side_effect=[limited, ok]
+        ) as mock_request:
+            with patch("desktop_app.utils.api_client_core.base_client.time.sleep") as mock_sleep:
+                response = base_client.request(
+                    "GET",
+                    "http://test/bulk",
+                    retry_on_rate_limit=True,
+                )
+
+        assert response is ok
+        assert mock_request.call_count == 2
+        mock_sleep.assert_called_once_with(0.0)
+
+    def test_request_rewinds_file_before_rate_limit_retry(self, base_client):
+        """Multipart upload retries resend the file from the beginning."""
+        limited = self._mock_response(429, {"detail": "Too many requests"})
+        limited.headers = {"Retry-After": "0"}
+        ok = self._mock_response(200, {"ok": True})
+        file_obj = BytesIO(b"abcdef")
+        positions = []
+
+        def request_side_effect(*args, **kwargs):
+            uploaded = kwargs["files"]["file"][1]
+            positions.append(uploaded.tell())
+            uploaded.read()
+            return limited if len(positions) == 1 else ok
+
+        with patch.object(
+            base_client._session, "request", side_effect=request_side_effect
+        ):
+            with patch("desktop_app.utils.api_client_core.base_client.time.sleep"):
+                response = base_client.request(
+                    "POST",
+                    "http://test/upload-and-index",
+                    files={"file": ("doc.txt", file_obj)},
+                    retry_on_rate_limit=True,
+                )
+
+        assert response is ok
+        assert positions == [0, 0]
 
     def test_404_raises_api_error(self, base_client):
         """HTTP 404 → generic APIError with status_code."""

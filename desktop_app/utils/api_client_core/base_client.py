@@ -1,7 +1,17 @@
-import requests
+import logging
+import time
 from typing import Optional, Dict, Any
 
+import requests
+
 from desktop_app.utils.errors import APIError, APIConnectionError, APIAuthenticationError, APIRateLimitError
+
+logger = logging.getLogger(__name__)
+
+RATE_LIMIT_RETRY_AFTER_HEADER = "Retry-After"
+RATE_LIMIT_RESET_HEADER = "X-RateLimit-Reset"
+DEFAULT_RATE_LIMIT_RETRIES = 6
+MAX_RATE_LIMIT_SLEEP_SECONDS = 65.0
 
 class BaseAPIClient:
     """
@@ -69,11 +79,39 @@ class BaseAPIClient:
         Executes HTTP requests mapped via the shared session, enforcing standard timeout
         and structured legacy error translation mapping across the domain clients.
         """
+        retry_on_rate_limit = bool(kwargs.pop("retry_on_rate_limit", False))
+        max_rate_limit_retries = int(
+            kwargs.pop("max_rate_limit_retries", DEFAULT_RATE_LIMIT_RETRIES)
+        )
         kwargs.setdefault('timeout', self._timeout)
+        attempts = 0
+
         try:
-            response = self._session.request(method, url, **kwargs)
-            self._handle_response_errors(response)
-            return response
+            while True:
+                response = self._session.request(method, url, **kwargs)
+
+                if (
+                    response.status_code == 429
+                    and retry_on_rate_limit
+                    and attempts < max_rate_limit_retries
+                ):
+                    attempts += 1
+                    delay = _rate_limit_retry_delay(response, attempts)
+                    logger.warning(
+                        "Rate limited during %s %s; retrying in %.1fs "
+                        "(attempt %d/%d)",
+                        method,
+                        url,
+                        delay,
+                        attempts,
+                        max_rate_limit_retries,
+                    )
+                    _rewind_request_files(kwargs.get("files"))
+                    time.sleep(delay)
+                    continue
+
+                self._handle_response_errors(response)
+                return response
         except requests.exceptions.ConnectionError as e:
             raise APIConnectionError(f"Failed to connect to API: {str(e)}")
         except requests.exceptions.Timeout as e:
@@ -109,3 +147,53 @@ class BaseAPIClient:
         """Releases the underlying session connection pool."""
         if hasattr(self, '_session'):
             self._session.close()
+
+
+def _rate_limit_retry_delay(response: requests.Response, attempt: int) -> float:
+    retry_after = response.headers.get(RATE_LIMIT_RETRY_AFTER_HEADER)
+    if retry_after:
+        try:
+            return _clamp_retry_delay(float(retry_after))
+        except ValueError:
+            pass
+
+    reset_at = response.headers.get(RATE_LIMIT_RESET_HEADER)
+    if reset_at:
+        try:
+            return _clamp_retry_delay(float(reset_at) - time.time() + 0.25)
+        except ValueError:
+            pass
+
+    return _clamp_retry_delay(2 ** max(0, attempt - 1))
+
+
+def _clamp_retry_delay(delay: float) -> float:
+    return max(0.0, min(delay, MAX_RATE_LIMIT_SLEEP_SECONDS))
+
+
+def _rewind_request_files(files: Any) -> None:
+    """Reset file-like request bodies before retrying a multipart upload."""
+    if not files:
+        return
+
+    values = files.values() if isinstance(files, dict) else files
+    for value in values:
+        _rewind_file_value(value)
+
+
+def _rewind_file_value(value: Any) -> bool:
+    if hasattr(value, "seek"):
+        try:
+            value.seek(0)
+            return True
+        except Exception:
+            logger.debug("Could not rewind request file for retry", exc_info=True)
+            return False
+
+    if isinstance(value, (list, tuple)):
+        rewound = False
+        for item in value:
+            rewound = _rewind_file_value(item) or rewound
+        return rewound
+
+    return False

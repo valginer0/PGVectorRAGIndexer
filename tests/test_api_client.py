@@ -4,6 +4,7 @@ import requests
 from pathlib import Path
 
 from desktop_app.utils.api_client import APIClient
+from desktop_app.utils.api_client_core.request_headers import BULK_INDEXING_HEADERS
 
 @pytest.fixture
 def api_client():
@@ -54,9 +55,8 @@ def test_upload_document_success(api_client):
         assert call_args[1]["data"]["force_reindex"] == "true"
         assert call_args[1]["data"]["custom_source_uri"] == "/full/path/test.txt"
         assert call_args[1]["data"]["document_type"] == "resume"
-        assert call_args[1]["headers"] == {
-            "X-PGVectorRAGIndexer-Operation": "bulk-indexing"
-        }
+        assert call_args[1]["headers"] == BULK_INDEXING_HEADERS
+        assert call_args[1]["retry_on_rate_limit"] is True
 
 def test_search_success(api_client):
     """Test search functionality."""
@@ -131,9 +131,8 @@ def test_check_document_exists_true(api_client):
         args = mock_request.call_args
         assert args[0][0] == "GET"
         assert "/documents/" in args[0][1]
-        assert args[1]["headers"] == {
-            "X-PGVectorRAGIndexer-Operation": "bulk-indexing"
-        }
+        assert args[1]["headers"] == BULK_INDEXING_HEADERS
+        assert args[1]["retry_on_rate_limit"] is True
 
 def test_check_document_exists_false(api_client):
     """Test check_document_exists returns False when not found."""
@@ -339,6 +338,25 @@ def test_list_watched_folders(api_client):
             "GET",
             "http://test-api/api/v1/watched-folders",
             params={"enabled_only": True}
+        )
+
+def test_scan_watched_folder_uses_bulk_indexing_header(api_client):
+    """Test scan_watched_folder routes as a trusted bulk indexing operation."""
+    with patch.object(api_client._base, "request") as mock_request:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"status": "success"}
+        mock_request.return_value = mock_response
+
+        res = api_client.scan_watched_folder("f1", client_id="client-1")
+        assert res["status"] == "success"
+
+        mock_request.assert_called_with(
+            "POST",
+            "http://test-api/api/v1/watched-folders/f1/scan",
+            json={"client_id": "client-1"},
+            headers=BULK_INDEXING_HEADERS,
+            retry_on_rate_limit=True,
         )
 
 def test_list_users(api_client):

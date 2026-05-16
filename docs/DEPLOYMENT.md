@@ -140,6 +140,9 @@ For deployments where source folders live on server disks/NAS mounts, scheduled 
 - Server-scope scheduled scans run inside the backend scheduler, not through the
   HTTP API rate limiter, so nightly organization indexing is not constrained by
   `API_RATE_LIMIT_PER_MINUTE`.
+- Desktop-client bulk imports and client-scope scan requests are marked as
+  trusted bulk indexing operations and retry residual 429 responses, so large
+  imports do not fail file-by-file under normal rate-limit settings.
 - Root path uniqueness is scoped (not global):
   - client scope: unique on `(executor_id, normalized_folder_path)`
   - server scope: unique on `(normalized_folder_path)`

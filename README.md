@@ -126,7 +126,7 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ### Architecture & Scale (v2.4 - v2.5)
 
-- **✅ Hierarchical Document Tree**: Scalable, lazy-loaded tree view replacing the legacy list for 100k+ document navigation.
+- **✅ Hierarchical Document Tree**: Scalable, lazy-loaded tree view replacing the legacy list for 100k+ document navigation, with folder-level indexed-document deletion for stale paths.
 - **✅ Privacy-First Analytics**: Opt-in anonymous usage tracking with a local audit log and transparency dashboard.
 - **✅ Split-Backend Testing**: E2E validation suite for multi-server production deployments.
 - **✅ WSL Native Dialogs**: Seamless integration of Windows native file pickers when running under WSL/Linux.
@@ -149,7 +149,7 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 - **✅ Dynamic UI**: Upload tab automatically fetches available document types from the database.
 
 - **✅ Document Type System**: Organize documents with custom types (policy, resume, report, etc.)
-- **✅ Bulk Delete with Preview**: Safely delete multiple documents with preview before action
+- **✅ Bulk Delete with Preview**: Safely delete multiple documents with preview before action, including wildcard path filters such as `G:\*` or `*G*`
 - **✅ Export/Backup System**: Export documents as JSON backup before deletion
 - **✅ Undo/Restore Functionality**: Restore deleted documents from backup
 - **✅ Desktop App Manage Tab**: Full GUI for bulk operations with backup/restore
@@ -600,8 +600,13 @@ curl -X POST "http://localhost:8000/documents/bulk-delete" \
   -d '{
     "filters": {"type": "draft"},
     "preview": true
-  }'
+}'
 ```
+
+Path filters accept SQL LIKE or glob-style wildcards and normalize Windows
+backslashes. For example, `{"source_uri_like": "G:\\*"}` previews all indexed
+documents under a stale `G:` drive, while `{"source_uri_like": "*G*"}` finds
+paths containing `G`.
 
 **Export backup before delete**:
 ```bash

@@ -147,6 +147,11 @@ curl http://localhost:8000/stats
 curl -X DELETE "http://localhost:8000/documents/<document_id>"
 ```
 
+In the Desktop App, use **Documents → Tree**, right-click a folder, and choose
+**Delete Folder Documents...** to remove all indexed entries below a stale path
+such as a missing Google Drive `G:`. The Manage tab path filter also accepts
+wildcards such as `G:\*` and `*G*`.
+
 ## 🎯 Common Tasks
 
 ### Index Multiple Documents

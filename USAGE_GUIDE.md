@@ -26,12 +26,17 @@ All three tabs (Upload, Search, Manage) support comprehensive filtering with met
 
 **Manage Tab (Bulk Operations):**
 - **Document Type**: Loads actual types from your database
-- **Path/Name Filter**: Supports wildcards (e.g., `*resume*`, `C:\Projects\*`)
+- **Path/Name Filter**: Supports wildcards (e.g., `*resume*`, `C:\Projects\*`, `G:\*`, `*G*`)
 - **Metadata Filters**: Filter by arbitrary key-value pairs (e.g., `status=obsolete`)
+
+**Document Tree Folder Cleanup:**
+- In the Desktop App **Documents** tab, switch to **Tree**, right-click a folder, and choose **Delete Folder Documents...** to remove all indexed documents below that folder.
+- This deletes indexed database chunks only; it does not delete files from disk.
+- This is the safest way to remove stale entries from a missing virtual drive such as Google Drive `G:`.
 
 **Backend API Support:**
 - `type` - shortcut for `metadata.type`
-- `source_uri_like` - SQL LIKE pattern for path/filename
+- `source_uri_like` - SQL LIKE or glob-style pattern for path/filename; Windows backslashes are normalized, so `G:\*`, `G:/%`, and `*G*` all work
 - `metadata.*` - Any custom metadata field
 - `GET /metadata/keys` - List all metadata keys
 - `GET /metadata/values?key=type` - Get values for a specific key

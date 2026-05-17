@@ -238,16 +238,6 @@ async def upload_and_index(
                      errors=[{"source_uri": source, "error": error_message}])
         logger.error(f"Upload and index failed: {e}")
         
-        if (
-            file.filename
-            and file.filename.lower().endswith(".doc")
-            and "convert" not in error_message.lower()
-        ):
-            error_message = (
-                "Legacy .doc format is not supported automatically. "
-                "Please install LibreOffice/soffice for conversion or convert the document to .docx."
-            )
-        
         raise_api_error(
             ErrorCode.UNSUPPORTED_FORMAT if isinstance(e, UnsupportedFormatError) else ErrorCode.DOCUMENT_PROCESSING_FAILED,
             message=error_message,

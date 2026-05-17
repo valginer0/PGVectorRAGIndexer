@@ -62,11 +62,12 @@ class TestClientVersionCheck:
         return APIClient(base_url="http://localhost:8000")
 
     def test_compatible_version(self):
+        from version import __version__ as CLIENT_VERSION
         client = self._make_client()
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {
-            "server_version": "2.4.5",
+            "server_version": CLIENT_VERSION,
             "api_version": "1",
             "min_client_version": "2.0.0",
             "max_client_version": "99.99.99",

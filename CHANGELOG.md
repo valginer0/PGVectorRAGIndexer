@@ -15,6 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Full releases no longer mark the version bump commit as `[skip ci]`, and the Windows installer release workflow now refuses to upload an MSI unless the matching GHCR release image tag exists.
 - Windows drive path bulk-delete filters now normalize backslashes consistently and accept glob-style patterns such as `G:\*` and `*G*`.
 - The Documents tree now offers folder-level indexed-document deletion for stale paths such as missing Google Drive `G:` mounts.
+- The upload endpoint no longer masks real `.doc` processing errors with a generic "Legacy .doc format is not supported" message; actual errors from the loader chain are now shown to users.
+- The desktop app now detects when its Docker backend is running an older version and offers a one-click update at startup, preventing stale-backend issues where bug fixes appear missing.
 
 ## [2.14.7] - 2026-05-17
 

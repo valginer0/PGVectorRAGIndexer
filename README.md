@@ -91,8 +91,8 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ### 🆕 Latest Fixes (v2.14.7)
 
-- **✅ PowerPoint Indexing Robustness**: `.pptx` files no longer fail when unstructured's optional PPTX extras are missing; native extraction and a built-in OpenXML fallback cover supported decks.
-- **✅ Image OCR Format Normalization**: Phone/camera images that open as special Pillow formats are normalized before OCR, preventing valid `.jpg` files from failing as unsupported.
+- **✅ Accurate `.doc` Error Reporting**: Legacy `.doc` upload failures now show the real error from the loader chain instead of a generic "not supported" message that masked actual issues.
+- **✅ Stale Docker Backend Detection**: The desktop app now detects when its Docker backend is running an older version and offers a one-click update at startup.
 
 ### Recent Fixes (v2.14.4)
 

@@ -144,45 +144,88 @@ def main():
         changelog_path = os.path.join(base_dir, 'CHANGELOG.md')
         if not os.path.exists(changelog_path):
             return False
-            
-        try:
-            tag_result = subprocess.run(['git', 'describe', '--tags', '--abbrev=0'], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            if tag_result.returncode != 0: return False
-            last_tag = tag_result.stdout.strip()
-            log_result = subprocess.run(['git', 'log', f'{last_tag}..HEAD', '--pretty=format:%s'], stdout=subprocess.PIPE, text=True)
-            commits = [line.strip() for line in log_result.stdout.split('\n') if line.strip()]
-        except Exception:
-            return False
-            
+
         with open(changelog_path, 'r', encoding='utf-8') as f:
             content = f.read()
-            
+
         if f"## [{version_info['full']}]" in content:
             print(f"  - CHANGELOG.md: entry for {version_info['full']} already exists")
             return False
-            
+
+        # Prefer hand-written [Unreleased] content over auto-generated commit messages.
+        # The [Unreleased] section is everything from its header up to (but not
+        # including) the next versioned section header or end-of-file.
+        unreleased_match = re.search(
+            r'^## \[Unreleased\]\s*\n(.*?)(?=^## \[|\Z)',
+            content,
+            re.MULTILINE | re.DOTALL,
+        )
+        unreleased_body = unreleased_match.group(1).strip() if unreleased_match else ''
+        has_handwritten = bool(re.search(r'^- ', unreleased_body, re.MULTILINE))
+
+        if has_handwritten:
+            new_section = (
+                f"## [{version_info['full']}] - {version_info['date']}\n\n"
+                f"{unreleased_body}\n\n"
+            )
+            # Rename [Unreleased] → new version section, restore a fresh [Unreleased] above it.
+            new_content = (
+                content[:unreleased_match.start()]
+                + "## [Unreleased]\n\n"
+                + new_section
+                + content[unreleased_match.end():]
+            )
+            if not dry_run:
+                with open(changelog_path, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+            print("  ✓ CHANGELOG.md: promoted [Unreleased] section to release entry")
+            return True
+
+        # Fallback: [Unreleased] was empty — auto-generate from git commit messages.
+        try:
+            tag_result = subprocess.run(
+                ['git', 'describe', '--tags', '--abbrev=0'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+            )
+            if tag_result.returncode != 0:
+                return False
+            last_tag = tag_result.stdout.strip()
+            log_result = subprocess.run(
+                ['git', 'log', f'{last_tag}..HEAD', '--pretty=format:%s'],
+                stdout=subprocess.PIPE, text=True,
+            )
+            commits = [line.strip() for line in log_result.stdout.split('\n') if line.strip()]
+        except Exception:
+            return False
+
         added, fixed, changed = [], [], []
         for msg in commits:
             ml = msg.lower()
-            if ml.startswith('feat') or ml.startswith('add'): added.append(f"- {msg}")
-            elif ml.startswith('fix') or ml.startswith('bug'): fixed.append(f"- {msg}")
-            elif "bump version" not in ml: changed.append(f"- {msg}")
-            
+            if ml.startswith('feat') or ml.startswith('add'):
+                added.append(f"- {msg}")
+            elif ml.startswith('fix') or ml.startswith('bug'):
+                fixed.append(f"- {msg}")
+            elif 'bump version' not in ml:
+                changed.append(f"- {msg}")
+
         lines = [f"## [{version_info['full']}] - {version_info['date']}\n"]
         if added: lines.extend(["### Added"] + added + [""])
         if fixed: lines.extend(["### Fixed"] + fixed + [""])
         if changed: lines.extend(["### Changed"] + changed + [""])
-        if not added and not fixed and not changed: lines.extend(["- Internal improvements and fixes.", ""])
-            
-        match = re.search(r'^## \[\d+\.\d+\.\d+\]', content, re.MULTILINE)
-        if match:
-            new_content = content[:match.start()] + "\n".join(lines) + "\n" + content[match.start():]
-            if not dry_run:
-                with open(changelog_path, 'w', encoding='utf-8') as f: f.write(new_content)
-            print("  ✓ CHANGELOG.md: injected auto-generated patch notes")
-            return True
-        return False
-        
+        if not added and not fixed and not changed:
+            lines.extend(["- Internal improvements and fixes.", ""])
+
+        new_section = "\n".join(lines) + "\n"
+        first_release = re.search(r'^## \[\d+\.\d+\.\d+\]', content, re.MULTILINE)
+        if not first_release:
+            return False
+        new_content = content[:first_release.start()] + new_section + content[first_release.start():]
+        if not dry_run:
+            with open(changelog_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+        print("  ✓ CHANGELOG.md: injected auto-generated patch notes")
+        return True
+
     if update_changelog(version_info, main_dir, dry_run):
         updated_count += 1
     

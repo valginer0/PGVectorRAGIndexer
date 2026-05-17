@@ -66,6 +66,21 @@ class SystemClient:
                     f"(v{self._server_version}) supports. Maximum: v{max_ver}. "
                     f"Please update the server."
                 )
+
+            # Catch the common case where the user installed a newer desktop
+            # app (or MSI) but forgot to update the Docker backend image.
+            try:
+                server_v = Version(self._server_version)
+            except InvalidVersion:
+                server_v = None
+            if server_v and client_v > server_v:
+                return False, (
+                    f"Your backend (v{self._server_version}) is older than this "
+                    f"client (v{CLIENT_VERSION}). Features and bug fixes from "
+                    f"the latest release may be missing.\n\n"
+                    f"Please update the server."
+                )
+
             return True, ""
         except ImportError:
             logger.debug("packaging not installed, skipping version check")

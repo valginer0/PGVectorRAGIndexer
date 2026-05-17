@@ -8,12 +8,17 @@ import tempfile
 import hashlib
 from datetime import datetime, timezone
 from typing import Optional, Any
+import xxhash
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Request, Query
 
 from api_models import IndexRequest, IndexResponse
 from services import get_indexer, encrypted_pdfs_encountered
 from auth import require_api_key
-from document_processor import UnsupportedFormatError, DocumentProcessingError, EncryptedPDFError
+from document_processor import (
+    UnsupportedFormatError,
+    DocumentProcessingError,
+    EncryptedPDFError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -81,32 +86,61 @@ async def upload_and_index(
     try:
         # Create temporary file with original extension
         suffix = os.path.splitext(file.filename)[1] if file.filename else '.tmp'
+        bytes_written = 0
+        hasher = xxhash.xxh64()
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
             temp_path = temp_file.name
-            # Write uploaded content to temp file
-            content = await file.read()
-            temp_file.write(content)
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                bytes_written += len(chunk)
+                hasher.update(chunk)
+                temp_file.write(chunk)
+        uploaded_file_hash = hasher.hexdigest()
         
-        logger.info(f"Uploaded file: {file.filename} ({len(content)} bytes) -> {temp_path}")
+        logger.info(f"Uploaded file: {file.filename} ({bytes_written} bytes) -> {temp_path}")
         
         # Determine the source URI to use (custom path or filename)
-        display_name = custom_source_uri if custom_source_uri else file.filename
+        display_name = custom_source_uri or file.filename or "upload"
         logger.info(f"upload_and_index: force_reindex={force_reindex} (type={type(force_reindex)})")
         
         # Process the file using temp path, but with custom source_uri for document_id
         idx = get_indexer()
+        document_id = hashlib.sha256(display_name.encode()).hexdigest()[:16]
         
-        # Process document from temp file
         metadata = {
             'upload_method': 'http_upload',
             'original_filename': file.filename,
+            'display_name': display_name,
+            'file_hash': uploaded_file_hash,
             'temp_path': temp_path
         }
+        if custom_source_uri:
+            metadata['custom_source_uri'] = custom_source_uri
         
         # Add document type if provided
         if document_type:
             metadata['type'] = document_type
+
+        existing_doc = idx.repository.get_document_by_id(document_id)
+        if not force_reindex and existing_doc:
+            existing_hash = (existing_doc.get('metadata') or {}).get('file_hash')
+            if existing_hash and existing_hash == uploaded_file_hash:
+                complete_run(run_id, status="success", files_scanned=1, files_skipped=1)
+                return IndexResponse(
+                    status='skipped',
+                    document_id=document_id,
+                    source_uri=display_name,
+                    chunks_indexed=0,
+                    message='Document already indexed with matching file hash'
+                )
+            logger.info(
+                "Existing upload %s will be reindexed because file hash changed or is missing",
+                document_id,
+            )
         
+        # Process document from temp file
         processed_doc = idx.processor.process(
             source_uri=temp_path,
             custom_metadata=metadata,
@@ -114,26 +148,16 @@ async def upload_and_index(
         )
         
         # Regenerate document_id based on the display name (not temp path)
-        processed_doc.document_id = hashlib.sha256(display_name.encode()).hexdigest()[:16]
+        processed_doc.document_id = document_id
         processed_doc.source_uri = display_name
         processed_doc.metadata['source_uri'] = display_name
         processed_doc.metadata['document_id'] = processed_doc.document_id
         if custom_source_uri:
             processed_doc.metadata['custom_source_uri'] = custom_source_uri
         
-        # Check if document already exists
-        if not force_reindex and idx.repository.document_exists(processed_doc.document_id):
-            complete_run(run_id, status="success", files_scanned=1, files_skipped=1)
-            return IndexResponse(
-                status='skipped',
-                document_id=processed_doc.document_id,
-                source_uri=processed_doc.source_uri,
-                chunks_indexed=0,
-                message='Document already indexed (use force_reindex=true to reindex)'
-            )
-        
-        # Delete existing if force reindex
-        if force_reindex and idx.repository.document_exists(processed_doc.document_id):
+        # Delete existing document before replacing it when force reindexing or
+        # when the uploaded file hash differs from the indexed metadata.
+        if existing_doc:
             logger.info(f"Removing existing document: {processed_doc.document_id}")
             idx.repository.delete_document(processed_doc.document_id)
         

@@ -140,6 +140,9 @@ For deployments where source folders live on server disks/NAS mounts, scheduled 
 - Server-scope scheduled scans run inside the backend scheduler, not through the
   HTTP API rate limiter, so nightly organization indexing is not constrained by
   `API_RATE_LIMIT_PER_MINUTE`.
+- Local, uploaded, and server-scheduled indexing have no application-level file
+  size cap by default (`MAX_FILE_SIZE_MB=0`). Set a positive value only when an
+  organization deliberately wants to reject larger documents.
 - Desktop-client bulk imports and client-scope scan requests are marked as
   trusted bulk indexing operations and retry residual 429 responses, so large
   imports do not fail file-by-file under normal rate-limit settings.

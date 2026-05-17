@@ -8,7 +8,7 @@ import pytest
 from pathlib import Path
 from config import get_config
 from indexer_v2 import DocumentIndexer
-from document_processor import DocumentProcessor
+from document_processor import DocumentProcessingError, DocumentProcessor
 
 
 class TestMarkdownFileSupport:
@@ -63,6 +63,36 @@ class TestMarkdownFileSupport:
             assert len(result.chunks) > 0
         except Exception as e:
             pytest.fail(f".markdown file validation failed: {e}")
+
+
+class TestFileSizeLimit:
+    """Regression coverage for large local/uploaded documents."""
+
+    def test_default_file_size_limit_is_disabled(self):
+        config = get_config()
+        assert config.max_file_size_mb == 0
+
+    def test_zero_file_size_limit_disables_guard(self, tmp_path):
+        test_file = tmp_path / "large.pdf"
+        with test_file.open("wb") as handle:
+            handle.seek((2 * 1024 * 1024) - 1)
+            handle.write(b"\0")
+
+        processor = DocumentProcessor()
+        processor.config.max_file_size_mb = 0
+        processor._validate_source(str(test_file))
+
+    def test_positive_file_size_limit_still_enforced(self, tmp_path):
+        test_file = tmp_path / "large.pdf"
+        with test_file.open("wb") as handle:
+            handle.seek((2 * 1024 * 1024) - 1)
+            handle.write(b"\0")
+
+        processor = DocumentProcessor()
+        processor.config.max_file_size_mb = 1
+
+        with pytest.raises(DocumentProcessingError, match="File too large"):
+            processor._validate_source(str(test_file))
 
 
 @pytest.mark.database

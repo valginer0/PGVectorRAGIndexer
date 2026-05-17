@@ -310,8 +310,10 @@ server {
     access_log /var/log/nginx/rag-api-access.log;
     error_log /var/log/nginx/rag-api-error.log;
 
-    # Client body size (for file uploads)
-    client_max_body_size 50M;
+    # Client body size (for file uploads). 0 disables the Nginx upload cap;
+    # set an explicit value only when your deployment intentionally rejects
+    # larger documents.
+    client_max_body_size 0;
 
     location / {
         proxy_pass http://rag_api;
@@ -465,6 +467,21 @@ integrations, remains rate-limited.
 Server-side scheduled scans run inside the backend scheduler rather than through
 HTTP request handling, so organization nightly indexing jobs are not constrained
 by `API_RATE_LIMIT_PER_MINUTE`.
+
+### 5. Document Size Limits
+
+By default, PGVectorRAGIndexer does not apply an application-level file size cap
+when indexing local files, HTTP uploads, or server-scheduled folders:
+
+```bash
+MAX_FILE_SIZE_MB=0
+```
+
+Set `MAX_FILE_SIZE_MB` to a positive value only when the deployment
+intentionally rejects larger documents. If a reverse proxy is in front of the
+API, keep its upload limit aligned with the application setting; the Nginx
+example above uses `client_max_body_size 0` so the proxy does not silently
+reintroduce a smaller cap.
 
 ## 📊 Monitoring & Logging
 

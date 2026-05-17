@@ -218,6 +218,57 @@ class TestDocumentProcessorOCRIntegration:
         )
         assert can_load_image, "No loader registered for image files"
 
+    def test_textless_image_indexes_metadata_fallback(self, tmp_path):
+        """Images with no OCR text should remain searchable by filename/path."""
+        from document_processor import DocumentProcessor
+
+        image_path = tmp_path / "uploaded.jpg"
+        image_path.write_bytes(b"not a real image; fake loader avoids decoding")
+
+        class EmptyImageLoader:
+            def can_load(self, _source_uri):
+                return True
+
+            def load(self, _source_uri, ocr_mode="auto"):
+                return []
+
+            def get_metadata(self, _source_uri):
+                return {}
+
+        processor = DocumentProcessor()
+        processor.loaders = [EmptyImageLoader()]
+        result = processor.process(
+            str(image_path),
+            custom_metadata={
+                "display_name": r"C:\Users\v_ale\My Drive\home\cars\kiaEV6\IMG_0535.jpg"
+            },
+        )
+
+        assert len(result.chunks) == 1
+        assert "IMG_0535.jpg" in result.chunks[0].page_content
+        assert "no readable text" in result.chunks[0].page_content
+        assert result.chunks[0].metadata["extraction_method"] == "metadata_fallback"
+
+    def test_textless_text_file_still_reports_empty(self, tmp_path):
+        """Metadata fallback is limited to textless images/PDFs."""
+        from document_processor import DocumentProcessor, LoaderError
+
+        text_path = tmp_path / "empty.txt"
+        text_path.write_text("", encoding="utf-8")
+
+        class EmptyTextLoader:
+            def can_load(self, _source_uri):
+                return True
+
+            def load(self, _source_uri):
+                return []
+
+        processor = DocumentProcessor()
+        processor.loaders = [EmptyTextLoader()]
+
+        with pytest.raises(LoaderError, match="No content loaded"):
+            processor.process(str(text_path))
+
 
 class TestIndexerOCRIntegration:
     """Tests for DocumentIndexer OCR integration."""

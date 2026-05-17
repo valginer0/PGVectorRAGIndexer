@@ -265,7 +265,10 @@ class AppConfig(BaseSettings):
     ocr: OCRConfig = Field(default_factory=OCRConfig)
     
     # Application settings
-    max_file_size_mb: int = Field(default=50, description='Maximum file size in MB')
+    max_file_size_mb: int = Field(
+        default=0,
+        description='Maximum file size in MB for local/indexed files; 0 disables the limit'
+    )
     supported_extensions: list[str] = Field(
         default=['.txt', '.md', '.markdown', '.pdf', '.doc', '.docx', '.xlsx', '.csv', '.html', '.pptx', '.yaml', '.yml', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp'],
         description='Supported file extensions'
@@ -276,6 +279,14 @@ class AppConfig(BaseSettings):
     )
     cache_embeddings: bool = Field(default=True, description='Cache embeddings in memory')
     enable_deduplication: bool = Field(default=True, description='Enable document deduplication')
+
+    @field_validator('max_file_size_mb')
+    @classmethod
+    def validate_max_file_size_mb(cls, v: int) -> int:
+        """Validate max file size; 0 disables the document-size guard."""
+        if v < 0:
+            raise ValueError('max_file_size_mb must be 0 or greater')
+        return v
     
     @classmethod
     def load(cls) -> 'AppConfig':

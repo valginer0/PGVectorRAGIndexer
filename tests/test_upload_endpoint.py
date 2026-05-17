@@ -4,6 +4,7 @@ Tests for file upload and index endpoint.
 
 import pytest
 import io
+import uuid
 from fastapi.testclient import TestClient
 from api import app
 
@@ -59,6 +60,52 @@ class TestUploadAndIndex:
         assert response2.status_code == 200
         data = response2.json()
         assert data["status"] == "success"
+
+    def test_existing_upload_skips_before_parsing(self, client, monkeypatch):
+        """Already-indexed uploads should skip before loader/parser work."""
+        from services import get_indexer
+
+        filename = f"skip_before_parse_{uuid.uuid4().hex}.txt"
+        response1 = client.post(
+            "/upload-and-index",
+            files={"file": (filename, io.BytesIO(b"first content"), "text/plain")}
+        )
+        assert response1.status_code == 200
+        assert response1.json()["status"] == "success"
+
+        def fail_if_called(*_args, **_kwargs):
+            raise AssertionError("processor.process should not run for existing uploads")
+
+        idx = get_indexer()
+        monkeypatch.setattr(idx.processor, "process", fail_if_called)
+
+        response2 = client.post(
+            "/upload-and-index",
+            files={"file": (filename, io.BytesIO(b"first content"), "text/plain")}
+        )
+        assert response2.status_code == 200
+        data = response2.json()
+        assert data["status"] == "skipped"
+        assert data["document_id"] == response1.json()["document_id"]
+
+    def test_changed_upload_reindexes_without_force(self, client):
+        """Same-path uploads with changed content should refresh by file hash."""
+        filename = f"changed_without_force_{uuid.uuid4().hex}.txt"
+        response1 = client.post(
+            "/upload-and-index",
+            files={"file": (filename, io.BytesIO(b"original content"), "text/plain")}
+        )
+        assert response1.status_code == 200
+        assert response1.json()["status"] == "success"
+
+        response2 = client.post(
+            "/upload-and-index",
+            files={"file": (filename, io.BytesIO(b"updated content"), "text/plain")}
+        )
+        assert response2.status_code == 200
+        data = response2.json()
+        assert data["status"] == "success"
+        assert data["document_id"] == response1.json()["document_id"]
 
     def test_upload_legacy_doc_returns_hint(self, client):
         file_data = io.BytesIO(b"dummy")

@@ -742,6 +742,57 @@ class DocumentProcessor:
         """Generate unique document ID from source URI."""
         # Use SHA256 hash of source URI for consistent IDs
         return hashlib.sha256(source_uri.encode()).hexdigest()[:16]
+
+    def _display_source_uri(
+        self,
+        source_uri: str,
+        custom_metadata: Optional[Dict[str, Any]]
+    ) -> str:
+        """Return the user-facing source path/name for metadata fallback text."""
+        metadata = custom_metadata or {}
+        for key in ("custom_source_uri", "display_name", "original_filename"):
+            value = metadata.get(key)
+            if value:
+                return str(value)
+        return source_uri
+
+    def _display_filename(self, display_source: str) -> str:
+        """Extract a filename from either POSIX or Windows-style paths."""
+        parts = re.split(r"[\\/]+", display_source.strip())
+        return parts[-1] if parts and parts[-1] else display_source
+
+    def _metadata_fallback_document(
+        self,
+        source_uri: str,
+        custom_metadata: Optional[Dict[str, Any]]
+    ) -> Optional[Document]:
+        """Create a searchable metadata-only document for textless media files."""
+        display_source = self._display_source_uri(source_uri, custom_metadata)
+        ext = Path(display_source).suffix.lower() or Path(source_uri).suffix.lower()
+        if ext not in (self.IMAGE_EXTENSIONS | {'.pdf'}):
+            return None
+
+        filename = self._display_filename(display_source)
+        file_type = "image" if ext in self.IMAGE_EXTENSIONS else "pdf"
+        content = "\n".join([
+            f"File name: {filename}",
+            f"File path: {display_source}",
+            f"File type: {file_type} ({ext})",
+            "Text extraction: no readable text was found by native extraction or OCR.",
+        ])
+        return Document(
+            page_content=content,
+            metadata={
+                'source': display_source,
+                'file_type': file_type,
+                'file_extension': ext,
+                'extraction_method': 'metadata_fallback',
+                'content_warning': 'no_text_extracted',
+            }
+        )
+
+    def _has_loaded_content(self, documents: List[Document]) -> bool:
+        return any((doc.page_content or '').strip() for doc in documents)
     
     def _validate_source(self, source_uri: str) -> None:
         """Validate source URI."""
@@ -756,11 +807,12 @@ class DocumentProcessor:
         
         # Check file size
         if path.is_file():
-            max_size = self.config.max_file_size_mb * 1024 * 1024
-            if path.stat().st_size > max_size:
+            max_size = self.config.max_file_size_mb
+            max_size_bytes = max_size * 1024 * 1024
+            if max_size > 0 and path.stat().st_size > max_size_bytes:
                 raise DocumentProcessingError(
                     f"File too large: {path.stat().st_size} bytes "
-                    f"(max: {max_size} bytes)"
+                    f"(max: {max_size_bytes} bytes)"
                 )
         
         # Check extension or filename
@@ -867,9 +919,11 @@ class DocumentProcessor:
         # Validate source
         self._validate_source(source_uri)
         
-        # Calculate file hash if it's a local file
-        file_hash = None
-        if not source_uri.startswith(('http://', 'https://')):
+        # Calculate file hash if it's a local file. Upload endpoints may pass a
+        # precomputed hash so large files are not read twice before parsing.
+        metadata_overrides = custom_metadata or {}
+        file_hash = metadata_overrides.get('file_hash')
+        if file_hash is None and not source_uri.startswith(('http://', 'https://')):
             file_hash = calculate_file_hash(Path(source_uri))
         
         # Get appropriate loader
@@ -893,8 +947,16 @@ class DocumentProcessor:
                 if doc.page_content:
                     doc.page_content = doc.page_content.replace('\x00', '')
 
-            if not documents:
-                raise LoaderError("No content loaded from document")
+            if not self._has_loaded_content(documents):
+                fallback_doc = self._metadata_fallback_document(source_uri, custom_metadata)
+                if fallback_doc:
+                    logger.warning(
+                        "No text extracted from %s; indexing metadata fallback",
+                        source_uri,
+                    )
+                    documents = [fallback_doc]
+                else:
+                    raise LoaderError("No content loaded from document")
         except DocumentProcessingError:
             raise
         except LoaderError as e:

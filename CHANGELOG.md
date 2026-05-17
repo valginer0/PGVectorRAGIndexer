@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Large document indexing is no longer capped at 50 MB by default; `MAX_FILE_SIZE_MB=0` now disables the application-level size guard unless an operator explicitly configures a positive limit.
+- Textless images and PDFs now index a metadata fallback entry instead of failing with `No content loaded from document`, keeping filenames and paths searchable when OCR/native extraction finds no readable text.
+- HTTP uploads are streamed to temporary files instead of being read into memory at once before indexing.
 - Windows release installers and the desktop Docker manager now ignore stale same-project `APP_IMAGE` release-tag overrides that point to an older backend image; non-version debug/custom image tags still work.
 - Full releases no longer mark the version bump commit as `[skip ci]`, and the Windows installer release workflow now refuses to upload an MSI unless the matching GHCR release image tag exists.
 - Windows drive path bulk-delete filters now normalize backslashes consistently and accept glob-style patterns such as `G:\*` and `*G*`.

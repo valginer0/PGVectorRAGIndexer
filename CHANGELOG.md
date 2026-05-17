@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.8] - 2026-05-17
+
 ### Fixed
 - Large document indexing is no longer capped at 50 MB by default; `MAX_FILE_SIZE_MB=0` now disables the application-level size guard unless an operator explicitly configures a positive limit.
 - Textless images and PDFs now index a metadata fallback entry instead of failing with `No content loaded from document`, keeping filenames and paths searchable when OCR/native extraction finds no readable text.

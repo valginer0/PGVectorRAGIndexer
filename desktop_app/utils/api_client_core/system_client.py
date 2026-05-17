@@ -3,6 +3,7 @@ from packaging.version import Version, InvalidVersion
 import logging
 
 from desktop_app.utils.api_client_core.base_client import BaseAPIClient
+from desktop_app.utils.errors import APIConnectionError, APIError
 from version import __version__ as CLIENT_VERSION
 
 logger = logging.getLogger(__name__)
@@ -85,8 +86,18 @@ class SystemClient:
         except ImportError:
             logger.debug("packaging not installed, skipping version check")
             return True, ""
+        except APIConnectionError:
+            return True, ""  # Server unreachable — don't block startup
+        except APIError:
+            # Server is up but the version endpoint doesn't exist — backend
+            # predates version reporting. Treat as stale.
+            return False, (
+                f"Your Docker backend is older than this app (v{CLIENT_VERSION}) "
+                f"and doesn't support version reporting.\n\n"
+                f"Please update the Docker backend."
+            )
         except Exception:
-            return True, ""  # Can't reach server — don't block
+            return True, ""  # Unknown error — don't block startup
 
     def get_statistics(self) -> Dict[str, Any]:
         """Get database statistics."""

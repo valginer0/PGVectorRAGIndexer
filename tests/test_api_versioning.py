@@ -118,12 +118,19 @@ class TestClientVersionCheck:
             compatible, msg = client.check_version_compatibility()
         assert compatible is True
 
-    def test_endpoint_missing_is_ok(self):
-        """Old servers without /api/version should not block."""
+    def test_endpoint_missing_prompts_update(self):
+        """Old backends that return 404 on /api/v1/version should prompt an update."""
+        from desktop_app.utils.errors import APIError
         client = self._make_client()
-        mock_resp = MagicMock()
-        mock_resp.status_code = 404
-        with patch.object(client._base, "request", side_effect=RuntimeError("HTTP 404")):
+        with patch.object(client._base, "request", side_effect=APIError("API Error (404)", status_code=404)):
+            compatible, msg = client.check_version_compatibility()
+        assert compatible is False
+        assert "update" in msg.lower()
+
+    def test_server_unknown_error_is_ok(self):
+        """Unexpected errors during version check should not block startup."""
+        client = self._make_client()
+        with patch.object(client._base, "request", side_effect=RuntimeError("unexpected")):
             compatible, msg = client.check_version_compatibility()
         assert compatible is True
 

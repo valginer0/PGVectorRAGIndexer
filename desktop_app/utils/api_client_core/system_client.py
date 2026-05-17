@@ -56,13 +56,13 @@ class SystemClient:
 
             if client_v < min_v:
                 return False, (
-                    f"This client (v{CLIENT_VERSION}) is too old for the server "
+                    f"This app (v{CLIENT_VERSION}) is too old for the Docker backend "
                     f"(v{self._server_version}). Minimum required: v{min_ver}. "
                     f"Please update the desktop app."
                 )
             if client_v > max_v:
                 return False, (
-                    f"This client (v{CLIENT_VERSION}) is newer than the server "
+                    f"This app (v{CLIENT_VERSION}) is newer than the Docker backend "
                     f"(v{self._server_version}) supports. Maximum: v{max_ver}. "
                     f"Please update the server."
                 )
@@ -75,8 +75,8 @@ class SystemClient:
                 server_v = None
             if server_v and client_v > server_v:
                 return False, (
-                    f"Your backend (v{self._server_version}) is older than this "
-                    f"client (v{CLIENT_VERSION}). Features and bug fixes from "
+                    f"Your Docker backend (v{self._server_version}) is older than "
+                    f"this app (v{CLIENT_VERSION}). Features and bug fixes from "
                     f"the latest release may be missing.\n\n"
                     f"Please update the server."
                 )

@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.14.9] - 2026-05-17
+
+### Fixed
+- fix: treat missing version endpoint as stale backend, not compatible
+
 ## [2.14.8] - 2026-05-17
 
 ### Fixed

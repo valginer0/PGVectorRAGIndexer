@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Search evaluation fixture loader and CLI skeleton.
+Search evaluation fixture loader and live HTTP evaluator.
 
-This first pass is intentionally offline: it validates the fixture corpus and
-builds the query execution plan. Live indexing/search execution can be layered
-on top of these helpers in the next step.
+The CLI validates the fixture corpus, prints query execution plans, and can run
+the corpus against a PGVectorRAGIndexer HTTP API to produce JSON search-quality
+results.
 """
 
 from __future__ import annotations

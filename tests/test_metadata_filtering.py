@@ -89,6 +89,20 @@ class TestMetadataUpload:
         assert result["metadata"]["namespace"] == "search_eval_v0"
         assert result["metadata"]["category"] == "search_eval"
         assert result["metadata"]["doc_type"] == "fixture"
+
+    def test_upload_rejects_conflicting_document_type_metadata(self, client):
+        """document_type and metadata.type must not silently disagree."""
+        response = client.post(
+            "/upload-and-index",
+            files={"file": ("conflict.txt", b"Conflicting type metadata", "text/plain")},
+            data={
+                "document_type": "resume",
+                "metadata": json.dumps({"type": "policy"}),
+            },
+        )
+
+        assert response.status_code == 400
+        assert "document_type conflicts with metadata.type" in response.text
     
     def test_upload_without_document_type(self, client, db_manager):
         """Test uploading a document without a type (should work)."""
@@ -300,22 +314,7 @@ class TestMetadataListDocuments:
         
         assert len(documents) >= 2
         
-        # Debug: print what we got
-        print(f"\nDocuments returned: {len(documents)}")
-        for doc in documents:
-            print(f"  - {doc.get('document_id')}: type={doc.get('document_type')}, keys={list(doc.keys())}")
-        
-        # Debug: Check what's actually in the database
-        with db_manager.get_cursor(dict_cursor=True) as cursor:
-            cursor.execute("SELECT document_id, metadata FROM document_chunks ORDER BY indexed_at DESC LIMIT 5")
-            db_results = cursor.fetchall()
-            print(f"\nDatabase contents:")
-            for row in db_results:
-                print(f"  - {row['document_id']}: metadata={row['metadata']}")
-        
-        # Check that document_type is included
         types_found = [doc.get('document_type') for doc in documents if doc.get('document_type')]
-        print(f"Types found: {types_found}")
         assert 'policy' in types_found, f"Expected 'policy' in {types_found}"
         assert 'resume' in types_found, f"Expected 'resume' in {types_found}"
     

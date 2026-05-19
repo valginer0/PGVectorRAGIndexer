@@ -27,10 +27,11 @@ This namespace lets the evaluator clean up and query only its own documents.
 
 ## Validation
 
-Run the fixture integrity test after editing the corpus, manifest, or query set:
+Run the fixture integrity and evaluator CLI tests after editing the corpus,
+manifest, query set, or evaluator:
 
 ```bash
-venv/bin/python -m pytest tests/test_search_eval_fixtures.py -q
+venv/bin/python -m pytest tests/test_search_eval_fixtures.py tests/test_search_eval_cli.py -q
 ```
 
 The test checks that:
@@ -49,6 +50,7 @@ venv/bin/python scripts/search_eval.py validate
 venv/bin/python scripts/search_eval.py plan
 venv/bin/python scripts/search_eval.py plan --json
 venv/bin/python scripts/search_eval.py run --output-json docs/internal/SEARCH_EVAL_BASELINE_V0.json
+venv/bin/python scripts/search_eval.py run --skip-cleanup --skip-index --query-id literal_ev6_txt
 ```
 
 ## Next Step

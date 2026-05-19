@@ -123,6 +123,15 @@ async def upload_and_index(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail=f"Invalid metadata JSON: {e}",
                 )
+        if (
+            document_type
+            and user_metadata.get("type") is not None
+            and user_metadata.get("type") != document_type
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="document_type conflicts with metadata.type",
+            )
 
         metadata = dict(user_metadata)
         metadata.update({
@@ -135,7 +144,7 @@ async def upload_and_index(
         if custom_source_uri:
             metadata['custom_source_uri'] = custom_source_uri
         
-        # Add document type if provided
+        # document_type is the explicit form-field override for metadata.type.
         if document_type:
             metadata['type'] = document_type
 

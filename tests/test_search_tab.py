@@ -96,6 +96,27 @@ def test_load_extensions_defaults_to_select_all(search_tab, mock_api_client):
     # checked_items() returns [] when only '*' is selected (means no filter)
     assert search_tab.ext_filter.checked_items() == []
 
+def test_select_all_is_sticky(search_tab, mock_api_client):
+    """'*' must never disappear: unchecking it or the last specific ext reverts to '*'."""
+    mock_api_client.get_extensions.return_value = [".txt"]
+    search_tab.load_extensions()
+    box = search_tab.ext_filter
+
+    # Simulate unchecking '*' directly
+    star_index = box._model.index(0, 0)
+    box._toggle_item(star_index)
+    assert box.currentText() == "*", "unchecking '*' alone should re-check it"
+    assert box.checked_items() == []
+
+    # Check .txt (unchecks '*'), then uncheck .txt → should revert to '*'
+    txt_index = box._model.index(1, 0)
+    box._toggle_item(txt_index)   # check .txt, uncheck *
+    assert box.currentText() == ".txt"
+    box._toggle_item(txt_index)   # uncheck .txt → nothing left → revert to *
+    assert box.currentText() == "*", "unchecking last specific ext should revert to '*'"
+    assert box.checked_items() == []
+
+
 def test_display_results_deduplicates_chunks_by_source(search_tab):
     """Multiple chunk matches from the same file should display as one row."""
     results = [

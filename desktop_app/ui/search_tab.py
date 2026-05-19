@@ -66,6 +66,15 @@ class CheckableComboBox(QComboBox):
                         other.setData(Qt.Unchecked, Qt.CheckStateRole)
                         break
 
+        # If nothing is checked (user unchecked * or last specific ext),
+        # fall back to "*" so the field is never blank.
+        if not self._raw_checked():
+            for i in range(self._model.rowCount()):
+                other = self._model.item(i)
+                if other.text() == self.SELECT_ALL:
+                    other.setData(Qt.Checked, Qt.CheckStateRole)
+                    break
+
         self._suppress_hide = True  # keep popup open after toggling
         self._refresh_text()
 

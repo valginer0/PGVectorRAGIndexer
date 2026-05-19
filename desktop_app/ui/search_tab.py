@@ -61,8 +61,8 @@ class CheckableComboBox(QComboBox):
 
     def add_item(self, text: str):
         item = QStandardItem(text)
-        item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
-        item.setCheckState(Qt.Unchecked)
+        item.setFlags(Qt.ItemIsEnabled)  # No ItemIsUserCheckable — we toggle manually
+        item.setData(Qt.Unchecked, Qt.CheckStateRole)
         self._model.appendRow(item)
 
     def clear_items(self):

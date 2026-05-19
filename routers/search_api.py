@@ -34,7 +34,8 @@ async def search_documents(request: SearchRequest):
             results = ret.search_hybrid(
                 query=request.query,
                 top_k=request.top_k,
-                alpha=request.alpha
+                alpha=request.alpha,
+                filters=request.filters,
             )
         else:
             results = ret.search(

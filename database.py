@@ -690,9 +690,9 @@ class DocumentRepository:
         """Return sorted list of distinct file extensions present in the index."""
         query = """
         SELECT DISTINCT
-            LOWER(CONCAT('.', SPLIT_PART(REVERSE(source_uri), '.', 1))) AS ext
+            LOWER(CONCAT('.', (REGEXP_MATCH(source_uri, '\\.([a-zA-Z0-9]{1,10})$'))[1])) AS ext
         FROM document_chunks
-        WHERE source_uri ~ '\\.[^./\\\\]+$'
+        WHERE source_uri ~ '\\.([a-zA-Z0-9]{1,10})$'
         ORDER BY ext
         """
         with self.db.get_cursor() as cursor:

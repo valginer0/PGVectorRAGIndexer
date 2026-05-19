@@ -185,7 +185,8 @@ class DocumentRetriever:
         self,
         query: str,
         top_k: Optional[int] = None,
-        alpha: Optional[float] = None
+        alpha: Optional[float] = None,
+        filters: Optional[Dict[str, Any]] = None,
     ) -> List[SearchResult]:
         """
         Hybrid search combining vector and full-text search.
@@ -204,7 +205,27 @@ class DocumentRetriever:
         """
         top_k = top_k or self.config.retrieval.top_k
         alpha = alpha if alpha is not None else self.config.retrieval.hybrid_alpha
-        
+
+        # Build WHERE clause for optional filters (applied in scored CTE)
+        filter_clauses = []
+        filter_params: List[Any] = []
+        if filters:
+            for key, value in filters.items():
+                if key == 'extensions' and isinstance(value, list) and value:
+                    ext_clauses = []
+                    for ext in value:
+                        normalized = ext if ext.startswith('.') else f'.{ext}'
+                        ext_clauses.append("d.source_uri ILIKE %s")
+                        filter_params.append(f'%{normalized}')
+                    filter_clauses.append(f"({' OR '.join(ext_clauses)})")
+                elif key in ['type', 'namespace', 'category']:
+                    filter_clauses.append(f"d.metadata->>'{key}' ILIKE %s")
+                    filter_params.append(value)
+                elif key.startswith('metadata.'):
+                    filter_clauses.append("d.metadata->>%s = %s")
+                    filter_params.extend([key[9:], value])
+        filter_where = f"AND {' AND '.join(filter_clauses)}" if filter_clauses else ""
+
         # Parse query for quoted phrases and regular terms
         phrases, terms = parse_search_query(query)
         
@@ -279,6 +300,7 @@ class DocumentRetriever:
                 END AS has_text_match
             FROM candidates c
             JOIN document_chunks d ON c.chunk_id = d.chunk_id
+            WHERE 1=1 {filter_where}
         ),
         ranked AS (
             SELECT *,
@@ -314,11 +336,13 @@ class DocumentRetriever:
         # - embedding for candidates ORDER BY
         # - tsquery_params for candidates WHERE
         # - embedding x2 for scored (distance, ROW_NUMBER)
+        # - filter_params for scored WHERE filter
         # - tsquery_params x4 for scored (2x CASE WHEN, 1x ts_rank_cd each)
         # - alpha x3, top_k
         params = [query_embedding]  # candidates ORDER BY
         params.extend(tsquery_params)  # candidates WHERE
         params.extend([query_embedding, query_embedding])  # scored: distance, ROW_NUMBER
+        params.extend(filter_params)  # scored: WHERE filter
         params.extend(tsquery_params)  # scored: 1st CASE WHEN
         params.extend(tsquery_params)  # scored: ts_rank_cd
         params.extend(tsquery_params)  # scored: 2nd CASE WHEN

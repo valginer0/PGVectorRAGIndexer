@@ -86,6 +86,45 @@ def test_perform_search_success(search_tab):
         mock_worker_instance.start.assert_called_once()
         assert not search_tab.search_btn.isEnabled()
 
+def test_load_extensions_keeps_filter_blank(search_tab, mock_api_client):
+    """Loading extension choices should not preselect a filter."""
+    mock_api_client.get_extensions.return_value = [".txt", ".pdf"]
+
+    search_tab.load_extensions()
+
+    assert search_tab.ext_filter.currentText() == ""
+    assert search_tab.ext_filter.checked_items() == []
+
+def test_display_results_deduplicates_chunks_by_source(search_tab):
+    """Multiple chunk matches from the same file should display as one row."""
+    results = [
+        {
+            "relevance_score": 0.95,
+            "source_uri": "/docs/ev6.txt",
+            "text_content": "EV6 charging notes",
+            "chunk_index": 2,
+        },
+        {
+            "relevance_score": 0.85,
+            "source_uri": "/docs/ev6.txt",
+            "text_content": "EV6 warranty notes",
+            "chunk_index": 5,
+        },
+        {
+            "relevance_score": 0.75,
+            "source_uri": "/docs/other.txt",
+            "text_content": "Other notes",
+            "chunk_index": 1,
+        },
+    ]
+
+    search_tab.display_results(results)
+
+    assert search_tab.results_table.rowCount() == 2
+    assert search_tab.results_table.item(0, 2).text() == "/docs/ev6.txt"
+    assert search_tab.results_table.item(0, 3).text() == "2"
+    assert search_tab.results_table.item(1, 2).text() == "/docs/other.txt"
+
 def test_search_finished_success(search_tab):
     """Test handling of successful search results."""
     results = [

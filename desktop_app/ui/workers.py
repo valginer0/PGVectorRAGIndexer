@@ -9,7 +9,7 @@ class SearchWorker(QThread):
     """Worker thread for performing searches."""
     finished = Signal(bool, object)
 
-    def __init__(self, api_client, query, top_k, min_score, metric, document_type=None):
+    def __init__(self, api_client, query, top_k, min_score, metric, document_type=None, extensions=None):
         super().__init__()
         self.api_client = api_client
         self.query = query
@@ -17,6 +17,7 @@ class SearchWorker(QThread):
         self.min_score = min_score
         self.metric = metric
         self.document_type = document_type
+        self.extensions = extensions
 
     def run(self):
         try:
@@ -25,7 +26,8 @@ class SearchWorker(QThread):
                 top_k=self.top_k,
                 min_score=self.min_score,
                 metric=self.metric,
-                document_type=self.document_type
+                document_type=self.document_type,
+                extensions=self.extensions,
             )
             self.finished.emit(True, results)
         except Exception as e:

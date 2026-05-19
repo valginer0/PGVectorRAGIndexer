@@ -646,6 +646,15 @@ class DocumentRepository:
                     # Use ILIKE for case-insensitive matching
                     where_clauses.append(f"metadata->>'{key}' ILIKE %s")
                     params.append(value)
+                elif key == 'extensions' and isinstance(value, list) and value:
+                    # Filter by file extension: OR across all requested extensions.
+                    # Each extension is matched case-insensitively at the end of source_uri.
+                    ext_clauses = []
+                    for ext in value:
+                        normalized = ext if ext.startswith('.') else f'.{ext}'
+                        ext_clauses.append("source_uri ILIKE %s")
+                        params.append(f'%{normalized}')
+                    where_clauses.append(f"({' OR '.join(ext_clauses)})")
                 else:
                     # Direct column match (e.g., document_id, source_uri)
                     where_clauses.append(f"{key} = %s")
@@ -676,6 +685,20 @@ class DocumentRepository:
             cursor.execute(query, params)
             results = cursor.fetchall()
             return [dict(row) for row in results]
+
+    def get_indexed_extensions(self) -> List[str]:
+        """Return sorted list of distinct file extensions present in the index."""
+        query = """
+        SELECT DISTINCT
+            LOWER(CONCAT('.', SPLIT_PART(REVERSE(source_uri), '.', 1))) AS ext
+        FROM document_chunks
+        WHERE source_uri ~ '\\.[^./\\\\]+$'
+        ORDER BY ext
+        """
+        with self.db.get_cursor() as cursor:
+            cursor.execute(query)
+            rows = cursor.fetchall()
+        return [row[0] for row in rows if row[0] and row[0] != '.']
     
     def get_statistics(self) -> Dict[str, Any]:
         """

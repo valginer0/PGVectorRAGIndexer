@@ -174,7 +174,8 @@ class APIClient:
         min_score: float = 0.5,
         metric: str = "cosine",
         document_type: Optional[str] = None,
-        filters: Optional[Dict[str, Any]] = None
+        filters: Optional[Dict[str, Any]] = None,
+        extensions: Optional[List[str]] = None,
     ) -> List[Dict[str, Any]]:
         """Search for documents."""
         return self._search.search(
@@ -183,8 +184,13 @@ class APIClient:
             min_score=min_score,
             metric=metric,
             document_type=document_type,
-            filters=filters
+            filters=filters,
+            extensions=extensions,
         )
+
+    def get_extensions(self) -> List[str]:
+        """Return distinct file extensions present in the index."""
+        return self._search.get_extensions()
     
     def list_documents(
         self,

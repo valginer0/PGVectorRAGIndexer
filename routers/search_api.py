@@ -322,6 +322,21 @@ async def get_context(
         )
 
 
+@search_router.get("/extensions", response_model=List[str], tags=["Search & Documents"], dependencies=[Depends(require_api_key)])
+async def get_indexed_extensions():
+    """Return sorted list of distinct file extensions present in the index."""
+    try:
+        db_manager = get_db_manager()
+        repo = DocumentRepository(db_manager)
+        return repo.get_indexed_extensions()
+    except Exception as e:
+        logger.error(f"Failed to get indexed extensions: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get indexed extensions: {str(e)}"
+        )
+
+
 @search_router.get("/metadata/keys", response_model=List[str], tags=["Metadata"], dependencies=[Depends(require_api_key)])
 async def get_metadata_keys(pattern: Optional[str] = Query(default=None)):
     """List all unique metadata keys."""

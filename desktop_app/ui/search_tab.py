@@ -16,7 +16,50 @@ from PySide6.QtWidgets import (
 )
 import qtawesome as qta
 from PySide6.QtCore import Qt, QThread, Signal, QPoint, QSize
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QStandardItemModel, QStandardItem
+
+
+class CheckableComboBox(QComboBox):
+    """A combobox where each item has a checkbox, supporting multi-selection."""
+
+    def __init__(self, placeholder: str = "All", parent=None):
+        super().__init__(parent)
+        self._placeholder = placeholder
+        self._model = QStandardItemModel(self)
+        self.setModel(self._model)
+        self.view().pressed.connect(self._toggle_item)
+        self.setEditable(True)
+        self.lineEdit().setReadOnly(True)
+        self.lineEdit().setPlaceholderText(placeholder)
+        self._refresh_text()
+
+    def _toggle_item(self, index):
+        item = self._model.itemFromIndex(index)
+        item.setCheckState(
+            Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked
+        )
+        self._refresh_text()
+
+    def _refresh_text(self):
+        checked = self.checked_items()
+        self.lineEdit().setText(", ".join(checked) if checked else "")
+
+    def add_item(self, text: str):
+        item = QStandardItem(text)
+        item.setFlags(Qt.ItemIsUserCheckable | Qt.ItemIsEnabled)
+        item.setCheckState(Qt.Unchecked)
+        self._model.appendRow(item)
+
+    def clear_items(self):
+        self._model.clear()
+        self._refresh_text()
+
+    def checked_items(self) -> list:
+        return [
+            self._model.item(i).text()
+            for i in range(self._model.rowCount())
+            if self._model.item(i).checkState() == Qt.Checked
+        ]
 from .shared import populate_document_type_combo
 from .workers import SearchWorker
 from ..utils.snippet_utils import extract_snippet
@@ -124,6 +167,28 @@ class SearchTab(QWidget):
         type_layout.addStretch()
         layout.addWidget(type_group)
 
+        # File extension filter
+        ext_group = QGroupBox("File Extension Filter (Optional)")
+        ext_layout = QHBoxLayout(ext_group)
+        ext_layout.addWidget(QLabel("Extensions:"))
+        self.ext_filter = CheckableComboBox(placeholder="All extensions")
+        self.ext_filter.setMinimumWidth(200)
+        self.ext_filter.setMinimumHeight(35)
+        self.ext_filter.setToolTip(
+            "Filter results by file extension. Check one or more extensions, or leave blank for all."
+        )
+        ext_layout.addWidget(self.ext_filter)
+
+        refresh_ext_btn = QPushButton()
+        refresh_ext_btn.setIcon(qta.icon('fa5s.sync-alt', color='#9ca3af'))
+        refresh_ext_btn.clicked.connect(self.load_extensions)
+        refresh_ext_btn.setToolTip("Refresh available file extensions")
+        refresh_ext_btn.setFixedSize(30, 30)
+        ext_layout.addWidget(refresh_ext_btn)
+
+        ext_layout.addStretch()
+        layout.addWidget(ext_group)
+
         # Load document types on init - DEFERRED to MainWindow
         # self.load_document_types()
 
@@ -188,12 +253,14 @@ class SearchTab(QWidget):
         
         # Start search worker
         selected_type = self.type_filter.currentText().strip() if hasattr(self, "type_filter") else ""
-        
+
         # Handle wildcard and empty type
         if selected_type == "*":
             document_type = None  # No filter (all types)
         else:
             document_type = selected_type  # Specific type or empty string (for "No Type")
+
+        extensions = self.ext_filter.checked_items() if hasattr(self, "ext_filter") else []
 
         self.search_worker = SearchWorker(
             self.api_client,
@@ -201,7 +268,8 @@ class SearchTab(QWidget):
             self.top_k_spin.value(),
             self.min_score_spin.value(),
             self.metric_combo.currentText(),
-            document_type=document_type
+            document_type=document_type,
+            extensions=extensions or None,
         )
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
@@ -380,6 +448,18 @@ class SearchTab(QWidget):
         elif action == remove_action:
             self.source_manager.remove_entry(source_uri)
     
+    def load_extensions(self) -> None:
+        """Populate the extension filter from the index."""
+        if not hasattr(self, "ext_filter"):
+            return
+        try:
+            extensions = self.api_client.get_extensions()
+            self.ext_filter.clear_items()
+            for ext in extensions:
+                self.ext_filter.add_item(ext)
+        except Exception as e:
+            logger.debug(f"Could not load extensions: {e}")
+
     def load_document_types(self) -> None:
         """Populate the document type filter from the API."""
         if not hasattr(self, "type_filter"):

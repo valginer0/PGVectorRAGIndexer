@@ -741,7 +741,7 @@ class MainWindow(QMainWindow):
         tab_loads = [
             ("Documents",      lambda: self.documents_tab.load_documents()      if hasattr(self, 'documents_tab') else None),
             ("Upload",         lambda: self.upload_tab.load_document_types()    if hasattr(self, 'upload_tab') else None),
-            ("Search",         lambda: self.search_tab.load_document_types()    if hasattr(self, 'search_tab') else None),
+            ("Search",         lambda: (self.search_tab.load_document_types(), self.search_tab.load_extensions()) if hasattr(self, 'search_tab') else None),
             ("Health",         lambda: self.health_tab.refresh()                if hasattr(self, 'health_tab') else None),
             ("Organization",   lambda: self.org_tab.probe_and_refresh()         if hasattr(self, 'org_tab') else None),
             ("Watched Folders", lambda: self._load_watched_folders()),

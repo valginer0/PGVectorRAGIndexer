@@ -13,6 +13,10 @@ search bugs:
 - chunk crowding from one source file
 - unrelated negative-control documents
 
+The Niro service bulletin is a true non-EV6 distractor: it should remain
+semantically close to EV service content without containing the literal `EV6`
+token.
+
 The first evaluator implementation should index every file under `corpus/`
 using the metadata in `manifest.yaml`, then run `queries.yaml`.
 
@@ -55,7 +59,8 @@ venv/bin/python scripts/search_eval.py run --skip-cleanup --skip-index --query-i
 
 ## Next Step
 
-Run the live evaluator against a local API, inspect the JSON results, and add a
-Markdown baseline report. The live runner indexes the corpus through
-`/upload-and-index`, de-duplicates returned chunks by `source_uri`, and writes
-first-pass backend chunk plus displayed unique-file metrics.
+After corpus or query edits, run the live evaluator against a branch-local API
+and refresh the private baseline artifacts in `docs/internal/`. The live runner
+indexes the corpus through `/upload-and-index`, de-duplicates returned chunks by
+`source_uri`, and writes backend chunk, displayed unique-file, assertion, and
+top-file diagnostic metrics.

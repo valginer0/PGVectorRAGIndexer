@@ -98,5 +98,6 @@ def test_eval_corpus_preserves_literal_and_negative_contracts():
 
     assert "EV6" in ev6_text
     assert crowding_text.count("EV6") >= 8
-    assert "does not mention the EV6" in niro_text
+    assert "EV6" not in niro_text
+    assert "literal model search" in niro_text
     assert "EV6" not in banana_text

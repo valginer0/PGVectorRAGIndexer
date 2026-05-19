@@ -504,7 +504,7 @@ def calculate_literal_hit_metrics(
     for index, result in enumerate(file_results[:query_plan.top_k_files], start=1):
         source_uri = normalize_result_path(str(result.get("source_uri", "")), fixture_root)
         if source_uri in literal_hit_sources:
-            return {"LiteralHitFound": bool(literal_hit_sources), "LiteralHitRank": index}
+            return {"LiteralHitFound": True, "LiteralHitRank": index}
     return {"LiteralHitFound": bool(literal_hit_sources), "LiteralHitRank": None}
 
 

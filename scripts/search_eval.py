@@ -13,6 +13,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -247,6 +248,14 @@ def validate_fixture_set(fixture_set: FixtureSet) -> list[str]:
                     errors.append(f"{query_id} assertion first_expected_rank_lte must be positive")
         if "literal_match_rank_lte" in assertions and not expected_files:
             errors.append(f"{query_id} assertion literal_match_rank_lte requires expected_files")
+        if "literal_match_rank_lte" in assertions:
+            try:
+                literal_rank_limit = int(assertions["literal_match_rank_lte"])
+            except (TypeError, ValueError):
+                errors.append(f"{query_id} assertion literal_match_rank_lte must be an integer")
+            else:
+                if literal_rank_limit < 1:
+                    errors.append(f"{query_id} assertion literal_match_rank_lte must be positive")
         if assertions.get("filters_respected") is True and not filters:
             errors.append(f"{query_id} assertion filters_respected requires filters")
         if "forbidden_at_5_eq" in assertions and not forbidden_files:
@@ -415,6 +424,7 @@ def calculate_file_metrics(
     file_results: list[dict[str, Any]],
     query_plan: QueryPlan,
     fixture_root: Path | None = None,
+    literal_hit_rank: int | None = None,
 ) -> dict[str, Any]:
     top_k = query_plan.top_k_files
     result_files = [
@@ -445,9 +455,41 @@ def calculate_file_metrics(
         "Precision@K": sum(1 for path in result_files if path in relevant) / precision_denominator,
         "Forbidden@K": sum(1 for path in result_files if path in forbidden),
         "FirstExpectedRank": first_expected_rank,
+        "LiteralHitRank": literal_hit_rank,
         "UniqueFiles@K": len(set(result_files)),
         "FilterViolations": filter_violations,
     }
+
+
+def literal_query_tokens(query: str) -> list[str]:
+    return [token.lower() for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)]
+
+
+def text_contains_literal_tokens(text: str, tokens: list[str]) -> bool:
+    haystack = text.lower()
+    return bool(tokens) and all(token in haystack for token in tokens)
+
+
+def calculate_literal_hit_rank(
+    chunk_results: list[dict[str, Any]],
+    file_results: list[dict[str, Any]],
+    query_plan: QueryPlan,
+    fixture_root: Path | None = None,
+) -> int | None:
+    tokens = literal_query_tokens(query_plan.query)
+    if not tokens:
+        return None
+
+    literal_hit_sources = {
+        normalize_result_path(str(result.get("source_uri", "")), fixture_root)
+        for result in chunk_results
+        if text_contains_literal_tokens(str(result.get("text_content", "")), tokens)
+    }
+    for index, result in enumerate(file_results[:query_plan.top_k_files], start=1):
+        source_uri = normalize_result_path(str(result.get("source_uri", "")), fixture_root)
+        if source_uri in literal_hit_sources:
+            return index
+    return None
 
 
 def _assertion_severity(expected: Any) -> str:
@@ -518,13 +560,14 @@ def evaluate_assertions(
         )
 
     if "literal_match_rank_lte" in assertions:
+        expected = int(assertions["literal_match_rank_lte"])
+        actual = metrics.get("LiteralHitRank")
         checks.append(
             _assertion_check(
                 "literal_match_rank_lte",
-                assertions["literal_match_rank_lte"],
-                None,
-                None,
-                note="Literal-hit rank requires live text/snippet evidence and is not computed yet.",
+                expected,
+                actual,
+                actual is not None and int(actual) <= expected,
             )
         )
 
@@ -602,7 +645,18 @@ def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: P
     response = client.search(plan)
     chunk_results = list(response.get("results") or [])
     file_results = dedupe_chunks_by_source_uri(chunk_results)
-    metrics = calculate_file_metrics(file_results, plan, fixture_root=fixture_root)
+    literal_hit_rank = calculate_literal_hit_rank(
+        chunk_results,
+        file_results,
+        plan,
+        fixture_root=fixture_root,
+    )
+    metrics = calculate_file_metrics(
+        file_results,
+        plan,
+        fixture_root=fixture_root,
+        literal_hit_rank=literal_hit_rank,
+    )
     return {
         "id": plan.id,
         "class": plan.query_class,

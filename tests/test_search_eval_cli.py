@@ -79,14 +79,47 @@ def test_calculate_file_metrics_for_filtered_literal_case(search_eval):
         ],
         plan,
         fixture_root=FIXTURE_ROOT,
+        literal_hit_rank=1,
     )
 
     assert metrics["Recall@K"] is True
     assert metrics["MRR"] == 1.0
     assert metrics["FirstExpectedRank"] == 1
+    assert metrics["LiteralHitRank"] == 1
     assert metrics["Forbidden@K"] == 1
     assert metrics["FilterViolations"] == 1
     assert metrics["UniqueFiles@K"] == 3
+
+
+def test_calculate_literal_hit_rank_uses_any_chunk_for_displayed_file(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    plan = next(
+        item for item in search_eval.build_query_plans(fixture_set)
+        if item.id == "literal_ev6_txt"
+    )
+    displayed = [
+        {"source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt", "relevance_score": 0.9},
+        {"source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt", "relevance_score": 0.8},
+    ]
+    chunks = [
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+            "text_content": "General notes without the identifier.",
+            "relevance_score": 0.9,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+            "text_content": "The EV6 owner notes include a direct identifier hit.",
+            "relevance_score": 0.2,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+            "text_content": "No vehicle code here.",
+            "relevance_score": 0.8,
+        },
+    ]
+
+    assert search_eval.calculate_literal_hit_rank(chunks, displayed, plan, FIXTURE_ROOT) == 1
 
 
 def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval):
@@ -116,6 +149,7 @@ def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval)
         "Precision@K": 0.5,
         "Forbidden@K": 1,
         "FirstExpectedRank": 1,
+        "LiteralHitRank": 1,
         "UniqueFiles@K": 3,
         "FilterViolations": 0,
     }
@@ -126,11 +160,11 @@ def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval)
     assert assertions["passed"] is False
     assert assertions["required_failed"] == 1
     assert assertions["advisory_failed"] == 1
-    assert assertions["skipped"] == 1
+    assert assertions["skipped"] == 0
     assert checks["forbidden_at_5_eq"]["status"] == "fail"
     assert checks["no_confident_literal_match"]["severity"] == "advisory"
     assert checks["no_confident_literal_match"]["status"] == "fail"
-    assert checks["literal_match_rank_lte"]["status"] == "skipped"
+    assert checks["literal_match_rank_lte"]["status"] == "pass"
 
 
 def test_build_document_uploads_adds_eval_metadata_and_stable_ids(search_eval):
@@ -161,6 +195,9 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
     invalid_first_rank_query = dict(fixture_set.query_items[0])
     invalid_first_rank_query["id"] = "invalid_first_rank_gate"
     invalid_first_rank_query["assertions"] = {"first_expected_rank_lte": "near"}
+    invalid_literal_rank_query = dict(fixture_set.query_items[0])
+    invalid_literal_rank_query["id"] = "invalid_literal_rank_gate"
+    invalid_literal_rank_query["assertions"] = {"literal_match_rank_lte": 0}
     invalid_forbidden_query = dict(fixture_set.query_items[0])
     invalid_forbidden_query["id"] = "invalid_forbidden_gate"
     invalid_forbidden_query["assertions"] = {"forbidden_at_5_eq": -1}
@@ -171,6 +208,7 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
     invalid_queries["queries"] = [
         invalid_query,
         invalid_first_rank_query,
+        invalid_literal_rank_query,
         invalid_forbidden_query,
         invalid_unique_query,
     ]
@@ -185,6 +223,7 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
 
     assert "invalid_recall_gate assertion recall_at_5 requires expected_files" in errors
     assert "invalid_first_rank_gate assertion first_expected_rank_lte must be an integer" in errors
+    assert "invalid_literal_rank_gate assertion literal_match_rank_lte must be positive" in errors
     assert "invalid_forbidden_gate assertion forbidden_at_5_eq must be non-negative" in errors
     assert "invalid_unique_gate assertion min_unique_files_at_5 must be an integer" in errors
 
@@ -219,10 +258,12 @@ def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_
                 "results": [
                     {
                         "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+                        "text_content": "The EV6 owner notes include a direct hit.",
                         "relevance_score": 0.9,
                     },
                     {
                         "source_uri": "search_eval_v0/corpus/vehicles/ev6_chunk_crowding.txt",
+                        "text_content": "Another EV6 chunk.",
                         "relevance_score": 0.8,
                     },
                 ],
@@ -245,8 +286,9 @@ def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_
     assert output["cleanup"] == {"deleted": 0, "missing": 12}
     assert len(output["indexing"]) == 12
     assert output["results"][0]["metrics"]["Recall@K"] is True
+    assert output["results"][0]["metrics"]["LiteralHitRank"] == 1
     assert output["results"][0]["assertions"]["passed"] is True
-    assert output["results"][0]["assertions"]["skipped"] == 1
+    assert output["results"][0]["assertions"]["skipped"] == 0
     assert output["results"][0]["top_files"] == [
         "corpus/vehicles/ev6_owner_notes.txt",
         "corpus/vehicles/ev6_chunk_crowding.txt",

@@ -1,10 +1,6 @@
 # Update Development Docker Containers
 # Pulls the :dev image from GHCR and restarts containers
 
-# Change to the script's directory so relative paths (docker-compose.dev.yml) resolve correctly
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-Set-Location $ScriptDir
-
 Write-Host "==========================================" -ForegroundColor Cyan
 Write-Host "  Update Development Docker Containers" -ForegroundColor Cyan
 Write-Host "==========================================" -ForegroundColor Cyan

@@ -4,7 +4,8 @@ Uses direct function testing without complex mocking.
 """
 
 import pytest
-from retriever_v2 import parse_search_query
+from types import SimpleNamespace
+from retriever_v2 import DocumentRetriever, parse_search_query
 
 
 class TestHybridSearchSQLGeneration:
@@ -78,3 +79,43 @@ class TestHybridSearchSQLGeneration:
         assert 'combined_score' in boost_sql
         assert 'THEN' in boost_sql
         assert 'ELSE' in boost_sql
+
+    def test_hybrid_search_adds_literal_identifier_fallback(self):
+        """Short identifiers like EV6 should be literal candidates, not vector-only."""
+        captured = {}
+
+        class FakeCursor:
+            def execute(self, sql, params):
+                captured["sql"] = sql
+                captured["params"] = params
+
+            def fetchall(self):
+                return []
+
+        class FakeCursorContext:
+            def __enter__(self):
+                return FakeCursor()
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        retriever = DocumentRetriever.__new__(DocumentRetriever)
+        retriever.config = SimpleNamespace(
+            retrieval=SimpleNamespace(top_k=10, hybrid_alpha=0.5, distance_metric="cosine")
+        )
+        retriever.embedding_service = SimpleNamespace(encode=lambda _query: [0.1, 0.2])
+        retriever.db_manager = SimpleNamespace(get_cursor=lambda dict_cursor=False: FakeCursorContext())
+
+        results = retriever.search_hybrid(
+            "EV6",
+            top_k=10,
+            filters={"extensions": [".txt"]},
+        )
+
+        assert results == []
+        assert "Literal substring matches for short identifiers" in captured["sql"]
+        assert "text_content ILIKE %s" in captured["sql"]
+        assert "d.text_content ILIKE %s" in captured["sql"]
+        assert "%EV6%" in captured["params"]
+        assert captured["params"].count("%EV6%") == 3
+        assert captured["sql"].count("%s") == len(captured["params"])

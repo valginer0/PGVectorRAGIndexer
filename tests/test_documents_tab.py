@@ -42,6 +42,8 @@ def test_initialization(documents_tab):
     assert hasattr(documents_tab, "page_size_combo")
     assert hasattr(documents_tab, "prev_page_btn")
     assert hasattr(documents_tab, "next_page_btn")
+    assert documents_tab._view_mode == "tree"
+    assert documents_tab._view_stack.currentIndex() == 0
 
 def test_load_documents_success(documents_tab):
     """Test successful document loading."""

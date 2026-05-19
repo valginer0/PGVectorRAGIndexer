@@ -135,6 +135,7 @@ class SearchTab(QWidget):
         self.search_worker = None
         self.source_manager = source_manager
         self.current_query = ""  # Store for snippet extraction
+        self._display_result_limit = 10
         self.setup_ui()
     
     def setup_ui(self):
@@ -320,10 +321,13 @@ class SearchTab(QWidget):
 
         extensions = self.ext_filter.checked_items() if hasattr(self, "ext_filter") else []
 
+        self._display_result_limit = self.top_k_spin.value()
+        candidate_limit = self._candidate_limit_for_unique_files(self._display_result_limit)
+
         self.search_worker = SearchWorker(
             self.api_client,
             query,
-            self.top_k_spin.value(),
+            candidate_limit,
             self.min_score_spin.value(),
             self.metric_combo.currentText(),
             document_type=document_type,
@@ -377,7 +381,7 @@ class SearchTab(QWidget):
             if uri not in seen_uris:
                 seen_uris.add(uri)
                 deduped.append(r)
-        valid_results = deduped
+        valid_results = deduped[:self._display_result_limit]
 
         self.results_table.setRowCount(len(valid_results))
         
@@ -564,3 +568,7 @@ class SearchTab(QWidget):
         augmented['display_chunk'] = chunk_value
 
         return augmented
+
+    def _candidate_limit_for_unique_files(self, visible_limit: int) -> int:
+        """Fetch extra chunk-level matches so file-level dedupe does not hide files."""
+        return min(max(visible_limit * 20, visible_limit + 50), 500)

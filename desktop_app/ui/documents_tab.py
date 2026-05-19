@@ -44,7 +44,7 @@ class DocumentsTab(QWidget):
         self.sort_fields: List[str] = ["indexed_at"]
         self.sort_directions: List[str] = ["desc"]
         self.is_loading = False
-        self._view_mode = "list"  # "list" or "tree"
+        self._view_mode = "tree"  # "list" or "tree"
         self.sort_column_mapping = {
             0: "source_uri",
             1: "document_type",
@@ -68,17 +68,17 @@ class DocumentsTab(QWidget):
         header_layout.addStretch()
         
         # View toggle buttons
-        self._list_btn = QPushButton(" List")
-        self._list_btn.setIcon(qta.icon('fa5s.list', color='#6366f1'))
-        self._list_btn.setStyleSheet("border: 2px solid #6366f1; padding: 6px 12px;")
-        self._list_btn.clicked.connect(lambda: self._set_view_mode("list"))
-        header_layout.addWidget(self._list_btn)
-
         self._tree_btn = QPushButton(" Tree")
-        self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='white'))
-        self._tree_btn.setStyleSheet("padding: 6px 12px;")
+        self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='#6366f1'))
+        self._tree_btn.setStyleSheet("border: 2px solid #6366f1; padding: 6px 12px;")
         self._tree_btn.clicked.connect(lambda: self._set_view_mode("tree"))
         header_layout.addWidget(self._tree_btn)
+
+        self._list_btn = QPushButton(" List")
+        self._list_btn.setIcon(qta.icon('fa5s.list', color='white'))
+        self._list_btn.setStyleSheet("padding: 6px 12px;")
+        self._list_btn.clicked.connect(lambda: self._set_view_mode("list"))
+        header_layout.addWidget(self._list_btn)
 
         self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
@@ -179,9 +179,9 @@ class DocumentsTab(QWidget):
 
         tree_page_layout.addWidget(tree_group)
 
-        # Add pages to stack
-        self._view_stack.addWidget(list_page)   # index 0
-        self._view_stack.addWidget(tree_page)   # index 1
+        # Add pages to stack in UI priority order: tree first, then list.
+        self._view_stack.addWidget(tree_page)   # index 0
+        self._view_stack.addWidget(list_page)   # index 1
 
         layout.addWidget(self._view_stack)
 
@@ -610,13 +610,13 @@ class DocumentsTab(QWidget):
         _active = "border: 2px solid #6366f1; padding: 6px 12px;"
         _inactive = "padding: 6px 12px;"
         if mode == "list":
-            self._view_stack.setCurrentIndex(0)
+            self._view_stack.setCurrentIndex(1)
             self._list_btn.setStyleSheet(_active)
             self._list_btn.setIcon(qta.icon('fa5s.list', color='#6366f1'))
             self._tree_btn.setStyleSheet(_inactive)
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='white'))
         else:
-            self._view_stack.setCurrentIndex(1)
+            self._view_stack.setCurrentIndex(0)
             self._tree_btn.setStyleSheet(_active)
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='#6366f1'))
             self._list_btn.setStyleSheet(_inactive)

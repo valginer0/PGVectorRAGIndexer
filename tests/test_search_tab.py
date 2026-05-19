@@ -79,7 +79,7 @@ def test_perform_search_success(search_tab):
         # Verify args
         args = MockWorker.call_args
         assert args[0][1] == "test query"
-        assert args[0][2] == 5
+        assert args[0][2] == 100
         assert args[0][3] == 0.5
         assert args[0][4] == "cosine"
         
@@ -146,6 +146,24 @@ def test_display_results_deduplicates_chunks_by_source(search_tab):
     assert search_tab.results_table.item(0, 2).text() == "/docs/ev6.txt"
     assert search_tab.results_table.item(0, 3).text() == "2"
     assert search_tab.results_table.item(1, 2).text() == "/docs/other.txt"
+
+def test_display_results_respects_visible_limit_after_deduping(search_tab):
+    search_tab._display_result_limit = 2
+    results = [
+        {
+            "relevance_score": 1.0 - (i * 0.01),
+            "source_uri": f"/docs/file-{i}.txt",
+            "text_content": f"EV6 note {i}",
+            "chunk_index": i,
+        }
+        for i in range(5)
+    ]
+
+    search_tab.display_results(results)
+
+    assert search_tab.results_table.rowCount() == 2
+    assert search_tab.results_table.item(0, 2).text() == "/docs/file-0.txt"
+    assert search_tab.results_table.item(1, 2).text() == "/docs/file-1.txt"
 
 def test_search_finished_success(search_tab):
     """Test handling of successful search results."""

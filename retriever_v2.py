@@ -282,6 +282,22 @@ class DocumentRetriever:
         else:
             # Combine all parts with AND operator (&&)
             tsquery_expression = ' && '.join(tsquery_parts)
+
+        # PostgreSQL full-text search can miss short model codes / identifiers
+        # such as "EV6". Add a literal substring fallback so exact text hits are
+        # candidates and receive the text-match boost.
+        literal_tokens = [token.strip() for token in [*phrases, *terms] if token.strip()]
+        if not literal_tokens and query.strip():
+            literal_tokens = [query.strip()]
+        lexical_expression = (
+            " AND ".join(["text_content ILIKE %s" for _ in literal_tokens])
+            if literal_tokens else "FALSE"
+        )
+        scored_lexical_expression = (
+            " AND ".join(["d.text_content ILIKE %s" for _ in literal_tokens])
+            if literal_tokens else "FALSE"
+        )
+        lexical_params = [f"%{token}%" for token in literal_tokens]
         
         # Build the full SQL query
         # Strategy: Get candidates from BOTH vector and fulltext search via UNION,
@@ -301,6 +317,10 @@ class DocumentRetriever:
             -- All fulltext matches from the same filtered source
             SELECT chunk_id FROM {candidate_source}
             WHERE to_tsvector('english', text_content) @@ ({tsquery_expression})
+            UNION
+            -- Literal substring matches for short identifiers (e.g. EV6)
+            SELECT chunk_id FROM {candidate_source}
+            WHERE {lexical_expression}
         ),
         scored AS (
             SELECT
@@ -314,10 +334,13 @@ class DocumentRetriever:
                 CASE
                     WHEN to_tsvector('english', d.text_content) @@ ({tsquery_expression})
                     THEN ts_rank_cd(to_tsvector('english', d.text_content), {tsquery_expression})
+                    WHEN {scored_lexical_expression}
+                    THEN 1.0
                     ELSE 0
                 END AS text_score,
                 CASE
                     WHEN to_tsvector('english', d.text_content) @@ ({tsquery_expression})
+                        OR ({scored_lexical_expression})
                     THEN 1
                     ELSE 0
                 END AS has_text_match
@@ -356,17 +379,21 @@ class DocumentRetriever:
         
         # Build parameter list in SQL text order (left-to-right):
         # filtered_docs CTE WHERE: filter_params (only present when filters active)
-        # candidates CTE: embedding (ORDER BY), then tsquery_params (fulltext WHERE)
-        # scored CTE: embedding x2 (vector_distance, ROW_NUMBER),
-        #   then tsquery_params x3 (1st CASE WHEN, ts_rank_cd, 2nd CASE WHEN)
+        # candidates CTE: embedding (ORDER BY), tsquery_params (fulltext WHERE),
+        #   then lexical_params (literal WHERE)
+        # scored CTE: embedding x2 (vector_distance, ROW_NUMBER), then
+        #   tsquery/lexical params in the order text_score and has_text_match use them
         # final SELECT: alpha x3, top_k
         params = list(filter_params)    # filtered_docs WHERE (empty when no filters)
         params.append(query_embedding)  # candidates ORDER BY
         params.extend(tsquery_params)   # candidates fulltext WHERE
+        params.extend(lexical_params)   # candidates literal WHERE
         params.extend([query_embedding, query_embedding])  # scored: distance, ROW_NUMBER
-        params.extend(tsquery_params)   # scored: 1st CASE WHEN
-        params.extend(tsquery_params)   # scored: ts_rank_cd
-        params.extend(tsquery_params)   # scored: 2nd CASE WHEN
+        params.extend(tsquery_params)   # scored text_score: fulltext WHEN
+        params.extend(tsquery_params)   # scored text_score: ts_rank_cd
+        params.extend(lexical_params)   # scored text_score: literal WHEN
+        params.extend(tsquery_params)   # scored has_text_match: fulltext WHEN
+        params.extend(lexical_params)   # scored has_text_match: literal OR
         params.extend([alpha, 1 - alpha, alpha, top_k])
         
         with self.db_manager.get_cursor(dict_cursor=True) as cursor:

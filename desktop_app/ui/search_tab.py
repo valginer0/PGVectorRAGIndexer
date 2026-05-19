@@ -43,11 +43,29 @@ class CheckableComboBox(QComboBox):
         self.currentIndexChanged.connect(lambda _: self._refresh_text())
         self._refresh_text()
 
+    # Text of the "select all" sentinel item.
+    SELECT_ALL = "*"
+
     def _toggle_item(self, index):
         item = self._model.itemFromIndex(index)
-        item.setCheckState(
-            Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked
-        )
+        new_state = Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked
+        item.setCheckState(new_state)
+
+        if new_state == Qt.Checked:
+            if item.text() == self.SELECT_ALL:
+                # "*" checked → uncheck every specific extension
+                for i in range(self._model.rowCount()):
+                    other = self._model.item(i)
+                    if other.text() != self.SELECT_ALL:
+                        other.setData(Qt.Unchecked, Qt.CheckStateRole)
+            else:
+                # Specific extension checked → uncheck "*"
+                for i in range(self._model.rowCount()):
+                    other = self._model.item(i)
+                    if other.text() == self.SELECT_ALL:
+                        other.setData(Qt.Unchecked, Qt.CheckStateRole)
+                        break
+
         self._suppress_hide = True  # keep popup open after toggling
         self._refresh_text()
 
@@ -61,14 +79,14 @@ class CheckableComboBox(QComboBox):
         super().hidePopup()
 
     def _refresh_text(self):
-        checked = self.checked_items()
         self.setCurrentIndex(-1)
-        self.lineEdit().setText(", ".join(checked) if checked else "")
+        raw = self._raw_checked()
+        self.lineEdit().setText(", ".join(raw) if raw else "")
 
-    def add_item(self, text: str):
+    def add_item(self, text: str, checked: bool = False):
         item = QStandardItem(text)
         item.setFlags(Qt.ItemIsEnabled)  # No ItemIsUserCheckable — we toggle manually
-        item.setData(Qt.Unchecked, Qt.CheckStateRole)
+        item.setData(Qt.Checked if checked else Qt.Unchecked, Qt.CheckStateRole)
         self._model.appendRow(item)
         self._refresh_text()
 
@@ -76,12 +94,21 @@ class CheckableComboBox(QComboBox):
         self._model.clear()
         self._refresh_text()
 
-    def checked_items(self) -> list:
+    def _raw_checked(self) -> list:
+        """All checked item texts, including the '*' sentinel."""
         return [
             self._model.item(i).text()
             for i in range(self._model.rowCount())
             if self._model.item(i).checkState() == Qt.Checked
         ]
+
+    def checked_items(self) -> list:
+        """Checked items suitable for use as a search filter.
+        Returns [] when '*' is the only selection (meaning 'all — no filter')."""
+        raw = self._raw_checked()
+        if not raw or raw == [self.SELECT_ALL]:
+            return []
+        return [t for t in raw if t != self.SELECT_ALL]
 from .shared import populate_document_type_combo
 from .workers import SearchWorker
 from ..utils.snippet_utils import extract_snippet
@@ -489,6 +516,7 @@ class SearchTab(QWidget):
         try:
             extensions = self.api_client.get_extensions()
             self.ext_filter.clear_items()
+            self.ext_filter.add_item(CheckableComboBox.SELECT_ALL, checked=True)
             for ext in extensions:
                 self.ext_filter.add_item(ext)
         except Exception as e:

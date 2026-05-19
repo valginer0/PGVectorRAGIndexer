@@ -86,13 +86,14 @@ def test_perform_search_success(search_tab):
         mock_worker_instance.start.assert_called_once()
         assert not search_tab.search_btn.isEnabled()
 
-def test_load_extensions_keeps_filter_blank(search_tab, mock_api_client):
-    """Loading extension choices should not preselect a filter."""
+def test_load_extensions_defaults_to_select_all(search_tab, mock_api_client):
+    """Loading extensions should show '*' (all) selected, with no active filter."""
     mock_api_client.get_extensions.return_value = [".txt", ".pdf"]
 
     search_tab.load_extensions()
 
-    assert search_tab.ext_filter.currentText() == ""
+    assert search_tab.ext_filter.currentText() == "*"
+    # checked_items() returns [] when only '*' is selected (means no filter)
     assert search_tab.ext_filter.checked_items() == []
 
 def test_display_results_deduplicates_chunks_by_source(search_tab):

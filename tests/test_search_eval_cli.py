@@ -80,11 +80,13 @@ def test_calculate_file_metrics_for_filtered_literal_case(search_eval):
         plan,
         fixture_root=FIXTURE_ROOT,
         literal_hit_rank=1,
+        literal_hit_found=True,
     )
 
     assert metrics["Recall@K"] is True
     assert metrics["MRR"] == 1.0
     assert metrics["FirstExpectedRank"] == 1
+    assert metrics["LiteralHitFound"] is True
     assert metrics["LiteralHitRank"] == 1
     assert metrics["Forbidden@K"] == 1
     assert metrics["FilterViolations"] == 1
@@ -122,6 +124,46 @@ def test_calculate_literal_hit_rank_uses_any_chunk_for_displayed_file(search_eva
     assert search_eval.calculate_literal_hit_rank(chunks, displayed, plan, FIXTURE_ROOT) == 1
 
 
+def test_calculate_literal_hit_metrics_distinguishes_found_outside_top_k(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    original = next(
+        item for item in search_eval.build_query_plans(fixture_set)
+        if item.id == "literal_ev6_txt"
+    )
+    plan = search_eval.QueryPlan(
+        id=original.id,
+        query_class=original.query_class,
+        query=original.query,
+        filters=original.filters,
+        expected_files=original.expected_files,
+        relevant_files=original.relevant_files,
+        forbidden_files=original.forbidden_files,
+        assertions=original.assertions,
+        top_k_files=1,
+        backend_top_k=original.backend_top_k,
+    )
+    file_results = [
+        {"source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt", "relevance_score": 0.9},
+        {"source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt", "relevance_score": 0.1},
+    ]
+    chunk_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+            "text_content": "The EV6 identifier is present, but below the displayed cutoff.",
+            "relevance_score": 0.1,
+        }
+    ]
+
+    metrics = search_eval.calculate_literal_hit_metrics(
+        chunk_results,
+        file_results,
+        plan,
+        FIXTURE_ROOT,
+    )
+
+    assert metrics == {"LiteralHitFound": True, "LiteralHitRank": None}
+
+
 def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval):
     plan = search_eval.QueryPlan(
         id="assertion_probe",
@@ -149,6 +191,7 @@ def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval)
         "Precision@K": 0.5,
         "Forbidden@K": 1,
         "FirstExpectedRank": 1,
+        "LiteralHitFound": True,
         "LiteralHitRank": 1,
         "UniqueFiles@K": 3,
         "FilterViolations": 0,
@@ -286,6 +329,7 @@ def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_
     assert output["cleanup"] == {"deleted": 0, "missing": 12}
     assert len(output["indexing"]) == 12
     assert output["results"][0]["metrics"]["Recall@K"] is True
+    assert output["results"][0]["metrics"]["LiteralHitFound"] is True
     assert output["results"][0]["metrics"]["LiteralHitRank"] == 1
     assert output["results"][0]["assertions"]["passed"] is True
     assert output["results"][0]["assertions"]["skipped"] == 0

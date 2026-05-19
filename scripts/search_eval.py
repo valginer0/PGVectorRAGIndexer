@@ -425,6 +425,7 @@ def calculate_file_metrics(
     query_plan: QueryPlan,
     fixture_root: Path | None = None,
     literal_hit_rank: int | None = None,
+    literal_hit_found: bool | None = None,
 ) -> dict[str, Any]:
     top_k = query_plan.top_k_files
     result_files = [
@@ -455,6 +456,7 @@ def calculate_file_metrics(
         "Precision@K": sum(1 for path in result_files if path in relevant) / precision_denominator,
         "Forbidden@K": sum(1 for path in result_files if path in forbidden),
         "FirstExpectedRank": first_expected_rank,
+        "LiteralHitFound": literal_hit_found,
         "LiteralHitRank": literal_hit_rank,
         "UniqueFiles@K": len(set(result_files)),
         "FilterViolations": filter_violations,
@@ -476,9 +478,23 @@ def calculate_literal_hit_rank(
     query_plan: QueryPlan,
     fixture_root: Path | None = None,
 ) -> int | None:
+    return calculate_literal_hit_metrics(
+        chunk_results,
+        file_results,
+        query_plan,
+        fixture_root,
+    )["LiteralHitRank"]
+
+
+def calculate_literal_hit_metrics(
+    chunk_results: list[dict[str, Any]],
+    file_results: list[dict[str, Any]],
+    query_plan: QueryPlan,
+    fixture_root: Path | None = None,
+) -> dict[str, bool | int | None]:
     tokens = literal_query_tokens(query_plan.query)
     if not tokens:
-        return None
+        return {"LiteralHitFound": None, "LiteralHitRank": None}
 
     literal_hit_sources = {
         normalize_result_path(str(result.get("source_uri", "")), fixture_root)
@@ -488,8 +504,8 @@ def calculate_literal_hit_rank(
     for index, result in enumerate(file_results[:query_plan.top_k_files], start=1):
         source_uri = normalize_result_path(str(result.get("source_uri", "")), fixture_root)
         if source_uri in literal_hit_sources:
-            return index
-    return None
+            return {"LiteralHitFound": bool(literal_hit_sources), "LiteralHitRank": index}
+    return {"LiteralHitFound": bool(literal_hit_sources), "LiteralHitRank": None}
 
 
 def _assertion_severity(expected: Any) -> str:
@@ -645,7 +661,7 @@ def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: P
     response = client.search(plan)
     chunk_results = list(response.get("results") or [])
     file_results = dedupe_chunks_by_source_uri(chunk_results)
-    literal_hit_rank = calculate_literal_hit_rank(
+    literal_hit_metrics = calculate_literal_hit_metrics(
         chunk_results,
         file_results,
         plan,
@@ -655,7 +671,8 @@ def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: P
         file_results,
         plan,
         fixture_root=fixture_root,
-        literal_hit_rank=literal_hit_rank,
+        literal_hit_rank=literal_hit_metrics["LiteralHitRank"],
+        literal_hit_found=literal_hit_metrics["LiteralHitFound"],
     )
     return {
         "id": plan.id,

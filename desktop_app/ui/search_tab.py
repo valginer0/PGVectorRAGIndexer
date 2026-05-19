@@ -35,8 +35,12 @@ class CheckableComboBox(QComboBox):
         self.lineEdit().setPlaceholderText(placeholder)
         # Disable the autocompleter — it interferes with the custom model
         self.setCompleter(None)
+        self.setCurrentIndex(-1)
 
         self.view().pressed.connect(self._toggle_item)
+        # When QComboBox auto-selects index 0 after the first item is added it
+        # overwrites the line edit text.  Reset to our custom display each time.
+        self.currentIndexChanged.connect(lambda _: self._refresh_text())
         self._refresh_text()
 
     def _toggle_item(self, index):
@@ -58,6 +62,7 @@ class CheckableComboBox(QComboBox):
 
     def _refresh_text(self):
         checked = self.checked_items()
+        self.setCurrentIndex(-1)
         self.lineEdit().setText(", ".join(checked) if checked else "")
 
     def add_item(self, text: str):
@@ -65,6 +70,7 @@ class CheckableComboBox(QComboBox):
         item.setFlags(Qt.ItemIsEnabled)  # No ItemIsUserCheckable — we toggle manually
         item.setData(Qt.Unchecked, Qt.CheckStateRole)
         self._model.appendRow(item)
+        self._refresh_text()
 
     def clear_items(self):
         self._model.clear()
@@ -299,7 +305,8 @@ class SearchTab(QWidget):
         if success:
             results = data
             self.display_results(results)
-            self.status_label.setText(f"Found {len(results)} results")
+            n = self.results_table.rowCount()
+            self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''} (1 per file)")
             self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
         else:
             error_msg = data
@@ -324,7 +331,18 @@ class SearchTab(QWidget):
                 valid_results.append(r)
             else:
                 logger.warning(f"Skipping invalid result: {r}")
-        
+
+        # Deduplicate: keep only the best-scored chunk per source file.
+        # Results arrive sorted by score descending so the first occurrence wins.
+        seen_uris: set = set()
+        deduped = []
+        for r in valid_results:
+            uri = r.get('source_uri', '')
+            if uri not in seen_uris:
+                seen_uris.add(uri)
+                deduped.append(r)
+        valid_results = deduped
+
         self.results_table.setRowCount(len(valid_results))
         
         for i, result in enumerate(valid_results):

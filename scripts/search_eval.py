@@ -434,10 +434,159 @@ def calculate_file_metrics(
     }
 
 
+def _assertion_severity(expected: Any) -> str:
+    return "advisory" if str(expected).lower() == "advisory" else "required"
+
+
+def _assertion_check(
+    name: str,
+    expected: Any,
+    actual: Any,
+    passed: bool | None,
+    *,
+    severity: str = "required",
+    note: str | None = None,
+) -> dict[str, Any]:
+    status = "skipped"
+    if passed is True:
+        status = "pass"
+    elif passed is False:
+        status = "fail"
+
+    check = {
+        "name": name,
+        "severity": severity,
+        "expected": expected,
+        "actual": actual,
+        "passed": passed,
+        "status": status,
+    }
+    if note:
+        check["note"] = note
+    return check
+
+
+def evaluate_assertions(
+    metrics: dict[str, Any],
+    query_plan: QueryPlan,
+    *,
+    file_result_count: int | None = None,
+) -> dict[str, Any]:
+    checks: list[dict[str, Any]] = []
+    assertions = query_plan.assertions
+
+    if "recall_at_5" in assertions:
+        expected = assertions["recall_at_5"]
+        severity = _assertion_severity(expected)
+        actual = metrics.get("Recall@K")
+        checks.append(
+            _assertion_check(
+                "recall_at_5",
+                True,
+                actual,
+                actual is True,
+                severity=severity,
+            )
+        )
+
+    if "first_expected_rank_lte" in assertions:
+        expected = int(assertions["first_expected_rank_lte"])
+        actual = metrics.get("FirstExpectedRank")
+        checks.append(
+            _assertion_check(
+                "first_expected_rank_lte",
+                expected,
+                actual,
+                actual is not None and int(actual) <= expected,
+            )
+        )
+
+    if "literal_match_rank_lte" in assertions:
+        checks.append(
+            _assertion_check(
+                "literal_match_rank_lte",
+                assertions["literal_match_rank_lte"],
+                None,
+                None,
+                note="Literal-hit rank requires live text/snippet evidence and is not computed yet.",
+            )
+        )
+
+    if "filters_respected" in assertions:
+        expected = assertions["filters_respected"]
+        severity = _assertion_severity(expected)
+        actual = metrics.get("FilterViolations")
+        checks.append(
+            _assertion_check(
+                "filters_respected",
+                0,
+                actual,
+                actual == 0,
+                severity=severity,
+            )
+        )
+
+    if "forbidden_at_5_eq" in assertions:
+        expected = int(assertions["forbidden_at_5_eq"])
+        actual = metrics.get("Forbidden@K")
+        checks.append(
+            _assertion_check(
+                "forbidden_at_5_eq",
+                expected,
+                actual,
+                actual == expected,
+            )
+        )
+
+    if "min_unique_files_at_5" in assertions:
+        expected = int(assertions["min_unique_files_at_5"])
+        actual = metrics.get("UniqueFiles@K")
+        checks.append(
+            _assertion_check(
+                "min_unique_files_at_5",
+                expected,
+                actual,
+                actual is not None and int(actual) >= expected,
+            )
+        )
+
+    if "no_confident_literal_match" in assertions:
+        expected = assertions["no_confident_literal_match"]
+        severity = _assertion_severity(expected)
+        checks.append(
+            _assertion_check(
+                "no_confident_literal_match",
+                0,
+                file_result_count,
+                None if file_result_count is None else file_result_count == 0,
+                severity=severity,
+                note="Current proxy is zero file results; score-confidence gating is not implemented yet.",
+            )
+        )
+
+    required_failed = sum(
+        1 for check in checks
+        if check["severity"] == "required" and check["passed"] is False
+    )
+    advisory_failed = sum(
+        1 for check in checks
+        if check["severity"] == "advisory" and check["passed"] is False
+    )
+    skipped = sum(1 for check in checks if check["passed"] is None)
+    return {
+        "passed": required_failed == 0,
+        "required_failed": required_failed,
+        "advisory_failed": advisory_failed,
+        "skipped": skipped,
+        "checks": checks,
+    }
+
+
 def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: Path) -> dict[str, Any]:
     response = client.search(plan)
     chunk_results = list(response.get("results") or [])
     file_results = dedupe_chunks_by_source_uri(chunk_results)
+    metrics = calculate_file_metrics(file_results, plan, fixture_root=fixture_root)
     return {
         "id": plan.id,
         "class": plan.query_class,
@@ -446,7 +595,8 @@ def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: P
         "search_time_ms": response.get("search_time_ms"),
         "backend_result_count": len(chunk_results),
         "file_result_count": len(file_results),
-        "metrics": calculate_file_metrics(file_results, plan, fixture_root=fixture_root),
+        "metrics": metrics,
+        "assertions": evaluate_assertions(metrics, plan, file_result_count=len(file_results)),
         "top_files": [
             normalize_result_path(str(result.get("source_uri", "")), fixture_root)
             for result in file_results[:plan.top_k_files]

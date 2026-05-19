@@ -89,6 +89,50 @@ def test_calculate_file_metrics_for_filtered_literal_case(search_eval):
     assert metrics["UniqueFiles@K"] == 3
 
 
+def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval):
+    plan = search_eval.QueryPlan(
+        id="assertion_probe",
+        query_class="negative",
+        query="EV6",
+        filters={"namespace": "search_eval_v0", "extensions": [".txt"]},
+        expected_files=["corpus/vehicles/ev6_owner_notes.txt"],
+        relevant_files=["corpus/vehicles/ev6_owner_notes.txt"],
+        forbidden_files=["corpus/noise/banana_bread_recipe.txt"],
+        assertions={
+            "recall_at_5": True,
+            "first_expected_rank_lte": 2,
+            "literal_match_rank_lte": 2,
+            "filters_respected": True,
+            "forbidden_at_5_eq": 0,
+            "min_unique_files_at_5": 2,
+            "no_confident_literal_match": "advisory",
+        },
+        top_k_files=5,
+        backend_top_k=100,
+    )
+    metrics = {
+        "Recall@K": True,
+        "MRR": 1.0,
+        "Precision@K": 0.5,
+        "Forbidden@K": 1,
+        "FirstExpectedRank": 1,
+        "UniqueFiles@K": 3,
+        "FilterViolations": 0,
+    }
+
+    assertions = search_eval.evaluate_assertions(metrics, plan, file_result_count=3)
+    checks = {check["name"]: check for check in assertions["checks"]}
+
+    assert assertions["passed"] is False
+    assert assertions["required_failed"] == 1
+    assert assertions["advisory_failed"] == 1
+    assert assertions["skipped"] == 1
+    assert checks["forbidden_at_5_eq"]["status"] == "fail"
+    assert checks["no_confident_literal_match"]["severity"] == "advisory"
+    assert checks["no_confident_literal_match"]["status"] == "fail"
+    assert checks["literal_match_rank_lte"]["status"] == "skipped"
+
+
 def test_build_document_uploads_adds_eval_metadata_and_stable_ids(search_eval):
     fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
     uploads = search_eval.build_document_uploads(fixture_set)
@@ -188,6 +232,8 @@ def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_
     assert output["cleanup"] == {"deleted": 0, "missing": 12}
     assert len(output["indexing"]) == 12
     assert output["results"][0]["metrics"]["Recall@K"] is True
+    assert output["results"][0]["assertions"]["passed"] is True
+    assert output["results"][0]["assertions"]["skipped"] == 1
     assert output["results"][0]["top_files"] == [
         "corpus/vehicles/ev6_owner_notes.txt",
         "corpus/vehicles/ev6_chunk_crowding.txt",

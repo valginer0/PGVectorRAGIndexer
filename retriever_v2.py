@@ -332,20 +332,19 @@ class DocumentRetriever:
         LIMIT %s
         """
         
-        # Build parameter list:
-        # - embedding for candidates ORDER BY
-        # - tsquery_params for candidates WHERE
-        # - embedding x2 for scored (distance, ROW_NUMBER)
-        # - filter_params for scored WHERE filter
-        # - tsquery_params x4 for scored (2x CASE WHEN, 1x ts_rank_cd each)
-        # - alpha x3, top_k
+        # Build parameter list in SQL text order (left-to-right):
+        # candidates CTE: embedding (ORDER BY), then tsquery_params (WHERE)
+        # scored CTE SELECT: embedding x2 (vector_distance, ROW_NUMBER), then
+        #   tsquery_params x3 (1st CASE WHEN, ts_rank_cd, 2nd CASE WHEN)
+        # scored CTE WHERE: filter_params (comes after SELECT expressions in text)
+        # final SELECT: alpha x3, top_k
         params = [query_embedding]  # candidates ORDER BY
         params.extend(tsquery_params)  # candidates WHERE
         params.extend([query_embedding, query_embedding])  # scored: distance, ROW_NUMBER
-        params.extend(filter_params)  # scored: WHERE filter
         params.extend(tsquery_params)  # scored: 1st CASE WHEN
         params.extend(tsquery_params)  # scored: ts_rank_cd
         params.extend(tsquery_params)  # scored: 2nd CASE WHEN
+        params.extend(filter_params)  # scored: WHERE filter (after all SELECT expressions)
         params.extend([alpha, 1 - alpha, alpha, top_k])
         
         with self.db_manager.get_cursor(dict_cursor=True) as cursor:

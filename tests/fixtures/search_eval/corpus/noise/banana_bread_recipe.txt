@@ -7,5 +7,5 @@ Bake until the top is golden and a tester comes out clean. Let the loaf cool
 before slicing.
 
 This document is unrelated to electric vehicles, invoices, authentication, and
-retrieval systems. It should not appear in top results for EV6 or invoice
+retrieval systems. It should not appear in top results for vehicle or invoice
 identifier searches.

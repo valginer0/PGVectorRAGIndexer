@@ -229,6 +229,12 @@ class DocumentRetriever:
                 elif key in ['document_id', 'source_uri']:
                     filter_clauses.append(f"{key} = %s")
                     filter_params.append(value)
+                else:
+                    raise ValueError(
+                        f"Unsupported filter key '{key}' for hybrid search. "
+                        f"Supported keys: extensions, type, namespace, category, "
+                        f"document_id, source_uri, metadata.<key>"
+                    )
 
         if filter_clauses:
             filter_where_sql = f"WHERE {' AND '.join(filter_clauses)}"

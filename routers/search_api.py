@@ -68,6 +68,8 @@ async def search_documents(request: SearchRequest):
             total_results=len(result_models),
             search_time_ms=round(search_time, 2)
         )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Search failed: {e}")
         raise HTTPException(

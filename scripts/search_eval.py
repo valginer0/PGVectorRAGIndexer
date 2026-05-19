@@ -256,6 +256,16 @@ def validate_fixture_set(fixture_set: FixtureSet) -> list[str]:
             else:
                 if literal_rank_limit < 1:
                     errors.append(f"{query_id} assertion literal_match_rank_lte must be positive")
+        if "literal_match_tokens" in assertions:
+            literal_tokens = assertions["literal_match_tokens"]
+            if not isinstance(literal_tokens, list) or not literal_tokens:
+                errors.append(f"{query_id} assertion literal_match_tokens must be a non-empty list")
+            else:
+                for token in literal_tokens:
+                    if not isinstance(token, str) or not token.strip():
+                        errors.append(
+                            f"{query_id} assertion literal_match_tokens must contain non-empty strings"
+                        )
         if assertions.get("filters_respected") is True and not filters:
             errors.append(f"{query_id} assertion filters_respected requires filters")
         if "forbidden_at_5_eq" in assertions and not forbidden_files:
@@ -426,6 +436,7 @@ def calculate_file_metrics(
     fixture_root: Path | None = None,
     literal_hit_rank: int | None = None,
     literal_hit_found: bool | None = None,
+    literal_hit_tokens: list[str] | None = None,
 ) -> dict[str, Any]:
     top_k = query_plan.top_k_files
     result_files = [
@@ -458,6 +469,7 @@ def calculate_file_metrics(
         "FirstExpectedRank": first_expected_rank,
         "LiteralHitFound": literal_hit_found,
         "LiteralHitRank": literal_hit_rank,
+        "LiteralHitTokens": literal_hit_tokens,
         "UniqueFiles@K": len(set(result_files)),
         "FilterViolations": filter_violations,
     }
@@ -465,6 +477,13 @@ def calculate_file_metrics(
 
 def literal_query_tokens(query: str) -> list[str]:
     return [token.lower() for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)]
+
+
+def literal_match_tokens_for_plan(query_plan: QueryPlan) -> list[str]:
+    configured_tokens = query_plan.assertions.get("literal_match_tokens")
+    if configured_tokens:
+        return [str(token).strip().lower() for token in configured_tokens if str(token).strip()]
+    return literal_query_tokens(query_plan.query)
 
 
 def text_contains_literal_tokens(text: str, tokens: list[str]) -> bool:
@@ -503,17 +522,21 @@ def calculate_literal_hit_metrics(
     file_results: list[dict[str, Any]],
     query_plan: QueryPlan,
     fixture_root: Path | None = None,
-) -> dict[str, bool | int | None]:
-    tokens = literal_query_tokens(query_plan.query)
+) -> dict[str, Any]:
+    tokens = literal_match_tokens_for_plan(query_plan)
     if not tokens:
-        return {"LiteralHitFound": None, "LiteralHitRank": None}
+        return {"LiteralHitFound": None, "LiteralHitRank": None, "LiteralHitTokens": []}
 
     literal_hit_sources = literal_hit_source_paths(chunk_results, tokens, fixture_root)
     for index, result in enumerate(file_results[:query_plan.top_k_files], start=1):
         source_uri = normalize_result_path(str(result.get("source_uri", "")), fixture_root)
         if source_uri in literal_hit_sources:
-            return {"LiteralHitFound": True, "LiteralHitRank": index}
-    return {"LiteralHitFound": bool(literal_hit_sources), "LiteralHitRank": None}
+            return {"LiteralHitFound": True, "LiteralHitRank": index, "LiteralHitTokens": tokens}
+    return {
+        "LiteralHitFound": bool(literal_hit_sources),
+        "LiteralHitRank": None,
+        "LiteralHitTokens": tokens,
+    }
 
 
 def build_top_file_details(
@@ -522,7 +545,7 @@ def build_top_file_details(
     query_plan: QueryPlan,
     fixture_root: Path | None = None,
 ) -> list[dict[str, Any]]:
-    tokens = literal_query_tokens(query_plan.query)
+    tokens = literal_match_tokens_for_plan(query_plan)
     literal_sources = literal_hit_source_paths(chunk_results, tokens, fixture_root) if tokens else set()
     expected = set(query_plan.expected_files)
     relevant = set(query_plan.relevant_files or query_plan.expected_files)
@@ -712,6 +735,7 @@ def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: P
         fixture_root=fixture_root,
         literal_hit_rank=literal_hit_metrics["LiteralHitRank"],
         literal_hit_found=literal_hit_metrics["LiteralHitFound"],
+        literal_hit_tokens=literal_hit_metrics["LiteralHitTokens"],
     )
     return {
         "id": plan.id,

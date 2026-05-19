@@ -88,6 +88,7 @@ def test_calculate_file_metrics_for_filtered_literal_case(search_eval):
         fixture_root=FIXTURE_ROOT,
         literal_hit_rank=1,
         literal_hit_found=True,
+        literal_hit_tokens=["ev6"],
     )
 
     assert metrics["Recall@K"] is True
@@ -95,6 +96,7 @@ def test_calculate_file_metrics_for_filtered_literal_case(search_eval):
     assert metrics["FirstExpectedRank"] == 1
     assert metrics["LiteralHitFound"] is True
     assert metrics["LiteralHitRank"] == 1
+    assert metrics["LiteralHitTokens"] == ["ev6"]
     assert metrics["Forbidden@K"] == 1
     assert metrics["FilterViolations"] == 1
     assert metrics["UniqueFiles@K"] == 3
@@ -168,7 +170,59 @@ def test_calculate_literal_hit_metrics_distinguishes_found_outside_top_k(search_
         FIXTURE_ROOT,
     )
 
-    assert metrics == {"LiteralHitFound": True, "LiteralHitRank": None}
+    assert metrics == {
+        "LiteralHitFound": True,
+        "LiteralHitRank": None,
+        "LiteralHitTokens": ["ev6"],
+    }
+
+
+def test_literal_match_tokens_override_query_tokens(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    original = next(
+        item for item in search_eval.build_query_plans(fixture_set)
+        if item.id == "hybrid_ev6_charging"
+    )
+
+    assert search_eval.literal_match_tokens_for_plan(original) == ["ev6"]
+
+    full_query_plan = search_eval.QueryPlan(
+        id=original.id,
+        query_class=original.query_class,
+        query=original.query,
+        filters=original.filters,
+        expected_files=original.expected_files,
+        relevant_files=original.relevant_files,
+        forbidden_files=original.forbidden_files,
+        assertions={"literal_match_rank_lte": 2},
+        top_k_files=original.top_k_files,
+        backend_top_k=original.backend_top_k,
+    )
+    chunk_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+            "text_content": "The EV6 owner notes mention fast charging but not the full query.",
+            "rank_score": 10.0,
+        }
+    ]
+    file_results = [{"source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt"}]
+
+    assert search_eval.calculate_literal_hit_metrics(
+        chunk_results,
+        file_results,
+        original,
+        FIXTURE_ROOT,
+    ) == {"LiteralHitFound": True, "LiteralHitRank": 1, "LiteralHitTokens": ["ev6"]}
+    assert search_eval.calculate_literal_hit_metrics(
+        chunk_results,
+        file_results,
+        full_query_plan,
+        FIXTURE_ROOT,
+    ) == {
+        "LiteralHitFound": False,
+        "LiteralHitRank": None,
+        "LiteralHitTokens": ["ev6", "fast", "charging", "limit"],
+    }
 
 
 def test_build_top_file_details_adds_diagnostic_flags(search_eval):
@@ -305,6 +359,9 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
     invalid_literal_rank_query = dict(fixture_set.query_items[0])
     invalid_literal_rank_query["id"] = "invalid_literal_rank_gate"
     invalid_literal_rank_query["assertions"] = {"literal_match_rank_lte": 0}
+    invalid_literal_tokens_query = dict(fixture_set.query_items[0])
+    invalid_literal_tokens_query["id"] = "invalid_literal_tokens_gate"
+    invalid_literal_tokens_query["assertions"] = {"literal_match_tokens": []}
     invalid_forbidden_query = dict(fixture_set.query_items[0])
     invalid_forbidden_query["id"] = "invalid_forbidden_gate"
     invalid_forbidden_query["assertions"] = {"forbidden_at_5_eq": -1}
@@ -316,6 +373,7 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
         invalid_query,
         invalid_first_rank_query,
         invalid_literal_rank_query,
+        invalid_literal_tokens_query,
         invalid_forbidden_query,
         invalid_unique_query,
     ]
@@ -331,6 +389,7 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
     assert "invalid_recall_gate assertion recall_at_5 requires expected_files" in errors
     assert "invalid_first_rank_gate assertion first_expected_rank_lte must be an integer" in errors
     assert "invalid_literal_rank_gate assertion literal_match_rank_lte must be positive" in errors
+    assert "invalid_literal_tokens_gate assertion literal_match_tokens must be a non-empty list" in errors
     assert "invalid_forbidden_gate assertion forbidden_at_5_eq must be non-negative" in errors
     assert "invalid_unique_gate assertion min_unique_files_at_5 must be an integer" in errors
 
@@ -397,6 +456,7 @@ def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_
     assert output["results"][0]["metrics"]["Recall@K"] is True
     assert output["results"][0]["metrics"]["LiteralHitFound"] is True
     assert output["results"][0]["metrics"]["LiteralHitRank"] == 1
+    assert output["results"][0]["metrics"]["LiteralHitTokens"] == ["ev6"]
     assert output["results"][0]["assertions"]["passed"] is True
     assert output["results"][0]["assertions"]["skipped"] == 0
     assert output["results"][0]["top_file_details"][0]["score"] == 10.9

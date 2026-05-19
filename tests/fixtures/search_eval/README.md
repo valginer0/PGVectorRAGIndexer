@@ -42,8 +42,16 @@ The test checks that:
 - extension-filter expectations match expected files
 - literal and negative-control fixtures preserve their intended contracts
 
+The evaluator skeleton can also validate and print the planned query executions:
+
+```bash
+venv/bin/python scripts/search_eval.py validate
+venv/bin/python scripts/search_eval.py plan
+venv/bin/python scripts/search_eval.py plan --json
+```
+
 ## Next Step
 
-Build the first evaluator CLI around these fixtures. It should index the corpus,
-run `queries.yaml`, de-duplicate returned chunks by `source_uri`, and report both
+Extend `scripts/search_eval.py` with live execution. It should index the corpus,
+run `queries.yaml`, de-duplicate returned chunks by `source_uri`, and write both
 backend chunk metrics and displayed unique-file metrics.

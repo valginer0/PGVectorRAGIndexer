@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.0] - 2026-05-19
+
+### Added
+- feat: file extension filter for search
+
+### Fixed
+- fix(search): prioritize literal matches and default documents tree
+- fix(search-ui): make '*' sticky — revert to it when selection becomes empty
+- fix(search-ui): use '*' as explicit 'all extensions' default, matching type filter
+- fix(search-ui): pre-selected extension on load + duplicate file results
+- fix(search): fail closed on unknown hybrid filter keys with HTTP 400
+- fix(search): address P1/P2 review findings in extension filter
+- fix(search): correct filter_params position in hybrid search SQL params list
+- fix(search): extension filter now works in hybrid search + correct uncheck behavior
+- fix: update-dev.ps1 set working dir to script location
+- fix: keep extension dropdown open during multi-select, disable completer
+
+### Changed
+- test: fix test_smoke_desktop.py after changing default view mode
+- chore: add venv-windows to gitignore
+- test(search-ui): cover blank extension filter and file dedupe
+- Revert "fix: update-dev.ps1 set working dir to script location"
+- chore: gitignore personal document
+
 ## [2.14.9] - 2026-05-17
 
 ### Fixed

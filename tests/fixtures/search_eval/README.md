@@ -24,3 +24,26 @@ category: search_eval
 ```
 
 This namespace lets the evaluator clean up and query only its own documents.
+
+## Validation
+
+Run the fixture integrity test after editing the corpus, manifest, or query set:
+
+```bash
+venv/bin/python -m pytest tests/test_search_eval_fixtures.py -q
+```
+
+The test checks that:
+
+- every manifest document exists and is non-empty
+- query IDs are unique
+- query classes are known
+- query file references are listed in the manifest
+- extension-filter expectations match expected files
+- literal and negative-control fixtures preserve their intended contracts
+
+## Next Step
+
+Build the first evaluator CLI around these fixtures. It should index the corpus,
+run `queries.yaml`, de-duplicate returned chunks by `source_uri`, and report both
+backend chunk metrics and displayed unique-file metrics.

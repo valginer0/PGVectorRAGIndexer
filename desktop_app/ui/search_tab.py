@@ -25,12 +25,18 @@ class CheckableComboBox(QComboBox):
     def __init__(self, placeholder: str = "All", parent=None):
         super().__init__(parent)
         self._placeholder = placeholder
+        self._suppress_hide = False
+
         self._model = QStandardItemModel(self)
         self.setModel(self._model)
-        self.view().pressed.connect(self._toggle_item)
+
         self.setEditable(True)
         self.lineEdit().setReadOnly(True)
         self.lineEdit().setPlaceholderText(placeholder)
+        # Disable the autocompleter — it interferes with the custom model
+        self.setCompleter(None)
+
+        self.view().pressed.connect(self._toggle_item)
         self._refresh_text()
 
     def _toggle_item(self, index):
@@ -38,7 +44,16 @@ class CheckableComboBox(QComboBox):
         item.setCheckState(
             Qt.Unchecked if item.checkState() == Qt.Checked else Qt.Checked
         )
+        self._suppress_hide = True  # keep popup open after toggling
         self._refresh_text()
+
+    def hidePopup(self):
+        # Suppress one close triggered by the item click so users can
+        # check multiple extensions without reopening the dropdown each time.
+        if self._suppress_hide:
+            self._suppress_hide = False
+            return
+        super().hidePopup()
 
     def _refresh_text(self):
         checked = self.checked_items()

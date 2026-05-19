@@ -1,0 +1,12 @@
+Grounded Answers
+
+Grounded answers are responses that stay tied to source documents. A retrieval
+system should return passages that support the answer and show which file was
+used.
+
+When the source material is missing or contradictory, the assistant should say
+that the evidence is insufficient rather than inventing a confident response.
+
+Good retrieval makes answers easier to audit. The user can inspect the source
+path, compare the quoted passage with the generated answer, and decide whether
+the answer is trustworthy.

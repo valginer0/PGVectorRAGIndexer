@@ -1,0 +1,11 @@
+Niro Service Bulletin
+
+This bulletin applies to the Niro electric vehicle platform. It describes a
+software update for charging-session reporting and dashboard range estimates.
+
+The bulletin does not mention the EV6. It is included in the corpus because it
+is semantically close to electric-vehicle service content while being the wrong
+answer for an EV6 literal search.
+
+Technicians should verify the vehicle identification number before applying the
+update package.

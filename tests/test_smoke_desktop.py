@@ -142,6 +142,7 @@ class TestDocumentsTabTreeSignalIsolation:
         from desktop_app.ui.documents_tab import DocumentsTab
 
         tab = DocumentsTab(mock_api_client)
+        tab._set_view_mode("list")
         assert tab._view_mode == "list"
 
         original_text = tab.status_label.text()

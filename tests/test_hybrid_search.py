@@ -119,3 +119,43 @@ class TestHybridSearchSQLGeneration:
         assert "%EV6%" in captured["params"]
         assert captured["params"].count("%EV6%") == 3
         assert captured["sql"].count("%s") == len(captured["params"])
+
+    def test_hybrid_search_preserves_combined_score_as_rank_score(self):
+        """The public result should expose the score used for hybrid ordering."""
+        class FakeCursor:
+            def execute(self, _sql, _params):
+                pass
+
+            def fetchall(self):
+                return [
+                    {
+                        "chunk_id": 1,
+                        "document_id": "doc-1",
+                        "chunk_index": 0,
+                        "text_content": "EV6 owner notes",
+                        "source_uri": "ev6.txt",
+                        "vector_distance": 0.25,
+                        "text_score": 1.0,
+                        "combined_score": 10.75,
+                    }
+                ]
+
+        class FakeCursorContext:
+            def __enter__(self):
+                return FakeCursor()
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        retriever = DocumentRetriever.__new__(DocumentRetriever)
+        retriever.config = SimpleNamespace(
+            retrieval=SimpleNamespace(top_k=10, hybrid_alpha=0.5, distance_metric="cosine")
+        )
+        retriever.embedding_service = SimpleNamespace(encode=lambda _query: [0.1, 0.2])
+        retriever.db_manager = SimpleNamespace(get_cursor=lambda dict_cursor=False: FakeCursorContext())
+
+        results = retriever.search_hybrid("EV6", top_k=1)
+
+        assert len(results) == 1
+        assert results[0].relevance_score == 0.75
+        assert results[0].rank_score == 10.75

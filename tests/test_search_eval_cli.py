@@ -55,6 +55,13 @@ def test_dedupe_chunks_by_source_uri_keeps_best_scored_chunk(search_eval):
     assert deduped[0]["chunk_index"] == 1
 
 
+def test_result_score_prefers_rank_score(search_eval):
+    assert search_eval._result_score({
+        "rank_score": 10.5,
+        "relevance_score": 0.1,
+    }) == 10.5
+
+
 def test_calculate_file_metrics_for_filtered_literal_case(search_eval):
     fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
     plan = next(
@@ -175,11 +182,13 @@ def test_build_top_file_details_adds_diagnostic_flags(search_eval):
             "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
             "chunk_index": 2,
             "relevance_score": 0.91,
+            "rank_score": 10.91,
         },
         {
             "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
             "chunk_index": 0,
             "relevance_score": 0.42,
+            "rank_score": 0.42,
         },
     ]
     chunk_results = [
@@ -205,7 +214,9 @@ def test_build_top_file_details_adds_diagnostic_flags(search_eval):
     assert details[0] == {
         "rank": 1,
         "source_uri": "corpus/vehicles/ev6_owner_notes.txt",
-        "score": 0.91,
+        "score": 10.91,
+        "rank_score": 10.91,
+        "relevance_score": 0.91,
         "chunk_index": 2,
         "literal_hit": True,
         "expected": True,
@@ -356,11 +367,13 @@ def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_
                         "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
                         "text_content": "The EV6 owner notes include a direct hit.",
                         "relevance_score": 0.9,
+                        "rank_score": 10.9,
                     },
                     {
                         "source_uri": "search_eval_v0/corpus/vehicles/ev6_chunk_crowding.txt",
                         "text_content": "Another EV6 chunk.",
                         "relevance_score": 0.8,
+                        "rank_score": 10.8,
                     },
                 ],
             }
@@ -386,6 +399,7 @@ def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_
     assert output["results"][0]["metrics"]["LiteralHitRank"] == 1
     assert output["results"][0]["assertions"]["passed"] is True
     assert output["results"][0]["assertions"]["skipped"] == 0
+    assert output["results"][0]["top_file_details"][0]["score"] == 10.9
     assert output["results"][0]["top_files"] == [
         "corpus/vehicles/ev6_owner_notes.txt",
         "corpus/vehicles/ev6_chunk_crowding.txt",

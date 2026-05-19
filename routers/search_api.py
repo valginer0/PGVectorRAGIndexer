@@ -56,6 +56,7 @@ async def search_documents(request: SearchRequest):
                 source_uri=r.source_uri,
                 distance=r.distance,
                 relevance_score=r.relevance_score,
+                rank_score=r.rank_score,
                 metadata=r.metadata,
                 document_type=r.document_type
             )

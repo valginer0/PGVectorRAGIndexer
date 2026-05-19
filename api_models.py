@@ -51,6 +51,7 @@ class SearchResultModel(BaseModel):
     source_uri: str
     distance: float
     relevance_score: float
+    rank_score: Optional[float] = None
     metadata: Optional[Dict[str, Any]] = None
     document_type: Optional[str] = None
 

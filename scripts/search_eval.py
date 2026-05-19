@@ -378,7 +378,7 @@ def _content_type_for_path(path: Path) -> str:
 
 
 def _result_score(result: dict[str, Any]) -> float:
-    for key in ("relevance_score", "score", "combined_score"):
+    for key in ("rank_score", "combined_score", "relevance_score", "score"):
         if result.get(key) is not None:
             return float(result[key])
     return 0.0
@@ -531,10 +531,13 @@ def build_top_file_details(
     details = []
     for rank, result in enumerate(file_results[:query_plan.top_k_files], start=1):
         source_uri = normalize_result_path(str(result.get("source_uri", "")), fixture_root)
+        rank_score = _result_score(result)
         details.append({
             "rank": rank,
             "source_uri": source_uri,
-            "score": _result_score(result),
+            "score": rank_score,
+            "rank_score": rank_score,
+            "relevance_score": result.get("relevance_score"),
             "chunk_index": result.get("chunk_index"),
             "literal_hit": source_uri in literal_sources if tokens else None,
             "expected": source_uri in expected,

@@ -67,6 +67,7 @@ class SearchResult:
     source_uri: str
     distance: float
     relevance_score: float
+    rank_score: Optional[float] = None
     metadata: Optional[Dict[str, Any]] = None
     document_type: Optional[str] = None
     
@@ -171,6 +172,7 @@ class DocumentRetriever:
                     source_uri=result['source_uri'],
                     distance=result['distance'],
                     relevance_score=relevance_score,
+                    rank_score=relevance_score,
                     metadata=result.get('metadata'),
                     document_type=result.get('metadata', {}).get('type')
                 ))
@@ -415,7 +417,8 @@ class DocumentRetriever:
                 text_content=result['text_content'],
                 source_uri=result['source_uri'],
                 distance=result['vector_distance'],
-                relevance_score=relevance_score
+                relevance_score=relevance_score,
+                rank_score=float(result['combined_score'])
             ))
         
         logger.info(f"Found {len(results)} relevant chunks (hybrid)")

@@ -164,6 +164,59 @@ def test_calculate_literal_hit_metrics_distinguishes_found_outside_top_k(search_
     assert metrics == {"LiteralHitFound": True, "LiteralHitRank": None}
 
 
+def test_build_top_file_details_adds_diagnostic_flags(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    plan = next(
+        item for item in search_eval.build_query_plans(fixture_set)
+        if item.id == "literal_ev6_txt"
+    )
+    file_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+            "chunk_index": 2,
+            "relevance_score": 0.91,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+            "chunk_index": 0,
+            "relevance_score": 0.42,
+        },
+    ]
+    chunk_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+            "text_content": "A lower-ranked chunk mentions EV6 directly.",
+            "relevance_score": 0.1,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+            "text_content": "Banana notes without the vehicle identifier.",
+            "relevance_score": 0.42,
+        },
+    ]
+
+    details = search_eval.build_top_file_details(
+        chunk_results,
+        file_results,
+        plan,
+        FIXTURE_ROOT,
+    )
+
+    assert details[0] == {
+        "rank": 1,
+        "source_uri": "corpus/vehicles/ev6_owner_notes.txt",
+        "score": 0.91,
+        "chunk_index": 2,
+        "literal_hit": True,
+        "expected": True,
+        "relevant": True,
+        "forbidden": False,
+    }
+    assert details[1]["source_uri"] == "corpus/noise/banana_bread_recipe.txt"
+    assert details[1]["literal_hit"] is False
+    assert details[1]["forbidden"] is True
+
+
 def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval):
     plan = search_eval.QueryPlan(
         id="assertion_probe",
@@ -337,6 +390,8 @@ def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_
         "corpus/vehicles/ev6_owner_notes.txt",
         "corpus/vehicles/ev6_chunk_crowding.txt",
     ]
+    assert output["results"][0]["top_file_details"][0]["literal_hit"] is True
+    assert output["results"][0]["top_file_details"][0]["expected"] is True
 
 
 def test_cli_validate_and_plan_smoke(search_eval, capsys):

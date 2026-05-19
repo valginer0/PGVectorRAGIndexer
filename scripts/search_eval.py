@@ -472,6 +472,18 @@ def text_contains_literal_tokens(text: str, tokens: list[str]) -> bool:
     return bool(tokens) and all(token in haystack for token in tokens)
 
 
+def literal_hit_source_paths(
+    chunk_results: list[dict[str, Any]],
+    tokens: list[str],
+    fixture_root: Path | None = None,
+) -> set[str]:
+    return {
+        normalize_result_path(str(result.get("source_uri", "")), fixture_root)
+        for result in chunk_results
+        if text_contains_literal_tokens(str(result.get("text_content", "")), tokens)
+    }
+
+
 def calculate_literal_hit_rank(
     chunk_results: list[dict[str, Any]],
     file_results: list[dict[str, Any]],
@@ -496,16 +508,40 @@ def calculate_literal_hit_metrics(
     if not tokens:
         return {"LiteralHitFound": None, "LiteralHitRank": None}
 
-    literal_hit_sources = {
-        normalize_result_path(str(result.get("source_uri", "")), fixture_root)
-        for result in chunk_results
-        if text_contains_literal_tokens(str(result.get("text_content", "")), tokens)
-    }
+    literal_hit_sources = literal_hit_source_paths(chunk_results, tokens, fixture_root)
     for index, result in enumerate(file_results[:query_plan.top_k_files], start=1):
         source_uri = normalize_result_path(str(result.get("source_uri", "")), fixture_root)
         if source_uri in literal_hit_sources:
             return {"LiteralHitFound": True, "LiteralHitRank": index}
     return {"LiteralHitFound": bool(literal_hit_sources), "LiteralHitRank": None}
+
+
+def build_top_file_details(
+    chunk_results: list[dict[str, Any]],
+    file_results: list[dict[str, Any]],
+    query_plan: QueryPlan,
+    fixture_root: Path | None = None,
+) -> list[dict[str, Any]]:
+    tokens = literal_query_tokens(query_plan.query)
+    literal_sources = literal_hit_source_paths(chunk_results, tokens, fixture_root) if tokens else set()
+    expected = set(query_plan.expected_files)
+    relevant = set(query_plan.relevant_files or query_plan.expected_files)
+    forbidden = set(query_plan.forbidden_files)
+
+    details = []
+    for rank, result in enumerate(file_results[:query_plan.top_k_files], start=1):
+        source_uri = normalize_result_path(str(result.get("source_uri", "")), fixture_root)
+        details.append({
+            "rank": rank,
+            "source_uri": source_uri,
+            "score": _result_score(result),
+            "chunk_index": result.get("chunk_index"),
+            "literal_hit": source_uri in literal_sources if tokens else None,
+            "expected": source_uri in expected,
+            "relevant": source_uri in relevant,
+            "forbidden": source_uri in forbidden,
+        })
+    return details
 
 
 def _assertion_severity(expected: Any) -> str:
@@ -688,6 +724,12 @@ def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: P
             normalize_result_path(str(result.get("source_uri", "")), fixture_root)
             for result in file_results[:plan.top_k_files]
         ],
+        "top_file_details": build_top_file_details(
+            chunk_results,
+            file_results,
+            plan,
+            fixture_root=fixture_root,
+        ),
     }
 
 

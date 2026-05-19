@@ -50,7 +50,8 @@ class CheckableComboBox(QComboBox):
     def hidePopup(self):
         # Suppress one close triggered by the item click so users can
         # check multiple extensions without reopening the dropdown each time.
-        if self._suppress_hide:
+        # Use getattr guard: Qt can call this override before __init__ sets the attr.
+        if getattr(self, "_suppress_hide", False):
             self._suppress_hide = False
             return
         super().hidePopup()

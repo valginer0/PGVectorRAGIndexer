@@ -206,7 +206,9 @@ class DocumentRetriever:
         top_k = top_k or self.config.retrieval.top_k
         alpha = alpha if alpha is not None else self.config.retrieval.hybrid_alpha
 
-        # Build WHERE clause for optional filters (applied in scored CTE)
+        # Build a pre-filter CTE so both the vector and fulltext candidate branches
+        # are constrained before the LIMIT, preventing missing results in large indexes.
+        # Column names are plain (no table alias) because they reference document_chunks directly.
         filter_clauses = []
         filter_params: List[Any] = []
         if filters:
@@ -215,16 +217,30 @@ class DocumentRetriever:
                     ext_clauses = []
                     for ext in value:
                         normalized = ext if ext.startswith('.') else f'.{ext}'
-                        ext_clauses.append("d.source_uri ILIKE %s")
+                        ext_clauses.append("source_uri ILIKE %s")
                         filter_params.append(f'%{normalized}')
                     filter_clauses.append(f"({' OR '.join(ext_clauses)})")
                 elif key in ['type', 'namespace', 'category']:
-                    filter_clauses.append(f"d.metadata->>'{key}' ILIKE %s")
+                    filter_clauses.append(f"metadata->>'{key}' ILIKE %s")
                     filter_params.append(value)
                 elif key.startswith('metadata.'):
-                    filter_clauses.append("d.metadata->>%s = %s")
+                    filter_clauses.append("metadata->>%s = %s")
                     filter_params.extend([key[9:], value])
-        filter_where = f"AND {' AND '.join(filter_clauses)}" if filter_clauses else ""
+                elif key in ['document_id', 'source_uri']:
+                    filter_clauses.append(f"{key} = %s")
+                    filter_params.append(value)
+
+        if filter_clauses:
+            filter_where_sql = f"WHERE {' AND '.join(filter_clauses)}"
+            filtered_docs_cte = f"""filtered_docs AS (
+                SELECT chunk_id, embedding, text_content
+                FROM document_chunks
+                {filter_where_sql}
+            ),"""
+            candidate_source = "filtered_docs"
+        else:
+            filtered_docs_cte = ""
+            candidate_source = "document_chunks"
 
         # Parse query for quoted phrases and regular terms
         phrases, terms = parse_search_query(query)
@@ -267,20 +283,21 @@ class DocumentRetriever:
         candidate_limit = max(top_k * 100, 1000)  # At least 1000, or 100x top_k
         
         query_sql = f"""
-        WITH candidates AS (
-            -- Top vector search results (wrapped in subquery for UNION compatibility)
+        WITH {filtered_docs_cte}
+        candidates AS (
+            -- Top vector search results constrained to filtered source
             SELECT chunk_id FROM (
-                SELECT chunk_id FROM document_chunks
+                SELECT chunk_id FROM {candidate_source}
                 ORDER BY embedding <=> %s::vector
                 LIMIT {candidate_limit}
             ) AS vector_candidates
             UNION
-            -- All fulltext matches (already filtered by WHERE)
-            SELECT chunk_id FROM document_chunks
+            -- All fulltext matches from the same filtered source
+            SELECT chunk_id FROM {candidate_source}
             WHERE to_tsvector('english', text_content) @@ ({tsquery_expression})
         ),
         scored AS (
-            SELECT 
+            SELECT
                 c.chunk_id,
                 d.document_id,
                 d.chunk_index,
@@ -288,19 +305,18 @@ class DocumentRetriever:
                 d.source_uri,
                 d.embedding <=> %s::vector AS vector_distance,
                 ROW_NUMBER() OVER (ORDER BY d.embedding <=> %s::vector) AS vector_rank,
-                CASE 
+                CASE
                     WHEN to_tsvector('english', d.text_content) @@ ({tsquery_expression})
                     THEN ts_rank_cd(to_tsvector('english', d.text_content), {tsquery_expression})
-                    ELSE 0 
+                    ELSE 0
                 END AS text_score,
-                CASE 
+                CASE
                     WHEN to_tsvector('english', d.text_content) @@ ({tsquery_expression})
                     THEN 1
-                    ELSE 0 
+                    ELSE 0
                 END AS has_text_match
             FROM candidates c
             JOIN document_chunks d ON c.chunk_id = d.chunk_id
-            WHERE 1=1 {filter_where}
         ),
         ranked AS (
             SELECT *,
@@ -333,18 +349,18 @@ class DocumentRetriever:
         """
         
         # Build parameter list in SQL text order (left-to-right):
-        # candidates CTE: embedding (ORDER BY), then tsquery_params (WHERE)
-        # scored CTE SELECT: embedding x2 (vector_distance, ROW_NUMBER), then
-        #   tsquery_params x3 (1st CASE WHEN, ts_rank_cd, 2nd CASE WHEN)
-        # scored CTE WHERE: filter_params (comes after SELECT expressions in text)
+        # filtered_docs CTE WHERE: filter_params (only present when filters active)
+        # candidates CTE: embedding (ORDER BY), then tsquery_params (fulltext WHERE)
+        # scored CTE: embedding x2 (vector_distance, ROW_NUMBER),
+        #   then tsquery_params x3 (1st CASE WHEN, ts_rank_cd, 2nd CASE WHEN)
         # final SELECT: alpha x3, top_k
-        params = [query_embedding]  # candidates ORDER BY
-        params.extend(tsquery_params)  # candidates WHERE
+        params = list(filter_params)    # filtered_docs WHERE (empty when no filters)
+        params.append(query_embedding)  # candidates ORDER BY
+        params.extend(tsquery_params)   # candidates fulltext WHERE
         params.extend([query_embedding, query_embedding])  # scored: distance, ROW_NUMBER
-        params.extend(tsquery_params)  # scored: 1st CASE WHEN
-        params.extend(tsquery_params)  # scored: ts_rank_cd
-        params.extend(tsquery_params)  # scored: 2nd CASE WHEN
-        params.extend(filter_params)  # scored: WHERE filter (after all SELECT expressions)
+        params.extend(tsquery_params)   # scored: 1st CASE WHEN
+        params.extend(tsquery_params)   # scored: ts_rank_cd
+        params.extend(tsquery_params)   # scored: 2nd CASE WHEN
         params.extend([alpha, 1 - alpha, alpha, top_k])
         
         with self.db_manager.get_cursor(dict_cursor=True) as cursor:

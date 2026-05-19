@@ -237,12 +237,28 @@ def validate_fixture_set(fixture_set: FixtureSet) -> list[str]:
             errors.append(f"{query_id} assertion recall_at_5 requires expected_files")
         if "first_expected_rank_lte" in assertions and not expected_files:
             errors.append(f"{query_id} assertion first_expected_rank_lte requires expected_files")
+        if "first_expected_rank_lte" in assertions:
+            try:
+                first_rank_limit = int(assertions["first_expected_rank_lte"])
+            except (TypeError, ValueError):
+                errors.append(f"{query_id} assertion first_expected_rank_lte must be an integer")
+            else:
+                if first_rank_limit < 1:
+                    errors.append(f"{query_id} assertion first_expected_rank_lte must be positive")
         if "literal_match_rank_lte" in assertions and not expected_files:
             errors.append(f"{query_id} assertion literal_match_rank_lte requires expected_files")
         if assertions.get("filters_respected") is True and not filters:
             errors.append(f"{query_id} assertion filters_respected requires filters")
         if "forbidden_at_5_eq" in assertions and not forbidden_files:
             errors.append(f"{query_id} assertion forbidden_at_5_eq requires forbidden_files")
+        if "forbidden_at_5_eq" in assertions:
+            try:
+                forbidden_count = int(assertions["forbidden_at_5_eq"])
+            except (TypeError, ValueError):
+                errors.append(f"{query_id} assertion forbidden_at_5_eq must be an integer")
+            else:
+                if forbidden_count < 0:
+                    errors.append(f"{query_id} assertion forbidden_at_5_eq must be non-negative")
         if "min_unique_files_at_5" in assertions:
             try:
                 min_unique = int(assertions["min_unique_files_at_5"])

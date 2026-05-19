@@ -158,11 +158,22 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
     invalid_query["id"] = "invalid_recall_gate"
     invalid_query["expected_files"] = []
     invalid_query["assertions"] = {"recall_at_5": True}
+    invalid_first_rank_query = dict(fixture_set.query_items[0])
+    invalid_first_rank_query["id"] = "invalid_first_rank_gate"
+    invalid_first_rank_query["assertions"] = {"first_expected_rank_lte": "near"}
+    invalid_forbidden_query = dict(fixture_set.query_items[0])
+    invalid_forbidden_query["id"] = "invalid_forbidden_gate"
+    invalid_forbidden_query["assertions"] = {"forbidden_at_5_eq": -1}
     invalid_unique_query = dict(fixture_set.query_items[0])
     invalid_unique_query["id"] = "invalid_unique_gate"
     invalid_unique_query["assertions"] = {"min_unique_files_at_5": "many"}
     invalid_queries = dict(fixture_set.queries)
-    invalid_queries["queries"] = [invalid_query, invalid_unique_query]
+    invalid_queries["queries"] = [
+        invalid_query,
+        invalid_first_rank_query,
+        invalid_forbidden_query,
+        invalid_unique_query,
+    ]
 
     invalid_fixture_set = search_eval.FixtureSet(
         root=fixture_set.root,
@@ -173,6 +184,8 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
     errors = search_eval.validate_fixture_set(invalid_fixture_set)
 
     assert "invalid_recall_gate assertion recall_at_5 requires expected_files" in errors
+    assert "invalid_first_rank_gate assertion first_expected_rank_lte must be an integer" in errors
+    assert "invalid_forbidden_gate assertion forbidden_at_5_eq must be non-negative" in errors
     assert "invalid_unique_gate assertion min_unique_files_at_5 must be an integer" in errors
 
 

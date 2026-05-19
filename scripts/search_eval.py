@@ -139,6 +139,34 @@ def validate_fixture_set(fixture_set: FixtureSet) -> list[str]:
         if not item.get("assertions"):
             errors.append(f"{query_id} has no assertions")
 
+        assertions = item.get("assertions") or {}
+        expected_files = item.get("expected_files") or []
+        forbidden_files = item.get("forbidden_files") or []
+        filters = item.get("filters") or {}
+
+        if assertions.get("recall_at_5") is True and not expected_files:
+            errors.append(f"{query_id} assertion recall_at_5 requires expected_files")
+        if "first_expected_rank_lte" in assertions and not expected_files:
+            errors.append(f"{query_id} assertion first_expected_rank_lte requires expected_files")
+        if "literal_match_rank_lte" in assertions and not expected_files:
+            errors.append(f"{query_id} assertion literal_match_rank_lte requires expected_files")
+        if assertions.get("filters_respected") is True and not filters:
+            errors.append(f"{query_id} assertion filters_respected requires filters")
+        if "forbidden_at_5_eq" in assertions and not forbidden_files:
+            errors.append(f"{query_id} assertion forbidden_at_5_eq requires forbidden_files")
+        if "min_unique_files_at_5" in assertions:
+            try:
+                min_unique = int(assertions["min_unique_files_at_5"])
+            except (TypeError, ValueError):
+                errors.append(f"{query_id} assertion min_unique_files_at_5 must be an integer")
+                min_unique = 0
+            if min_unique < 1:
+                errors.append(f"{query_id} assertion min_unique_files_at_5 must be positive")
+            elif min_unique > len(manifest_paths):
+                errors.append(
+                    f"{query_id} assertion min_unique_files_at_5 exceeds manifest size"
+                )
+
         for field in QUERY_FILE_FIELDS:
             for path in item.get(field, []) or []:
                 if path not in manifest_paths:
@@ -229,6 +257,8 @@ def normalize_result_path(source_uri: str, fixture_root: Path | None = None) -> 
 
     marker = "/corpus/"
     normalized = source_uri.replace("\\", "/")
+    # Fallback for API source URIs that point into this fixture corpus but are
+    # not under the local fixture root, such as mapped container paths.
     if marker in normalized:
         return "corpus/" + normalized.split(marker, 1)[1]
     return normalized

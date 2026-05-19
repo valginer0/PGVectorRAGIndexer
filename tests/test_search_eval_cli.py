@@ -2,6 +2,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures" / "search_eval"
@@ -16,9 +18,12 @@ def load_search_eval_module():
     return module
 
 
-def test_validate_fixture_set_and_build_query_plans():
-    search_eval = load_search_eval_module()
+@pytest.fixture(scope="module")
+def search_eval():
+    return load_search_eval_module()
 
+
+def test_validate_fixture_set_and_build_query_plans(search_eval):
     fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
     errors = search_eval.validate_fixture_set(fixture_set)
     plans = search_eval.build_query_plans(fixture_set)
@@ -36,9 +41,7 @@ def test_validate_fixture_set_and_build_query_plans():
     assert ev6_txt.backend_top_k == 100
 
 
-def test_dedupe_chunks_by_source_uri_keeps_best_scored_chunk():
-    search_eval = load_search_eval_module()
-
+def test_dedupe_chunks_by_source_uri_keeps_best_scored_chunk(search_eval):
     deduped = search_eval.dedupe_chunks_by_source_uri(
         [
             {"source_uri": "a.txt", "chunk_index": 0, "relevance_score": 0.5},
@@ -51,8 +54,7 @@ def test_dedupe_chunks_by_source_uri_keeps_best_scored_chunk():
     assert deduped[0]["chunk_index"] == 1
 
 
-def test_calculate_file_metrics_for_filtered_literal_case():
-    search_eval = load_search_eval_module()
+def test_calculate_file_metrics_for_filtered_literal_case(search_eval):
     fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
     plan = next(
         item for item in search_eval.build_query_plans(fixture_set)
@@ -86,9 +88,31 @@ def test_calculate_file_metrics_for_filtered_literal_case():
     assert metrics["UniqueFiles@K"] == 3
 
 
-def test_cli_validate_and_plan_smoke(capsys):
-    search_eval = load_search_eval_module()
+def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    invalid_query = dict(fixture_set.query_items[0])
+    invalid_query["id"] = "invalid_recall_gate"
+    invalid_query["expected_files"] = []
+    invalid_query["assertions"] = {"recall_at_5": True}
+    invalid_unique_query = dict(fixture_set.query_items[0])
+    invalid_unique_query["id"] = "invalid_unique_gate"
+    invalid_unique_query["assertions"] = {"min_unique_files_at_5": "many"}
+    invalid_queries = dict(fixture_set.queries)
+    invalid_queries["queries"] = [invalid_query, invalid_unique_query]
 
+    invalid_fixture_set = search_eval.FixtureSet(
+        root=fixture_set.root,
+        manifest=fixture_set.manifest,
+        queries=invalid_queries,
+    )
+
+    errors = search_eval.validate_fixture_set(invalid_fixture_set)
+
+    assert "invalid_recall_gate assertion recall_at_5 requires expected_files" in errors
+    assert "invalid_unique_gate assertion min_unique_files_at_5 must be an integer" in errors
+
+
+def test_cli_validate_and_plan_smoke(search_eval, capsys):
     assert search_eval.main(["--fixture-root", str(FIXTURE_ROOT), "validate"]) == 0
     validate_output = capsys.readouterr().out
     assert "12 documents" in validate_output

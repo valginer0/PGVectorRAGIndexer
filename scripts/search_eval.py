@@ -10,12 +10,15 @@ on top of these helpers in the next step.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import requests
 import yaml
 
 
@@ -72,6 +75,92 @@ class QueryPlan:
             "top_k_files": self.top_k_files,
             "backend_top_k": self.backend_top_k,
         }
+
+
+@dataclass(frozen=True)
+class DocumentUpload:
+    path: Path
+    source_uri: str
+    document_id: str
+    metadata: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "path": str(self.path),
+            "source_uri": self.source_uri,
+            "document_id": self.document_id,
+            "metadata": self.metadata,
+        }
+
+
+class SearchEvalHTTPError(RuntimeError):
+    pass
+
+
+class SearchEvalHTTPClient:
+    def __init__(self, base_url: str, api_key: str | None = None, timeout: float = 120.0):
+        self.base_url = base_url.rstrip("/")
+        self.api_base = f"{self.base_url}/api/v1"
+        self.timeout = timeout
+        self.session = requests.Session()
+        if api_key:
+            self.session.headers.update({"X-API-Key": api_key})
+
+    def request(self, method: str, path: str, **kwargs: Any) -> requests.Response:
+        url = path if path.startswith(("http://", "https://")) else f"{self.api_base}{path}"
+        kwargs.setdefault("timeout", self.timeout)
+        response = self.session.request(method, url, **kwargs)
+        if response.status_code >= 400:
+            message = response.text[:500]
+            try:
+                body = response.json()
+                if isinstance(body, dict):
+                    message = str(body.get("detail") or body.get("message") or body)
+            except ValueError:
+                pass
+            raise SearchEvalHTTPError(f"{method} {url} failed ({response.status_code}): {message}")
+        return response
+
+    def health(self) -> dict[str, Any]:
+        response = self.session.get(f"{self.base_url}/health", timeout=self.timeout)
+        if response.status_code >= 400:
+            raise SearchEvalHTTPError(
+                f"GET {self.base_url}/health failed ({response.status_code}): {response.text[:500]}"
+            )
+        return response.json()
+
+    def delete_document(self, document_id: str) -> str:
+        url = f"{self.api_base}/documents/{document_id}"
+        response = self.session.delete(url, timeout=self.timeout)
+        if response.status_code == 404:
+            return "missing"
+        if response.status_code >= 400:
+            raise SearchEvalHTTPError(
+                f"DELETE {url} failed ({response.status_code}): {response.text[:500]}"
+            )
+        return "deleted"
+
+    def upload_document(self, upload: DocumentUpload, force_reindex: bool = True) -> dict[str, Any]:
+        with upload.path.open("rb") as handle:
+            files = {"file": (upload.path.name, handle, _content_type_for_path(upload.path))}
+            data = {
+                "force_reindex": "true" if force_reindex else "false",
+                "custom_source_uri": upload.source_uri,
+                "metadata": json.dumps(upload.metadata, sort_keys=True),
+            }
+            response = self.request("POST", "/upload-and-index", files=files, data=data)
+        return response.json()
+
+    def search(self, plan: QueryPlan) -> dict[str, Any]:
+        payload = {
+            "query": plan.query,
+            "top_k": plan.backend_top_k,
+            "min_score": 0.0,
+            "filters": plan.filters,
+            "use_hybrid": True,
+        }
+        response = self.request("POST", "/search", json=payload)
+        return response.json()
 
 
 def load_yaml(path: Path) -> dict[str, Any]:
@@ -221,6 +310,48 @@ def build_query_plans(fixture_set: FixtureSet) -> list[QueryPlan]:
     return plans
 
 
+def document_source_uri(fixture_set: FixtureSet, manifest_path: str) -> str:
+    namespace = fixture_set.manifest["namespace"]
+    return f"{namespace}/{manifest_path}"
+
+
+def document_id_for_source_uri(source_uri: str) -> str:
+    return hashlib.sha256(source_uri.encode("utf-8")).hexdigest()[:16]
+
+
+def document_metadata(fixture_set: FixtureSet, document: dict[str, Any]) -> dict[str, Any]:
+    metadata = dict(fixture_set.manifest.get("default_metadata") or {})
+    metadata.update(document.get("metadata") or {})
+    metadata["eval_path"] = document["path"]
+    if "type" not in metadata and metadata.get("doc_type"):
+        metadata["type"] = metadata["doc_type"]
+    return metadata
+
+
+def build_document_uploads(fixture_set: FixtureSet) -> list[DocumentUpload]:
+    uploads: list[DocumentUpload] = []
+    for document in fixture_set.manifest.get("documents", []):
+        manifest_path = document["path"]
+        source_uri = document_source_uri(fixture_set, manifest_path)
+        uploads.append(
+            DocumentUpload(
+                path=fixture_set.root / manifest_path,
+                source_uri=source_uri,
+                document_id=document_id_for_source_uri(source_uri),
+                metadata=document_metadata(fixture_set, document),
+            )
+        )
+    return uploads
+
+
+def _content_type_for_path(path: Path) -> str:
+    if path.suffix.lower() == ".md":
+        return "text/markdown"
+    if path.suffix.lower() == ".txt":
+        return "text/plain"
+    return "application/octet-stream"
+
+
 def _result_score(result: dict[str, Any]) -> float:
     for key in ("relevance_score", "score", "combined_score"):
         if result.get(key) is not None:
@@ -303,6 +434,49 @@ def calculate_file_metrics(
     }
 
 
+def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: Path) -> dict[str, Any]:
+    response = client.search(plan)
+    chunk_results = list(response.get("results") or [])
+    file_results = dedupe_chunks_by_source_uri(chunk_results)
+    return {
+        "id": plan.id,
+        "class": plan.query_class,
+        "query": plan.query,
+        "filters": plan.filters,
+        "search_time_ms": response.get("search_time_ms"),
+        "backend_result_count": len(chunk_results),
+        "file_result_count": len(file_results),
+        "metrics": calculate_file_metrics(file_results, plan, fixture_root=fixture_root),
+        "top_files": [
+            normalize_result_path(str(result.get("source_uri", "")), fixture_root)
+            for result in file_results[:plan.top_k_files]
+        ],
+    }
+
+
+def cleanup_documents(client: SearchEvalHTTPClient, uploads: list[DocumentUpload]) -> dict[str, int]:
+    summary = {"deleted": 0, "missing": 0}
+    for upload in uploads:
+        status = client.delete_document(upload.document_id)
+        summary[status] = summary.get(status, 0) + 1
+    return summary
+
+
+def upload_documents(client: SearchEvalHTTPClient, uploads: list[DocumentUpload]) -> list[dict[str, Any]]:
+    return [client.upload_document(upload, force_reindex=True) for upload in uploads]
+
+
+def select_query_plans(plans: list[QueryPlan], query_ids: list[str] | None) -> list[QueryPlan]:
+    if not query_ids:
+        return plans
+    requested = set(query_ids)
+    selected = [plan for plan in plans if plan.id in requested]
+    missing = sorted(requested - {plan.id for plan in selected})
+    if missing:
+        raise ValueError(f"Unknown query id(s): {', '.join(missing)}")
+    return selected
+
+
 def run_validate(args: argparse.Namespace) -> int:
     fixture_set = load_fixture_set(args.fixture_root)
     errors = validate_fixture_set(fixture_set)
@@ -343,6 +517,56 @@ def run_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def run_live(args: argparse.Namespace) -> int:
+    fixture_set = load_fixture_set(args.fixture_root)
+    errors = validate_fixture_set(fixture_set)
+    if errors:
+        for error in errors:
+            print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
+    try:
+        plans = select_query_plans(build_query_plans(fixture_set), args.query_id)
+    except ValueError as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+
+    uploads = build_document_uploads(fixture_set)
+    client = SearchEvalHTTPClient(
+        base_url=args.api_base,
+        api_key=args.api_key,
+        timeout=args.timeout,
+    )
+
+    output: dict[str, Any] = {
+        "api_base": args.api_base,
+        "fixture_root": str(fixture_set.root),
+        "documents": len(uploads),
+        "queries": len(plans),
+    }
+
+    try:
+        output["health"] = client.health()
+        if not args.skip_cleanup:
+            output["cleanup"] = cleanup_documents(client, uploads)
+        if not args.skip_index:
+            output["indexing"] = upload_documents(client, uploads)
+        output["results"] = [
+            execute_query(client, plan, fixture_set.root)
+            for plan in plans
+        ]
+    except (requests.RequestException, SearchEvalHTTPError) as e:
+        print(f"ERROR: {e}", file=sys.stderr)
+        return 1
+
+    if args.output_json:
+        args.output_json.write_text(json.dumps(output, indent=2, sort_keys=True), encoding="utf-8")
+        print(f"Wrote {args.output_json}")
+    else:
+        print(json.dumps(output, indent=2, sort_keys=True))
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Validate and plan PGVectorRAGIndexer search evaluation fixtures."
@@ -362,6 +586,24 @@ def build_parser() -> argparse.ArgumentParser:
     plan_parser = subparsers.add_parser("plan", help="Print planned query executions")
     plan_parser.add_argument("--json", action="store_true", help="Output query plan as JSON")
     plan_parser.set_defaults(func=run_plan)
+
+    run_parser = subparsers.add_parser("run", help="Run the live HTTP search evaluation")
+    run_parser.add_argument(
+        "--api-base",
+        default=os.environ.get("SEARCH_EVAL_API_BASE", "http://localhost:8000"),
+        help="Base API URL before /api/v1 (default: http://localhost:8000)",
+    )
+    run_parser.add_argument(
+        "--api-key",
+        default=os.environ.get("PGVECTOR_API_KEY") or os.environ.get("API_KEY"),
+        help="API key for authenticated servers; defaults to PGVECTOR_API_KEY or API_KEY",
+    )
+    run_parser.add_argument("--timeout", type=float, default=120.0, help="HTTP timeout in seconds")
+    run_parser.add_argument("--query-id", action="append", help="Run only a specific query id")
+    run_parser.add_argument("--skip-cleanup", action="store_true", help="Do not delete prior eval docs first")
+    run_parser.add_argument("--skip-index", action="store_true", help="Do not upload/index the corpus first")
+    run_parser.add_argument("--output-json", type=Path, help="Write live evaluation result JSON to this path")
+    run_parser.set_defaults(func=run_live)
 
     return parser
 

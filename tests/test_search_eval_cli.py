@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 from pathlib import Path
 
@@ -88,6 +89,25 @@ def test_calculate_file_metrics_for_filtered_literal_case(search_eval):
     assert metrics["UniqueFiles@K"] == 3
 
 
+def test_build_document_uploads_adds_eval_metadata_and_stable_ids(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    uploads = search_eval.build_document_uploads(fixture_set)
+
+    owner_notes = next(
+        upload for upload in uploads
+        if upload.source_uri == "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt"
+    )
+
+    assert len(uploads) == 12
+    assert owner_notes.path == FIXTURE_ROOT / "corpus/vehicles/ev6_owner_notes.txt"
+    assert owner_notes.document_id == search_eval.document_id_for_source_uri(owner_notes.source_uri)
+    assert owner_notes.metadata["namespace"] == "search_eval_v0"
+    assert owner_notes.metadata["category"] == "search_eval"
+    assert owner_notes.metadata["doc_type"] == "owner_notes"
+    assert owner_notes.metadata["type"] == "owner_notes"
+    assert owner_notes.metadata["eval_path"] == "corpus/vehicles/ev6_owner_notes.txt"
+
+
 def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
     fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
     invalid_query = dict(fixture_set.query_items[0])
@@ -110,6 +130,68 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
 
     assert "invalid_recall_gate assertion recall_at_5 requires expected_files" in errors
     assert "invalid_unique_gate assertion min_unique_files_at_5 must be an integer" in errors
+
+
+def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_path):
+    class FakeHTTPClient:
+        def __init__(self, base_url, api_key=None, timeout=120.0):
+            self.base_url = base_url
+            self.api_key = api_key
+            self.timeout = timeout
+
+        def health(self):
+            return {"status": "healthy"}
+
+        def delete_document(self, _document_id):
+            return "missing"
+
+        def upload_document(self, upload, force_reindex=True):
+            assert force_reindex is True
+            assert upload.metadata["namespace"] == "search_eval_v0"
+            return {
+                "status": "success",
+                "document_id": upload.document_id,
+                "source_uri": upload.source_uri,
+                "chunks_indexed": 1,
+            }
+
+        def search(self, plan):
+            assert plan.id == "literal_ev6_txt"
+            return {
+                "search_time_ms": 12.3,
+                "results": [
+                    {
+                        "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+                        "relevance_score": 0.9,
+                    },
+                    {
+                        "source_uri": "search_eval_v0/corpus/vehicles/ev6_chunk_crowding.txt",
+                        "relevance_score": 0.8,
+                    },
+                ],
+            }
+
+    monkeypatch.setattr(search_eval, "SearchEvalHTTPClient", FakeHTTPClient)
+    output_path = tmp_path / "result.json"
+
+    status = search_eval.main([
+        "--fixture-root", str(FIXTURE_ROOT),
+        "run",
+        "--api-base", "http://example.test",
+        "--query-id", "literal_ev6_txt",
+        "--output-json", str(output_path),
+    ])
+
+    assert status == 0
+    output = json.loads(output_path.read_text())
+    assert output["api_base"] == "http://example.test"
+    assert output["cleanup"] == {"deleted": 0, "missing": 12}
+    assert len(output["indexing"]) == 12
+    assert output["results"][0]["metrics"]["Recall@K"] is True
+    assert output["results"][0]["top_files"] == [
+        "corpus/vehicles/ev6_owner_notes.txt",
+        "corpus/vehicles/ev6_chunk_crowding.txt",
+    ]
 
 
 def test_cli_validate_and_plan_smoke(search_eval, capsys):

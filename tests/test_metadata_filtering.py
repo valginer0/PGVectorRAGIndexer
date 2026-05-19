@@ -2,6 +2,7 @@
 Tests for document metadata (type/namespace) filtering functionality.
 """
 
+import json
 import pytest
 from pathlib import Path
 import tempfile
@@ -56,6 +57,38 @@ class TestMetadataUpload:
             result = cursor.fetchone()
             assert result is not None, f"No metadata found for document_id: {doc_id}"
             assert result['metadata'].get('type') == 'policy', f"Expected type='policy', got: {result['metadata']}"
+
+    def test_upload_with_metadata_json(self, client, db_manager):
+        """Test uploading a document with arbitrary JSON metadata."""
+        content = b"This is a namespaced search evaluation document."
+
+        response = client.post(
+            "/upload-and-index",
+            files={"file": ("search_eval.txt", content, "text/plain")},
+            data={
+                "force_reindex": "true",
+                "custom_source_uri": "search_eval_v0/corpus/test/search_eval.txt",
+                "metadata": json.dumps({
+                    "namespace": "search_eval_v0",
+                    "category": "search_eval",
+                    "doc_type": "fixture",
+                }),
+            }
+        )
+
+        assert response.status_code == 200
+        doc_id = response.json()["document_id"]
+        with db_manager.get_cursor(dict_cursor=True) as cursor:
+            cursor.execute(
+                "SELECT metadata FROM document_chunks WHERE document_id = %s LIMIT 1",
+                (doc_id,)
+            )
+            result = cursor.fetchone()
+
+        assert result is not None
+        assert result["metadata"]["namespace"] == "search_eval_v0"
+        assert result["metadata"]["category"] == "search_eval"
+        assert result["metadata"]["doc_type"] == "fixture"
     
     def test_upload_without_document_type(self, client, db_manager):
         """Test uploading a document without a type (should work)."""

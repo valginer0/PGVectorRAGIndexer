@@ -6,6 +6,7 @@ import logging
 import os
 import tempfile
 import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Optional, Any
 import xxhash
@@ -69,6 +70,7 @@ async def upload_and_index(
     force_reindex: Any = Form(default=False),
     custom_source_uri: Optional[str] = Form(default=None),
     document_type: Optional[str] = Form(default=None),
+    metadata_json: Optional[str] = Form(default=None, alias="metadata"),
     ocr_mode: Optional[str] = Form(default=None)
 ):
     """
@@ -108,14 +110,28 @@ async def upload_and_index(
         # Process the file using temp path, but with custom source_uri for document_id
         idx = get_indexer()
         document_id = hashlib.sha256(display_name.encode()).hexdigest()[:16]
-        
-        metadata = {
+
+        user_metadata: dict[str, Any] = {}
+        if metadata_json:
+            try:
+                parsed_metadata = json.loads(metadata_json)
+                if not isinstance(parsed_metadata, dict):
+                    raise ValueError("metadata must be a JSON object")
+                user_metadata = parsed_metadata
+            except (TypeError, ValueError, json.JSONDecodeError) as e:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Invalid metadata JSON: {e}",
+                )
+
+        metadata = dict(user_metadata)
+        metadata.update({
             'upload_method': 'http_upload',
             'original_filename': file.filename,
             'display_name': display_name,
             'file_hash': uploaded_file_hash,
             'temp_path': temp_path
-        }
+        })
         if custom_source_uri:
             metadata['custom_source_uri'] = custom_source_uri
         

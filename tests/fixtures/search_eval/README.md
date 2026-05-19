@@ -48,10 +48,12 @@ The evaluator skeleton can also validate and print the planned query executions:
 venv/bin/python scripts/search_eval.py validate
 venv/bin/python scripts/search_eval.py plan
 venv/bin/python scripts/search_eval.py plan --json
+venv/bin/python scripts/search_eval.py run --output-json docs/internal/SEARCH_EVAL_BASELINE_V0.json
 ```
 
 ## Next Step
 
-Extend `scripts/search_eval.py` with live execution. It should index the corpus,
-run `queries.yaml`, de-duplicate returned chunks by `source_uri`, and write both
-backend chunk metrics and displayed unique-file metrics.
+Run the live evaluator against a local API, inspect the JSON results, and add a
+Markdown baseline report. The live runner indexes the corpus through
+`/upload-and-index`, de-duplicates returned chunks by `source_uri`, and writes
+first-pass backend chunk plus displayed unique-file metrics.

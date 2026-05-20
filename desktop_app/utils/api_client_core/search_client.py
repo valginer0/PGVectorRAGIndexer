@@ -1,10 +1,24 @@
+import logging
 from typing import Dict, Any, Optional
 
 from desktop_app.utils.api_client_core.base_client import BaseAPIClient
 
+logger = logging.getLogger(__name__)
+
+DOCUMENT_GROUPING_FALLBACK_MULTIPLIER = 20
+DOCUMENT_GROUPING_FALLBACK_EXTRA = 50
+DOCUMENT_GROUPING_FALLBACK_MAX = 500
+DOCUMENT_GROUPING_KEYS = (
+    "group_by_document",
+    "literal_tail_suppression",
+    "literal_anchor_threshold",
+    "literal_tail_threshold",
+)
+
+
 class SearchClient:
     """Domain client for search operations."""
-    
+
     def __init__(self, base_client: BaseAPIClient):
         self._base = base_client
 
@@ -47,13 +61,23 @@ class SearchClient:
         if merged_filters:
             payload["filters"] = merged_filters
 
+        data = self._post_search(payload)
+        if group_by_document and not _group_by_document_confirmed(data):
+            logger.info(
+                "Backend did not confirm document-level search; retrying with legacy over-fetch"
+            )
+            fallback_payload = _legacy_document_grouping_fallback_payload(payload, top_k)
+            data = self._post_search(fallback_payload)
+
+        return data.get("results", [])
+
+    def _post_search(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         response = self._base.request(
             "POST",
             f"{self._base.api_base}/search",
             json=payload
         )
-        data = response.json()
-        return data.get("results", [])
+        return response.json()
 
     def get_extensions(self) -> list:
         """Return distinct file extensions present in the index."""
@@ -62,3 +86,30 @@ class SearchClient:
             return response.json()
         except Exception:
             return []
+
+
+def _group_by_document_confirmed(data: Dict[str, Any]) -> bool:
+    diagnostics = data.get("diagnostics") or {}
+    grouping = diagnostics.get("group_by_document") or {}
+    return bool(grouping.get("active"))
+
+
+def _legacy_document_grouping_fallback_payload(
+    payload: Dict[str, Any],
+    visible_top_k: int,
+) -> Dict[str, Any]:
+    fallback = dict(payload)
+    for key in DOCUMENT_GROUPING_KEYS:
+        fallback.pop(key, None)
+    fallback["top_k"] = _legacy_candidate_limit_for_unique_files(visible_top_k)
+    return fallback
+
+
+def _legacy_candidate_limit_for_unique_files(visible_limit: int) -> int:
+    return min(
+        max(
+            visible_limit * DOCUMENT_GROUPING_FALLBACK_MULTIPLIER,
+            visible_limit + DOCUMENT_GROUPING_FALLBACK_EXTRA,
+        ),
+        DOCUMENT_GROUPING_FALLBACK_MAX,
+    )

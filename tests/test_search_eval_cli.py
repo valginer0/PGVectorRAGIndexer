@@ -423,7 +423,7 @@ def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval)
         "FilterViolations": 0,
     }
 
-    assertions = search_eval.evaluate_assertions(metrics, plan, file_result_count=3)
+    assertions = search_eval.evaluate_assertions(metrics, plan)
     checks = {check["name"]: check for check in assertions["checks"]}
 
     assert assertions["passed"] is False
@@ -433,7 +433,44 @@ def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval)
     assert checks["forbidden_at_5_eq"]["status"] == "fail"
     assert checks["no_confident_literal_match"]["severity"] == "advisory"
     assert checks["no_confident_literal_match"]["status"] == "fail"
+    assert checks["no_confident_literal_match"]["actual"] is True
     assert checks["literal_match_rank_lte"]["status"] == "pass"
+
+
+def test_no_confident_literal_match_passes_when_literal_tokens_absent(search_eval):
+    plan = search_eval.QueryPlan(
+        id="unknown_identifier_probe",
+        query_class="negative",
+        query="ZXQ-000-NOT-REAL",
+        filters={"namespace": "search_eval_v0"},
+        expected_files=[],
+        relevant_files=[],
+        forbidden_files=[],
+        assertions={"no_confident_literal_match": "advisory"},
+        top_k_files=5,
+        backend_top_k=100,
+    )
+    metrics = {
+        "Recall@K": False,
+        "MRR": 0.0,
+        "Precision@K": 0.0,
+        "Forbidden@K": 0,
+        "FirstExpectedRank": None,
+        "LiteralHitFound": False,
+        "LiteralHitRank": None,
+        "UniqueFiles@K": 5,
+        "FilterViolations": 0,
+    }
+
+    assertions = search_eval.evaluate_assertions(metrics, plan)
+    checks = {check["name"]: check for check in assertions["checks"]}
+
+    assert assertions["passed"] is True
+    assert assertions["required_failed"] == 0
+    assert assertions["advisory_failed"] == 0
+    assert checks["no_confident_literal_match"]["status"] == "pass"
+    assert checks["no_confident_literal_match"]["expected"] is False
+    assert checks["no_confident_literal_match"]["actual"] is False
 
 
 def test_build_document_uploads_adds_eval_metadata_and_stable_ids(search_eval):

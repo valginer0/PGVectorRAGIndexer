@@ -695,8 +695,6 @@ def _assertion_check(
 def evaluate_assertions(
     metrics: dict[str, Any],
     query_plan: QueryPlan,
-    *,
-    file_result_count: int | None = None,
 ) -> dict[str, Any]:
     checks: list[dict[str, Any]] = []
     assertions = query_plan.assertions
@@ -780,14 +778,18 @@ def evaluate_assertions(
     if "no_confident_literal_match" in assertions:
         expected = assertions["no_confident_literal_match"]
         severity = _assertion_severity(expected)
+        actual = metrics.get("LiteralHitFound")
         checks.append(
             _assertion_check(
                 "no_confident_literal_match",
-                0,
-                file_result_count,
-                None if file_result_count is None else file_result_count == 0,
+                False,
+                actual,
+                None if actual is None else actual is False,
                 severity=severity,
-                note="Current proxy is zero file results; score-confidence gating is not implemented yet.",
+                note=(
+                    "Passes when no returned chunk contains all configured literal "
+                    "tokens, even if semantic neighbors are returned."
+                ),
             )
         )
 
@@ -852,7 +854,7 @@ def execute_query(
         "file_result_count": len(file_results),
         "raw_file_result_count": len(raw_file_results),
         "metrics": metrics,
-        "assertions": evaluate_assertions(metrics, plan, file_result_count=len(file_results)),
+        "assertions": evaluate_assertions(metrics, plan),
         "top_files": [
             normalize_result_path(str(result.get("source_uri", "")), fixture_root)
             for result in file_results[:plan.top_k_files]

@@ -147,6 +147,34 @@ def test_search_document_level_options_fallback_when_backend_does_not_confirm(ap
         assert "group_by_document" not in fallback_payload
         assert "literal_tail_suppression" not in fallback_payload
 
+
+def test_search_document_level_fallback_preserves_unlimited_top_k(api_client):
+    """A top_k=None caller should not hit legacy fallback arithmetic."""
+    with patch.object(api_client._base, "request") as mock_request:
+        unsupported_response = MagicMock()
+        unsupported_response.status_code = 200
+        unsupported_response.json.return_value = {
+            "results": [{"id": "chunk-only"}],
+        }
+        fallback_response = MagicMock()
+        fallback_response.status_code = 200
+        fallback_response.json.return_value = {
+            "results": [{"id": "fallback"}],
+        }
+        mock_request.side_effect = [unsupported_response, fallback_response]
+
+        results = api_client.search(
+            query="EV6",
+            top_k=None,
+            group_by_document=True,
+            literal_tail_suppression="identifier-token",
+        )
+
+        assert results == [{"id": "fallback"}]
+        fallback_payload = mock_request.call_args_list[1].kwargs["json"]
+        assert fallback_payload["top_k"] is None
+        assert "group_by_document" not in fallback_payload
+
 def test_list_documents_pagination(api_client):
     """Test list documents with pagination."""
     with patch.object(api_client._base, "request") as mock_request:

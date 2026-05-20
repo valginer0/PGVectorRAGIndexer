@@ -170,7 +170,7 @@ class APIClient:
     def search(
         self,
         query: str,
-        top_k: int = 10,
+        top_k: Optional[int] = 10,
         min_score: float = 0.5,
         metric: str = "cosine",
         document_type: Optional[str] = None,

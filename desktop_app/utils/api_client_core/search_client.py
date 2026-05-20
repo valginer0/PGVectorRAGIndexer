@@ -25,7 +25,7 @@ class SearchClient:
     def search(
         self,
         query: str,
-        top_k: int = 10,
+        top_k: Optional[int] = 10,
         min_score: float = 0.5,
         metric: str = "cosine",
         document_type: Optional[str] = None,
@@ -96,7 +96,7 @@ def _group_by_document_confirmed(data: Dict[str, Any]) -> bool:
 
 def _legacy_document_grouping_fallback_payload(
     payload: Dict[str, Any],
-    visible_top_k: int,
+    visible_top_k: Optional[int],
 ) -> Dict[str, Any]:
     fallback = dict(payload)
     for key in DOCUMENT_GROUPING_KEYS:
@@ -105,7 +105,9 @@ def _legacy_document_grouping_fallback_payload(
     return fallback
 
 
-def _legacy_candidate_limit_for_unique_files(visible_limit: int) -> int:
+def _legacy_candidate_limit_for_unique_files(visible_limit: Optional[int]) -> Optional[int]:
+    if visible_limit is None:
+        return None
     return min(
         max(
             visible_limit * DOCUMENT_GROUPING_FALLBACK_MULTIPLIER,

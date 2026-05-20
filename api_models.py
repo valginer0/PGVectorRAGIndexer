@@ -40,6 +40,13 @@ class SearchRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = Field(default=None, description="Search filters")
     use_hybrid: bool = Field(default=False, description="Use hybrid search")
     alpha: Optional[float] = Field(default=None, description="Hybrid search weight")
+    group_by_document: bool = Field(default=False, description="Return one representative result per source document")
+    literal_tail_suppression: Optional[str] = Field(
+        default=None,
+        description="Experimental document-grouped tail suppression mode; currently supports identifier-token",
+    )
+    literal_anchor_threshold: Optional[float] = Field(default=10.0, description="Rank-score threshold to activate literal-tail suppression")
+    literal_tail_threshold: Optional[float] = Field(default=0.1, description="Rank-score floor for non-literal tails")
 
 
 class SearchResultModel(BaseModel):
@@ -62,6 +69,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResultModel]
     total_results: int
     search_time_ms: float
+    diagnostics: Optional[Dict[str, Any]] = None
 
 
 class DocumentInfo(BaseModel):

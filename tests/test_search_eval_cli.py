@@ -792,6 +792,72 @@ def test_cli_run_can_apply_literal_tail_suppression(search_eval, monkeypatch, tm
     assert result["assertions"]["passed"] is True
 
 
+def test_cli_run_can_pass_api_grouping_options(search_eval, monkeypatch, tmp_path):
+    class FakeHTTPClient:
+        def __init__(self, base_url, api_key=None, timeout=120.0):
+            self.base_url = base_url
+            self.api_key = api_key
+            self.timeout = timeout
+
+        def health(self):
+            return {"status": "healthy"}
+
+        def delete_document(self, _document_id):
+            return "missing"
+
+        def upload_document(self, upload, force_reindex=True):
+            return {"document_id": upload.document_id, "source_uri": upload.source_uri}
+
+        def search(self, plan):
+            assert plan.id == "literal_ev6_txt"
+            assert self.search_options == {
+                "group_by_document": True,
+                "literal_tail_suppression": "identifier-token",
+                "literal_anchor_threshold": 10.0,
+                "literal_tail_threshold": 0.1,
+            }
+            return {
+                "diagnostics": {
+                    "group_by_document": {"active": True},
+                    "literal_tail_suppression": {"mode": "identifier-token"},
+                },
+                "search_time_ms": 12.3,
+                "results": [
+                    {
+                        "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+                        "text_content": "The EV6 owner notes include a direct hit.",
+                        "relevance_score": 0.9,
+                        "rank_score": 10.9,
+                    },
+                ],
+            }
+
+    monkeypatch.setattr(search_eval, "SearchEvalHTTPClient", FakeHTTPClient)
+    output_path = tmp_path / "result.json"
+
+    status = search_eval.main([
+        "--fixture-root", str(FIXTURE_ROOT),
+        "run",
+        "--api-base", "http://example.test",
+        "--query-id", "literal_ev6_txt",
+        "--api-group-by-document",
+        "--api-literal-tail-suppression", "identifier-token",
+        "--output-json", str(output_path),
+    ])
+
+    assert status == 0
+    output = json.loads(output_path.read_text())
+    assert output["api_search_options"] == {
+        "group_by_document": True,
+        "literal_tail_suppression": "identifier-token",
+        "literal_anchor_threshold": 10.0,
+        "literal_tail_threshold": 0.1,
+    }
+    assert output["results"][0]["api_diagnostics"]["literal_tail_suppression"] == {
+        "mode": "identifier-token"
+    }
+
+
 def test_cli_validate_and_plan_smoke(search_eval, capsys):
     assert search_eval.main(["--fixture-root", str(FIXTURE_ROOT), "validate"]) == 0
     validate_output = capsys.readouterr().out

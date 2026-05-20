@@ -3,6 +3,7 @@ Search, Document, and Metadata routes for PGVectorRAGIndexer.
 """
 
 import logging
+import re
 import time
 from datetime import datetime
 from typing import List, Optional, Dict, Any
@@ -22,29 +23,199 @@ logger = logging.getLogger(__name__)
 
 search_router = APIRouter(tags=["Search & Documents"])
 
+DEFAULT_LITERAL_ANCHOR_THRESHOLD = 10.0
+DEFAULT_LITERAL_TAIL_THRESHOLD = 0.1
+DOCUMENT_GROUPING_BACKEND_MULTIPLIER = 20
+
+
+def _result_rank_score(result: Any) -> float:
+    rank_score = getattr(result, "rank_score", None)
+    if rank_score is not None:
+        return float(rank_score)
+    return float(getattr(result, "relevance_score", 0.0) or 0.0)
+
+
+def _identifier_query_tokens(query: str) -> List[str]:
+    identifiers = []
+    for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query):
+        has_digit = any(char.isdigit() for char in token)
+        has_connector = "-" in token or "_" in token
+        has_alpha = any(char.isalpha() for char in token)
+        is_upper_acronym = (
+            has_alpha
+            and token.upper() == token
+            and token.lower() != token
+            and 2 <= len(token) <= 5
+        )
+        if has_digit or has_connector or is_upper_acronym:
+            identifiers.append(token.lower())
+    return identifiers
+
+
+def _text_contains_tokens(text: str, tokens: List[str]) -> bool:
+    haystack = text.lower()
+    return bool(tokens) and all(token in haystack for token in tokens)
+
+
+def _group_results_by_source_uri(results: List[Any]) -> List[Any]:
+    best_by_source: Dict[str, tuple[int, Any]] = {}
+    for index, result in enumerate(results):
+        source_uri = getattr(result, "source_uri", None) or getattr(result, "document_id", None)
+        if not source_uri:
+            continue
+        current = best_by_source.get(source_uri)
+        if current is None or _result_rank_score(result) > _result_rank_score(current[1]):
+            best_by_source[source_uri] = (index, result)
+
+    return [
+        result
+        for _, result in sorted(
+            best_by_source.values(),
+            key=lambda pair: (-_result_rank_score(pair[1]), pair[0]),
+        )
+    ]
+
+
+def _apply_identifier_tail_suppression(
+    *,
+    query: str,
+    chunk_results: List[Any],
+    file_results: List[Any],
+    anchor_threshold: float,
+    tail_threshold: float,
+) -> tuple[List[Any], Dict[str, Any]]:
+    tokens = _identifier_query_tokens(query)
+    diagnostics: Dict[str, Any] = {
+        "mode": "identifier-token",
+        "active": False,
+        "anchor_threshold": anchor_threshold,
+        "tail_threshold": tail_threshold,
+        "identifier_tokens": tokens,
+        "strong_literal_hits": [],
+        "suppressed_count": 0,
+        "suppressed_preview": [],
+    }
+    if not tokens:
+        diagnostics["reason"] = "no_identifier_tokens"
+        return file_results, diagnostics
+
+    literal_sources = {
+        source_uri
+        for result in chunk_results
+        if (source_uri := getattr(result, "source_uri", None))
+        and _text_contains_tokens(getattr(result, "text_content", ""), tokens)
+    }
+    if not literal_sources:
+        diagnostics["reason"] = "no_literal_hits"
+        return file_results, diagnostics
+
+    strong_literal_hits = []
+    for rank, result in enumerate(file_results, start=1):
+        source_uri = getattr(result, "source_uri", None)
+        rank_score = _result_rank_score(result)
+        if source_uri in literal_sources and rank_score >= anchor_threshold:
+            strong_literal_hits.append({
+                "rank": rank,
+                "source_uri": source_uri,
+                "rank_score": rank_score,
+            })
+
+    diagnostics["strong_literal_hits"] = strong_literal_hits
+    if not strong_literal_hits:
+        diagnostics["reason"] = "no_strong_literal_hit"
+        return file_results, diagnostics
+
+    kept = []
+    suppressed = []
+    for rank, result in enumerate(file_results, start=1):
+        source_uri = getattr(result, "source_uri", None)
+        rank_score = _result_rank_score(result)
+        if source_uri not in literal_sources and rank_score < tail_threshold:
+            suppressed.append({
+                "rank": rank,
+                "source_uri": source_uri,
+                "rank_score": rank_score,
+            })
+            continue
+        kept.append(result)
+
+    diagnostics.update({
+        "active": True,
+        "reason": "strong_literal_hit",
+        "suppressed_count": len(suppressed),
+        "suppressed_preview": suppressed[:10],
+    })
+    return kept, diagnostics
+
 
 @search_router.post("/search", response_model=SearchResponse, dependencies=[Depends(require_api_key)], responses={401: {"model": APIErrorResponse}})
 async def search_documents(request: SearchRequest):
     """Search for relevant documents."""
     try:
+        if request.literal_tail_suppression and not request.group_by_document:
+            raise ValueError("literal_tail_suppression requires group_by_document=true")
+        if request.literal_tail_suppression not in (None, "identifier-token"):
+            raise ValueError("literal_tail_suppression currently supports only identifier-token")
+        literal_anchor_threshold = (
+            request.literal_anchor_threshold
+            if request.literal_anchor_threshold is not None
+            else DEFAULT_LITERAL_ANCHOR_THRESHOLD
+        )
+        literal_tail_threshold = (
+            request.literal_tail_threshold
+            if request.literal_tail_threshold is not None
+            else DEFAULT_LITERAL_TAIL_THRESHOLD
+        )
+        if literal_anchor_threshold < 0:
+            raise ValueError("literal_anchor_threshold must be non-negative")
+        if literal_tail_threshold < 0:
+            raise ValueError("literal_tail_threshold must be non-negative")
+
         ret = get_retriever()
         start_time = time.time()
+        search_top_k = request.top_k
+        if request.group_by_document and request.top_k:
+            search_top_k = request.top_k * DOCUMENT_GROUPING_BACKEND_MULTIPLIER
         
         if request.use_hybrid:
             results = ret.search_hybrid(
                 query=request.query,
-                top_k=request.top_k,
+                top_k=search_top_k,
                 alpha=request.alpha,
                 filters=request.filters,
             )
         else:
             results = ret.search(
                 query=request.query,
-                top_k=request.top_k,
+                top_k=search_top_k,
                 filters=request.filters,
                 min_score=request.min_score
             )
         
+        diagnostics = None
+        if request.group_by_document:
+            raw_result_count = len(results)
+            grouped_results = _group_results_by_source_uri(results)
+            diagnostics = {
+                "group_by_document": {
+                    "active": True,
+                    "raw_result_count": raw_result_count,
+                    "grouped_result_count": len(grouped_results),
+                    "requested_top_k": request.top_k,
+                    "backend_top_k": search_top_k,
+                }
+            }
+            if request.literal_tail_suppression == "identifier-token":
+                grouped_results, suppression_diagnostics = _apply_identifier_tail_suppression(
+                    query=request.query,
+                    chunk_results=results,
+                    file_results=grouped_results,
+                    anchor_threshold=literal_anchor_threshold,
+                    tail_threshold=literal_tail_threshold,
+                )
+                diagnostics["literal_tail_suppression"] = suppression_diagnostics
+                diagnostics["group_by_document"]["suppressed_grouped_result_count"] = len(grouped_results)
+            results = grouped_results[:request.top_k] if request.top_k else grouped_results
         search_time = (time.time() - start_time) * 1000  # Convert to ms
         
         result_models = [
@@ -67,7 +238,8 @@ async def search_documents(request: SearchRequest):
             query=request.query,
             results=result_models,
             total_results=len(result_models),
-            search_time_ms=round(search_time, 2)
+            search_time_ms=round(search_time, 2),
+            diagnostics=diagnostics,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))

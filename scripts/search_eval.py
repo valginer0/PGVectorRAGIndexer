@@ -123,6 +123,7 @@ class SearchEvalHTTPClient:
         self.base_url = base_url.rstrip("/")
         self.api_base = f"{self.base_url}/api/v1"
         self.timeout = timeout
+        self.search_options: dict[str, Any] = {}
         self.session = requests.Session()
         if api_key:
             self.session.headers.update({"X-API-Key": api_key})
@@ -180,6 +181,7 @@ class SearchEvalHTTPClient:
             "filters": plan.filters,
             "use_hybrid": True,
         }
+        payload.update(self.search_options)
         response = self.request("POST", "/search", json=payload)
         return response.json()
 
@@ -879,6 +881,7 @@ def execute_query(
         "backend_result_count": len(chunk_results),
         "file_result_count": len(file_results),
         "raw_file_result_count": len(raw_file_results),
+        "api_diagnostics": response.get("diagnostics"),
         "metrics": metrics,
         "assertions": evaluate_assertions(metrics, plan),
         "top_files": [
@@ -980,14 +983,28 @@ def run_live(args: argparse.Namespace) -> int:
         api_key=args.api_key,
         timeout=args.timeout,
     )
+    api_search_options: dict[str, Any] = {}
+    if args.api_group_by_document:
+        api_search_options["group_by_document"] = True
+    if args.api_literal_tail_suppression:
+        api_search_options["literal_tail_suppression"] = args.api_literal_tail_suppression
+        api_search_options["literal_anchor_threshold"] = args.literal_anchor_threshold
+        api_search_options["literal_tail_threshold"] = args.literal_tail_threshold
+    if api_search_options:
+        client.search_options = api_search_options
+
     literal_tail_suppression = None
-    if args.literal_tail_suppression:
+    if args.api_literal_tail_suppression and not args.api_group_by_document:
+        print("ERROR: --api-literal-tail-suppression requires --api-group-by-document", file=sys.stderr)
+        return 1
+    if args.literal_tail_suppression or args.api_literal_tail_suppression:
         if args.literal_anchor_threshold < 0:
             print("ERROR: --literal-anchor-threshold must be non-negative", file=sys.stderr)
             return 1
         if args.literal_tail_threshold < 0:
             print("ERROR: --literal-tail-threshold must be non-negative", file=sys.stderr)
             return 1
+    if args.literal_tail_suppression:
         literal_tail_suppression = LiteralTailSuppressionConfig(
             anchor_threshold=args.literal_anchor_threshold,
             tail_threshold=args.literal_tail_threshold,
@@ -1004,6 +1021,8 @@ def run_live(args: argparse.Namespace) -> int:
         output["experiments"] = {
             "literal_tail_suppression": literal_tail_suppression.to_dict(),
         }
+    if api_search_options:
+        output["api_search_options"] = api_search_options
 
     try:
         output["health"] = client.health()
@@ -1068,6 +1087,16 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--skip-cleanup", action="store_true", help="Do not delete prior eval docs first")
     run_parser.add_argument("--skip-index", action="store_true", help="Do not upload/index the corpus first")
     run_parser.add_argument("--output-json", type=Path, help="Write live evaluation result JSON to this path")
+    run_parser.add_argument(
+        "--api-group-by-document",
+        action="store_true",
+        help="Ask the API to return grouped document-level search results",
+    )
+    run_parser.add_argument(
+        "--api-literal-tail-suppression",
+        choices=("identifier-token",),
+        help="Ask the API to apply experimental literal-tail suppression",
+    )
     run_parser.add_argument(
         "--literal-tail-suppression",
         action="store_true",

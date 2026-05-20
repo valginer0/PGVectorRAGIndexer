@@ -56,6 +56,7 @@ venv/bin/python scripts/search_eval.py plan --json
 venv/bin/python scripts/search_eval.py run --output-json docs/internal/SEARCH_EVAL_BASELINE_V0.json
 venv/bin/python scripts/search_eval.py run --literal-tail-suppression --literal-tail-suppression-signal query-class --literal-anchor-threshold 10.0 --literal-tail-threshold 0.1 --output-json docs/internal/SEARCH_EVAL_THRESHOLD_EXPERIMENT_V0.json
 venv/bin/python scripts/search_eval.py run --literal-tail-suppression --literal-tail-suppression-signal identifier-token --literal-anchor-threshold 10.0 --literal-tail-threshold 0.1 --output-json docs/internal/SEARCH_EVAL_IDENTIFIER_SIGNAL_EXPERIMENT_V0.json
+venv/bin/python scripts/search_eval.py run --api-group-by-document --api-literal-tail-suppression identifier-token --literal-anchor-threshold 10.0 --literal-tail-threshold 0.1 --output-json docs/internal/SEARCH_EVAL_API_IDENTIFIER_SIGNAL_EXPERIMENT_V0.json
 venv/bin/python scripts/search_eval.py run --skip-cleanup --skip-index --query-id literal_ev6_txt
 ```
 

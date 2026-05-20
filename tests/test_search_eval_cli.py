@@ -282,6 +282,114 @@ def test_build_top_file_details_adds_diagnostic_flags(search_eval):
     assert details[1]["forbidden"] is True
 
 
+def test_literal_tail_suppression_filters_low_score_non_literal_files(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    plan = next(
+        item for item in search_eval.build_query_plans(fixture_set)
+        if item.id == "literal_ev6_txt"
+    )
+    file_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+            "rank_score": 10.91,
+            "relevance_score": 0.91,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+            "rank_score": 0.06,
+            "relevance_score": 0.42,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/charging_overview.txt",
+            "rank_score": 0.2,
+            "relevance_score": 0.2,
+        },
+    ]
+    chunk_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+            "text_content": "The EV6 owner notes include a direct hit.",
+            "rank_score": 10.91,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+            "text_content": "Banana notes without the vehicle identifier.",
+            "rank_score": 0.06,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/charging_overview.txt",
+            "text_content": "General charging overview.",
+            "rank_score": 0.2,
+        },
+    ]
+
+    filtered, diagnostics = search_eval.apply_literal_tail_suppression(
+        chunk_results,
+        file_results,
+        plan,
+        FIXTURE_ROOT,
+        search_eval.LiteralTailSuppressionConfig(
+            anchor_threshold=10.0,
+            tail_threshold=0.1,
+        ),
+    )
+
+    assert diagnostics["active"] is True
+    assert diagnostics["reason"] == "strong_literal_hit"
+    assert diagnostics["suppressed_count"] == 1
+    assert diagnostics["suppressed_top_k_count"] == 1
+    assert diagnostics["suppressed_preview"][0]["source_uri"] == "corpus/noise/banana_bread_recipe.txt"
+    assert [result["source_uri"] for result in filtered] == [
+        "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+        "search_eval_v0/corpus/vehicles/charging_overview.txt",
+    ]
+
+
+def test_literal_tail_suppression_skips_contextual_classes(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    plan = next(
+        item for item in search_eval.build_query_plans(fixture_set)
+        if item.id == "context_auth_timeout"
+    )
+    file_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/engineering/auth_session_policy.txt",
+            "rank_score": 10.91,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+            "rank_score": 0.01,
+        },
+    ]
+    chunk_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/engineering/auth_session_policy.txt",
+            "text_content": "Session timeout context appears directly.",
+            "rank_score": 10.91,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+            "text_content": "Banana notes.",
+            "rank_score": 0.01,
+        },
+    ]
+
+    filtered, diagnostics = search_eval.apply_literal_tail_suppression(
+        chunk_results,
+        file_results,
+        plan,
+        FIXTURE_ROOT,
+        search_eval.LiteralTailSuppressionConfig(
+            anchor_threshold=10.0,
+            tail_threshold=0.1,
+        ),
+    )
+
+    assert diagnostics["active"] is False
+    assert diagnostics["reason"] == "ineligible_query_class"
+    assert filtered == file_results
+
+
 def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval):
     plan = search_eval.QueryPlan(
         id="assertion_probe",
@@ -466,6 +574,81 @@ def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_
     ]
     assert output["results"][0]["top_file_details"][0]["literal_hit"] is True
     assert output["results"][0]["top_file_details"][0]["expected"] is True
+
+
+def test_cli_run_can_apply_literal_tail_suppression(search_eval, monkeypatch, tmp_path):
+    class FakeHTTPClient:
+        def __init__(self, base_url, api_key=None, timeout=120.0):
+            self.base_url = base_url
+            self.api_key = api_key
+            self.timeout = timeout
+
+        def health(self):
+            return {"status": "healthy"}
+
+        def delete_document(self, _document_id):
+            return "missing"
+
+        def upload_document(self, upload, force_reindex=True):
+            return {"document_id": upload.document_id, "source_uri": upload.source_uri}
+
+        def search(self, plan):
+            assert plan.id == "literal_ev6_txt"
+            return {
+                "search_time_ms": 12.3,
+                "results": [
+                    {
+                        "source_uri": "search_eval_v0/corpus/vehicles/ev6_owner_notes.txt",
+                        "text_content": "The EV6 owner notes include a direct hit.",
+                        "relevance_score": 0.9,
+                        "rank_score": 10.9,
+                    },
+                    {
+                        "source_uri": "search_eval_v0/corpus/vehicles/ev6_chunk_crowding.txt",
+                        "text_content": "Another EV6 chunk.",
+                        "relevance_score": 0.8,
+                        "rank_score": 10.8,
+                    },
+                    {
+                        "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+                        "text_content": "Banana notes without the vehicle identifier.",
+                        "relevance_score": 0.06,
+                        "rank_score": 0.06,
+                    },
+                ],
+            }
+
+    monkeypatch.setattr(search_eval, "SearchEvalHTTPClient", FakeHTTPClient)
+    output_path = tmp_path / "result.json"
+
+    status = search_eval.main([
+        "--fixture-root", str(FIXTURE_ROOT),
+        "run",
+        "--api-base", "http://example.test",
+        "--query-id", "literal_ev6_txt",
+        "--literal-tail-suppression",
+        "--output-json", str(output_path),
+    ])
+
+    assert status == 0
+    output = json.loads(output_path.read_text())
+    result = output["results"][0]
+    assert output["experiments"]["literal_tail_suppression"] == {
+        "anchor_threshold": 10.0,
+        "tail_threshold": 0.1,
+    }
+    assert result["file_result_count"] == 2
+    assert result["raw_file_result_count"] == 3
+    assert result["top_files"] == [
+        "corpus/vehicles/ev6_owner_notes.txt",
+        "corpus/vehicles/ev6_chunk_crowding.txt",
+    ]
+    assert result["literal_tail_suppression"]["active"] is True
+    assert result["literal_tail_suppression"]["suppressed_count"] == 1
+    assert result["literal_tail_suppression"]["suppressed_preview"][0]["source_uri"] == (
+        "corpus/noise/banana_bread_recipe.txt"
+    )
+    assert result["assertions"]["passed"] is True
 
 
 def test_cli_validate_and_plan_smoke(search_eval, capsys):

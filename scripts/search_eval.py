@@ -33,6 +33,12 @@ VALID_QUERY_CLASSES = {
     "negative",
 }
 QUERY_FILE_FIELDS = ("expected_files", "relevant_files", "forbidden_files")
+LITERAL_TAIL_SUPPRESSION_CLASSES = {
+    "literal",
+    "filtered",
+    "chunk_crowding",
+    "negative",
+}
 
 
 @dataclass(frozen=True)
@@ -91,6 +97,18 @@ class DocumentUpload:
             "source_uri": self.source_uri,
             "document_id": self.document_id,
             "metadata": self.metadata,
+        }
+
+
+@dataclass(frozen=True)
+class LiteralTailSuppressionConfig:
+    anchor_threshold: float
+    tail_threshold: float
+
+    def to_dict(self) -> dict[str, float]:
+        return {
+            "anchor_threshold": self.anchor_threshold,
+            "tail_threshold": self.tail_threshold,
         }
 
 
@@ -570,6 +588,78 @@ def build_top_file_details(
     return details
 
 
+def apply_literal_tail_suppression(
+    chunk_results: list[dict[str, Any]],
+    file_results: list[dict[str, Any]],
+    query_plan: QueryPlan,
+    fixture_root: Path | None,
+    config: LiteralTailSuppressionConfig,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    tokens = literal_match_tokens_for_plan(query_plan)
+    diagnostics: dict[str, Any] = {
+        "active": False,
+        "anchor_threshold": config.anchor_threshold,
+        "tail_threshold": config.tail_threshold,
+        "eligible_classes": sorted(LITERAL_TAIL_SUPPRESSION_CLASSES),
+        "literal_hit_tokens": tokens,
+        "strong_literal_hits": [],
+        "suppressed_count": 0,
+        "suppressed_top_k_count": 0,
+    }
+    if query_plan.query_class not in LITERAL_TAIL_SUPPRESSION_CLASSES:
+        diagnostics["reason"] = "ineligible_query_class"
+        return file_results, diagnostics
+    if not tokens:
+        diagnostics["reason"] = "no_literal_tokens"
+        return file_results, diagnostics
+
+    literal_sources = literal_hit_source_paths(chunk_results, tokens, fixture_root)
+    if not literal_sources:
+        diagnostics["reason"] = "no_literal_hits"
+        return file_results, diagnostics
+
+    strong_literal_hits = []
+    for rank, result in enumerate(file_results[:query_plan.top_k_files], start=1):
+        source_uri = normalize_result_path(str(result.get("source_uri", "")), fixture_root)
+        rank_score = _result_score(result)
+        if source_uri in literal_sources and rank_score >= config.anchor_threshold:
+            strong_literal_hits.append({
+                "rank": rank,
+                "source_uri": source_uri,
+                "rank_score": rank_score,
+            })
+
+    diagnostics["strong_literal_hits"] = strong_literal_hits
+    if not strong_literal_hits:
+        diagnostics["reason"] = "no_strong_literal_hit"
+        return file_results, diagnostics
+
+    filtered_results = []
+    suppressed = []
+    for rank, result in enumerate(file_results, start=1):
+        source_uri = normalize_result_path(str(result.get("source_uri", "")), fixture_root)
+        rank_score = _result_score(result)
+        if source_uri not in literal_sources and rank_score < config.tail_threshold:
+            suppressed.append({
+                "rank": rank,
+                "source_uri": source_uri,
+                "rank_score": rank_score,
+            })
+            continue
+        filtered_results.append(result)
+
+    diagnostics.update({
+        "active": True,
+        "reason": "strong_literal_hit",
+        "suppressed_count": len(suppressed),
+        "suppressed_top_k_count": sum(
+            1 for item in suppressed if item["rank"] <= query_plan.top_k_files
+        ),
+        "suppressed_preview": suppressed[:10],
+    })
+    return filtered_results, diagnostics
+
+
 def _assertion_severity(expected: Any) -> str:
     return "advisory" if str(expected).lower() == "advisory" else "required"
 
@@ -719,10 +809,25 @@ def evaluate_assertions(
     }
 
 
-def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: Path) -> dict[str, Any]:
+def execute_query(
+    client: SearchEvalHTTPClient,
+    plan: QueryPlan,
+    fixture_root: Path,
+    literal_tail_suppression: LiteralTailSuppressionConfig | None = None,
+) -> dict[str, Any]:
     response = client.search(plan)
     chunk_results = list(response.get("results") or [])
-    file_results = dedupe_chunks_by_source_uri(chunk_results)
+    raw_file_results = dedupe_chunks_by_source_uri(chunk_results)
+    file_results = raw_file_results
+    suppression_diagnostics = None
+    if literal_tail_suppression is not None:
+        file_results, suppression_diagnostics = apply_literal_tail_suppression(
+            chunk_results,
+            file_results,
+            plan,
+            fixture_root,
+            literal_tail_suppression,
+        )
     literal_hit_metrics = calculate_literal_hit_metrics(
         chunk_results,
         file_results,
@@ -737,7 +842,7 @@ def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: P
         literal_hit_found=literal_hit_metrics["LiteralHitFound"],
         literal_hit_tokens=literal_hit_metrics["LiteralHitTokens"],
     )
-    return {
+    result = {
         "id": plan.id,
         "class": plan.query_class,
         "query": plan.query,
@@ -745,6 +850,7 @@ def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: P
         "search_time_ms": response.get("search_time_ms"),
         "backend_result_count": len(chunk_results),
         "file_result_count": len(file_results),
+        "raw_file_result_count": len(raw_file_results),
         "metrics": metrics,
         "assertions": evaluate_assertions(metrics, plan, file_result_count=len(file_results)),
         "top_files": [
@@ -758,6 +864,9 @@ def execute_query(client: SearchEvalHTTPClient, plan: QueryPlan, fixture_root: P
             fixture_root=fixture_root,
         ),
     }
+    if suppression_diagnostics is not None:
+        result["literal_tail_suppression"] = suppression_diagnostics
+    return result
 
 
 def cleanup_documents(client: SearchEvalHTTPClient, uploads: list[DocumentUpload]) -> dict[str, int]:
@@ -843,6 +952,18 @@ def run_live(args: argparse.Namespace) -> int:
         api_key=args.api_key,
         timeout=args.timeout,
     )
+    literal_tail_suppression = None
+    if args.literal_tail_suppression:
+        if args.literal_anchor_threshold < 0:
+            print("ERROR: --literal-anchor-threshold must be non-negative", file=sys.stderr)
+            return 1
+        if args.literal_tail_threshold < 0:
+            print("ERROR: --literal-tail-threshold must be non-negative", file=sys.stderr)
+            return 1
+        literal_tail_suppression = LiteralTailSuppressionConfig(
+            anchor_threshold=args.literal_anchor_threshold,
+            tail_threshold=args.literal_tail_threshold,
+        )
 
     output: dict[str, Any] = {
         "api_base": args.api_base,
@@ -850,6 +971,10 @@ def run_live(args: argparse.Namespace) -> int:
         "documents": len(uploads),
         "queries": len(plans),
     }
+    if literal_tail_suppression is not None:
+        output["experiments"] = {
+            "literal_tail_suppression": literal_tail_suppression.to_dict(),
+        }
 
     try:
         output["health"] = client.health()
@@ -858,7 +983,12 @@ def run_live(args: argparse.Namespace) -> int:
         if not args.skip_index:
             output["indexing"] = upload_documents(client, uploads)
         output["results"] = [
-            execute_query(client, plan, fixture_set.root)
+            execute_query(
+                client,
+                plan,
+                fixture_set.root,
+                literal_tail_suppression=literal_tail_suppression,
+            )
             for plan in plans
         ]
     except (requests.RequestException, SearchEvalHTTPError) as e:
@@ -909,6 +1039,23 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--skip-cleanup", action="store_true", help="Do not delete prior eval docs first")
     run_parser.add_argument("--skip-index", action="store_true", help="Do not upload/index the corpus first")
     run_parser.add_argument("--output-json", type=Path, help="Write live evaluation result JSON to this path")
+    run_parser.add_argument(
+        "--literal-tail-suppression",
+        action="store_true",
+        help="Evaluator-only experiment: suppress low-score non-literal files after strong literal hits",
+    )
+    run_parser.add_argument(
+        "--literal-anchor-threshold",
+        type=float,
+        default=10.0,
+        help="Rank-score threshold that activates literal-tail suppression (default: 10.0)",
+    )
+    run_parser.add_argument(
+        "--literal-tail-threshold",
+        type=float,
+        default=0.1,
+        help="Rank-score floor for non-literal files when suppression is active (default: 0.1)",
+    )
     run_parser.set_defaults(func=run_live)
 
     return parser

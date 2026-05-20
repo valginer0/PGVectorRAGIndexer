@@ -86,6 +86,24 @@ def test_perform_search_success(search_tab):
         mock_worker_instance.start.assert_called_once()
         assert not search_tab.search_btn.isEnabled()
 
+
+def test_perform_search_can_use_document_level_backend_option(search_tab):
+    """Experimental document-level search sends a visible-limit request to the API."""
+    search_tab.query_input.setText("EV6")
+    search_tab.top_k_spin.setValue(5)
+    search_tab.min_score_spin.setValue(0.3)
+    search_tab.metric_combo.setCurrentText("cosine")
+
+    with patch("desktop_app.ui.search_tab.app_config.get_document_level_search_enabled", return_value=True), \
+         patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
+        search_tab.perform_search()
+
+        args = MockWorker.call_args
+        assert args[0][1] == "EV6"
+        assert args[0][2] == 5
+        assert args.kwargs["group_by_document"] is True
+        assert args.kwargs["literal_tail_suppression"] == "identifier-token"
+
 def test_load_extensions_defaults_to_select_all(search_tab, mock_api_client):
     """Loading extensions should show '*' (all) selected, with no active filter."""
     mock_api_client.get_extensions.return_value = [".txt", ".pdf"]

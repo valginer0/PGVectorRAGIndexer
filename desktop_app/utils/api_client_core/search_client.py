@@ -17,6 +17,10 @@ class SearchClient:
         document_type: Optional[str] = None,
         filters: Optional[Dict[str, Any]] = None,
         extensions: Optional[list] = None,
+        group_by_document: bool = False,
+        literal_tail_suppression: Optional[str] = None,
+        literal_anchor_threshold: Optional[float] = None,
+        literal_tail_threshold: Optional[float] = None,
     ) -> list:
         """Search the indexed documents."""
         payload = {
@@ -26,6 +30,14 @@ class SearchClient:
             "metric": metric,
             "use_hybrid": True
         }
+        if group_by_document:
+            payload["group_by_document"] = True
+        if literal_tail_suppression:
+            payload["literal_tail_suppression"] = literal_tail_suppression
+        if literal_anchor_threshold is not None:
+            payload["literal_anchor_threshold"] = literal_anchor_threshold
+        if literal_tail_threshold is not None:
+            payload["literal_tail_threshold"] = literal_tail_threshold
 
         merged_filters: Dict[str, Any] = dict(filters) if filters else {}
         if document_type:

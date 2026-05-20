@@ -84,6 +84,29 @@ def test_search_success(api_client):
         assert payload["metric"] == "cosine"
         assert payload["use_hybrid"] is True
 
+
+def test_search_can_request_document_level_options(api_client):
+    """Search can opt into backend document grouping without changing defaults."""
+    with patch.object(api_client._base, "request") as mock_request:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"results": [{"id": "1"}]}
+        mock_request.return_value = mock_response
+
+        api_client.search(
+            query="EV6",
+            top_k=5,
+            group_by_document=True,
+            literal_tail_suppression="identifier-token",
+        )
+
+        payload = mock_request.call_args[1]["json"]
+        assert payload["top_k"] == 5
+        assert payload["group_by_document"] is True
+        assert payload["literal_tail_suppression"] == "identifier-token"
+        assert "literal_anchor_threshold" not in payload
+        assert "literal_tail_threshold" not in payload
+
 def test_list_documents_pagination(api_client):
     """Test list documents with pagination."""
     with patch.object(api_client._base, "request") as mock_request:

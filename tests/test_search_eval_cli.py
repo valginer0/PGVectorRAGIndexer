@@ -68,6 +68,7 @@ def test_identifier_query_tokens_finds_product_shaped_identifiers(search_eval):
     assert search_eval.identifier_query_tokens("JWT session timeout policy") == ["jwt"]
     assert search_eval.identifier_query_tokens("ZXQ-000-NOT-REAL") == ["zxq-000-not-real"]
     assert search_eval.identifier_query_tokens("customer payment issue") == []
+    assert search_eval.identifier_query_tokens("I have a question") == []
 
 
 def test_calculate_file_metrics_for_filtered_literal_case(search_eval):

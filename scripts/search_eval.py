@@ -509,7 +509,7 @@ def identifier_query_tokens(query: str) -> list[str]:
             has_alpha
             and token.upper() == token
             and token.lower() != token
-            and len(token) <= 5
+            and 2 <= len(token) <= 5
         )
         if has_digit or has_connector or is_upper_acronym:
             identifiers.append(token.lower())

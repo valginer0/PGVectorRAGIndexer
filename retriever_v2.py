@@ -6,9 +6,10 @@ This is the v2 retriever that uses the new modular architecture.
 
 import argparse
 import logging
+import math
 import re
 import sys
-from typing import List, Dict, Any, Optional, Tuple
+from typing import List, Dict, Any, Optional, Tuple, Mapping
 from dataclasses import dataclass
 
 from config import get_config
@@ -54,6 +55,84 @@ def parse_search_query(query: str) -> Tuple[List[str], List[str]]:
     terms_text = re.sub(quote_pattern, '', query).strip()
     terms = terms_text.split() if terms_text else []
     return phrases, terms
+
+
+def normalize_lexical_terms(values: List[str]) -> List[str]:
+    """Normalize query fragments into exact-match lexical terms."""
+    terms: List[str] = []
+    seen = set()
+    for value in values:
+        for match in re.finditer(r"[A-Za-z0-9][A-Za-z0-9_-]*", value):
+            term = match.group(0).lower()
+            if term not in seen:
+                seen.add(term)
+                terms.append(term)
+    return terms
+
+
+def build_exact_token_regex(term: str) -> str:
+    """Build a PostgreSQL regex pattern for case-insensitive exact-token matching."""
+    return rf"(^|[^[:alnum:]_]){re.escape(term.lower())}([^[:alnum:]_]|$)"
+
+
+def calculate_idf(total_documents: int, document_frequency: int) -> float:
+    """Calculate smoothed IDF for document-level lexical rarity."""
+    if total_documents < 0:
+        raise ValueError("total_documents must be non-negative")
+    if document_frequency < 0:
+        raise ValueError("document_frequency must be non-negative")
+    if document_frequency > total_documents:
+        raise ValueError("document_frequency cannot exceed total_documents")
+    return math.log((total_documents + 1) / (document_frequency + 1)) + 1
+
+
+def weighted_rrf_score(
+    *,
+    dense_rank: Optional[int] = None,
+    lexical_rank: Optional[int] = None,
+    rrf_k: int = 60,
+    dense_weight: float = 1.0,
+    lexical_weight: float = 1.0,
+) -> float:
+    """Compute a weighted Reciprocal Rank Fusion score."""
+    if rrf_k < 0:
+        raise ValueError("rrf_k must be non-negative")
+    score = 0.0
+    if dense_rank is not None:
+        if dense_rank < 1:
+            raise ValueError("dense_rank must be positive")
+        score += dense_weight * (1.0 / (rrf_k + dense_rank))
+    if lexical_rank is not None:
+        if lexical_rank < 1:
+            raise ValueError("lexical_rank must be positive")
+        score += lexical_weight * (1.0 / (rrf_k + lexical_rank))
+    return score
+
+
+def fuse_ranked_candidates(
+    dense_ranks: Mapping[int, int],
+    lexical_ranks: Mapping[int, int],
+    *,
+    rrf_k: int = 60,
+    dense_weight: float = 1.0,
+    lexical_weight: float = 1.0,
+) -> List[Tuple[int, float]]:
+    """Fuse dense and lexical chunk ranks into sorted `(chunk_id, score)` pairs."""
+    chunk_ids = set(dense_ranks) | set(lexical_ranks)
+    scored = [
+        (
+            chunk_id,
+            weighted_rrf_score(
+                dense_rank=dense_ranks.get(chunk_id),
+                lexical_rank=lexical_ranks.get(chunk_id),
+                rrf_k=rrf_k,
+                dense_weight=dense_weight,
+                lexical_weight=lexical_weight,
+            ),
+        )
+        for chunk_id in chunk_ids
+    ]
+    return sorted(scored, key=lambda item: (-item[1], item[0]))
 
 
 @dataclass

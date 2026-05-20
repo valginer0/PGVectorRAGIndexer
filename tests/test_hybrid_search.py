@@ -5,7 +5,56 @@ Uses direct function testing without complex mocking.
 
 import pytest
 from types import SimpleNamespace
-from retriever_v2 import DocumentRetriever, parse_search_query
+from retriever_v2 import (
+    DocumentRetriever,
+    build_exact_token_regex,
+    calculate_idf,
+    fuse_ranked_candidates,
+    normalize_lexical_terms,
+    parse_search_query,
+    weighted_rrf_score,
+)
+
+
+class TestHybridFusionHelpers:
+    """Tests for the pure helpers used by the lexical-fusion design."""
+
+    def test_normalize_lexical_terms_extracts_exact_match_tokens(self):
+        terms = normalize_lexical_terms([
+            "EV6 charging!",
+            "ZXQ-000-NOT-REAL",
+            "EV6",
+            "invoice #4421",
+        ])
+
+        assert terms == ["ev6", "charging", "zxq-000-not-real", "invoice", "4421"]
+
+    def test_build_exact_token_regex_uses_posix_boundaries_and_escaping(self):
+        pattern = build_exact_token_regex("EV6+")
+
+        assert pattern == r"(^|[^[:alnum:]_])ev6\+([^[:alnum:]_]|$)"
+
+    def test_calculate_idf_rewards_rare_terms(self):
+        rare = calculate_idf(total_documents=100, document_frequency=1)
+        common = calculate_idf(total_documents=100, document_frequency=50)
+
+        assert rare > common
+        assert calculate_idf(total_documents=100, document_frequency=100) == pytest.approx(1.0)
+
+    def test_weighted_rrf_score_combines_dense_and_lexical_ranks(self):
+        combined = weighted_rrf_score(dense_rank=2, lexical_rank=2)
+        dense_only = weighted_rrf_score(dense_rank=1)
+
+        assert combined > dense_only
+
+    def test_fuse_ranked_candidates_prefers_dual_signal_result(self):
+        fused = fuse_ranked_candidates(
+            dense_ranks={1: 1, 2: 2},
+            lexical_ranks={3: 1, 2: 2},
+        )
+
+        assert fused[0][0] == 2
+        assert {chunk_id for chunk_id, _score in fused} == {1, 2, 3}
 
 
 class TestHybridSearchSQLGeneration:

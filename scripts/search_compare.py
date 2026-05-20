@@ -158,6 +158,15 @@ def load_queries(args: argparse.Namespace) -> list[dict[str, str]]:
     return [{"id": f"q{index:03d}", "query": query} for index, query in enumerate(queries, start=1)]
 
 
+def validate_args(args: argparse.Namespace) -> list[str]:
+    errors: list[str] = []
+    if args.literal_anchor_threshold < 0:
+        errors.append("--literal-anchor-threshold must be non-negative")
+    if args.literal_tail_threshold < 0:
+        errors.append("--literal-tail-threshold must be non-negative")
+    return errors
+
+
 def build_search_payload(
     *,
     query: str,
@@ -241,6 +250,10 @@ def execute_query_pair(
 
 
 def run(args: argparse.Namespace) -> int:
+    for error in validate_args(args):
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
     try:
         queries = load_queries(args)
         filters = build_filters(args)

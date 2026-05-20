@@ -130,3 +130,20 @@ def test_main_writes_read_only_comparison_json(monkeypatch, tmp_path):
     assert output["query_count"] == 1
     assert output["results"][0]["baseline"]["top_files"] == ["baseline.txt"]
     assert output["results"][0]["document_level"]["top_files"] == ["grouped.txt"]
+
+
+def test_main_rejects_negative_threshold_before_http_client(monkeypatch, capsys):
+    search_compare = load_search_compare_module()
+
+    def fail_if_instantiated(*_args, **_kwargs):
+        raise AssertionError("HTTP client should not be created for invalid thresholds")
+
+    monkeypatch.setattr(search_compare, "SearchCompareHTTPClient", fail_if_instantiated)
+
+    status = search_compare.main([
+        "--query", "EV6",
+        "--literal-anchor-threshold", "-1",
+    ])
+
+    assert status == 1
+    assert "--literal-anchor-threshold must be non-negative" in capsys.readouterr().err

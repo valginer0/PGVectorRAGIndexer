@@ -54,7 +54,7 @@ venv/bin/python scripts/search_eval.py validate
 venv/bin/python scripts/search_eval.py plan
 venv/bin/python scripts/search_eval.py plan --json
 venv/bin/python scripts/search_eval.py run --output-json docs/internal/SEARCH_EVAL_BASELINE_V0.json
-venv/bin/python scripts/search_eval.py run --literal-tail-suppression --output-json docs/internal/SEARCH_EVAL_THRESHOLD_EXPERIMENT_V0.json
+venv/bin/python scripts/search_eval.py run --literal-tail-suppression --literal-anchor-threshold 10.0 --literal-tail-threshold 0.1 --output-json docs/internal/SEARCH_EVAL_THRESHOLD_EXPERIMENT_V0.json
 venv/bin/python scripts/search_eval.py run --skip-cleanup --skip-index --query-id literal_ev6_txt
 ```
 

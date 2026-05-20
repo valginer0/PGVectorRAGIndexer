@@ -62,6 +62,14 @@ def test_result_score_prefers_rank_score(search_eval):
     }) == 10.5
 
 
+def test_identifier_query_tokens_finds_product_shaped_identifiers(search_eval):
+    assert search_eval.identifier_query_tokens("EV6 fast charging limit") == ["ev6"]
+    assert search_eval.identifier_query_tokens("invoice #4421") == ["4421"]
+    assert search_eval.identifier_query_tokens("JWT session timeout policy") == ["jwt"]
+    assert search_eval.identifier_query_tokens("ZXQ-000-NOT-REAL") == ["zxq-000-not-real"]
+    assert search_eval.identifier_query_tokens("customer payment issue") == []
+
+
 def test_calculate_file_metrics_for_filtered_literal_case(search_eval):
     fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
     plan = next(
@@ -390,6 +398,100 @@ def test_literal_tail_suppression_skips_contextual_classes(search_eval):
     assert filtered == file_results
 
 
+def test_literal_tail_suppression_identifier_signal_does_not_need_query_class(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    plan = next(
+        item for item in search_eval.build_query_plans(fixture_set)
+        if item.id == "hybrid_ev6_battery_warranty"
+    )
+    file_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_battery_warranty.md",
+            "rank_score": 11.0,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+            "rank_score": 0.04,
+        },
+    ]
+    chunk_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/vehicles/ev6_battery_warranty.md",
+            "text_content": "The EV6 battery warranty has direct identifier coverage.",
+            "rank_score": 11.0,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/banana_bread_recipe.txt",
+            "text_content": "Banana notes.",
+            "rank_score": 0.04,
+        },
+    ]
+
+    filtered, diagnostics = search_eval.apply_literal_tail_suppression(
+        chunk_results,
+        file_results,
+        plan,
+        FIXTURE_ROOT,
+        search_eval.LiteralTailSuppressionConfig(
+            anchor_threshold=10.0,
+            tail_threshold=0.1,
+            signal="identifier-token",
+        ),
+    )
+
+    assert diagnostics["active"] is True
+    assert diagnostics["signal"] == "identifier-token"
+    assert diagnostics["literal_hit_tokens"] == ["ev6"]
+    assert diagnostics["suppressed_count"] == 1
+    assert filtered == [file_results[0]]
+
+
+def test_literal_tail_suppression_identifier_signal_skips_plain_language(search_eval):
+    fixture_set = search_eval.load_fixture_set(FIXTURE_ROOT)
+    plan = next(
+        item for item in search_eval.build_query_plans(fixture_set)
+        if item.id == "filter_billing_md"
+    )
+    file_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/finance/billing_policy.md",
+            "rank_score": 11.0,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/random_meeting_notes.md",
+            "rank_score": 0.04,
+        },
+    ]
+    chunk_results = [
+        {
+            "source_uri": "search_eval_v0/corpus/finance/billing_policy.md",
+            "text_content": "Customer payment issue policy.",
+            "rank_score": 11.0,
+        },
+        {
+            "source_uri": "search_eval_v0/corpus/noise/random_meeting_notes.md",
+            "text_content": "Meeting notes.",
+            "rank_score": 0.04,
+        },
+    ]
+
+    filtered, diagnostics = search_eval.apply_literal_tail_suppression(
+        chunk_results,
+        file_results,
+        plan,
+        FIXTURE_ROOT,
+        search_eval.LiteralTailSuppressionConfig(
+            anchor_threshold=10.0,
+            tail_threshold=0.1,
+            signal="identifier-token",
+        ),
+    )
+
+    assert diagnostics["active"] is False
+    assert diagnostics["reason"] == "no_identifier_tokens"
+    assert filtered == file_results
+
+
 def test_evaluate_assertions_reports_required_and_advisory_failures(search_eval):
     plan = search_eval.QueryPlan(
         id="assertion_probe",
@@ -673,6 +775,7 @@ def test_cli_run_can_apply_literal_tail_suppression(search_eval, monkeypatch, tm
     assert output["experiments"]["literal_tail_suppression"] == {
         "anchor_threshold": 10.0,
         "tail_threshold": 0.1,
+        "signal": "query-class",
     }
     assert result["file_result_count"] == 2
     assert result["raw_file_result_count"] == 3

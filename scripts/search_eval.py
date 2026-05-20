@@ -104,11 +104,13 @@ class DocumentUpload:
 class LiteralTailSuppressionConfig:
     anchor_threshold: float
     tail_threshold: float
+    signal: str = "query-class"
 
-    def to_dict(self) -> dict[str, float]:
+    def to_dict(self) -> dict[str, float | str]:
         return {
             "anchor_threshold": self.anchor_threshold,
             "tail_threshold": self.tail_threshold,
+            "signal": self.signal,
         }
 
 
@@ -497,6 +499,23 @@ def literal_query_tokens(query: str) -> list[str]:
     return [token.lower() for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query)]
 
 
+def identifier_query_tokens(query: str) -> list[str]:
+    identifiers = []
+    for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]*", query):
+        has_digit = any(char.isdigit() for char in token)
+        has_connector = "-" in token or "_" in token
+        has_alpha = any(char.isalpha() for char in token)
+        is_upper_acronym = (
+            has_alpha
+            and token.upper() == token
+            and token.lower() != token
+            and len(token) <= 5
+        )
+        if has_digit or has_connector or is_upper_acronym:
+            identifiers.append(token.lower())
+    return identifiers
+
+
 def literal_match_tokens_for_plan(query_plan: QueryPlan) -> list[str]:
     configured_tokens = query_plan.assertions.get("literal_match_tokens")
     if configured_tokens:
@@ -595,22 +614,29 @@ def apply_literal_tail_suppression(
     fixture_root: Path | None,
     config: LiteralTailSuppressionConfig,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    tokens = literal_match_tokens_for_plan(query_plan)
+    if config.signal == "identifier-token":
+        tokens = identifier_query_tokens(query_plan.query)
+    else:
+        tokens = literal_match_tokens_for_plan(query_plan)
+
     diagnostics: dict[str, Any] = {
         "active": False,
         "anchor_threshold": config.anchor_threshold,
         "tail_threshold": config.tail_threshold,
+        "signal": config.signal,
         "eligible_classes": sorted(LITERAL_TAIL_SUPPRESSION_CLASSES),
         "literal_hit_tokens": tokens,
         "strong_literal_hits": [],
         "suppressed_count": 0,
         "suppressed_top_k_count": 0,
     }
-    if query_plan.query_class not in LITERAL_TAIL_SUPPRESSION_CLASSES:
+    if config.signal == "query-class" and query_plan.query_class not in LITERAL_TAIL_SUPPRESSION_CLASSES:
         diagnostics["reason"] = "ineligible_query_class"
         return file_results, diagnostics
     if not tokens:
-        diagnostics["reason"] = "no_literal_tokens"
+        diagnostics["reason"] = (
+            "no_identifier_tokens" if config.signal == "identifier-token" else "no_literal_tokens"
+        )
         return file_results, diagnostics
 
     literal_sources = literal_hit_source_paths(chunk_results, tokens, fixture_root)
@@ -965,6 +991,7 @@ def run_live(args: argparse.Namespace) -> int:
         literal_tail_suppression = LiteralTailSuppressionConfig(
             anchor_threshold=args.literal_anchor_threshold,
             tail_threshold=args.literal_tail_threshold,
+            signal=args.literal_tail_suppression_signal,
         )
 
     output: dict[str, Any] = {
@@ -1057,6 +1084,15 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.1,
         help="Rank-score floor for non-literal files when suppression is active (default: 0.1)",
+    )
+    run_parser.add_argument(
+        "--literal-tail-suppression-signal",
+        choices=("query-class", "identifier-token"),
+        default="query-class",
+        help=(
+            "Activation signal for literal-tail suppression: fixture query class "
+            "or product-shaped identifier tokens (default: query-class)"
+        ),
     )
     run_parser.set_defaults(func=run_live)
 

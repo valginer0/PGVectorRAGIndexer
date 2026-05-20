@@ -28,7 +28,12 @@ DEFAULT_LITERAL_TAIL_THRESHOLD = 0.1
 DOCUMENT_GROUPING_BACKEND_MULTIPLIER = 20
 HYBRID_MODE_LEGACY = "legacy"
 HYBRID_MODE_LEXICAL_FUSION_V0 = "lexical-fusion-v0"
-SUPPORTED_HYBRID_MODES = {HYBRID_MODE_LEGACY, HYBRID_MODE_LEXICAL_FUSION_V0}
+HYBRID_MODE_RERANK_V0 = "rerank-v0"
+SUPPORTED_HYBRID_MODES = {
+    HYBRID_MODE_LEGACY,
+    HYBRID_MODE_LEXICAL_FUSION_V0,
+    HYBRID_MODE_RERANK_V0,
+}
 
 
 def _result_rank_score(result: Any) -> float:
@@ -160,7 +165,7 @@ async def search_documents(request: SearchRequest):
                 raise ValueError("hybrid_mode requires use_hybrid=true")
             if request.hybrid_mode not in SUPPORTED_HYBRID_MODES:
                 raise ValueError(
-                    "hybrid_mode currently supports only legacy or lexical-fusion-v0"
+                    "hybrid_mode currently supports only legacy, lexical-fusion-v0, or rerank-v0"
                 )
         if request.literal_tail_suppression and not request.group_by_document:
             raise ValueError("literal_tail_suppression requires group_by_document=true")
@@ -196,6 +201,18 @@ async def search_documents(request: SearchRequest):
                         "hybrid_mode lexical-fusion-v0 is not implemented by the configured retriever"
                     )
                 results, retrieval_diagnostics = fusion_search(
+                    query=request.query,
+                    top_k=search_top_k,
+                    alpha=request.alpha,
+                    filters=request.filters,
+                )
+            elif request.hybrid_mode == HYBRID_MODE_RERANK_V0:
+                rerank_search = getattr(ret, "search_hybrid_rerank_v0", None)
+                if rerank_search is None:
+                    raise ValueError(
+                        "hybrid_mode rerank-v0 is not implemented by the configured retriever"
+                    )
+                results, retrieval_diagnostics = rerank_search(
                     query=request.query,
                     top_k=search_top_k,
                     alpha=request.alpha,

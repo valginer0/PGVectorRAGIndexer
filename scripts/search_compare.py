@@ -338,7 +338,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--filters-json", help="Additional raw search filters as a JSON object")
     parser.add_argument(
         "--hybrid-mode",
-        choices=("legacy", "lexical-fusion-v0"),
+        choices=("legacy", "lexical-fusion-v0", "rerank-v0"),
         help="Optional experimental hybrid mode for the document-level payload",
     )
     parser.add_argument(

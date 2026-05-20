@@ -35,6 +35,10 @@ class _FakeRetriever:
         self.calls.append(("fusion", kwargs))
         return self.results, {"hybrid_fusion_v0": {"active": True}}
 
+    def search_hybrid_rerank_v0(self, **kwargs):
+        self.calls.append(("rerank", kwargs))
+        return self.results, {"rerank_v0": {"active": True}}
+
     def search(self, **kwargs):
         self.calls.append(("vector", kwargs))
         return self.results
@@ -168,7 +172,7 @@ async def test_hybrid_mode_rejects_unknown_value(monkeypatch):
         ))
 
     assert exc_info.value.status_code == 400
-    assert "legacy or lexical-fusion-v0" in exc_info.value.detail
+    assert "legacy, lexical-fusion-v0, or rerank-v0" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
@@ -204,3 +208,21 @@ async def test_hybrid_mode_lexical_fusion_uses_fusion_path(monkeypatch):
     assert retriever.calls[0][0] == "fusion"
     assert retriever.calls[0][1]["top_k"] == 1
     assert response.diagnostics == {"hybrid_fusion_v0": {"active": True}}
+
+
+@pytest.mark.asyncio
+async def test_hybrid_mode_rerank_uses_rerank_path(monkeypatch):
+    retriever = _FakeRetriever([_result("ev6.txt", rank_score=0.95)])
+    monkeypatch.setattr(search_api, "get_retriever", lambda: retriever)
+
+    response = await search_api.search_documents(SearchRequest(
+        query="EV6 charging",
+        top_k=1,
+        use_hybrid=True,
+        hybrid_mode="rerank-v0",
+    ))
+
+    assert [result.source_uri for result in response.results] == ["ev6.txt"]
+    assert retriever.calls[0][0] == "rerank"
+    assert retriever.calls[0][1]["top_k"] == 1
+    assert response.diagnostics == {"rerank_v0": {"active": True}}

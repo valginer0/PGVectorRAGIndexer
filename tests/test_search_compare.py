@@ -125,14 +125,14 @@ def test_main_writes_read_only_comparison_json(monkeypatch, tmp_path):
         "--api-base", "http://example.test",
         "--query", "EV6",
         "--top-k", "1",
-        "--hybrid-mode", "lexical-fusion-v0",
+        "--hybrid-mode", "rerank-v0",
         "--output-json", str(output_path),
     ])
 
     assert status == 0
     output = json.loads(output_path.read_text())
     assert output["query_count"] == 1
-    assert output["document_level_options"]["hybrid_mode"] == "lexical-fusion-v0"
+    assert output["document_level_options"]["hybrid_mode"] == "rerank-v0"
     assert output["results"][0]["baseline"]["top_files"] == ["baseline.txt"]
     assert output["results"][0]["document_level"]["top_files"] == ["grouped.txt"]
 

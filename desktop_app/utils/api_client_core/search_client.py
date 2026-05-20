@@ -2,12 +2,10 @@ import logging
 from typing import Dict, Any, Optional
 
 from desktop_app.utils.api_client_core.base_client import BaseAPIClient
+from desktop_app.utils.search_limits import candidate_limit_for_unique_files
 
 logger = logging.getLogger(__name__)
 
-DOCUMENT_GROUPING_FALLBACK_MULTIPLIER = 20
-DOCUMENT_GROUPING_FALLBACK_EXTRA = 50
-DOCUMENT_GROUPING_FALLBACK_MAX = 500
 DOCUMENT_GROUPING_KEYS = (
     "group_by_document",
     "literal_tail_suppression",
@@ -101,17 +99,5 @@ def _legacy_document_grouping_fallback_payload(
     fallback = dict(payload)
     for key in DOCUMENT_GROUPING_KEYS:
         fallback.pop(key, None)
-    fallback["top_k"] = _legacy_candidate_limit_for_unique_files(visible_top_k)
+    fallback["top_k"] = candidate_limit_for_unique_files(visible_top_k)
     return fallback
-
-
-def _legacy_candidate_limit_for_unique_files(visible_limit: Optional[int]) -> Optional[int]:
-    if visible_limit is None:
-        return None
-    return min(
-        max(
-            visible_limit * DOCUMENT_GROUPING_FALLBACK_MULTIPLIER,
-            visible_limit + DOCUMENT_GROUPING_FALLBACK_EXTRA,
-        ),
-        DOCUMENT_GROUPING_FALLBACK_MAX,
-    )

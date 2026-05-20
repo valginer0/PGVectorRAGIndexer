@@ -122,6 +122,7 @@ from .shared import populate_document_type_combo
 from .workers import SearchWorker
 from ..utils.snippet_utils import extract_snippet
 from ..utils import app_config
+from ..utils.search_limits import candidate_limit_for_unique_files
 
 # ... imports ...
 
@@ -578,5 +579,5 @@ class SearchTab(QWidget):
         return augmented
 
     def _candidate_limit_for_unique_files(self, visible_limit: int) -> int:
-        """Fetch extra chunk-level matches so file-level dedupe does not hide files."""
-        return min(max(visible_limit * 20, visible_limit + 50), 500)
+        """Fetch extra chunk-level matches so file-level de-dupe does not hide files."""
+        return candidate_limit_for_unique_files(visible_limit)

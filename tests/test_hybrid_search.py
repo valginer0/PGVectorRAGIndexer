@@ -352,3 +352,87 @@ class TestHybridSearchSQLGeneration:
         assert diagnostics["hybrid_fusion_v0"]["top_explanations"][0]["lexical_rank"] == 1
         assert "~* %s" in captured["calls"][4][0]
         assert captured["calls"][0][1][0] == "%.txt"
+
+    def test_hybrid_fusion_v0_alpha_controls_dense_and_lexical_weights(self):
+        """Alpha should map to dense weight, with lexical weight as the complement."""
+        def run_with_alpha(alpha):
+            class FakeCursor:
+                def __init__(self):
+                    self.responses = [
+                        ("all", [
+                            {"chunk_id": 1, "dense_rank": 1, "vector_distance": 0.10},
+                            {"chunk_id": 2, "dense_rank": 2, "vector_distance": 0.20},
+                        ]),
+                        ("one", {"total_documents": 10}),
+                        ("one", {"document_frequency": 2}),
+                        ("all", [
+                            {
+                                "chunk_id": 2,
+                                "lexical_rank": 1,
+                                "lexical_score": 2.0,
+                                "matched_terms": ["ev6"],
+                                "full_term_match": True,
+                                "matched_term_count": 1,
+                                "phrase_match_count": 0,
+                            },
+                        ]),
+                        ("all", [
+                            {
+                                "chunk_id": 1,
+                                "document_id": "doc-1",
+                                "chunk_index": 0,
+                                "text_content": "Charging notes",
+                                "source_uri": "charging.txt",
+                                "vector_distance": 0.10,
+                                "metadata": {},
+                            },
+                            {
+                                "chunk_id": 2,
+                                "document_id": "doc-2",
+                                "chunk_index": 0,
+                                "text_content": "EV6 notes",
+                                "source_uri": "ev6.txt",
+                                "vector_distance": 0.20,
+                                "metadata": {},
+                            },
+                        ]),
+                    ]
+                    self.current = None
+
+                def execute(self, _sql, _params):
+                    self.current = self.responses.pop(0)
+
+                def fetchall(self):
+                    kind, data = self.current
+                    assert kind == "all"
+                    return data
+
+                def fetchone(self):
+                    kind, data = self.current
+                    assert kind == "one"
+                    return data
+
+            class FakeCursorContext:
+                def __enter__(self):
+                    return FakeCursor()
+
+                def __exit__(self, exc_type, exc, tb):
+                    return False
+
+            retriever = DocumentRetriever.__new__(DocumentRetriever)
+            retriever.config = SimpleNamespace(
+                retrieval=SimpleNamespace(top_k=10, hybrid_alpha=0.5, distance_metric="cosine")
+            )
+            retriever.embedding_service = SimpleNamespace(encode=lambda _query: [0.1, 0.2])
+            retriever.db_manager = SimpleNamespace(get_cursor=lambda dict_cursor=False: FakeCursorContext())
+            return retriever.search_hybrid_fusion_v0("EV6", top_k=2, alpha=alpha)
+
+        dense_results, dense_diagnostics = run_with_alpha(1.0)
+        lexical_results, lexical_diagnostics = run_with_alpha(0.0)
+
+        assert [result.chunk_id for result in dense_results] == [1, 2]
+        assert dense_diagnostics["hybrid_fusion_v0"]["dense_weight"] == 1.0
+        assert dense_diagnostics["hybrid_fusion_v0"]["lexical_weight"] == 0.0
+        assert [result.chunk_id for result in lexical_results] == [2, 1]
+        assert lexical_diagnostics["hybrid_fusion_v0"]["dense_weight"] == 0.0
+        assert lexical_diagnostics["hybrid_fusion_v0"]["lexical_weight"] == 1.0

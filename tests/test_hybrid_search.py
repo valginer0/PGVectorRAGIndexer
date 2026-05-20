@@ -41,11 +41,40 @@ class TestHybridFusionHelpers:
         assert rare > common
         assert calculate_idf(total_documents=100, document_frequency=100) == pytest.approx(1.0)
 
+    @pytest.mark.parametrize(
+        ("total_documents", "document_frequency", "message"),
+        [
+            (-1, 0, "total_documents must be non-negative"),
+            (10, -1, "document_frequency must be non-negative"),
+            (10, 11, "document_frequency cannot exceed total_documents"),
+        ],
+    )
+    def test_calculate_idf_rejects_invalid_counts(
+        self,
+        total_documents,
+        document_frequency,
+        message,
+    ):
+        with pytest.raises(ValueError, match=message):
+            calculate_idf(total_documents, document_frequency)
+
     def test_weighted_rrf_score_combines_dense_and_lexical_ranks(self):
         combined = weighted_rrf_score(dense_rank=2, lexical_rank=2)
         dense_only = weighted_rrf_score(dense_rank=1)
 
         assert combined > dense_only
+
+    @pytest.mark.parametrize(
+        ("kwargs", "message"),
+        [
+            ({"rrf_k": -1}, "rrf_k must be non-negative"),
+            ({"dense_rank": 0}, "dense_rank must be positive"),
+            ({"lexical_rank": 0}, "lexical_rank must be positive"),
+        ],
+    )
+    def test_weighted_rrf_score_rejects_invalid_rank_inputs(self, kwargs, message):
+        with pytest.raises(ValueError, match=message):
+            weighted_rrf_score(**kwargs)
 
     def test_fuse_ranked_candidates_prefers_dual_signal_result(self):
         fused = fuse_ranked_candidates(

@@ -173,6 +173,7 @@ def build_search_payload(
     top_k: int | None,
     min_score: float,
     filters: dict[str, Any] | None,
+    hybrid_mode: str | None = None,
 ) -> dict[str, Any]:
     payload: dict[str, Any] = {
         "query": query,
@@ -182,6 +183,8 @@ def build_search_payload(
     }
     if filters:
         payload["filters"] = filters
+    if hybrid_mode:
+        payload["hybrid_mode"] = hybrid_mode
     return payload
 
 
@@ -194,6 +197,7 @@ def execute_query_pair(
     filters: dict[str, Any] | None,
     literal_anchor_threshold: float,
     literal_tail_threshold: float,
+    hybrid_mode: str | None = None,
 ) -> dict[str, Any]:
     baseline_payload = build_search_payload(
         query=query_item["query"],
@@ -210,6 +214,7 @@ def execute_query_pair(
         top_k=top_k,
         min_score=min_score,
         filters=filters,
+        hybrid_mode=hybrid_mode,
     )
     document_payload.update({
         "group_by_document": True,
@@ -279,6 +284,8 @@ def run(args: argparse.Namespace) -> int:
             "literal_tail_threshold": args.literal_tail_threshold,
         },
     }
+    if args.hybrid_mode:
+        output["document_level_options"]["hybrid_mode"] = args.hybrid_mode
     try:
         output["health"] = client.health()
         output["results"] = [
@@ -290,6 +297,7 @@ def run(args: argparse.Namespace) -> int:
                 filters=filters,
                 literal_anchor_threshold=args.literal_anchor_threshold,
                 literal_tail_threshold=args.literal_tail_threshold,
+                hybrid_mode=args.hybrid_mode,
             )
             for query in queries
         ]
@@ -328,6 +336,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--document-type", help="Optional document type filter; use * for all")
     parser.add_argument("--extension", action="append", help="Optional extension filter; may be repeated")
     parser.add_argument("--filters-json", help="Additional raw search filters as a JSON object")
+    parser.add_argument(
+        "--hybrid-mode",
+        choices=("legacy", "lexical-fusion-v0"),
+        help="Optional experimental hybrid mode for the document-level payload",
+    )
     parser.add_argument(
         "--literal-anchor-threshold",
         type=float,

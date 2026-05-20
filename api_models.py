@@ -40,6 +40,7 @@ class SearchRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = Field(default=None, description="Search filters")
     use_hybrid: bool = Field(default=False, description="Use hybrid search")
     alpha: Optional[float] = Field(default=None, description="Hybrid search weight")
+    hybrid_mode: Optional[str] = Field(default=None, description="Experimental hybrid strategy; supports legacy or lexical-fusion-v0")
     group_by_document: bool = Field(default=False, description="Return one representative result per source document")
     literal_tail_suppression: Optional[str] = Field(
         default=None,

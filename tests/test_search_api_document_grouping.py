@@ -31,6 +31,10 @@ class _FakeRetriever:
         self.calls.append(("hybrid", kwargs))
         return self.results
 
+    def search_hybrid_fusion_v0(self, **kwargs):
+        self.calls.append(("fusion", kwargs))
+        return self.results, {"hybrid_fusion_v0": {"active": True}}
+
     def search(self, **kwargs):
         self.calls.append(("vector", kwargs))
         return self.results
@@ -133,3 +137,70 @@ async def test_literal_tail_suppression_requires_document_grouping(monkeypatch):
 
     assert exc_info.value.status_code == 400
     assert "group_by_document=true" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_hybrid_mode_requires_hybrid_search(monkeypatch):
+    retriever = _FakeRetriever([])
+    monkeypatch.setattr(search_api, "get_retriever", lambda: retriever)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await search_api.search_documents(SearchRequest(
+            query="EV6",
+            use_hybrid=False,
+            hybrid_mode="lexical-fusion-v0",
+        ))
+
+    assert exc_info.value.status_code == 400
+    assert "hybrid_mode requires use_hybrid=true" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_hybrid_mode_rejects_unknown_value(monkeypatch):
+    retriever = _FakeRetriever([])
+    monkeypatch.setattr(search_api, "get_retriever", lambda: retriever)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await search_api.search_documents(SearchRequest(
+            query="EV6",
+            use_hybrid=True,
+            hybrid_mode="mystery",
+        ))
+
+    assert exc_info.value.status_code == 400
+    assert "legacy or lexical-fusion-v0" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_hybrid_mode_legacy_uses_existing_hybrid_path(monkeypatch):
+    retriever = _FakeRetriever([_result("ev6.txt", rank_score=10.0)])
+    monkeypatch.setattr(search_api, "get_retriever", lambda: retriever)
+
+    response = await search_api.search_documents(SearchRequest(
+        query="EV6",
+        top_k=1,
+        use_hybrid=True,
+        hybrid_mode="legacy",
+    ))
+
+    assert [result.source_uri for result in response.results] == ["ev6.txt"]
+    assert retriever.calls[0][0] == "hybrid"
+    assert response.diagnostics is None
+
+
+@pytest.mark.asyncio
+async def test_hybrid_mode_lexical_fusion_uses_fusion_path(monkeypatch):
+    retriever = _FakeRetriever([_result("ev6.txt", rank_score=0.03)])
+    monkeypatch.setattr(search_api, "get_retriever", lambda: retriever)
+
+    response = await search_api.search_documents(SearchRequest(
+        query="EV6 charging",
+        top_k=1,
+        use_hybrid=True,
+        hybrid_mode="lexical-fusion-v0",
+    ))
+
+    assert [result.source_uri for result in response.results] == ["ev6.txt"]
+    assert retriever.calls[0][0] == "fusion"
+    assert retriever.calls[0][1]["top_k"] == 1
+    assert response.diagnostics == {"hybrid_fusion_v0": {"active": True}}

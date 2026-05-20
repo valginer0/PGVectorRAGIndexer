@@ -74,12 +74,15 @@ def test_execute_query_pair_builds_baseline_and_document_level_payloads():
         filters={"extensions": [".txt"]},
         literal_anchor_threshold=10.0,
         literal_tail_threshold=0.1,
+        hybrid_mode="lexical-fusion-v0",
     )
 
     assert client.payloads[0]["top_k"] == 52
     assert client.payloads[0]["filters"] == {"extensions": [".txt"]}
     assert "group_by_document" not in client.payloads[0]
+    assert "hybrid_mode" not in client.payloads[0]
     assert client.payloads[1]["top_k"] == 2
+    assert client.payloads[1]["hybrid_mode"] == "lexical-fusion-v0"
     assert client.payloads[1]["group_by_document"] is True
     assert client.payloads[1]["literal_tail_suppression"] == "identifier-token"
     assert result["baseline"]["top_files"] == ["a.txt", "b.txt"]
@@ -122,12 +125,14 @@ def test_main_writes_read_only_comparison_json(monkeypatch, tmp_path):
         "--api-base", "http://example.test",
         "--query", "EV6",
         "--top-k", "1",
+        "--hybrid-mode", "lexical-fusion-v0",
         "--output-json", str(output_path),
     ])
 
     assert status == 0
     output = json.loads(output_path.read_text())
     assert output["query_count"] == 1
+    assert output["document_level_options"]["hybrid_mode"] == "lexical-fusion-v0"
     assert output["results"][0]["baseline"]["top_files"] == ["baseline.txt"]
     assert output["results"][0]["document_level"]["top_files"] == ["grouped.txt"]
 

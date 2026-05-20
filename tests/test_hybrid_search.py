@@ -237,3 +237,118 @@ class TestHybridSearchSQLGeneration:
         assert len(results) == 1
         assert results[0].relevance_score == 0.75
         assert results[0].rank_score == 10.75
+
+    def test_hybrid_fusion_v0_fuses_dense_and_lexical_candidates(self):
+        """The experimental path should rank dual-signal chunks above single-signal chunks."""
+        captured = {"calls": []}
+
+        class FakeCursor:
+            def __init__(self):
+                self.responses = [
+                    ("all", [
+                        {"chunk_id": 1, "dense_rank": 1, "vector_distance": 0.10},
+                        {"chunk_id": 2, "dense_rank": 2, "vector_distance": 0.20},
+                    ]),
+                    ("one", {"total_documents": 10}),
+                    ("one", {"document_frequency": 1}),
+                    ("one", {"document_frequency": 8}),
+                    ("all", [
+                        {
+                            "chunk_id": 2,
+                            "lexical_rank": 1,
+                            "lexical_score": 2.0,
+                            "matched_terms": ["ev6"],
+                            "full_term_match": False,
+                            "matched_term_count": 1,
+                            "phrase_match_count": 0,
+                        },
+                        {
+                            "chunk_id": 3,
+                            "lexical_rank": 2,
+                            "lexical_score": 2.0,
+                            "matched_terms": ["ev6"],
+                            "full_term_match": False,
+                            "matched_term_count": 1,
+                            "phrase_match_count": 0,
+                        },
+                    ]),
+                    ("all", [
+                        {
+                            "chunk_id": 1,
+                            "document_id": "doc-1",
+                            "chunk_index": 0,
+                            "text_content": "Charging notes",
+                            "source_uri": "charging.txt",
+                            "vector_distance": 0.10,
+                            "metadata": {},
+                        },
+                        {
+                            "chunk_id": 2,
+                            "document_id": "doc-2",
+                            "chunk_index": 0,
+                            "text_content": "EV6 notes",
+                            "source_uri": "ev6.txt",
+                            "vector_distance": 0.20,
+                            "metadata": {"type": "note"},
+                        },
+                        {
+                            "chunk_id": 3,
+                            "document_id": "doc-3",
+                            "chunk_index": 0,
+                            "text_content": "EV6 warranty",
+                            "source_uri": "ev6_warranty.txt",
+                            "vector_distance": 0.30,
+                            "metadata": {},
+                        },
+                    ]),
+                ]
+                self.current = None
+
+            def execute(self, sql, params):
+                captured["calls"].append((sql, params))
+                self.current = self.responses.pop(0)
+
+            def fetchall(self):
+                kind, data = self.current
+                assert kind == "all"
+                return data
+
+            def fetchone(self):
+                kind, data = self.current
+                assert kind == "one"
+                return data
+
+        class FakeCursorContext:
+            def __init__(self):
+                self.cursor = FakeCursor()
+
+            def __enter__(self):
+                return self.cursor
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        retriever = DocumentRetriever.__new__(DocumentRetriever)
+        retriever.config = SimpleNamespace(
+            retrieval=SimpleNamespace(top_k=10, hybrid_alpha=0.5, distance_metric="cosine")
+        )
+        retriever.embedding_service = SimpleNamespace(encode=lambda _query: [0.1, 0.2])
+        retriever.db_manager = SimpleNamespace(get_cursor=lambda dict_cursor=False: FakeCursorContext())
+
+        results, diagnostics = retriever.search_hybrid_fusion_v0(
+            "EV6 charging",
+            top_k=3,
+            filters={"extensions": [".txt"]},
+        )
+
+        assert [result.chunk_id for result in results] == [2, 1, 3]
+        assert results[0].source_uri == "ev6.txt"
+        assert results[0].document_type == "note"
+        assert results[0].rank_score > results[1].rank_score
+        assert diagnostics["hybrid_fusion_v0"]["active"] is True
+        assert diagnostics["hybrid_fusion_v0"]["query_terms"][0]["term"] == "ev6"
+        assert diagnostics["hybrid_fusion_v0"]["query_terms"][0]["df"] == 1
+        assert diagnostics["hybrid_fusion_v0"]["top_explanations"][0]["dense_rank"] == 2
+        assert diagnostics["hybrid_fusion_v0"]["top_explanations"][0]["lexical_rank"] == 1
+        assert "~* %s" in captured["calls"][4][0]
+        assert captured["calls"][0][1][0] == "%.txt"

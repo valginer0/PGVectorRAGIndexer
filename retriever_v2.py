@@ -23,6 +23,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+FUSION_V0_RRF_K = 60
+FUSION_V0_DENSE_WEIGHT = 1.0
+FUSION_V0_LEXICAL_WEIGHT = 1.0
+
 
 def parse_search_query(query: str) -> Tuple[List[str], List[str]]:
     """
@@ -195,6 +199,337 @@ class DocumentRetriever:
         else:
             # Default: assume lower distance is better
             return max(0.0, min(1.0, 1.0 / (1.0 + distance)))
+
+    def _build_filtered_docs_context(
+        self,
+        filters: Optional[Dict[str, Any]],
+    ) -> Tuple[str, str, List[Any]]:
+        """Build a filtered document_chunks CTE shared by hybrid search variants."""
+        filter_clauses = []
+        filter_params: List[Any] = []
+        if filters:
+            for key, value in filters.items():
+                if key == 'extensions' and isinstance(value, list) and value:
+                    ext_clauses = []
+                    for ext in value:
+                        normalized = ext if ext.startswith('.') else f'.{ext}'
+                        ext_clauses.append("source_uri ILIKE %s")
+                        filter_params.append(f'%{normalized}')
+                    filter_clauses.append(f"({' OR '.join(ext_clauses)})")
+                elif key in ['type', 'namespace', 'category']:
+                    filter_clauses.append(f"metadata->>'{key}' ILIKE %s")
+                    filter_params.append(value)
+                elif key.startswith('metadata.'):
+                    filter_clauses.append("metadata->>%s = %s")
+                    filter_params.extend([key[9:], value])
+                elif key in ['document_id', 'source_uri']:
+                    filter_clauses.append(f"{key} = %s")
+                    filter_params.append(value)
+                else:
+                    raise ValueError(
+                        f"Unsupported filter key '{key}' for hybrid search. "
+                        f"Supported keys: extensions, type, namespace, category, "
+                        f"document_id, source_uri, metadata.<key>"
+                    )
+
+        if not filter_clauses:
+            return "", "document_chunks", filter_params
+
+        filter_where_sql = f"WHERE {' AND '.join(filter_clauses)}"
+        filtered_docs_cte = f"""filtered_docs AS (
+            SELECT
+                chunk_id,
+                document_id,
+                chunk_index,
+                text_content,
+                source_uri,
+                embedding,
+                metadata
+            FROM document_chunks
+            {filter_where_sql}
+        )"""
+        return filtered_docs_cte, "filtered_docs", filter_params
+
+    def search_hybrid_fusion_v0(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        alpha: Optional[float] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[List[SearchResult], Dict[str, Any]]:
+        """Experimental dense + lexical rank fusion search."""
+        top_k = top_k or self.config.retrieval.top_k
+        distance_metric = self.config.retrieval.distance_metric
+        dense_weight = FUSION_V0_DENSE_WEIGHT
+        lexical_weight = FUSION_V0_LEXICAL_WEIGHT
+        if alpha is not None:
+            dense_weight = alpha
+            lexical_weight = 1.0 - alpha
+
+        phrases, terms = parse_search_query(query)
+        lexical_terms = normalize_lexical_terms([*phrases, *terms] or [query])
+        term_patterns = {
+            term: build_exact_token_regex(term)
+            for term in lexical_terms
+        }
+        phrase_patterns = [f"%{phrase}%" for phrase in phrases if phrase.strip()]
+        dense_limit = max(top_k * 50, 500)
+        lexical_limit = max(top_k * 50, 500)
+        query_embedding = self.embedding_service.encode(query)
+        filtered_docs_cte, candidate_source, filter_params = self._build_filtered_docs_context(filters)
+        cte_prefix = f"{filtered_docs_cte}," if filtered_docs_cte else ""
+        standalone_cte = f"WITH {filtered_docs_cte}" if filtered_docs_cte else ""
+
+        dense_sql = f"""
+        WITH {cte_prefix}
+        dense AS (
+            SELECT
+                chunk_id,
+                embedding <=> %s::vector AS vector_distance
+            FROM {candidate_source}
+            ORDER BY embedding <=> %s::vector
+            LIMIT %s
+        )
+        SELECT
+            chunk_id,
+            ROW_NUMBER() OVER (ORDER BY vector_distance) AS dense_rank,
+            vector_distance
+        FROM dense
+        ORDER BY dense_rank
+        """
+
+        total_sql = f"""
+        {standalone_cte}
+        SELECT COUNT(DISTINCT source_uri) AS total_documents
+        FROM {candidate_source}
+        """
+
+        df_sql = f"""
+        {standalone_cte}
+        SELECT COUNT(DISTINCT source_uri) AS document_frequency
+        FROM {candidate_source}
+        WHERE text_content ~* %s
+        """
+
+        dense_rows: List[Dict[str, Any]]
+        lexical_rows: List[Dict[str, Any]] = []
+        term_stats: List[Dict[str, Any]] = []
+        with self.db_manager.get_cursor(dict_cursor=True) as cursor:
+            cursor.execute(
+                dense_sql,
+                [*filter_params, query_embedding, query_embedding, dense_limit],
+            )
+            dense_rows = list(cursor.fetchall())
+
+            cursor.execute(total_sql, filter_params)
+            total_row = cursor.fetchone() or {}
+            total_documents = int(total_row.get("total_documents") or 0)
+
+            idf_by_term: Dict[str, float] = {}
+            for term, pattern in term_patterns.items():
+                cursor.execute(df_sql, [*filter_params, pattern])
+                df_row = cursor.fetchone() or {}
+                document_frequency = int(df_row.get("document_frequency") or 0)
+                idf = calculate_idf(total_documents, document_frequency)
+                idf_by_term[term] = idf
+                term_stats.append({
+                    "term": term,
+                    "df": document_frequency,
+                    "idf": idf,
+                })
+
+            if term_patterns or phrase_patterns:
+                score_parts = []
+                count_parts = []
+                term_array_parts = []
+                phrase_count_parts = []
+                lexical_where_parts = []
+                score_params: List[Any] = []
+                count_params: List[Any] = []
+                term_array_params: List[Any] = []
+                phrase_count_params: List[Any] = []
+
+                for term, pattern in term_patterns.items():
+                    score_parts.append("CASE WHEN text_content ~* %s THEN %s ELSE 0 END")
+                    score_params.extend([pattern, idf_by_term[term]])
+                    count_parts.append("CASE WHEN text_content ~* %s THEN 1 ELSE 0 END")
+                    count_params.append(pattern)
+                    term_array_parts.append("CASE WHEN text_content ~* %s THEN %s::text ELSE NULL END")
+                    term_array_params.extend([pattern, term])
+                    lexical_where_parts.append("text_content ~* %s")
+
+                for pattern in phrase_patterns:
+                    phrase_count_parts.append("CASE WHEN text_content ILIKE %s THEN 1 ELSE 0 END")
+                    phrase_count_params.append(pattern)
+                    lexical_where_parts.append("text_content ILIKE %s")
+
+                where_params = [*term_patterns.values(), *phrase_patterns]
+                matched_idf_sql = " + ".join(score_parts) if score_parts else "0.0"
+                matched_count_sql = " + ".join(count_parts) if count_parts else "0"
+                matched_terms_sql = (
+                    f"ARRAY_REMOVE(ARRAY[{', '.join(term_array_parts)}], NULL)"
+                    if term_array_parts else "ARRAY[]::text[]"
+                )
+                phrase_count_sql = " + ".join(phrase_count_parts) if phrase_count_parts else "0"
+                lexical_where_sql = " OR ".join(lexical_where_parts)
+                full_term_match_sql = (
+                    f"matched_term_count = {len(lexical_terms)}"
+                    if lexical_terms else "FALSE"
+                )
+
+                lexical_sql = f"""
+                WITH {cte_prefix}
+                scored AS (
+                    SELECT
+                        chunk_id,
+                        source_uri,
+                        chunk_index,
+                        ({matched_idf_sql})::float AS matched_idf_sum,
+                        ({matched_count_sql})::int AS matched_term_count,
+                        {matched_terms_sql} AS matched_terms,
+                        ({phrase_count_sql})::int AS phrase_match_count
+                    FROM {candidate_source}
+                    WHERE {lexical_where_sql}
+                ),
+                ranked AS (
+                    SELECT
+                        *,
+                        {full_term_match_sql} AS full_term_match,
+                        (matched_idf_sum + (2.0 * phrase_match_count))::float AS lexical_score
+                    FROM scored
+                )
+                SELECT
+                    chunk_id,
+                    ROW_NUMBER() OVER (
+                        ORDER BY
+                            full_term_match DESC,
+                            lexical_score DESC,
+                            matched_term_count DESC,
+                            source_uri ASC,
+                            chunk_index ASC
+                    ) AS lexical_rank,
+                    lexical_score,
+                    matched_terms,
+                    full_term_match,
+                    matched_term_count,
+                    phrase_match_count
+                FROM ranked
+                ORDER BY lexical_rank
+                LIMIT %s
+                """
+                cursor.execute(
+                    lexical_sql,
+                    [
+                        *filter_params,
+                        *score_params,
+                        *count_params,
+                        *term_array_params,
+                        *phrase_count_params,
+                        *where_params,
+                        lexical_limit,
+                    ],
+                )
+                lexical_rows = list(cursor.fetchall())
+
+            dense_ranks = {
+                int(row["chunk_id"]): int(row["dense_rank"])
+                for row in dense_rows
+            }
+            lexical_ranks = {
+                int(row["chunk_id"]): int(row["lexical_rank"])
+                for row in lexical_rows
+            }
+            fused = fuse_ranked_candidates(
+                dense_ranks,
+                lexical_ranks,
+                rrf_k=FUSION_V0_RRF_K,
+                dense_weight=dense_weight,
+                lexical_weight=lexical_weight,
+            )[:top_k]
+
+            if not fused:
+                diagnostics = {
+                    "hybrid_fusion_v0": {
+                        "active": True,
+                        "rrf_k": FUSION_V0_RRF_K,
+                        "dense_weight": dense_weight,
+                        "lexical_weight": lexical_weight,
+                        "dense_limit": dense_limit,
+                        "lexical_limit": lexical_limit,
+                        "query_terms": term_stats,
+                        "top_explanations": [],
+                    }
+                }
+                return [], diagnostics
+
+            fused_scores = {chunk_id: score for chunk_id, score in fused}
+            chunk_ids = [chunk_id for chunk_id, _score in fused]
+            hydrate_sql = """
+            SELECT
+                chunk_id,
+                document_id,
+                chunk_index,
+                text_content,
+                source_uri,
+                embedding <=> %s::vector AS vector_distance,
+                metadata
+            FROM document_chunks
+            WHERE chunk_id = ANY(%s)
+            """
+            cursor.execute(hydrate_sql, [query_embedding, chunk_ids])
+            hydrated_rows = {
+                int(row["chunk_id"]): row
+                for row in cursor.fetchall()
+            }
+
+        dense_details = {int(row["chunk_id"]): row for row in dense_rows}
+        lexical_details = {int(row["chunk_id"]): row for row in lexical_rows}
+        results: List[SearchResult] = []
+        top_explanations: List[Dict[str, Any]] = []
+        for chunk_id, fusion_score in fused:
+            row = hydrated_rows.get(chunk_id)
+            if row is None:
+                continue
+            vector_distance = float(row["vector_distance"])
+            lexical_detail = lexical_details.get(chunk_id, {})
+            result = SearchResult(
+                chunk_id=chunk_id,
+                document_id=row["document_id"],
+                chunk_index=row["chunk_index"],
+                text_content=row["text_content"],
+                source_uri=row["source_uri"],
+                distance=vector_distance,
+                relevance_score=self._calculate_relevance_score(vector_distance, distance_metric),
+                rank_score=fusion_score,
+                metadata=row.get("metadata"),
+                document_type=(row.get("metadata") or {}).get("type"),
+            )
+            results.append(result)
+            top_explanations.append({
+                "source_uri": row["source_uri"],
+                "chunk_index": row["chunk_index"],
+                "dense_rank": dense_details.get(chunk_id, {}).get("dense_rank"),
+                "lexical_rank": lexical_detail.get("lexical_rank"),
+                "matched_terms": list(lexical_detail.get("matched_terms") or []),
+                "full_term_match": bool(lexical_detail.get("full_term_match", False)),
+                "lexical_score": lexical_detail.get("lexical_score"),
+                "fusion_score": fused_scores[chunk_id],
+            })
+
+        diagnostics = {
+            "hybrid_fusion_v0": {
+                "active": True,
+                "rrf_k": FUSION_V0_RRF_K,
+                "dense_weight": dense_weight,
+                "lexical_weight": lexical_weight,
+                "dense_limit": dense_limit,
+                "lexical_limit": lexical_limit,
+                "query_terms": term_stats,
+                "top_explanations": top_explanations[:20],
+            }
+        }
+        logger.info(f"Found {len(results)} relevant chunks (hybrid fusion v0)")
+        return results, diagnostics
     
     def search(
         self,

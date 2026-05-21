@@ -1,0 +1,47 @@
+# Branch-local PG17 + pg_textsearch spike for the local Rancher Desktop/Docker
+# CLI environment.
+#
+# This compose file is intentionally isolated from the production/default stack:
+# - separate service name
+# - separate container name
+# - separate host port
+# - separate named volume
+#
+# Usage:
+#   docker compose -f docker-compose.search-pgtextsearch.yml up -d --build
+#   docker cp scripts/pgtextsearch_spike_probe.sql vector_rag_db_pgtextsearch_spike:/tmp/pgtextsearch_spike_probe.sql
+#   docker exec -i vector_rag_db_pgtextsearch_spike psql -U rag_user -d rag_vector_db -f /tmp/pgtextsearch_spike_probe.sql
+#   docker compose -f docker-compose.search-pgtextsearch.yml down
+
+services:
+  db_pgtextsearch_spike:
+    build:
+      context: .
+      dockerfile: docker/postgres-pgtextsearch-pg17/Dockerfile
+      args:
+        PG_TEXTSEARCH_VERSION: ${PG_TEXTSEARCH_VERSION:-v1.2.0}
+    image: pgvectorragindexer/postgres-pgtextsearch:pg17-v1.2.0
+    container_name: vector_rag_db_pgtextsearch_spike
+    restart: unless-stopped
+    command: ["postgres", "-c", "shared_preload_libraries=pg_textsearch"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rag_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_password}
+      POSTGRES_DB: ${POSTGRES_DB:-rag_vector_db}
+    ports:
+      - "${PGTEXTSEARCH_SPIKE_PORT:-55432}:5432"
+    volumes:
+      - postgres_pgtextsearch_spike_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rag_user} -d ${POSTGRES_DB:-rag_vector_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag_search_spike_network
+
+volumes:
+  postgres_pgtextsearch_spike_data:
+
+networks:
+  rag_search_spike_network:

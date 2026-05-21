@@ -44,6 +44,14 @@ class _FakeRetriever:
         return self.results
 
 
+class _FakeLegacyOnlyRetriever:
+    def search_hybrid(self, **_kwargs):
+        return []
+
+    def search(self, **_kwargs):
+        return []
+
+
 def test_identifier_query_tokens_skip_single_letter_words():
     assert search_api._identifier_query_tokens("I have a JWT question about EV6") == ["jwt", "ev6"]
 
@@ -211,6 +219,22 @@ async def test_hybrid_mode_lexical_fusion_uses_fusion_path(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_hybrid_mode_lexical_fusion_missing_retriever_method_returns_400(monkeypatch):
+    monkeypatch.setattr(search_api, "get_retriever", lambda: _FakeLegacyOnlyRetriever())
+
+    with pytest.raises(HTTPException) as exc_info:
+        await search_api.search_documents(SearchRequest(
+            query="EV6 charging",
+            top_k=1,
+            use_hybrid=True,
+            hybrid_mode="lexical-fusion-v0",
+        ))
+
+    assert exc_info.value.status_code == 400
+    assert "lexical-fusion-v0 is not implemented" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
 async def test_hybrid_mode_rerank_uses_rerank_path(monkeypatch):
     retriever = _FakeRetriever([_result("ev6.txt", rank_score=0.95)])
     monkeypatch.setattr(search_api, "get_retriever", lambda: retriever)
@@ -226,3 +250,19 @@ async def test_hybrid_mode_rerank_uses_rerank_path(monkeypatch):
     assert retriever.calls[0][0] == "rerank"
     assert retriever.calls[0][1]["top_k"] == 1
     assert response.diagnostics == {"rerank_v0": {"active": True}}
+
+
+@pytest.mark.asyncio
+async def test_hybrid_mode_rerank_missing_retriever_method_returns_400(monkeypatch):
+    monkeypatch.setattr(search_api, "get_retriever", lambda: _FakeLegacyOnlyRetriever())
+
+    with pytest.raises(HTTPException) as exc_info:
+        await search_api.search_documents(SearchRequest(
+            query="EV6 charging",
+            top_k=1,
+            use_hybrid=True,
+            hybrid_mode="rerank-v0",
+        ))
+
+    assert exc_info.value.status_code == 400
+    assert "rerank-v0 is not implemented" in exc_info.value.detail

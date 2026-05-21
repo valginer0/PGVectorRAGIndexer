@@ -215,6 +215,9 @@ backups/
 # Runtime data: files a user uploads to the desktop app locally for indexing
 documents/
 
+# Local retrieval spike data
+lancedb_spike_data/
+
 # Private project strategy docs (should not be in version control)
 docs/internal/
 

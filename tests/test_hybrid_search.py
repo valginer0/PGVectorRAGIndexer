@@ -7,11 +7,14 @@ import pytest
 from types import SimpleNamespace
 from retriever_v2 import (
     DocumentRetriever,
+    SearchResult,
     build_exact_token_regex,
     calculate_idf,
+    coerce_rerank_scores,
     fuse_ranked_candidates,
     normalize_lexical_terms,
     parse_search_query,
+    rerank_v0_candidate_limit,
     weighted_rrf_score,
 )
 
@@ -84,6 +87,27 @@ class TestHybridFusionHelpers:
 
         assert fused[0][0] == 2
         assert {chunk_id for chunk_id, _score in fused} == {1, 2, 3}
+
+
+class TestHybridRerankHelpers:
+    """Tests for pure helpers used by the rerank-v0 design."""
+
+    def test_rerank_v0_candidate_limit_bounds_candidate_window(self):
+        assert rerank_v0_candidate_limit(1) == 50
+        assert rerank_v0_candidate_limit(10) == 100
+        assert rerank_v0_candidate_limit(100) == 200
+
+    def test_coerce_rerank_scores_normalizes_model_output(self):
+        class FakeArray:
+            def tolist(self):
+                return [1, "2.5"]
+
+        assert coerce_rerank_scores(FakeArray(), 2) == [1.0, 2.5]
+        assert coerce_rerank_scores(0.75, 1) == [0.75]
+
+    def test_coerce_rerank_scores_rejects_count_mismatch(self):
+        with pytest.raises(ValueError, match="expected 2 scores"):
+            coerce_rerank_scores([1.0], 2)
 
 
 class TestHybridSearchSQLGeneration:
@@ -436,3 +460,103 @@ class TestHybridSearchSQLGeneration:
         assert [result.chunk_id for result in lexical_results] == [2, 1]
         assert lexical_diagnostics["hybrid_fusion_v0"]["dense_weight"] == 0.0
         assert lexical_diagnostics["hybrid_fusion_v0"]["lexical_weight"] == 1.0
+
+    def test_hybrid_rerank_v0_reranks_legacy_hybrid_candidates(self):
+        """The experimental reranker should order by cross-encoder score."""
+        captured = {}
+
+        candidates = [
+            SearchResult(
+                chunk_id=1,
+                document_id="doc-1",
+                chunk_index=0,
+                text_content="General charging notes",
+                source_uri="charging.txt",
+                distance=0.1,
+                relevance_score=0.9,
+                rank_score=10.0,
+            ),
+            SearchResult(
+                chunk_id=2,
+                document_id="doc-2",
+                chunk_index=0,
+                text_content="Kia EV6 fast charging guide",
+                source_uri="ev6_charging.txt",
+                distance=0.2,
+                relevance_score=0.8,
+                rank_score=8.0,
+            ),
+            SearchResult(
+                chunk_id=3,
+                document_id="doc-3",
+                chunk_index=0,
+                text_content="Kia EV6 battery warranty",
+                source_uri="ev6_battery.txt",
+                distance=0.3,
+                relevance_score=0.7,
+                rank_score=7.0,
+            ),
+        ]
+
+        class FakeReranker:
+            def predict(self, pairs):
+                captured["pairs"] = pairs
+                return [0.2, 0.95, 0.5]
+
+        def fake_search_hybrid(**kwargs):
+            captured["search_kwargs"] = kwargs
+            return candidates
+
+        retriever = DocumentRetriever.__new__(DocumentRetriever)
+        retriever.config = SimpleNamespace(
+            retrieval=SimpleNamespace(top_k=10, hybrid_alpha=0.5, distance_metric="cosine")
+        )
+        retriever.search_hybrid = fake_search_hybrid
+        retriever._get_reranker_v0 = lambda: FakeReranker()
+
+        results, diagnostics = retriever.search_hybrid_rerank_v0(
+            "EV6 charging",
+            top_k=2,
+            alpha=0.4,
+            filters={"extensions": [".txt"]},
+        )
+
+        assert [result.chunk_id for result in results] == [2, 3]
+        assert results[0].rank_score == 0.95
+        assert results[0].relevance_score == 0.8
+        assert captured["search_kwargs"] == {
+            "query": "EV6 charging",
+            "top_k": 50,
+            "alpha": 0.4,
+            "filters": {"extensions": [".txt"]},
+        }
+        assert captured["pairs"][0] == ("EV6 charging", "General charging notes")
+        rerank_diagnostics = diagnostics["rerank_v0"]
+        assert rerank_diagnostics["active"] is True
+        assert rerank_diagnostics["candidate_source"] == "legacy_hybrid"
+        assert rerank_diagnostics["candidate_count"] == 3
+        assert rerank_diagnostics["candidate_limit"] == 50
+        assert rerank_diagnostics["returned_count"] == 2
+        assert rerank_diagnostics["top_explanations"][0] == {
+            "source_uri": "ev6_charging.txt",
+            "chunk_index": 0,
+            "original_rank": 2,
+            "original_rank_score": 8.0,
+            "rerank_score": 0.95,
+        }
+
+    def test_hybrid_rerank_v0_empty_candidates_do_not_load_model(self):
+        """No candidates should return diagnostics without touching the reranker."""
+        retriever = DocumentRetriever.__new__(DocumentRetriever)
+        retriever.config = SimpleNamespace(
+            retrieval=SimpleNamespace(top_k=10, hybrid_alpha=0.5, distance_metric="cosine")
+        )
+        retriever.search_hybrid = lambda **_kwargs: []
+        retriever._get_reranker_v0 = lambda: pytest.fail("reranker should not load")
+
+        results, diagnostics = retriever.search_hybrid_rerank_v0("EV6", top_k=2)
+
+        assert results == []
+        rerank_diagnostics = diagnostics["rerank_v0"]
+        assert rerank_diagnostics["candidate_count"] == 0
+        assert rerank_diagnostics["top_explanations"] == []

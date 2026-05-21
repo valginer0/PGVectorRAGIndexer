@@ -9,8 +9,9 @@ import logging
 import math
 import re
 import sys
+import time
 from typing import List, Dict, Any, Optional, Tuple, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from config import get_config
 from database import get_db_manager, DocumentRepository
@@ -26,6 +27,10 @@ logger = logging.getLogger(__name__)
 FUSION_V0_RRF_K = 60
 FUSION_V0_DENSE_WEIGHT = 1.0
 FUSION_V0_LEXICAL_WEIGHT = 1.0
+RERANK_V0_MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+RERANK_V0_CANDIDATE_MULTIPLIER = 10
+RERANK_V0_MIN_CANDIDATES = 50
+RERANK_V0_MAX_CANDIDATES = 200
 
 
 def parse_search_query(query: str) -> Tuple[List[str], List[str]]:
@@ -137,6 +142,31 @@ def fuse_ranked_candidates(
         for chunk_id in chunk_ids
     ]
     return sorted(scored, key=lambda item: (-item[1], item[0]))
+
+
+def rerank_v0_candidate_limit(top_k: int) -> int:
+    """Calculate the legacy-hybrid candidate window for rerank-v0."""
+    if top_k < 1:
+        raise ValueError("top_k must be positive")
+    return min(
+        max(top_k * RERANK_V0_CANDIDATE_MULTIPLIER, RERANK_V0_MIN_CANDIDATES),
+        RERANK_V0_MAX_CANDIDATES,
+    )
+
+
+def coerce_rerank_scores(raw_scores: Any, expected_count: int) -> List[float]:
+    """Normalize reranker model output to one float score per candidate."""
+    if hasattr(raw_scores, "tolist"):
+        raw_scores = raw_scores.tolist()
+    if expected_count == 1 and isinstance(raw_scores, (int, float)):
+        return [float(raw_scores)]
+
+    scores = [float(score) for score in raw_scores]
+    if len(scores) != expected_count:
+        raise ValueError(
+            f"rerank-v0 expected {expected_count} scores, received {len(scores)}"
+        )
+    return scores
 
 
 @dataclass
@@ -529,6 +559,93 @@ class DocumentRetriever:
             }
         }
         logger.info(f"Found {len(results)} relevant chunks (hybrid fusion v0)")
+        return results, diagnostics
+
+    def _get_reranker_v0(self):
+        """Load and cache the experimental cross-encoder reranker."""
+        reranker = getattr(self, "_reranker_v0", None)
+        if reranker is None:
+            try:
+                from sentence_transformers import CrossEncoder
+            except ImportError as exc:
+                raise ValueError(
+                    "hybrid_mode rerank-v0 requires sentence-transformers to be installed"
+                ) from exc
+            reranker = CrossEncoder(RERANK_V0_MODEL_NAME)
+            self._reranker_v0 = reranker
+        return reranker
+
+    def search_hybrid_rerank_v0(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        alpha: Optional[float] = None,
+        filters: Optional[Dict[str, Any]] = None,
+    ) -> Tuple[List[SearchResult], Dict[str, Any]]:
+        """Experimental legacy-hybrid candidate retrieval followed by cross-encoder reranking."""
+        top_k = top_k or self.config.retrieval.top_k
+        candidate_limit = rerank_v0_candidate_limit(top_k)
+
+        retrieval_start = time.perf_counter()
+        candidates = self.search_hybrid(
+            query=query,
+            top_k=candidate_limit,
+            alpha=alpha,
+            filters=filters,
+        )
+        retrieval_latency_ms = (time.perf_counter() - retrieval_start) * 1000
+
+        diagnostics: Dict[str, Any] = {
+            "rerank_v0": {
+                "active": True,
+                "model_name": RERANK_V0_MODEL_NAME,
+                "candidate_source": "legacy_hybrid",
+                "requested_top_k": top_k,
+                "candidate_limit": candidate_limit,
+                "candidate_count": len(candidates),
+                "retrieval_latency_ms": round(retrieval_latency_ms, 2),
+                "rerank_latency_ms": 0.0,
+                "top_explanations": [],
+            }
+        }
+        if not candidates:
+            return [], diagnostics
+
+        rerank_start = time.perf_counter()
+        reranker = self._get_reranker_v0()
+        raw_scores = reranker.predict([
+            (query, candidate.text_content or "")
+            for candidate in candidates
+        ])
+        rerank_scores = coerce_rerank_scores(raw_scores, len(candidates))
+        rerank_latency_ms = (time.perf_counter() - rerank_start) * 1000
+
+        ranked_candidates = sorted(
+            [
+                (index, candidate, rerank_scores[index])
+                for index, candidate in enumerate(candidates)
+            ],
+            key=lambda item: (-item[2], item[0]),
+        )
+
+        results: List[SearchResult] = []
+        top_explanations: List[Dict[str, Any]] = []
+        for original_index, candidate, rerank_score in ranked_candidates[:top_k]:
+            results.append(replace(candidate, rank_score=rerank_score))
+            top_explanations.append({
+                "source_uri": candidate.source_uri,
+                "chunk_index": candidate.chunk_index,
+                "original_rank": original_index + 1,
+                "original_rank_score": candidate.rank_score,
+                "rerank_score": rerank_score,
+            })
+
+        diagnostics["rerank_v0"].update({
+            "rerank_latency_ms": round(rerank_latency_ms, 2),
+            "returned_count": len(results),
+            "top_explanations": top_explanations[:20],
+        })
+        logger.info(f"Found {len(results)} relevant chunks (hybrid rerank v0)")
         return results, diagnostics
     
     def search(

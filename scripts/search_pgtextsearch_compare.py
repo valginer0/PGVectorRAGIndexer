@@ -24,6 +24,8 @@ from psycopg2.extras import RealDictCursor
 DEFAULT_QUERIES = ["EV6", "EV6 charging", "EV6 battery"]
 DEFAULT_DOCUMENT_TABLE = "search_spike_document_text"
 DEFAULT_INDEX_NAME = "search_spike_document_text_content_bm25"
+DEFAULT_PARENT_LIMIT = 5
+DEFAULT_CHILD_LIMIT_PER_PARENT = 5
 
 
 def normalize_extension(extension: str) -> str:
@@ -140,6 +142,100 @@ def run_query(
     return rows, wall_ms
 
 
+def run_parent_child_query(
+    conn,
+    *,
+    table_name: str,
+    query: str,
+    parent_limit: int,
+    child_limit_per_parent: int,
+    extensions: list[str],
+) -> tuple[list[dict[str, Any]], float]:
+    base_where, params = extension_where(extensions)
+    where_sql = base_where
+    query_sql = sql.SQL(
+        f"""
+        WITH top_parent_docs AS (
+            SELECT
+                source_uri,
+                chunk_count,
+                content <@> %s AS parent_bm25_score
+            FROM {{}}
+            {where_sql}
+            ORDER BY content <@> %s
+            LIMIT %s
+        ),
+        ranked_parent_docs AS (
+            SELECT
+                source_uri,
+                chunk_count,
+                parent_bm25_score,
+                ROW_NUMBER() OVER (ORDER BY parent_bm25_score, source_uri) AS parent_rank
+            FROM top_parent_docs
+        ),
+        child_chunks AS (
+            SELECT
+                p.parent_rank,
+                p.source_uri,
+                p.chunk_count AS parent_chunk_count,
+                p.parent_bm25_score,
+                c.chunk_id,
+                c.chunk_index,
+                c.text_content,
+                ROW_NUMBER() OVER (
+                    PARTITION BY c.source_uri
+                    ORDER BY c.chunk_index
+                ) AS child_rank
+            FROM ranked_parent_docs p
+            JOIN document_chunks c ON c.source_uri = p.source_uri
+        )
+        SELECT
+            parent_rank,
+            source_uri,
+            parent_chunk_count,
+            parent_bm25_score,
+            chunk_id,
+            chunk_index,
+            child_rank,
+            LEFT(REPLACE(text_content, E'\n', ' '), 220) AS preview
+        FROM child_chunks
+        WHERE child_rank <= %s
+        ORDER BY parent_rank, chunk_index
+        """
+    ).format(sql.Identifier(table_name))
+    start = time.perf_counter()
+    with conn.cursor(cursor_factory=RealDictCursor) as cursor:
+        cursor.execute(query_sql, [query, *params, query, parent_limit, child_limit_per_parent])
+        rows = [dict(row) for row in cursor.fetchall()]
+    wall_ms = (time.perf_counter() - start) * 1000
+    return rows, wall_ms
+
+
+def group_parent_child_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    parents: list[dict[str, Any]] = []
+    by_source_uri: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        source_uri = row["source_uri"]
+        parent = by_source_uri.get(source_uri)
+        if parent is None:
+            parent = {
+                "parent_rank": row["parent_rank"],
+                "source_uri": source_uri,
+                "parent_chunk_count": row["parent_chunk_count"],
+                "parent_bm25_score": row["parent_bm25_score"],
+                "fulfilled_chunks": [],
+            }
+            by_source_uri[source_uri] = parent
+            parents.append(parent)
+        parent["fulfilled_chunks"].append({
+            "chunk_id": row["chunk_id"],
+            "chunk_index": row["chunk_index"],
+            "child_rank": row["child_rank"],
+            "preview": row["preview"],
+        })
+    return parents
+
+
 def compare_queries(args: argparse.Namespace) -> dict[str, Any]:
     queries = args.query or DEFAULT_QUERIES
     extensions = args.extension or []
@@ -165,6 +261,14 @@ def compare_queries(args: argparse.Namespace) -> dict[str, Any]:
                 extensions=extensions,
                 strict_all_terms=True,
             )
+            parent_child_rows, parent_child_ms = run_parent_child_query(
+                conn,
+                table_name=args.document_table,
+                query=query,
+                parent_limit=args.parent_limit,
+                child_limit_per_parent=args.child_limit_per_parent,
+                extensions=extensions,
+            )
             results.append({
                 "query": query,
                 "raw_bm25": {
@@ -174,6 +278,12 @@ def compare_queries(args: argparse.Namespace) -> dict[str, Any]:
                 "strict_all_terms": {
                     "wall_time_ms": round(strict_ms, 2),
                     "results": strict_rows,
+                },
+                "parent_child": {
+                    "wall_time_ms": round(parent_child_ms, 2),
+                    "parent_limit": args.parent_limit,
+                    "child_limit_per_parent": args.child_limit_per_parent,
+                    "parents": group_parent_child_rows(parent_child_rows),
                 },
             })
     return {
@@ -207,6 +317,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--query", action="append", help="Query to compare; may be repeated")
     parser.add_argument("--extension", action="append", help="Extension filter; may be repeated")
     parser.add_argument("--top-k", type=int, default=10)
+    parser.add_argument("--parent-limit", type=int, default=DEFAULT_PARENT_LIMIT)
+    parser.add_argument(
+        "--child-limit-per-parent",
+        type=int,
+        default=DEFAULT_CHILD_LIMIT_PER_PARENT,
+    )
     parser.add_argument("--output-json", type=Path)
     return parser
 

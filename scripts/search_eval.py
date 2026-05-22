@@ -68,6 +68,7 @@ class QueryPlan:
     assertions: dict[str, Any]
     top_k_files: int
     backend_top_k: int
+    group_by_document: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -81,6 +82,7 @@ class QueryPlan:
             "assertions": self.assertions,
             "top_k_files": self.top_k_files,
             "backend_top_k": self.backend_top_k,
+            "group_by_document": self.group_by_document,
         }
 
 
@@ -182,6 +184,8 @@ class SearchEvalHTTPClient:
             "use_hybrid": True,
         }
         payload.update(self.search_options)
+        if plan.group_by_document:
+            payload["group_by_document"] = True
         response = self.request("POST", "/search", json=payload)
         return response.json()
 
@@ -250,6 +254,8 @@ def validate_fixture_set(fixture_set: FixtureSet) -> list[str]:
             errors.append(f"{query_id} has an empty query")
         if not item.get("assertions"):
             errors.append(f"{query_id} has no assertions")
+        if "group_by_document" in item and not isinstance(item["group_by_document"], bool):
+            errors.append(f"{query_id} group_by_document must be a boolean")
 
         assertions = item.get("assertions") or {}
         expected_files = item.get("expected_files") or []
@@ -361,6 +367,7 @@ def build_query_plans(fixture_set: FixtureSet) -> list[QueryPlan]:
                 assertions=dict(item.get("assertions") or {}),
                 top_k_files=int(item.get("top_k_files", default_top_k_files)),
                 backend_top_k=int(item.get("backend_top_k", default_backend_top_k)),
+                group_by_document=bool(item.get("group_by_document", False)),
             )
         )
 

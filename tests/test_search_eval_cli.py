@@ -31,7 +31,7 @@ def test_validate_fixture_set_and_build_query_plans(search_eval):
 
     assert errors == []
     assert len(fixture_set.manifest_paths) == 12
-    assert len(plans) == 19
+    assert len(plans) == 20
 
     ev6_txt = next(plan for plan in plans if plan.id == "literal_ev6_txt")
     assert ev6_txt.filters == {
@@ -616,6 +616,9 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
     invalid_unique_query = dict(fixture_set.query_items[0])
     invalid_unique_query["id"] = "invalid_unique_gate"
     invalid_unique_query["assertions"] = {"min_unique_files_at_5": "many"}
+    invalid_group_by_query = dict(fixture_set.query_items[0])
+    invalid_group_by_query["id"] = "invalid_group_by_gate"
+    invalid_group_by_query["group_by_document"] = "yes"
     invalid_queries = dict(fixture_set.queries)
     invalid_queries["queries"] = [
         invalid_query,
@@ -624,6 +627,7 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
         invalid_literal_tokens_query,
         invalid_forbidden_query,
         invalid_unique_query,
+        invalid_group_by_query,
     ]
 
     invalid_fixture_set = search_eval.FixtureSet(
@@ -640,6 +644,7 @@ def test_validate_fixture_set_rejects_unsatisfiable_assertions(search_eval):
     assert "invalid_literal_tokens_gate assertion literal_match_tokens must be a non-empty list" in errors
     assert "invalid_forbidden_gate assertion forbidden_at_5_eq must be non-negative" in errors
     assert "invalid_unique_gate assertion min_unique_files_at_5 must be an integer" in errors
+    assert "invalid_group_by_gate group_by_document must be a boolean" in errors
 
 
 def test_cli_run_uses_http_client_and_writes_json(search_eval, monkeypatch, tmp_path):
@@ -862,9 +867,9 @@ def test_cli_validate_and_plan_smoke(search_eval, capsys):
     assert search_eval.main(["--fixture-root", str(FIXTURE_ROOT), "validate"]) == 0
     validate_output = capsys.readouterr().out
     assert "12 documents" in validate_output
-    assert "19 queries" in validate_output
+    assert "20 queries" in validate_output
 
     assert search_eval.main(["--fixture-root", str(FIXTURE_ROOT), "plan"]) == 0
     plan_output = capsys.readouterr().out
-    assert "Query plan: 19 queries" in plan_output
+    assert "Query plan: 20 queries" in plan_output
     assert "literal_ev6_txt" in plan_output

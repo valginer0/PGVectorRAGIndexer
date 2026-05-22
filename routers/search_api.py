@@ -25,6 +25,8 @@ search_router = APIRouter(tags=["Search & Documents"])
 
 DEFAULT_LITERAL_ANCHOR_THRESHOLD = 10.0
 DEFAULT_LITERAL_TAIL_THRESHOLD = 0.1
+DEFAULT_FUSION_LITERAL_ANCHOR_THRESHOLD = 0.01
+DEFAULT_FUSION_LITERAL_TAIL_THRESHOLD = 0.005
 DOCUMENT_GROUPING_BACKEND_MULTIPLIER = 20
 HYBRID_MODE_LEGACY = "legacy"
 HYBRID_MODE_LEXICAL_FUSION_V0 = "lexical-fusion-v0"
@@ -171,15 +173,31 @@ async def search_documents(request: SearchRequest):
             raise ValueError("literal_tail_suppression requires group_by_document=true")
         if request.literal_tail_suppression not in (None, "identifier-token"):
             raise ValueError("literal_tail_suppression currently supports only identifier-token")
+        # Dynamically assign default thresholds depending on whether hybrid fusion-v0 is used.
+        # This is because lexical-fusion-v0 produces normalized reciprocal rank fusion (RRF) scores
+        # that are strictly less than 1.0 (typically < 0.033), in contrast to legacy hybrid which
+        # produces scores > 10.0.
+        is_fusion = request.use_hybrid and request.hybrid_mode == HYBRID_MODE_LEXICAL_FUSION_V0
+        default_anchor = (
+            DEFAULT_FUSION_LITERAL_ANCHOR_THRESHOLD
+            if is_fusion
+            else DEFAULT_LITERAL_ANCHOR_THRESHOLD
+        )
+        default_tail = (
+            DEFAULT_FUSION_LITERAL_TAIL_THRESHOLD
+            if is_fusion
+            else DEFAULT_LITERAL_TAIL_THRESHOLD
+        )
+
         literal_anchor_threshold = (
             request.literal_anchor_threshold
             if request.literal_anchor_threshold is not None
-            else DEFAULT_LITERAL_ANCHOR_THRESHOLD
+            else default_anchor
         )
         literal_tail_threshold = (
             request.literal_tail_threshold
             if request.literal_tail_threshold is not None
-            else DEFAULT_LITERAL_TAIL_THRESHOLD
+            else default_tail
         )
         if literal_anchor_threshold < 0:
             raise ValueError("literal_anchor_threshold must be non-negative")

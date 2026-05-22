@@ -46,8 +46,16 @@ class SearchRequest(BaseModel):
         default=None,
         description="Experimental document-grouped tail suppression mode; currently supports identifier-token",
     )
-    literal_anchor_threshold: Optional[float] = Field(default=10.0, description="Rank-score threshold to activate literal-tail suppression")
-    literal_tail_threshold: Optional[float] = Field(default=0.1, description="Rank-score floor for non-literal tails")
+    # Defaults are set to None to enable dynamic, search-mode-specific default threshold
+    # assignment inside routers/search_api.py (e.g. 10.0/0.1 for legacy, 0.01/0.005 for fusion).
+    literal_anchor_threshold: Optional[float] = Field(
+        default=None,
+        description="Rank-score threshold to activate literal-tail suppression; dynamic defaults are resolved in search_api.py",
+    )
+    literal_tail_threshold: Optional[float] = Field(
+        default=None,
+        description="Rank-score floor for non-literal tails; dynamic defaults are resolved in search_api.py",
+    )
 
 
 class SearchResultModel(BaseModel):

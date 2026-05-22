@@ -6,7 +6,7 @@ UNIQUE_FILE_CANDIDATE_MAX = 500
 
 
 def candidate_limit_for_unique_files(visible_limit: Optional[int]) -> Optional[int]:
-    """Fetch extra chunk-level matches so file-level de-dupe does not hide files."""
+    """Fetch extra chunk-level matches so file-level dedupe does not hide files."""
     if visible_limit is None:
         return None
     return min(

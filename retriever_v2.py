@@ -206,6 +206,7 @@ class DocumentRetriever:
         self.db_manager = get_db_manager()
         self.repository = DocumentRepository(self.db_manager)
         self.embedding_service = get_embedding_service()
+        self._reranker_v0 = None
     
     def _calculate_relevance_score(self, distance: float, metric: str = 'cosine') -> float:
         """
@@ -303,8 +304,8 @@ class DocumentRetriever:
             for term in lexical_terms
         }
         phrase_patterns = [f"%{phrase}%" for phrase in phrases if phrase.strip()]
-        dense_limit = max(top_k * 50, 500)
-        lexical_limit = max(top_k * 50, 500)
+        dense_limit = min(max(top_k * 50, 500), 5000)
+        lexical_limit = min(max(top_k * 50, 500), 5000)
         query_embedding = self.embedding_service.encode(query)
         filtered_docs_cte, candidate_source, filter_params = self._build_filtered_docs_context(filters)
         cte_prefix = f"{filtered_docs_cte}," if filtered_docs_cte else ""
@@ -356,6 +357,7 @@ class DocumentRetriever:
             total_documents = int(total_row.get("total_documents") or 0)
 
             idf_by_term: Dict[str, float] = {}
+            # TODO: Batch these term-level IDF queries to avoid N+1 database round-trips (e.g. using a single CASE WHEN query or lateral join)
             for term, pattern in term_patterns.items():
                 cursor.execute(df_sql, [*filter_params, pattern])
                 df_row = cursor.fetchone() or {}

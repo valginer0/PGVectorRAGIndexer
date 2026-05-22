@@ -579,5 +579,5 @@ class SearchTab(QWidget):
         return augmented
 
     def _candidate_limit_for_unique_files(self, visible_limit: int) -> int:
-        """Fetch extra chunk-level matches so file-level de-dupe does not hide files."""
+        """Fetch extra chunk-level matches so file-level dedupe does not hide files."""
         return candidate_limit_for_unique_files(visible_limit)

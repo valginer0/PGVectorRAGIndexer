@@ -217,6 +217,10 @@ documents/
 
 # Local retrieval spike data
 lancedb_spike_data/
+lancedb_prototype_data/
+
+# Local agent/tooling state
+.claude/
 
 # Private project strategy docs (should not be in version control)
 docs/internal/

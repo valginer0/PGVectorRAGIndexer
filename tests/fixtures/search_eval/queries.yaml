@@ -272,3 +272,18 @@ queries:
     relevant_files: []
     assertions:
       no_confident_literal_match: advisory
+
+  - id: crowding_ev6_grouped
+    class: chunk_crowding
+    query: EV6
+    group_by_document: true
+    expected_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    relevant_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_battery_warranty.md
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    assertions:
+      min_unique_files_at_5: 2
+      recall_at_5: true

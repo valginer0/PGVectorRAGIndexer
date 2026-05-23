@@ -221,6 +221,7 @@ lancedb_prototype_data/
 
 # Local agent/tooling state
 .claude/
+.antigravitycli/
 
 # Private project strategy docs (should not be in version control)
 docs/internal/

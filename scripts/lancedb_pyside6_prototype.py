@@ -36,7 +36,7 @@ import argparse
 import tempfile
 import psutil
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Lazy / Safe imports for PySide6, LanceDB, and Arrow
@@ -170,6 +170,7 @@ class SearchEngine:
 
         # Try to pull from PG17
         if pg_config is not None:
+            conn = None
             try:
                 import psycopg2
                 from psycopg2.extras import RealDictCursor
@@ -222,12 +223,14 @@ class SearchEngine:
                         "text_content": row["text_content"] or "",
                         "embedding": emb
                     })
-                conn.close()
 
             except Exception as e:
                 print(f"[Bootstrap] PostgreSQL bootstrap failed ({e}). Falling back to local mock data.", file=sys.stderr)
                 parents_data.clear()
                 chunks_data.clear()
+            finally:
+                if conn is not None:
+                    conn.close()
 
         # Seed with high quality mock data if PG was offline or failed
         if not parents_data:
@@ -483,6 +486,21 @@ if PYSIDE6_AVAILABLE:
             score.setStyleSheet("color: #3b82f6; font-size: 11px; font-weight: 500; margin-top: 4px;")
             layout.addWidget(score)
 
+    class BootstrapWorker(QtCore.QThread):
+        finished_signal = QtCore.Signal(str)
+
+        def __init__(self, engine: SearchEngine, pg_config: dict[str, Any] | None):
+            super().__init__()
+            self.engine = engine
+            self.pg_config = pg_config
+
+        def run(self):
+            try:
+                res_msg = self.engine.bootstrap_db(self.pg_config)
+                self.finished_signal.emit(res_msg)
+            except Exception as e:
+                self.finished_signal.emit(f"Bootstrap encountered error: {e}")
+
     class MainWindow(QMainWindow):
         def __init__(self, engine: SearchEngine):
             super().__init__()
@@ -721,10 +739,9 @@ if PYSIDE6_AVAILABLE:
             self.telemetry_readout.append(f"[{timestamp}] {msg}\n")
 
         def trigger_bootstrap(self):
-            self.log_telemetry("Starting database bootstrapping...")
+            self.log_telemetry("Starting database bootstrapping in background thread...")
             self.bootstrap_btn.setEnabled(False)
             self.bootstrap_btn.setText("Bootstrapping...")
-            QApplication.processEvents()
 
             # Pass default local PG credentials
             pg_conf = {
@@ -735,12 +752,13 @@ if PYSIDE6_AVAILABLE:
                 "password": "rag_password"
             }
             
-            try:
-                res_msg = self.engine.bootstrap_db(pg_conf)
-                self.log_telemetry(res_msg)
-            except Exception as e:
-                self.log_telemetry(f"Bootstrap encountered error: {e}")
+            # Start background thread to keep GUI responsive
+            self.bootstrap_thread = BootstrapWorker(self.engine, pg_conf)
+            self.bootstrap_thread.finished_signal.connect(self.on_bootstrap_finished)
+            self.bootstrap_thread.start()
 
+        def on_bootstrap_finished(self, res_msg: str):
+            self.log_telemetry(res_msg)
             self.update_db_status_pill()
             self.bootstrap_btn.setEnabled(True)
             self.bootstrap_btn.setText("Bootstrap Database")

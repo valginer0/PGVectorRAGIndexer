@@ -1,9 +1,33 @@
 import logging
+import threading
 import time
 from PySide6.QtCore import QThread, Signal
 from desktop_app.utils.hashing import calculate_file_hash
 
 logger = logging.getLogger(__name__)
+
+_LANCEDB_EMBEDDER_CACHE = {}
+_LANCEDB_EMBEDDER_LOCK = threading.Lock()
+
+
+def get_lancedb_embedder(model_name=None):
+    """Return a process-cached LanceDB embedder for local desktop search."""
+    from desktop_app.lancedb_engine import DEFAULT_EMBEDDING_MODEL, SentenceTransformerEmbedder
+
+    cache_key = model_name or DEFAULT_EMBEDDING_MODEL
+    with _LANCEDB_EMBEDDER_LOCK:
+        embedder = _LANCEDB_EMBEDDER_CACHE.get(cache_key)
+        if embedder is None:
+            logger.info("Loading local LanceDB embedder: %s", cache_key)
+            embedder = SentenceTransformerEmbedder(model_name=cache_key)
+            _LANCEDB_EMBEDDER_CACHE[cache_key] = embedder
+        return embedder
+
+
+def clear_lancedb_embedder_cache():
+    """Clear the cached local LanceDB embedder, primarily for tests."""
+    with _LANCEDB_EMBEDDER_LOCK:
+        _LANCEDB_EMBEDDER_CACHE.clear()
 
 class SearchWorker(QThread):
     """Worker thread for performing searches."""
@@ -90,7 +114,7 @@ class LocalLanceDBSearchWorker(QThread):
         try:
             from desktop_app.lancedb_engine import LocalLanceDBEngine
 
-            with LocalLanceDBEngine(self.db_path) as engine:
+            with LocalLanceDBEngine(self.db_path, embedder=get_lancedb_embedder()) as engine:
                 results, _telemetry = engine.search_parent_child(
                     self.query,
                     parent_limit=self.parent_limit,
@@ -123,7 +147,7 @@ class LocalLanceDBIngestWorker(QThread):
             from desktop_app.lancedb_engine import LocalLanceDBEngine
             from desktop_app.lancedb_ingestion import ingest_local_text_paths
 
-            with LocalLanceDBEngine(self.db_path) as engine:
+            with LocalLanceDBEngine(self.db_path, embedder=get_lancedb_embedder()) as engine:
                 result = ingest_local_text_paths(
                     engine,
                     self.paths,

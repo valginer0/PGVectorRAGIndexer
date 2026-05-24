@@ -6,7 +6,15 @@ from unittest.mock import MagicMock, call
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
-from desktop_app.ui.workers import SearchWorker, DocumentsWorker, UploadWorker
+from desktop_app.ui.workers import (
+    DocumentsWorker,
+    LocalLanceDBIngestWorker,
+    LocalLanceDBSearchWorker,
+    SearchWorker,
+    UploadWorker,
+    clear_lancedb_embedder_cache,
+    get_lancedb_embedder,
+)
 
 @pytest.fixture(scope="session")
 def qapp():
@@ -70,6 +78,126 @@ def test_search_worker_passes_document_level_options(qapp, mock_api_client):
     assert results == [(True, [{"id": "1"}])]
     assert mock_api_client.search.call_args.kwargs["group_by_document"] is True
     assert mock_api_client.search.call_args.kwargs["literal_tail_suppression"] == "identifier-token"
+
+
+def test_lancedb_embedder_cache_reuses_model(monkeypatch):
+    from desktop_app import lancedb_engine
+
+    created = []
+
+    class FakeEmbedder:
+        def __init__(self, model_name):
+            self.model_name = model_name
+            created.append(model_name)
+
+    monkeypatch.setattr(lancedb_engine, "SentenceTransformerEmbedder", FakeEmbedder)
+    clear_lancedb_embedder_cache()
+
+    first = get_lancedb_embedder("model-a")
+    second = get_lancedb_embedder("model-a")
+    third = get_lancedb_embedder("model-b")
+
+    assert first is second
+    assert third is not first
+    assert created == ["model-a", "model-b"]
+
+    clear_lancedb_embedder_cache()
+
+
+def test_local_lancedb_search_worker_uses_cached_embedder(qapp, monkeypatch):
+    from desktop_app import lancedb_engine
+
+    cached_embedder = object()
+    captured = {}
+
+    class FakeEngine:
+        def __init__(self, db_path, embedder=None):
+            captured["db_path"] = db_path
+            captured["embedder"] = embedder
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+        def search_parent_child(self, query, parent_limit, child_limit):
+            captured["query"] = query
+            captured["parent_limit"] = parent_limit
+            captured["child_limit"] = child_limit
+            result = MagicMock(
+                score=0.9,
+                source_uri="/docs/ev6.txt",
+                text="EV6 result",
+                chunk_index=0,
+                score_label="Cosine similarity: 0.9000",
+                parent_rank=1,
+            )
+            return [result], None
+
+    monkeypatch.setattr("desktop_app.ui.workers.get_lancedb_embedder", lambda: cached_embedder)
+    monkeypatch.setattr(lancedb_engine, "LocalLanceDBEngine", FakeEngine)
+
+    worker = LocalLanceDBSearchWorker("EV6", 5, "/tmp/lancedb", parent_limit=2)
+    results = []
+    worker.finished.connect(lambda success, data: results.append((success, data)))
+
+    worker.run()
+
+    assert captured == {
+        "db_path": "/tmp/lancedb",
+        "embedder": cached_embedder,
+        "query": "EV6",
+        "parent_limit": 2,
+        "child_limit": 5,
+    }
+    assert results[0][0] is True
+    assert results[0][1][0]["source_uri"] == "/docs/ev6.txt"
+
+
+def test_local_lancedb_ingest_worker_uses_cached_embedder(qapp, monkeypatch):
+    from desktop_app import lancedb_engine, lancedb_ingestion
+
+    cached_embedder = object()
+    captured = {}
+
+    class FakeEngine:
+        def __init__(self, db_path, embedder=None):
+            captured["db_path"] = db_path
+            captured["embedder"] = embedder
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+    class FakeResult:
+        def to_dict(self):
+            return {"indexed_documents": 1}
+
+    def fake_ingest(engine, paths, recursive=True):
+        captured["engine"] = engine
+        captured["paths"] = paths
+        captured["recursive"] = recursive
+        return FakeResult()
+
+    monkeypatch.setattr("desktop_app.ui.workers.get_lancedb_embedder", lambda: cached_embedder)
+    monkeypatch.setattr(lancedb_engine, "LocalLanceDBEngine", FakeEngine)
+    monkeypatch.setattr(lancedb_ingestion, "ingest_local_text_paths", fake_ingest)
+
+    worker = LocalLanceDBIngestWorker(["/docs"], "/tmp/lancedb", recursive=False)
+    results = []
+    worker.finished.connect(lambda success, data: results.append((success, data)))
+
+    worker.run()
+
+    assert captured["db_path"] == "/tmp/lancedb"
+    assert captured["embedder"] is cached_embedder
+    assert captured["paths"] == ["/docs"]
+    assert captured["recursive"] is False
+    assert results == [(True, {"indexed_documents": 1})]
+
 
 def test_search_worker_failure(qapp, mock_api_client):
     """Test SearchWorker emits error on failure."""

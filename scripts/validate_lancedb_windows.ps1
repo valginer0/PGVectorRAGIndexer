@@ -80,6 +80,23 @@ function Write-Info { param([string]$Msg) Write-Host "       $Msg" -ForegroundCo
 
 $Results   = [ordered]@{}
 $StartTime = Get-Date
+$LastNativeExitCode = 0
+
+function Invoke-NativeCapture {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments = @()
+    )
+    $oldPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $output = & $FilePath @Arguments 2>&1 | ForEach-Object { $_.ToString() }
+        $script:LastNativeExitCode = $LASTEXITCODE
+        return @($output)
+    } finally {
+        $ErrorActionPreference = $oldPreference
+    }
+}
 
 # ---------------------------------------------------------------------------
 # Sanity: warn if RepoRoot looks like a WSL UNC path
@@ -234,8 +251,10 @@ else:
 '@
 
 Write-Info "Sub-gate 1a: package imports ..."
-$ImportResult = & $VenvPython -c $ImportScript 2>&1
-$Gate1aPass = $LASTEXITCODE -eq 0
+$ImportScriptPath = Join-Path $ValidationDir "gate1a_import_check.py"
+$ImportScript | Set-Content -Path $ImportScriptPath -Encoding UTF8
+$ImportResult = Invoke-NativeCapture $VenvPython @($ImportScriptPath)
+$Gate1aPass = $LastNativeExitCode -eq 0
 if ($Gate1aPass) {
     Write-Pass "All packages import successfully"
     $Results["gate1a_imports"] = "PASS"
@@ -275,8 +294,10 @@ except Exception as e:
 
 Write-Info "Sub-gate 1b: load SentenceTransformer('all-MiniLM-L6-v2') and encode a sentence ..."
 Write-Info "(Model will be downloaded on first run - may take a minute)"
-$ModelResult = & $VenvPython -c $ModelScript 2>&1
-$Gate1bPass = $LASTEXITCODE -eq 0
+$ModelScriptPath = Join-Path $ValidationDir "gate1b_embedding_model.py"
+$ModelScript | Set-Content -Path $ModelScriptPath -Encoding UTF8
+$ModelResult = Invoke-NativeCapture $VenvPython @($ModelScriptPath)
+$Gate1bPass = $LastNativeExitCode -eq 0
 if ($Gate1bPass) {
     Write-Pass ($ModelResult | Select-String "MODEL_PASS" | Select-Object -First 1)
     $Results["gate1b_embedding_model"] = "PASS: $($ModelResult | Select-String 'MODEL_PASS')"
@@ -313,11 +334,15 @@ function Test-ZeroVectorFallback {
 }
 
 if ($Gate1Pass) {
-    $ProtoOutput = & $VenvPython $ProtoScript `
-        --headless `
-        --search "EV6 battery troubleshooting" `
-        --lance-path $ProtoLanceDir 2>&1
-    $ExitedClean = $LASTEXITCODE -eq 0
+    $ProtoOutput = Invoke-NativeCapture $VenvPython @(
+        $ProtoScript,
+        "--headless",
+        "--search",
+        "EV6 battery troubleshooting",
+        "--lance-path",
+        $ProtoLanceDir
+    )
+    $ExitedClean = $LastNativeExitCode -eq 0
     $UsedFallback = Test-ZeroVectorFallback $ProtoOutput
     $Gate2Pass = $ExitedClean -and -not $UsedFallback
     if ($Gate2Pass) {
@@ -366,8 +391,8 @@ if ($Gate2Pass) {
         "--noconfirm",
         "--clean"
     )
-    $PyiOutput = & $VenvPython -m PyInstaller @($PyiArgs) 2>&1
-    $Gate3Pass = $LASTEXITCODE -eq 0 -and (Test-Path $FrozenExe)
+    $PyiOutput = Invoke-NativeCapture $VenvPython (@("-m", "PyInstaller") + $PyiArgs)
+    $Gate3Pass = $LastNativeExitCode -eq 0 -and (Test-Path $FrozenExe)
     if ($Gate3Pass) {
         $ExeSize = [math]::Round((Get-Item $FrozenExe).Length / 1MB, 1)
         Write-Pass "Frozen exe built: $FrozenExe ($ExeSize MB)"
@@ -390,11 +415,14 @@ Write-Gate "Gate 4: Frozen exe headless run"
 
 if ($Gate3Pass) {
     $FrozenLanceDir = Join-Path $ValidationDir "lancedb_data_frozen"
-    $FrozenOutput = & $FrozenExe `
-        --headless `
-        --search "EV6 battery troubleshooting" `
-        --lance-path $FrozenLanceDir 2>&1
-    $ExitedClean  = $LASTEXITCODE -eq 0
+    $FrozenOutput = Invoke-NativeCapture $FrozenExe @(
+        "--headless",
+        "--search",
+        "EV6 battery troubleshooting",
+        "--lance-path",
+        $FrozenLanceDir
+    )
+    $ExitedClean  = $LastNativeExitCode -eq 0
     $UsedFallback = Test-ZeroVectorFallback $FrozenOutput
     $Gate4Pass = $ExitedClean -and -not $UsedFallback
     if ($Gate4Pass) {

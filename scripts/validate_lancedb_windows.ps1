@@ -215,7 +215,7 @@ foreach ($pkg in $Packages) {
 Write-Gate "Gate 1: Import check and embedding model verification"
 
 # Sub-gate 1a: package imports
-$ImportScript = @"
+$ImportScript = @'
 import sys
 failed = []
 for mod in ["torch", "transformers", "sentence_transformers", "lancedb", "pyarrow", "PySide6"]:
@@ -230,7 +230,7 @@ if failed:
 else:
     print("IMPORT_PASS")
     sys.exit(0)
-"@
+'@
 
 Write-Info "Sub-gate 1a: package imports ..."
 $ImportResult = & $VenvPython -c $ImportScript 2>&1
@@ -246,7 +246,7 @@ if ($Gate1aPass) {
 
 # Sub-gate 1b: load the actual embedding model and verify a real vector
 # This is the critical check that a zero-vector fallback would mask.
-$ModelScript = @"
+$ModelScript = @'
 import sys
 MODEL_NAME = "all-MiniLM-L6-v2"
 EXPECTED_DIM = 384
@@ -262,7 +262,7 @@ try:
         print(f"MODEL_FAIL: expected {EXPECTED_DIM} dims, got {dim}")
         sys.exit(1)
     if all(v == 0.0 for v in vec):
-        print("MODEL_FAIL: all-zero vector — model loaded but did not encode")
+        print("MODEL_FAIL: all-zero vector - model loaded but did not encode")
         sys.exit(1)
     nonzero = sum(1 for v in vec if v != 0.0)
     print(f"MODEL_PASS: {dim}-dim vector, {nonzero} non-zero values, first=[{vec[0]:.4f}, {vec[1]:.4f}, ...]")
@@ -270,10 +270,10 @@ try:
 except Exception as e:
     print(f"MODEL_FAIL: {e}")
     sys.exit(1)
-"@
+'@
 
 Write-Info "Sub-gate 1b: load SentenceTransformer('all-MiniLM-L6-v2') and encode a sentence ..."
-Write-Info "(Model will be downloaded on first run — may take a minute)"
+Write-Info "(Model will be downloaded on first run - may take a minute)"
 $ModelResult = & $VenvPython -c $ModelScript 2>&1
 $Gate1bPass = $LASTEXITCODE -eq 0
 if ($Gate1bPass) {
@@ -323,7 +323,7 @@ if ($Gate1Pass) {
         Write-Pass "Headless run exited cleanly with real embedding model"
         $Results["gate2_source_run"] = "PASS"
     } elseif ($UsedFallback) {
-        Write-Fail "Headless run used zero-vector fallback — embedding model failed inside prototype"
+        Write-Fail "Headless run used zero-vector fallback - embedding model failed inside prototype"
         $ProtoOutput | Where-Object { $_ -match "zero-vector|sentence_transformers" } |
             ForEach-Object { Write-Info $_ }
         $Results["gate2_source_run"] = "FAIL: zero-vector fallback detected"
@@ -402,7 +402,7 @@ if ($Gate3Pass) {
     } elseif ($UsedFallback) {
         # This is the critical case: PyInstaller froze source correctly but
         # sentence-transformers or its data files were not bundled properly.
-        Write-Fail "Frozen exe used zero-vector fallback — model not properly bundled by PyInstaller"
+        Write-Fail "Frozen exe used zero-vector fallback - model not properly bundled by PyInstaller"
         $FrozenOutput | Where-Object { $_ -match "zero-vector|sentence_transformers" } |
             ForEach-Object { Write-Info $_ }
         $Results["gate4_frozen_run"] = "FAIL: zero-vector fallback in frozen exe (bundling incomplete)"
@@ -482,9 +482,9 @@ network access disabled and an empty cache.
 
 - **Gate 1a** Import check: torch, transformers, sentence_transformers, lancedb, pyarrow, PySide6
 - **Gate 1b** Embedding model: load ``SentenceTransformer("all-MiniLM-L6-v2")``, encode one sentence, verify 384-dim non-zero vector (catches zero-vector fallback masking a real model failure)
-- **Gate 2** Source prototype: ``lancedb_pyside6_prototype.py --headless --search "EV6 battery troubleshooting"`` — exits cleanly AND output must not contain zero-vector fallback markers
+- **Gate 2** Source prototype: ``lancedb_pyside6_prototype.py --headless --search "EV6 battery troubleshooting"`` - exits cleanly AND output must not contain zero-vector fallback markers
 - **Gate 3** PyInstaller freeze: ``--onefile --collect-all lancedb pyarrow sentence_transformers transformers``
-- **Gate 4** Frozen exe: run frozen binary headlessly with same query — exits cleanly AND output must not contain zero-vector fallback markers (catches PyInstaller bundling incomplete sentence-transformers data)
+- **Gate 4** Frozen exe: run frozen binary headlessly with same query - exits cleanly AND output must not contain zero-vector fallback markers (catches PyInstaller bundling incomplete sentence-transformers data)
 
 ## How to Re-run
 
@@ -531,7 +531,7 @@ Write-Pass "Result written to: $ResultFile"
 # ---------------------------------------------------------------------------
 # Summary
 # ---------------------------------------------------------------------------
-Write-Gate "Summary — Overall: $Overall"
+Write-Gate "Summary - Overall: $Overall"
 $Results.Keys | ForEach-Object {
     $v = $Results[$_]
     if ($v -like "PASS*") { Write-Pass "$_`: $v" }

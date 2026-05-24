@@ -464,6 +464,20 @@ Duration: $Duration minutes
 |------|--------|
 $($ResultsMd -join "`n")
 
+## Scope Of Proof
+
+This validation proves **production-online packaging**: the frozen executable can
+load the embedding model and produce real vectors on a Windows machine with
+network access and a writable user cache.
+
+This validation does **not** prove strict offline/bundled-model packaging. Gate 2
+may populate the HuggingFace/sentence-transformers cache before Gate 4 runs, so
+Gate 4 may load model files from that cache rather than from inside the frozen
+executable. If fully offline deployment becomes a hard requirement, add a Gate 5
+that clears or redirects the model cache (for example by setting ``HF_HOME`` to
+an empty temp directory) before running the frozen executable, or run Gate 4 with
+network access disabled and an empty cache.
+
 ## Gate Definitions
 
 - **Gate 1a** Import check: torch, transformers, sentence_transformers, lancedb, pyarrow, PySide6

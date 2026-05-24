@@ -51,3 +51,21 @@ def test_dedupe_preserving_order_keeps_first_file_occurrence():
         "a.txt",
         "b.txt",
     ]
+
+
+def test_print_summary_includes_timing_fields(capsys):
+    validator = load_validation_module()
+
+    validator.print_summary({
+        "passed": True,
+        "embedder": {"mode": "hashing", "load_ms": 1.5},
+        "ingestion": {"indexed_documents": 2, "chunk_count": 3, "ingest_ms": 12.0},
+        "queries": [
+            {"id": "ev6", "passed": True, "result_files": ["ev6.txt"], "query_ms": 4.0}
+        ],
+        "total_ms": 20.0,
+    })
+
+    output = capsys.readouterr().out
+    assert "Embedder        : hashing (1.5 ms)" in output
+    assert "Total runtime   : 20.0 ms" in output

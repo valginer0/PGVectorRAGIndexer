@@ -250,6 +250,10 @@ def print_summary(output: dict[str, Any]) -> None:
     status = "PASS" if output["passed"] else "FAIL"
     print(f"{status}: local LanceDB desktop validation")
     print(
+        f"Embedder        : {output['embedder']['mode']} "
+        f"({output['embedder']['load_ms']} ms)"
+    )
+    print(
         "Indexed "
         f"{output['ingestion']['indexed_documents']} documents, "
         f"{output['ingestion']['chunk_count']} chunks "
@@ -261,6 +265,7 @@ def print_summary(output: dict[str, Any]) -> None:
             f"{query_status}: {query['id']} -> "
             f"{query['result_files']} ({query['query_ms']} ms)"
         )
+    print(f"Total runtime   : {output['total_ms']} ms")
 
 
 if __name__ == "__main__":

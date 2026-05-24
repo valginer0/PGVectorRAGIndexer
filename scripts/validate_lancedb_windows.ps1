@@ -24,19 +24,29 @@
     Path to a python.org CPython executable. Must NOT be Anaconda/Miniconda.
     If omitted the script searches PATH for the first non-Anaconda Python 3.11+.
 
+.PARAMETER RecreateVenv
+    Delete the venv, build, and dist folders before starting. Use this for a true
+    clean-room run. Without this flag the existing venv is reused (faster for
+    iteration, but not a guaranteed clean-room result).
+
 .EXAMPLE
-    # Run everything with defaults
+    # Run everything with defaults (reuses existing venv if present)
     .\scripts\validate_lancedb_windows.ps1
 
 .EXAMPLE
+    # Full clean-room run: delete venv and rebuild from scratch
+    .\scripts\validate_lancedb_windows.ps1 -RecreateVenv
+
+.EXAMPLE
     # Point at a specific CPython install
-    .\scripts\validate_lancedb_windows.ps1 -PythonExe "C:\Python311\python.exe"
+    .\scripts\validate_lancedb_windows.ps1 -PythonExe "C:\Python311\python.exe" -RecreateVenv
 #>
 
 param(
     [string]$RepoRoot      = (Split-Path $PSScriptRoot -Parent),
     [string]$ValidationDir = "$env:USERPROFILE\.codex\validation\PGVectorRAGIndexer\clean-cpython-lancedb",
-    [string]$PythonExe     = ""
+    [string]$PythonExe     = "",
+    [switch]$RecreateVenv
 )
 
 Set-StrictMode -Version Latest
@@ -52,6 +62,36 @@ function Write-Info { param([string]$Msg) Write-Host "       $Msg" -ForegroundCo
 
 $Results   = [ordered]@{}
 $StartTime = Get-Date
+
+# ---------------------------------------------------------------------------
+# Sanity: warn if RepoRoot looks like a WSL UNC path
+# ---------------------------------------------------------------------------
+if ($RepoRoot -match "^\\\\wsl") {
+    Write-Host ""
+    Write-Host "WARNING: RepoRoot appears to be a WSL UNC path:" -ForegroundColor Yellow
+    Write-Host "  $RepoRoot" -ForegroundColor Yellow
+    Write-Host "PyInstaller is unreliable over \\wsl.localhost\... paths." -ForegroundColor Yellow
+    Write-Host "Clone the repo to a native Windows path (e.g. C:\Users\v_ale\PGVectorRAGIndexer)" -ForegroundColor Yellow
+    Write-Host "and re-run from there, or pass -RepoRoot explicitly." -ForegroundColor Yellow
+    Write-Host ""
+    $confirm = Read-Host "Continue anyway? (y/N)"
+    if ($confirm -notmatch "^[Yy]") { exit 1 }
+}
+
+# ---------------------------------------------------------------------------
+# RecreateVenv: wipe venv, build, dist for a true clean-room run
+# ---------------------------------------------------------------------------
+if ($RecreateVenv) {
+    Write-Info "RecreateVenv: removing venv, build, and dist folders ..."
+    foreach ($dir in @("venv", "build", "dist")) {
+        $target = Join-Path $ValidationDir $dir
+        if (Test-Path $target) {
+            Remove-Item $target -Recurse -Force
+            Write-Info "  Removed: $target"
+        }
+    }
+    Write-Pass "Clean-room reset complete"
+}
 
 # ---------------------------------------------------------------------------
 # Gate 0: Locate a non-Anaconda CPython 3.11+
@@ -152,10 +192,11 @@ foreach ($pkg in $Packages) {
 }
 
 # ---------------------------------------------------------------------------
-# Gate 1: Import check
+# Gate 1: Import check + embedding model load + non-zero vector verify
 # ---------------------------------------------------------------------------
-Write-Gate "Gate 1: Import check"
+Write-Gate "Gate 1: Import check and embedding model verification"
 
+# Sub-gate 1a: package imports
 $ImportScript = @"
 import sys
 failed = []
@@ -165,24 +206,68 @@ for mod in ["torch", "transformers", "sentence_transformers", "lancedb", "pyarro
     except Exception as e:
         failed.append(f"{mod}: {e}")
 if failed:
-    print("FAIL")
+    print("IMPORT_FAIL")
     for f in failed: print(f"  {f}")
     sys.exit(1)
 else:
-    print("PASS")
+    print("IMPORT_PASS")
     sys.exit(0)
 "@
 
+Write-Info "Sub-gate 1a: package imports ..."
 $ImportResult = & $VenvPython -c $ImportScript 2>&1
-$Gate1Pass = $LASTEXITCODE -eq 0
-if ($Gate1Pass) {
-    Write-Pass "All imports succeeded"
-    $Results["gate1_imports"] = "PASS"
+$Gate1aPass = $LASTEXITCODE -eq 0
+if ($Gate1aPass) {
+    Write-Pass "All packages import successfully"
+    $Results["gate1a_imports"] = "PASS"
 } else {
-    Write-Fail "Import failures detected:"
+    Write-Fail "Import failures:"
     $ImportResult | ForEach-Object { Write-Info $_ }
-    $Results["gate1_imports"] = "FAIL: $ImportResult"
+    $Results["gate1a_imports"] = "FAIL: $($ImportResult | Select-Object -Last 5)"
 }
+
+# Sub-gate 1b: load the actual embedding model and verify a real vector
+# This is the critical check that a zero-vector fallback would mask.
+$ModelScript = @"
+import sys
+MODEL_NAME = "all-MiniLM-L6-v2"
+EXPECTED_DIM = 384
+try:
+    from sentence_transformers import SentenceTransformer
+    print(f"Loading {MODEL_NAME} ...", flush=True)
+    model = SentenceTransformer(MODEL_NAME)
+    vec = model.encode("EV6 battery diagnostic")
+    if hasattr(vec, "tolist"):
+        vec = vec.tolist()
+    dim = len(vec)
+    if dim != EXPECTED_DIM:
+        print(f"MODEL_FAIL: expected {EXPECTED_DIM} dims, got {dim}")
+        sys.exit(1)
+    if all(v == 0.0 for v in vec):
+        print("MODEL_FAIL: all-zero vector — model loaded but did not encode")
+        sys.exit(1)
+    nonzero = sum(1 for v in vec if v != 0.0)
+    print(f"MODEL_PASS: {dim}-dim vector, {nonzero} non-zero values, first=[{vec[0]:.4f}, {vec[1]:.4f}, ...]")
+    sys.exit(0)
+except Exception as e:
+    print(f"MODEL_FAIL: {e}")
+    sys.exit(1)
+"@
+
+Write-Info "Sub-gate 1b: load SentenceTransformer('all-MiniLM-L6-v2') and encode a sentence ..."
+Write-Info "(Model will be downloaded on first run — may take a minute)"
+$ModelResult = & $VenvPython -c $ModelScript 2>&1
+$Gate1bPass = $LASTEXITCODE -eq 0
+if ($Gate1bPass) {
+    Write-Pass ($ModelResult | Select-String "MODEL_PASS" | Select-Object -First 1)
+    $Results["gate1b_embedding_model"] = "PASS: $($ModelResult | Select-String 'MODEL_PASS')"
+} else {
+    Write-Fail "Embedding model check failed:"
+    $ModelResult | ForEach-Object { Write-Info $_ }
+    $Results["gate1b_embedding_model"] = "FAIL: $($ModelResult | Select-Object -Last 3)"
+}
+
+$Gate1Pass = $Gate1aPass -and $Gate1bPass
 
 # ---------------------------------------------------------------------------
 # Gate 2: Source prototype headless run
@@ -331,10 +416,21 @@ $($ResultsMd -join "`n")
 
 ## Gate Definitions
 
-- **Gate 1** Import check: torch, transformers, sentence_transformers, lancedb, pyarrow, PySide6
+- **Gate 1a** Import check: torch, transformers, sentence_transformers, lancedb, pyarrow, PySide6
+- **Gate 1b** Embedding model: load ``SentenceTransformer("all-MiniLM-L6-v2")``, encode one sentence, verify 384-dim non-zero vector (catches zero-vector fallback masking a real model failure)
 - **Gate 2** Source prototype: ``lancedb_pyside6_prototype.py --headless --search "EV6 battery troubleshooting"``
 - **Gate 3** PyInstaller freeze: ``--onefile --collect-all lancedb pyarrow sentence_transformers transformers``
 - **Gate 4** Frozen exe: run frozen binary headlessly with the same query
+
+## How to Re-run
+
+``````powershell
+# Reuse existing venv (fast, for iteration)
+.\scripts\validate_lancedb_windows.ps1
+
+# Full clean-room run (delete venv/build/dist and start fresh)
+.\scripts\validate_lancedb_windows.ps1 -RecreateVenv
+``````
 
 ## PyInstaller Command Used
 

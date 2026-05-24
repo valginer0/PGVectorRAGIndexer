@@ -257,6 +257,19 @@ def test_search_finished_success(search_tab):
     assert search_tab.results_table.rowCount() == 2
     assert search_tab.results_table.item(0, 0).text() == "0.9000"  # Score
     assert search_tab.results_table.item(0, 2).text() == "/path/1"  # Source (column 2 now)
+    assert search_tab.status_label.text() == "Found 2 results"
+
+
+def test_search_finished_marks_local_results_one_per_file(search_tab):
+    search_tab.search_worker = MagicMock()
+    search_tab.search_worker.property.return_value = True
+
+    search_tab.search_finished(
+        True,
+        [{"score": 0.9, "source_uri": "/path/1", "text_content": "content 1", "chunk_index": 1}],
+    )
+
+    assert search_tab.status_label.text() == "Found 1 result (1 per file)"
 
 def test_search_finished_failure(search_tab):
     """Test handling of search failure."""

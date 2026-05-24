@@ -135,6 +135,8 @@ def test_search_panel_local_lancedb_checkbox_wires_config(qapp):
 
         checkbox = tab._local_lancedb_search_checkbox
         assert checkbox.isChecked() is False
+        assert tab._local_lancedb_index_btn.text() == "Rebuild Local Text Index"
+        assert "overwrites" in tab._local_lancedb_index_btn.toolTip()
 
         checkbox.setChecked(True)
 

@@ -369,6 +369,7 @@ class SearchTab(QWidget):
             self._display_result_limit,
             app_config.get_local_lancedb_db_path(),
         )
+        self.search_worker.setProperty("one_result_per_file", True)
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
     
@@ -382,7 +383,8 @@ class SearchTab(QWidget):
             results = data
             self.display_results(results)
             n = self.results_table.rowCount()
-            self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''} (1 per file)")
+            suffix = " (1 per file)" if self._current_search_is_one_per_file() else ""
+            self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix}")
             self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
         else:
             error_msg = data
@@ -608,3 +610,9 @@ class SearchTab(QWidget):
     def _candidate_limit_for_unique_files(self, visible_limit: int) -> int:
         """Fetch extra chunk-level matches so file-level dedupe does not hide files."""
         return candidate_limit_for_unique_files(visible_limit)
+
+    def _current_search_is_one_per_file(self) -> bool:
+        worker = getattr(self, "search_worker", None)
+        if worker is not None and bool(worker.property("one_result_per_file")):
+            return True
+        return bool(app_config.get_document_level_search_enabled())

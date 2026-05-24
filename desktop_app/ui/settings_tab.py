@@ -371,9 +371,13 @@ class SettingsTab(QWidget):
         path_label.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
         vbox.addWidget(path_label)
 
-        self._local_lancedb_index_btn = QPushButton("Build Local Text Index")
+        self._local_lancedb_index_btn = QPushButton("Rebuild Local Text Index")
         self._local_lancedb_index_btn.setIcon(qta.icon("fa5s.database", color="white"))
         self._local_lancedb_index_btn.setMinimumHeight(34)
+        self._local_lancedb_index_btn.setToolTip(
+            "Builds a local text/Markdown LanceDB index from a folder. "
+            "This overwrites the current local index."
+        )
         self._local_lancedb_index_btn.clicked.connect(self._build_local_lancedb_index)
         vbox.addWidget(self._local_lancedb_index_btn)
 

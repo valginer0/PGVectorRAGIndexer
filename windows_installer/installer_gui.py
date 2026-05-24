@@ -236,8 +236,9 @@ class InstallerGUI:
                 text="🔄 Previous Installation Found",
                 fg=COLORS['warning']
             )
+            resume_from_step = resume_state.get("ResumeFromStep", 5)
             self.counter_label.config(
-                text=f"Will resume from Step 5 (started {age_str})"
+                text=f"Will resume from Step {resume_from_step} (started {age_str})"
             )
             self.install_btn.config(text="Resume")
             
@@ -264,7 +265,7 @@ class InstallerGUI:
             self._log("Found previous installation in progress", "warning")
             self._log(f"Started: {age_str}", "info")
             self._log(f"Install dir: {resume_state.get('InstallDir', 'unknown')}", "info")
-            self._log("Click 'Resume' to continue from Step 5", "info")
+            self._log(f"Click 'Resume' to continue from Step {resume_from_step}", "info")
             self._log("Or 'Start Fresh' to reinstall from scratch", "info")
             self._log("=" * 40, "info")
     

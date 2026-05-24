@@ -110,11 +110,14 @@ When no runtime is available, the installer also:
 The installer supports automatic reboot and resume:
 
 - Saves a state file recording the current stage, install directory, timestamp,
-  and installer version before requesting a reboot.
+  installer version, and the installer phase to resume from before requesting a
+  reboot.
 - Registers a scheduled task to relaunch after logon (falls back to a registry
   Run key if scheduled task creation fails).
 - On restart, validates the state file age and installer version, then resumes
-  from Phase 5 (assuming Phases 1–4 completed before the reboot).
+  from the recorded phase. Most restarts resume from Phase 5 after runtime
+  installation; WSL2 setup resumes from Phase 4 so runtime installation can
+  continue after Windows finishes enabling WSL.
 - The GUI offers a "Start Fresh" option to clear state and restart from Phase 1.
 
 ## In-App Runtime Repair

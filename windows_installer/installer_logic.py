@@ -635,7 +635,7 @@ class Installer:
     # State Management & Reboot Handling
     # =========================================================================
 
-    def _save_state(self, stage: str):
+    def _save_state(self, stage: str, resume_from_step: Optional[int] = None):
         """Save installation state to JSON with version and timestamp."""
         state = {
             "Stage": stage,
@@ -643,10 +643,13 @@ class Installer:
             "Timestamp": time.time(),
             "InstallerVersion": self.INSTALLER_VERSION
         }
+        if resume_from_step is not None:
+            state["ResumeFromStep"] = resume_from_step
         try:
             with open(self.state_file, 'w') as f:
                 json.dump(state, f, indent=2)
-            self._log(f"[State] Saved state: Stage={stage}, Version={self.INSTALLER_VERSION}", "info")
+            resume_msg = f", ResumeFromStep={resume_from_step}" if resume_from_step is not None else ""
+            self._log(f"[State] Saved state: Stage={stage}, Version={self.INSTALLER_VERSION}{resume_msg}", "info")
             self._log(f"[State] State file: {self.state_file}", "info")
         except Exception as e:
             self._log(f"[State] Failed to save state: {e}", "warning")
@@ -718,12 +721,12 @@ class Installer:
             capture_output=True
         )
 
-    def request_reboot(self):
+    def request_reboot(self, resume_from_step: int = 5):
         """Register resume task and signal reboot requirement."""
         self._log("Scheduling resume after reboot...", "info")
         
         # 1. Save state
-        self._save_state("PostReboot")
+        self._save_state("PostReboot", resume_from_step=resume_from_step)
         
         # 2. Register Scheduled Task (Legacy Parity)
         # We need to find where the current python/installer is running from
@@ -1141,7 +1144,7 @@ class Installer:
         if not self._check_wsl2_enabled():
             self._log("Installing WSL2 (required for Docker)...", "info")
             self._run_command("wsl --install --no-launch")
-            self.request_reboot()
+            self.request_reboot(resume_from_step=4)
             return True  # State machine resumes after reboot
 
         # 7. Install Rancher Desktop via winget
@@ -1558,11 +1561,16 @@ class Installer:
             self._log("RESUMING INSTALLATION AFTER RESTART", "success")
             self._log("=" * 50, "info")
             self._log(f"Previous install dir: {state.get('InstallDir')}", "info")
-            self._log("Skipping Steps 1-4 (prerequisites already installed)", "info")
-            self._log("Starting from Step 5: Starting Container Runtime", "info")
-            # Resume from Step 5 (Start Runtime) because that's what we rebooted for
-            # Prereqs (1-4) are assumed done.
-            start_index = 4 
+            resume_from_step = state.get("ResumeFromStep", 5)
+            try:
+                resume_from_step = int(resume_from_step)
+            except (TypeError, ValueError):
+                resume_from_step = 5
+            resume_from_step = max(1, min(resume_from_step, len(steps_functions)))
+            start_index = resume_from_step - 1
+            if start_index > 0:
+                self._log(f"Skipping Steps 1-{start_index}", "info")
+            self._log(f"Starting from Step {resume_from_step}: {self.steps[start_index].name}", "info")
             # We'll clear state at end after success
         
         try:

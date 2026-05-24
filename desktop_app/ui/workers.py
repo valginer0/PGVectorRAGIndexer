@@ -49,6 +49,92 @@ class SearchWorker(QThread):
             logger.error(f"Search failed: {e}")
             self.finished.emit(False, str(e))
 
+
+def format_lancedb_search_results(results) -> list[dict]:
+    """Convert local LanceDB search results to the SearchTab display shape."""
+    formatted = []
+    for result in results:
+        formatted.append({
+            "score": result.score,
+            "source_uri": result.source_uri,
+            "text_content": result.text,
+            "chunk_index": result.chunk_index,
+            "metadata": {
+                "search_backend": "local_lancedb",
+                "score_label": result.score_label,
+                "parent_rank": result.parent_rank,
+            },
+        })
+    return formatted
+
+
+class LocalLanceDBSearchWorker(QThread):
+    """Worker thread for experimental local LanceDB searches."""
+    finished = Signal(bool, object)
+
+    def __init__(
+        self,
+        query,
+        top_k,
+        db_path,
+        *,
+        parent_limit=5,
+    ):
+        super().__init__()
+        self.query = query
+        self.top_k = top_k
+        self.db_path = db_path
+        self.parent_limit = parent_limit
+
+    def run(self):
+        try:
+            from desktop_app.lancedb_engine import LocalLanceDBEngine
+
+            with LocalLanceDBEngine(self.db_path) as engine:
+                results, _telemetry = engine.search_parent_child(
+                    self.query,
+                    parent_limit=self.parent_limit,
+                    child_limit=self.top_k,
+                )
+            self.finished.emit(True, format_lancedb_search_results(results))
+        except Exception as e:
+            logger.error(f"Local LanceDB search failed: {e}")
+            self.finished.emit(False, str(e))
+
+
+class LocalLanceDBIngestWorker(QThread):
+    """Worker thread for building the experimental local LanceDB text index."""
+    finished = Signal(bool, object)
+
+    def __init__(
+        self,
+        paths,
+        db_path,
+        *,
+        recursive=True,
+    ):
+        super().__init__()
+        self.paths = list(paths)
+        self.db_path = db_path
+        self.recursive = recursive
+
+    def run(self):
+        try:
+            from desktop_app.lancedb_engine import LocalLanceDBEngine
+            from desktop_app.lancedb_ingestion import ingest_local_text_paths
+
+            with LocalLanceDBEngine(self.db_path) as engine:
+                result = ingest_local_text_paths(
+                    engine,
+                    self.paths,
+                    recursive=self.recursive,
+                )
+            self.finished.emit(True, result.to_dict())
+        except Exception as e:
+            logger.error(f"Local LanceDB ingestion failed: {e}")
+            self.finished.emit(False, str(e))
+
+
 class DocumentsWorker(QThread):
     """Worker thread for loading documents."""
     finished = Signal(bool, object)

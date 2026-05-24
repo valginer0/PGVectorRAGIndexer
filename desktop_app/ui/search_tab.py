@@ -119,7 +119,7 @@ class CheckableComboBox(QComboBox):
             return []
         return [t for t in raw if t != self.SELECT_ALL]
 from .shared import populate_document_type_combo
-from .workers import SearchWorker
+from .workers import LocalLanceDBSearchWorker, SearchWorker
 from ..utils.snippet_utils import extract_snippet
 from ..utils import app_config
 from ..utils.search_limits import candidate_limit_for_unique_files
@@ -288,6 +288,29 @@ class SearchTab(QWidget):
         # Store query for snippet extraction
         self.current_query = query
         
+        selected_type = self.type_filter.currentText().strip() if hasattr(self, "type_filter") else ""
+
+        # Handle wildcard and empty type
+        if selected_type == "*":
+            document_type = None  # No filter (all types)
+        else:
+            document_type = selected_type  # Specific type or empty string (for "No Type")
+
+        extensions = self.ext_filter.checked_items() if hasattr(self, "ext_filter") else []
+
+        self._display_result_limit = self.top_k_spin.value()
+        use_local_lancedb_search = app_config.get_local_lancedb_search_enabled()
+        if use_local_lancedb_search:
+            if document_type is not None or extensions:
+                QMessageBox.warning(
+                    self,
+                    "Local Search Filters Unsupported",
+                    "Local LanceDB search does not support document type or extension filters yet."
+                )
+                return
+            self._start_local_lancedb_search(query)
+            return
+
         health = self.api_client.get_health()
         if health.get("status") == "initializing":
             QMessageBox.information(
@@ -305,25 +328,14 @@ class SearchTab(QWidget):
                 "The API is not reachable. Please make sure Docker containers are running."
             )
             return
-        
+
         # Disable UI during search
         self.search_btn.setEnabled(False)
         self.query_input.setEnabled(False)
         self.status_label.setText(f"Searching for: {query}...")
         self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
-        
+
         # Start search worker
-        selected_type = self.type_filter.currentText().strip() if hasattr(self, "type_filter") else ""
-
-        # Handle wildcard and empty type
-        if selected_type == "*":
-            document_type = None  # No filter (all types)
-        else:
-            document_type = selected_type  # Specific type or empty string (for "No Type")
-
-        extensions = self.ext_filter.checked_items() if hasattr(self, "ext_filter") else []
-
-        self._display_result_limit = self.top_k_spin.value()
         use_document_level_search = app_config.get_document_level_search_enabled()
         candidate_limit = (
             self._display_result_limit
@@ -344,6 +356,22 @@ class SearchTab(QWidget):
         )
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
+
+    def _start_local_lancedb_search(self, query: str) -> None:
+        """Start the experimental local LanceDB search worker."""
+        self.search_btn.setEnabled(False)
+        self.query_input.setEnabled(False)
+        self.status_label.setText(f"Searching local LanceDB index for: {query}...")
+        self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
+
+        self.search_worker = LocalLanceDBSearchWorker(
+            query,
+            self._display_result_limit,
+            app_config.get_local_lancedb_db_path(),
+        )
+        self.search_worker.setProperty("one_result_per_file", True)
+        self.search_worker.finished.connect(self.search_finished)
+        self.search_worker.start()
     
     def search_finished(self, success: bool, data):
         """Handle search completion."""
@@ -355,7 +383,8 @@ class SearchTab(QWidget):
             results = data
             self.display_results(results)
             n = self.results_table.rowCount()
-            self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''} (1 per file)")
+            suffix = " (1 per file)" if self._current_search_is_one_per_file() else ""
+            self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix}")
             self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
         else:
             error_msg = data
@@ -581,3 +610,9 @@ class SearchTab(QWidget):
     def _candidate_limit_for_unique_files(self, visible_limit: int) -> int:
         """Fetch extra chunk-level matches so file-level dedupe does not hide files."""
         return candidate_limit_for_unique_files(visible_limit)
+
+    def _current_search_is_one_per_file(self) -> bool:
+        worker = getattr(self, "search_worker", None)
+        if worker is not None and bool(worker.property("one_result_per_file")):
+            return True
+        return bool(app_config.get_document_level_search_enabled())

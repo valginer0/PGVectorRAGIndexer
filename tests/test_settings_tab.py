@@ -1,6 +1,7 @@
 import os
 import pytest
 from unittest.mock import MagicMock, call, patch
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -108,6 +109,8 @@ def test_search_panel_document_level_checkbox_wires_config(qapp):
 
     with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
          patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
          patch("desktop_app.utils.app_config.set_document_level_search_enabled", setter):
         tab = SettingsTab(docker_manager=MagicMock())
 
@@ -117,3 +120,62 @@ def test_search_panel_document_level_checkbox_wires_config(qapp):
         checkbox.setChecked(True)
 
     setter.assert_called_once_with(True)
+
+
+def test_search_panel_local_lancedb_checkbox_wires_config(qapp):
+    """The local LanceDB checkbox reads and writes app config."""
+    setter = MagicMock()
+
+    with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
+         patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
+         patch("desktop_app.utils.app_config.set_local_lancedb_search_enabled", setter):
+        tab = SettingsTab(docker_manager=MagicMock())
+
+        checkbox = tab._local_lancedb_search_checkbox
+        assert checkbox.isChecked() is False
+        assert tab._local_lancedb_index_btn.text() == "Rebuild Local Text Index"
+        assert "overwrites" in tab._local_lancedb_index_btn.toolTip()
+
+        checkbox.setChecked(True)
+
+    setter.assert_called_once_with(True)
+
+
+def test_build_local_lancedb_index_starts_worker(qapp, tmp_path):
+    folder = tmp_path / "corpus"
+    folder.mkdir()
+
+    with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
+         patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
+         patch("desktop_app.ui.settings_tab.QFileDialog.getExistingDirectory", return_value=str(folder)), \
+         patch("desktop_app.ui.settings_tab.LocalLanceDBIngestWorker") as MockWorker:
+        worker = MockWorker.return_value
+        tab = SettingsTab(docker_manager=MagicMock())
+
+        tab._build_local_lancedb_index()
+
+        MockWorker.assert_called_once_with([Path(folder)], "/tmp/local-lancedb")
+        worker.finished.connect.assert_called_once_with(tab._local_lancedb_ingest_finished)
+        worker.start.assert_called_once()
+        assert tab._local_lancedb_index_btn.isEnabled() is False
+
+
+def test_local_lancedb_ingest_finished_updates_status(qapp):
+    with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
+         patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"):
+        tab = SettingsTab(docker_manager=MagicMock())
+
+        tab._local_lancedb_index_btn.setEnabled(False)
+        tab._local_lancedb_ingest_finished(
+            True,
+            {"indexed_documents": 2, "chunk_count": 5, "skipped_files": [{}, {}]},
+        )
+
+    assert tab._local_lancedb_index_btn.isEnabled() is True
+    assert "Indexed 2 documents, 5 chunks; skipped 2." == tab._local_lancedb_status.text()

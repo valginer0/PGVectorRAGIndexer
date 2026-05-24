@@ -163,14 +163,16 @@ def run_validation(
             )
             query_ms = elapsed_ms(query_start)
             result_files = [Path(result.source_uri).name for result in results]
+            unique_result_files = dedupe_preserving_order(result_files)
             matched_parent_files = [Path(source).name for source in telemetry.matched_parents]
-            passed = result_files == [query_spec["expected_file"]]
+            passed = unique_result_files == [query_spec["expected_file"]]
             query_outputs.append(
                 {
                     "id": query_spec["id"],
                     "query": query_spec["query"],
                     "expected_file": query_spec["expected_file"],
                     "result_files": result_files,
+                    "unique_result_files": unique_result_files,
                     "matched_parent_files": matched_parent_files,
                     "query_ms": query_ms,
                     "passed": passed,
@@ -227,6 +229,17 @@ def environment_info() -> dict[str, str]:
         "python": sys.version.split()[0],
         "lancedb": lancedb_version,
     }
+
+
+def dedupe_preserving_order(values: list[str]) -> list[str]:
+    seen = set()
+    deduped = []
+    for value in values:
+        if value in seen:
+            continue
+        seen.add(value)
+        deduped.append(value)
+    return deduped
 
 
 def elapsed_ms(start: float) -> float:

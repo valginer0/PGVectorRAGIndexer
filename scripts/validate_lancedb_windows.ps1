@@ -4,13 +4,31 @@
 
 .DESCRIPTION
     Runs four sequential gates inside a fresh CPython venv (not Anaconda):
-      Gate 1  Import check  torch, transformers, sentence_transformers, lancedb, PySide6
-      Gate 2  Source run    lancedb_pyside6_prototype.py --headless
+      Gate 1a Import check  torch, transformers, sentence_transformers, lancedb, PySide6
+      Gate 1b Model load    SentenceTransformer("all-MiniLM-L6-v2") encodes a real non-zero vector
+      Gate 2  Source run    lancedb_pyside6_prototype.py --headless (zero-vector fallback = FAIL)
       Gate 3  PyInstaller   freeze prototype to .exe
-      Gate 4  Frozen run    execute the frozen .exe --headless
+      Gate 4  Frozen run    frozen .exe --headless (zero-vector fallback = FAIL)
 
     Results are written to docs/internal/LANCEDB_WINDOWS_VALIDATION_V1.md so they
     can be committed to the private docs branch.
+
+    SCOPE OF PROOF
+    --------------
+    This script validates "production-online" packaging: the frozen exe can load
+    the embedding model and produce real vectors on a machine that has internet
+    access and a writable user cache (~/.cache or %USERPROFILE%\.cache).
+
+    It does NOT prove "strict offline/bundled" packaging. Gate 2 populates the
+    model cache, and Gate 4 may reuse that cache rather than loading model files
+    from inside the exe. If the production requirement is a fully offline,
+    no-download, model-inside-installer deployment, a separate offline gate is
+    needed:
+      - Clear or redirect the HuggingFace/sentence-transformers cache before
+        Gate 4 (e.g. set HF_HOME to an empty temp dir).
+      - Or run Gate 4 with network access disabled.
+    That gate is not implemented here. Add it as Gate 5 when offline deployment
+    becomes a hard requirement.
 
 .PARAMETER RepoRoot
     Absolute path to the PGVectorRAGIndexer repository checkout on Windows.

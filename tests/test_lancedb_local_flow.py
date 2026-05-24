@@ -51,6 +51,11 @@ def test_local_text_ingestion_builds_searchable_parent_child_index(tmp_path):
             parent_limit=1,
             child_limit=3,
         )
+        banana_results, banana_telemetry = engine.search_parent_child(
+            "banana recipe",
+            parent_limit=1,
+            child_limit=3,
+        )
 
     assert ingest_result.indexed_documents == 2
     assert ingest_result.stats.source_count == 2
@@ -58,3 +63,6 @@ def test_local_text_ingestion_builds_searchable_parent_child_index(tmp_path):
     assert search_results
     assert {Path(result.source_uri).name for result in search_results} == {"ev6_service.txt"}
     assert Path(telemetry.matched_parents[0]).name == "ev6_service.txt"
+    assert banana_results
+    assert {Path(result.source_uri).name for result in banana_results} == {"banana_recipe.md"}
+    assert Path(banana_telemetry.matched_parents[0]).name == "banana_recipe.md"

@@ -78,6 +78,17 @@ def test_build_local_text_corpus_can_disable_recursion(tmp_path):
     assert [Path(doc.source_uri).name for doc in corpus.documents] == ["top.txt"]
 
 
+def test_build_local_text_corpus_reports_missing_paths(tmp_path):
+    missing = tmp_path / "missing.txt"
+
+    corpus = build_local_text_corpus([missing])
+
+    assert corpus.documents == []
+    assert len(corpus.skipped_files) == 1
+    assert corpus.skipped_files[0].path == str(missing)
+    assert corpus.skipped_files[0].reason == "path_not_found"
+
+
 def test_ingest_local_text_paths_delegates_to_engine(tmp_path):
     path = tmp_path / "ev6.txt"
     path.write_text("EV6 battery diagnostic", encoding="utf-8")

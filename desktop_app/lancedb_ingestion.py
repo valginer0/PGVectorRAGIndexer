@@ -94,6 +94,9 @@ def build_local_text_corpus(
     skipped: list[SkippedLocalFile] = []
 
     for candidate in _iter_candidate_files(paths, recursive=recursive):
+        if not candidate.exists():
+            skipped.append(_skip(candidate, "path_not_found"))
+            continue
         if candidate.name.startswith("~$"):
             skipped.append(_skip(candidate, "temporary_office_file"))
             continue

@@ -170,12 +170,16 @@ class APIClient:
     def search(
         self,
         query: str,
-        top_k: int = 10,
+        top_k: Optional[int] = 10,
         min_score: float = 0.5,
         metric: str = "cosine",
         document_type: Optional[str] = None,
         filters: Optional[Dict[str, Any]] = None,
         extensions: Optional[List[str]] = None,
+        group_by_document: bool = False,
+        literal_tail_suppression: Optional[str] = None,
+        literal_anchor_threshold: Optional[float] = None,
+        literal_tail_threshold: Optional[float] = None,
     ) -> List[Dict[str, Any]]:
         """Search for documents."""
         return self._search.search(
@@ -186,6 +190,10 @@ class APIClient:
             document_type=document_type,
             filters=filters,
             extensions=extensions,
+            group_by_document=group_by_document,
+            literal_tail_suppression=literal_tail_suppression,
+            literal_anchor_threshold=literal_anchor_threshold,
+            literal_tail_threshold=literal_tail_threshold,
         )
 
     def get_extensions(self) -> List[str]:

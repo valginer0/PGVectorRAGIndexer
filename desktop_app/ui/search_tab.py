@@ -121,6 +121,8 @@ class CheckableComboBox(QComboBox):
 from .shared import populate_document_type_combo
 from .workers import SearchWorker
 from ..utils.snippet_utils import extract_snippet
+from ..utils import app_config
+from ..utils.search_limits import candidate_limit_for_unique_files
 
 # ... imports ...
 
@@ -322,7 +324,12 @@ class SearchTab(QWidget):
         extensions = self.ext_filter.checked_items() if hasattr(self, "ext_filter") else []
 
         self._display_result_limit = self.top_k_spin.value()
-        candidate_limit = self._candidate_limit_for_unique_files(self._display_result_limit)
+        use_document_level_search = app_config.get_document_level_search_enabled()
+        candidate_limit = (
+            self._display_result_limit
+            if use_document_level_search
+            else self._candidate_limit_for_unique_files(self._display_result_limit)
+        )
 
         self.search_worker = SearchWorker(
             self.api_client,
@@ -332,6 +339,8 @@ class SearchTab(QWidget):
             self.metric_combo.currentText(),
             document_type=document_type,
             extensions=extensions or None,
+            group_by_document=use_document_level_search,
+            literal_tail_suppression="identifier-token" if use_document_level_search else None,
         )
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
@@ -571,4 +580,4 @@ class SearchTab(QWidget):
 
     def _candidate_limit_for_unique_files(self, visible_limit: int) -> int:
         """Fetch extra chunk-level matches so file-level dedupe does not hide files."""
-        return min(max(visible_limit * 20, visible_limit + 50), 500)
+        return candidate_limit_for_unique_files(visible_limit)

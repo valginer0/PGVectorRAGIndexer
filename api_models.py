@@ -40,6 +40,22 @@ class SearchRequest(BaseModel):
     filters: Optional[Dict[str, Any]] = Field(default=None, description="Search filters")
     use_hybrid: bool = Field(default=False, description="Use hybrid search")
     alpha: Optional[float] = Field(default=None, description="Hybrid search weight")
+    hybrid_mode: Optional[str] = Field(default=None, description="Experimental hybrid strategy; supports legacy, lexical-fusion-v0, or rerank-v0")
+    group_by_document: bool = Field(default=False, description="Return one representative result per source document")
+    literal_tail_suppression: Optional[str] = Field(
+        default=None,
+        description="Experimental document-grouped tail suppression mode; currently supports identifier-token",
+    )
+    # Defaults are set to None to enable dynamic, search-mode-specific default threshold
+    # assignment inside routers/search_api.py (e.g. 10.0/0.1 for legacy, 0.01/0.005 for fusion).
+    literal_anchor_threshold: Optional[float] = Field(
+        default=None,
+        description="Rank-score threshold to activate literal-tail suppression; dynamic defaults are resolved in search_api.py",
+    )
+    literal_tail_threshold: Optional[float] = Field(
+        default=None,
+        description="Rank-score floor for non-literal tails; dynamic defaults are resolved in search_api.py",
+    )
 
 
 class SearchResultModel(BaseModel):
@@ -51,6 +67,7 @@ class SearchResultModel(BaseModel):
     source_uri: str
     distance: float
     relevance_score: float
+    rank_score: Optional[float] = None
     metadata: Optional[Dict[str, Any]] = None
     document_type: Optional[str] = None
 
@@ -61,6 +78,7 @@ class SearchResponse(BaseModel):
     results: List[SearchResultModel]
     total_results: int
     search_time_ms: float
+    diagnostics: Optional[Dict[str, Any]] = None
 
 
 class DocumentInfo(BaseModel):

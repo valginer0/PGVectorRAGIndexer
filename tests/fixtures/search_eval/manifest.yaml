@@ -1,0 +1,54 @@
+version: 0
+namespace: search_eval_v0
+default_metadata:
+  namespace: search_eval_v0
+  category: search_eval
+documents:
+  - path: corpus/vehicles/ev6_owner_notes.txt
+    metadata:
+      domain: vehicles
+      doc_type: owner_notes
+  - path: corpus/vehicles/ev6_battery_warranty.md
+    metadata:
+      domain: vehicles
+      doc_type: warranty
+  - path: corpus/vehicles/niro_service_bulletin.txt
+    metadata:
+      domain: vehicles
+      doc_type: service_bulletin
+  - path: corpus/vehicles/charging_overview.txt
+    metadata:
+      domain: vehicles
+      doc_type: overview
+  - path: corpus/vehicles/ev6_chunk_crowding.txt
+    metadata:
+      domain: vehicles
+      doc_type: repeated_notes
+  - path: corpus/finance/invoice_4421.txt
+    metadata:
+      domain: finance
+      doc_type: invoice
+  - path: corpus/finance/billing_policy.md
+    metadata:
+      domain: finance
+      doc_type: policy
+  - path: corpus/engineering/jwt_expiry_runbook.md
+    metadata:
+      domain: engineering
+      doc_type: runbook
+  - path: corpus/engineering/auth_session_policy.txt
+    metadata:
+      domain: engineering
+      doc_type: policy
+  - path: corpus/rag/grounded_answers.txt
+    metadata:
+      domain: rag
+      doc_type: guide
+  - path: corpus/noise/banana_bread_recipe.txt
+    metadata:
+      domain: noise
+      doc_type: recipe
+  - path: corpus/noise/random_meeting_notes.md
+    metadata:
+      domain: noise
+      doc_type: meeting_notes

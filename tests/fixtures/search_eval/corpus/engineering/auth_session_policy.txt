@@ -1,0 +1,12 @@
+Authentication Session Policy
+
+Users should be asked to sign in again when their session is no longer trusted.
+Examples include long inactivity, device change, password reset, administrator
+revocation, and failed refresh checks.
+
+The policy focuses on user experience and risk. Short sessions improve safety
+but can interrupt work; long sessions reduce friction but increase exposure if a
+device is lost.
+
+This document is a semantic neighbor for timeout and sign-in questions even when
+the query does not name a particular token format.

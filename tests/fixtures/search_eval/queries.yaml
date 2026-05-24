@@ -1,0 +1,289 @@
+version: 0
+description: Search quality query set for search_eval_v0.
+default_filters:
+  namespace: search_eval_v0
+default_top_k_files: 5
+default_backend_top_k: 100
+queries:
+  - id: literal_ev6_all
+    class: literal
+    query: EV6
+    expected_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_battery_warranty.md
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    relevant_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_battery_warranty.md
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    forbidden_files:
+      - corpus/noise/banana_bread_recipe.txt
+      - corpus/noise/random_meeting_notes.md
+    assertions:
+      recall_at_5: true
+      first_expected_rank_lte: 2
+      literal_match_rank_lte: 2
+      forbidden_at_5_eq: 0
+
+  - id: literal_ev6_txt
+    class: literal
+    query: EV6
+    filters:
+      extensions: [".txt"]
+    expected_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    relevant_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    forbidden_files:
+      - corpus/vehicles/ev6_battery_warranty.md
+      - corpus/noise/banana_bread_recipe.txt
+      - corpus/noise/random_meeting_notes.md
+    assertions:
+      recall_at_5: true
+      first_expected_rank_lte: 2
+      literal_match_rank_lte: 2
+      filters_respected: true
+      min_unique_files_at_5: 2
+
+  - id: literal_invoice_4421
+    class: literal
+    query: "invoice #4421"
+    expected_files:
+      - corpus/finance/invoice_4421.txt
+    relevant_files:
+      - corpus/finance/invoice_4421.txt
+    forbidden_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/niro_service_bulletin.txt
+    assertions:
+      recall_at_5: true
+      first_expected_rank_lte: 2
+      literal_match_rank_lte: 2
+
+  - id: literal_jwt_expiry
+    class: literal
+    query: JWT expiry
+    expected_files:
+      - corpus/engineering/jwt_expiry_runbook.md
+    relevant_files:
+      - corpus/engineering/jwt_expiry_runbook.md
+      - corpus/engineering/auth_session_policy.txt
+    forbidden_files:
+      - corpus/noise/banana_bread_recipe.txt
+    assertions:
+      recall_at_5: true
+      first_expected_rank_lte: 2
+      literal_match_rank_lte: 2
+
+  - id: context_grounded_answers
+    class: contextual
+    query: how do we keep answers tied to source documents
+    expected_files:
+      - corpus/rag/grounded_answers.txt
+    relevant_files:
+      - corpus/rag/grounded_answers.txt
+    assertions:
+      recall_at_5: advisory
+
+  - id: context_billing_charge_flow
+    class: contextual
+    query: how does a customer payment issue get handled
+    expected_files:
+      - corpus/finance/billing_policy.md
+    relevant_files:
+      - corpus/finance/billing_policy.md
+      - corpus/finance/invoice_4421.txt
+    assertions:
+      recall_at_5: advisory
+
+  - id: context_auth_timeout
+    class: contextual
+    query: when should a user be asked to sign in again
+    expected_files:
+      - corpus/engineering/auth_session_policy.txt
+    relevant_files:
+      - corpus/engineering/auth_session_policy.txt
+      - corpus/engineering/jwt_expiry_runbook.md
+    assertions:
+      recall_at_5: advisory
+
+  - id: hybrid_ev6_battery_warranty
+    class: hybrid
+    query: EV6 battery warranty
+    expected_files:
+      - corpus/vehicles/ev6_battery_warranty.md
+    relevant_files:
+      - corpus/vehicles/ev6_battery_warranty.md
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    assertions:
+      recall_at_5: true
+      first_expected_rank_lte: 2
+
+  - id: hybrid_ev6_charging
+    class: hybrid
+    query: EV6 fast charging limit
+    expected_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_battery_warranty.md
+    relevant_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_battery_warranty.md
+      - corpus/vehicles/charging_overview.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    assertions:
+      recall_at_5: true
+      literal_match_tokens: ["EV6"]
+      literal_match_rank_lte: 2
+
+  - id: hybrid_jwt_session_timeout
+    class: hybrid
+    query: JWT session timeout policy
+    expected_files:
+      - corpus/engineering/jwt_expiry_runbook.md
+      - corpus/engineering/auth_session_policy.txt
+    relevant_files:
+      - corpus/engineering/jwt_expiry_runbook.md
+      - corpus/engineering/auth_session_policy.txt
+    assertions:
+      recall_at_5: true
+      first_expected_rank_lte: 3
+
+  - id: filter_ev6_txt
+    class: filtered
+    query: EV6
+    filters:
+      extensions: [".txt"]
+    expected_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    relevant_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    assertions:
+      filters_respected: true
+      recall_at_5: true
+
+  - id: filter_ev6_md
+    class: filtered
+    query: EV6
+    filters:
+      extensions: [".md"]
+    expected_files:
+      - corpus/vehicles/ev6_battery_warranty.md
+    relevant_files:
+      - corpus/vehicles/ev6_battery_warranty.md
+    forbidden_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    assertions:
+      filters_respected: true
+      recall_at_5: true
+
+  - id: filter_billing_md
+    class: filtered
+    query: customer payment issue
+    filters:
+      extensions: [".md"]
+    expected_files:
+      - corpus/finance/billing_policy.md
+    relevant_files:
+      - corpus/finance/billing_policy.md
+    assertions:
+      filters_respected: true
+      recall_at_5: true
+
+  - id: filter_multi_extension
+    class: filtered
+    query: policy
+    filters:
+      extensions: [".txt", ".md"]
+    expected_files:
+      - corpus/finance/billing_policy.md
+      - corpus/engineering/auth_session_policy.txt
+    relevant_files:
+      - corpus/finance/billing_policy.md
+      - corpus/engineering/auth_session_policy.txt
+      - corpus/engineering/jwt_expiry_runbook.md
+    assertions:
+      filters_respected: true
+      recall_at_5: true
+
+  - id: crowding_ev6_unique_files
+    class: chunk_crowding
+    query: EV6
+    expected_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    relevant_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_battery_warranty.md
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    assertions:
+      min_unique_files_at_5: 2
+      recall_at_5: true
+
+  - id: crowding_ev6_txt_unique_files
+    class: chunk_crowding
+    query: EV6
+    filters:
+      extensions: [".txt"]
+    expected_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    relevant_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    assertions:
+      filters_respected: true
+      min_unique_files_at_5: 2
+      recall_at_5: true
+
+  - id: negative_banana_ev6
+    class: negative
+    query: EV6
+    expected_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+    forbidden_files:
+      - corpus/noise/banana_bread_recipe.txt
+      - corpus/noise/random_meeting_notes.md
+    assertions:
+      forbidden_at_5_eq: 0
+
+  - id: negative_invoice_vehicle
+    class: negative
+    query: "invoice #4421"
+    expected_files:
+      - corpus/finance/invoice_4421.txt
+    forbidden_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_battery_warranty.md
+      - corpus/vehicles/niro_service_bulletin.txt
+      - corpus/vehicles/charging_overview.txt
+    assertions:
+      first_expected_rank_lte: 2
+
+  - id: negative_unknown_identifier
+    class: negative
+    query: ZXQ-000-NOT-REAL
+    expected_files: []
+    relevant_files: []
+    assertions:
+      no_confident_literal_match: advisory
+
+  - id: crowding_ev6_grouped
+    class: chunk_crowding
+    query: EV6
+    group_by_document: true
+    expected_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    relevant_files:
+      - corpus/vehicles/ev6_owner_notes.txt
+      - corpus/vehicles/ev6_battery_warranty.md
+      - corpus/vehicles/ev6_chunk_crowding.txt
+    assertions:
+      min_unique_files_at_5: 2
+      recall_at_5: true

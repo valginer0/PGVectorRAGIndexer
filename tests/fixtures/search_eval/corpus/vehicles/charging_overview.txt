@@ -1,0 +1,12 @@
+Electric Vehicle Charging Overview
+
+Charging performance depends on battery temperature, station power, cable
+rating, and the vehicle charging curve. Drivers should not expect the peak rate
+to continue through the entire charging session.
+
+For highway trips, the practical goal is often to add enough range for the next
+stop rather than charging to 100 percent. Charging from a low state of charge to
+roughly 80 percent is usually faster than waiting for a full battery.
+
+This overview is useful context for charging questions, but it deliberately does
+not name a specific model code.

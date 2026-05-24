@@ -1,0 +1,15 @@
+EV6 Owner Notes
+
+The EV6 is assigned to the compact electric crossover fleet. These notes cover
+charging habits, winter range observations, and driver reminders collected from
+ordinary use.
+
+For long trips, the EV6 should start with at least 80 percent battery when the
+route includes highway driving and cold weather. Drivers reported that cabin
+preconditioning before departure improved comfort without a large range penalty.
+
+Fast charging works best when the battery is warm. The owner notes recommend
+planning a short warm-up drive before using a high-power DC charger in winter.
+
+The tire-pressure reminder is unrelated to warranty coverage. It appears here
+because several EV6 drivers confused the maintenance alert with a battery issue.

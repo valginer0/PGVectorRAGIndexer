@@ -172,7 +172,7 @@ if (-not $Python) {
     Write-Fail "Do NOT use Anaconda or Miniconda."
     exit 1
 }
-$Results["python_exe"] = $Python
+$ResolvedPythonExe = $Python
 
 # ---------------------------------------------------------------------------
 # Create / reuse clean venv
@@ -479,7 +479,7 @@ Duration: $Duration minutes
 | Item | Value |
 |------|-------|
 | Python | $PythonVer |
-| Python exe | $($Results["python_exe"]) |
+| Python exe | $ResolvedPythonExe |
 | LanceDB | $LanceVer |
 | PySide6 | $PySide6Ver |
 | torch (CPU) | $TorchVer |

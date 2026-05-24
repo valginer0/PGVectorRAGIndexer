@@ -429,6 +429,8 @@ class LocalLanceDBEngine:
         metric = getattr(query, "metric", None)
         if callable(metric):
             query = metric(VECTOR_METRIC)
+        else:  # pragma: no cover - current pinned LanceDB exposes metric()
+            LOGGER.debug("LanceDB query builder has no metric(); default vector metric will be used")
         return query
 
     @staticmethod

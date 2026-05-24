@@ -8,6 +8,7 @@ pytest.importorskip("lancedb")
 pytest.importorskip("pyarrow")
 
 from desktop_app.lancedb_engine import (  # noqa: E402
+    CHUNK_TABLE,
     EmbeddingModelError,
     LocalDocument,
     LocalLanceDBEngine,
@@ -40,6 +41,15 @@ class ZeroVectorEmbedder:
 
     def encode(self, text: str) -> list[float]:
         return [0.0, 0.0, 0.0]
+
+
+class AxisEmbedder:
+    @property
+    def dimension(self) -> int:
+        return 2
+
+    def encode(self, text: str) -> list[float]:
+        return [0.0, 1.0] if "beta" in (text or "").lower() else [1.0, 0.0]
 
 
 def sample_documents() -> list[LocalDocument]:
@@ -104,6 +114,28 @@ def test_parent_child_scopes_away_flat_global_noise(tmp_path):
     assert telemetry.matched_parents == ["docs/ev6_service.txt"]
     assert parent_results
     assert all(result.source_uri == "docs/ev6_service.txt" for result in parent_results)
+
+
+def test_vector_search_uses_cosine_metric(tmp_path):
+    engine = LocalLanceDBEngine(tmp_path / "lancedb", embedder=AxisEmbedder())
+    engine.ingest_documents(
+        [
+            LocalDocument(source_uri="docs/alpha.txt", text="alpha"),
+            LocalDocument(source_uri="docs/beta.txt", text="beta"),
+        ],
+        chunk_size=400,
+    )
+
+    rows = (
+        engine._vector_search(engine.db.open_table(CHUNK_TABLE), [1.0, 0.0])
+        .limit(2)
+        .to_arrow()
+        .to_pylist()
+    )
+    distances = {row["source_uri"]: row["_distance"] for row in rows}
+
+    assert distances["docs/alpha.txt"] == pytest.approx(0.0)
+    assert distances["docs/beta.txt"] == pytest.approx(1.0)
 
 
 def test_zero_vector_embeddings_are_rejected(tmp_path):

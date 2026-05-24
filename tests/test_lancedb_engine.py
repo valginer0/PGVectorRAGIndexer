@@ -66,13 +66,12 @@ def sample_documents() -> list[LocalDocument]:
 
 
 def test_ingests_reopens_and_searches_parent_child(tmp_path):
-    engine = LocalLanceDBEngine(tmp_path / "lancedb", embedder=KeywordEmbedder())
+    with LocalLanceDBEngine(tmp_path / "lancedb", embedder=KeywordEmbedder()) as engine:
+        stats = engine.ingest_documents(sample_documents(), chunk_size=400)
 
-    stats = engine.ingest_documents(sample_documents(), chunk_size=400)
-
-    assert stats.source_count == 3
-    assert stats.chunk_count == 3
-    assert engine.is_indexed()
+        assert stats.source_count == 3
+        assert stats.chunk_count == 3
+        assert engine.is_indexed()
 
     reopened = LocalLanceDBEngine(tmp_path / "lancedb", embedder=KeywordEmbedder())
     assert reopened.is_indexed()
@@ -84,6 +83,7 @@ def test_ingests_reopens_and_searches_parent_child(tmp_path):
     )
 
     assert results
+    assert results[0].score_label.startswith("Cosine similarity:")
     assert telemetry.query_type == "parent_child"
     assert telemetry.matched_parents == ["docs/ev6_service.txt"]
     assert {result.source_uri for result in results} == {"docs/ev6_service.txt"}
@@ -111,6 +111,13 @@ def test_zero_vector_embeddings_are_rejected(tmp_path):
 
     with pytest.raises(EmbeddingModelError, match="all-zero vector"):
         engine.ingest_documents([LocalDocument(source_uri="docs/a.txt", text="EV6 battery")])
+
+
+def test_empty_document_text_is_rejected_before_embedding(tmp_path):
+    engine = LocalLanceDBEngine(tmp_path / "lancedb", embedder=ZeroVectorEmbedder())
+
+    with pytest.raises(ValueError, match="document text"):
+        engine.ingest_documents([LocalDocument(source_uri="docs/blank.txt", text="  \n ")])
 
 
 def test_split_text_uses_stable_overlap():

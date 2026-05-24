@@ -8,6 +8,7 @@ shape: parent-document FTS first, child-chunk vector search second.
 from __future__ import annotations
 
 import hashlib
+import logging
 import math
 import re
 import time
@@ -20,6 +21,10 @@ PARENT_TABLE = "parent_documents"
 CHUNK_TABLE = "document_chunks"
 DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_EMBEDDING_DIM = 384
+VECTOR_METRIC = "cosine"
+MIN_VECTOR_INDEX_ROWS = 256
+
+LOGGER = logging.getLogger(__name__)
 
 
 class LanceDBEngineError(RuntimeError):
@@ -179,12 +184,31 @@ class LocalLanceDBEngine:
         self._lancedb, self._pa = _load_lancedb_dependencies()
         self.db_path.mkdir(parents=True, exist_ok=True)
         self.db = self._lancedb.connect(str(self.db_path))
+        self._closed = False
+
+    def __enter__(self) -> "LocalLanceDBEngine":
+        return self
+
+    def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Release the LanceDB connection if the installed version exposes close()."""
+        if self._closed:
+            return
+        db = self.db
+        close = getattr(db, "close", None)
+        if callable(close):
+            close()
+        self.db = None
+        self._closed = True
 
     @property
     def embedding_dimension(self) -> int:
         return self.embedder.dimension
 
     def table_names(self) -> list[str]:
+        self._ensure_open()
         if hasattr(self.db, "list_tables"):
             tables = self.db.list_tables()
             if hasattr(tables, "tables"):
@@ -207,6 +231,7 @@ class LocalLanceDBEngine:
         mode: str = "overwrite",
     ) -> IngestionStats:
         """Ingest local document text into parent and child LanceDB tables."""
+        self._ensure_open()
         if not documents:
             raise ValueError("documents must not be empty")
         if mode != "overwrite":
@@ -219,7 +244,7 @@ class LocalLanceDBEngine:
         for doc in documents:
             chunks = split_text(doc.text, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
             if not chunks:
-                chunks = [""]
+                raise ValueError(f"document text must not be empty: {doc.source_uri}")
             parent_rows.append(
                 {
                     "source_uri": doc.source_uri,
@@ -251,6 +276,7 @@ class LocalLanceDBEngine:
         )
         self._create_fts_index(parent_table, "aggregated_text")
         self._create_fts_index(chunk_table, "text_content")
+        self._create_vector_index(chunk_table, row_count=len(chunk_rows))
         return IngestionStats(
             source_count=len(parent_rows),
             chunk_count=len(chunk_rows),
@@ -265,6 +291,7 @@ class LocalLanceDBEngine:
         rrf_k: int = 60,
     ) -> tuple[list[SearchResult], SearchTelemetry]:
         """Compare against a flat global FTS/vector RRF search."""
+        self._ensure_open()
         self._ensure_indexed()
         self._validate_search_args(query, top_k)
         start = time.perf_counter()
@@ -277,7 +304,7 @@ class LocalLanceDBEngine:
         t1 = time.perf_counter()
         query_vector = self._encode(query)
         vector_rows = (
-            chunks.search(query_vector, vector_column_name="embedding")
+            self._vector_search(chunks, query_vector)
             .limit(top_k * 2)
             .to_arrow()
             .to_pylist()
@@ -291,7 +318,8 @@ class LocalLanceDBEngine:
             scores[int(row["chunk_id"])] = scores.get(int(row["chunk_id"]), 0.0) + 1.0 / (rrf_k + rank)
 
         by_chunk_id: dict[int, dict[str, Any]] = {}
-        for row in vector_rows + fts_rows:
+        # Vector rows win if duplicate LanceDB result metadata ever diverges.
+        for row in fts_rows + vector_rows:
             by_chunk_id[int(row["chunk_id"])] = row
 
         ranked_rows = sorted(
@@ -324,6 +352,7 @@ class LocalLanceDBEngine:
         child_limit: int = 10,
     ) -> tuple[list[SearchResult], SearchTelemetry]:
         """Search parent documents with FTS, then child chunks with vector search."""
+        self._ensure_open()
         self._ensure_indexed()
         self._validate_search_args(query, child_limit)
         if parent_limit <= 0:
@@ -351,7 +380,7 @@ class LocalLanceDBEngine:
             t1 = time.perf_counter()
             query_vector = self._encode(query)
             child_rows = (
-                chunks.search(query_vector, vector_column_name="embedding")
+                self._vector_search(chunks, query_vector)
                 .where(filter_clause)
                 .limit(child_limit)
                 .to_arrow()
@@ -362,8 +391,8 @@ class LocalLanceDBEngine:
                 self._result_from_row(
                     row,
                     rank=rank,
-                    score=1.0 - float(row.get("_distance", 1.0)),
-                    score_label=f"Cosine similarity: {1.0 - float(row.get('_distance', 1.0)):.4f}",
+                    score=self._cosine_similarity(row),
+                    score_label=self._cosine_score_label(row),
                     parent_rank=parent_ranks.get(str(row["source_uri"])),
                 )
                 for rank, row in enumerate(child_rows, 1)
@@ -383,12 +412,33 @@ class LocalLanceDBEngine:
         )
         return results, telemetry
 
+    def _ensure_open(self) -> None:
+        if self._closed:
+            raise LanceDBEngineError("LanceDB engine is closed")
+
     def _ensure_indexed(self) -> None:
         if not self.is_indexed():
             raise LanceDBEngineError("LanceDB index is not ready; ingest documents first")
 
     def _encode(self, text: str) -> list[float]:
         return _validate_embedding(self.embedder.encode(text), self.embedding_dimension)
+
+    @staticmethod
+    def _vector_search(table: Any, query_vector: list[float]) -> Any:
+        query = table.search(query_vector, vector_column_name="embedding")
+        metric = getattr(query, "metric", None)
+        if callable(metric):
+            query = metric(VECTOR_METRIC)
+        return query
+
+    @staticmethod
+    def _cosine_similarity(row: dict[str, Any]) -> float:
+        return 1.0 - float(row.get("_distance", 1.0))
+
+    @classmethod
+    def _cosine_score_label(cls, row: dict[str, Any]) -> str:
+        distance = float(row.get("_distance", 1.0))
+        return f"Cosine similarity: {cls._cosine_similarity(row):.4f} (distance: {distance:.4f})"
 
     @staticmethod
     def _validate_search_args(query: str, limit: int) -> None:
@@ -427,6 +477,19 @@ class LocalLanceDBEngine:
             table.create_fts_index(column, replace=True)
         except TypeError:
             table.create_fts_index(column)
+
+    @staticmethod
+    def _create_vector_index(table: Any, *, row_count: int) -> None:
+        if row_count < MIN_VECTOR_INDEX_ROWS:
+            return
+        try:
+            table.create_index(
+                metric=VECTOR_METRIC,
+                vector_column_name="embedding",
+                replace=True,
+            )
+        except Exception as exc:  # pragma: no cover - index remains an optimization
+            LOGGER.debug("Could not create LanceDB vector index: %s", exc)
 
     @staticmethod
     def _quote_lancedb_string(value: str) -> str:

@@ -177,8 +177,9 @@ if (-not (Test-Path $VenvDir)) {
     Write-Info "Delete $VenvDir manually to force a full reinstall"
 }
 
-# Upgrade pip silently
-& $VenvPip install --upgrade pip --quiet
+# Upgrade pip silently. On Windows, pip refuses to upgrade itself when invoked
+# through pip.exe; use python -m pip instead.
+& $VenvPython -m pip install --upgrade pip --quiet
 
 # ---------------------------------------------------------------------------
 # Install dependencies
@@ -199,7 +200,7 @@ $Packages = @(
 
 foreach ($pkg in $Packages) {
     Write-Info "Installing $($pkg.name) ..."
-    & $VenvPip @($pkg.args) 2>&1 | Out-Null
+    & $VenvPython -m pip @($pkg.args) 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Fail "Failed to install $($pkg.name)"
         $Results["install_$($pkg.name)"] = "FAIL"

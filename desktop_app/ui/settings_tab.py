@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 import qtawesome as qta
 from PySide6.QtCore import QThread, Signal, QSize, Qt
 from desktop_app.ui.styles.theme import Theme
-from desktop_app.ui.workers import StatsWorker
+from desktop_app.ui.workers import LocalLanceDBIngestWorker, StatsWorker
 from desktop_app.controllers.settings_controller import SettingsController
 from desktop_app.utils.controller_result import ControllerResult, UiAction, BackendSaveData, MessageSeverity
 
@@ -36,6 +36,7 @@ class SettingsTab(QWidget):
         self.controller = SettingsController(api_client=self.api_client)
 
         self.stats_worker = None
+        self._local_lancedb_ingest_worker = None
         self.setup_ui()
 
     def showEvent(self, event):
@@ -351,15 +352,83 @@ class SettingsTab(QWidget):
         )
         vbox.addWidget(self._document_level_search_checkbox)
 
+        self._local_lancedb_search_checkbox = QCheckBox(
+            "Use experimental local LanceDB search"
+        )
+        self._local_lancedb_search_checkbox.setChecked(
+            app_config.get_local_lancedb_search_enabled()
+        )
+        self._local_lancedb_search_checkbox.setToolTip(
+            "Searches the local LanceDB index folder instead of the backend API."
+        )
+        self._local_lancedb_search_checkbox.toggled.connect(
+            app_config.set_local_lancedb_search_enabled
+        )
+        vbox.addWidget(self._local_lancedb_search_checkbox)
+
+        path_label = QLabel(f"Local index: {app_config.get_local_lancedb_db_path()}")
+        path_label.setWordWrap(True)
+        path_label.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
+        vbox.addWidget(path_label)
+
+        self._local_lancedb_index_btn = QPushButton("Build Local Text Index")
+        self._local_lancedb_index_btn.setIcon(qta.icon("fa5s.database", color="white"))
+        self._local_lancedb_index_btn.setMinimumHeight(34)
+        self._local_lancedb_index_btn.clicked.connect(self._build_local_lancedb_index)
+        vbox.addWidget(self._local_lancedb_index_btn)
+
+        self._local_lancedb_status = QLabel("")
+        self._local_lancedb_status.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
+        vbox.addWidget(self._local_lancedb_status)
+
         desc = QLabel(
             "Default search behavior is unchanged when this is off. "
-            "This option is for validating backend document grouping."
+            "These options are for validating V2 search experiments."
         )
         desc.setWordWrap(True)
         desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
         vbox.addWidget(desc)
 
         parent_layout.addWidget(group)
+
+    def _build_local_lancedb_index(self):
+        """Build the experimental local LanceDB text index from a folder."""
+        from desktop_app.utils import app_config
+
+        folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select Folder for Local Text Index",
+            str(Path.home()),
+        )
+        if not folder:
+            return
+
+        self._local_lancedb_index_btn.setEnabled(False)
+        self._local_lancedb_status.setText("Building local text index...")
+        self._local_lancedb_status.setStyleSheet(f"color: {Theme.PRIMARY}; font-size: 12px;")
+
+        self._local_lancedb_ingest_worker = LocalLanceDBIngestWorker(
+            [Path(folder)],
+            app_config.get_local_lancedb_db_path(),
+        )
+        self._local_lancedb_ingest_worker.finished.connect(self._local_lancedb_ingest_finished)
+        self._local_lancedb_ingest_worker.start()
+
+    def _local_lancedb_ingest_finished(self, success: bool, data):
+        self._local_lancedb_index_btn.setEnabled(True)
+        if success:
+            indexed = data.get("indexed_documents", 0)
+            chunks = data.get("chunk_count", 0)
+            skipped = len(data.get("skipped_files", []))
+            self._local_lancedb_status.setText(
+                f"Indexed {indexed} document{'s' if indexed != 1 else ''}, "
+                f"{chunks} chunk{'s' if chunks != 1 else ''}; skipped {skipped}."
+            )
+            self._local_lancedb_status.setStyleSheet(f"color: {Theme.SUCCESS}; font-size: 12px;")
+        else:
+            QMessageBox.critical(self, "Local Index Failed", f"Local indexing failed: {data}")
+            self._local_lancedb_status.setText("Local indexing failed")
+            self._local_lancedb_status.setStyleSheet(f"color: {Theme.ERROR}; font-size: 12px;")
 
     # ------------------------------------------------------------------
     # Setup wizard panel (#18)

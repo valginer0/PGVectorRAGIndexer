@@ -132,3 +132,22 @@ def get_document_level_search_enabled() -> bool:
 
 def set_document_level_search_enabled(enabled: bool) -> None:
     set("document_level_search_enabled", bool(enabled))
+
+
+def get_local_lancedb_search_enabled() -> bool:
+    """Return whether desktop search should use the local LanceDB index."""
+    return bool(get("local_lancedb_search_enabled", False))
+
+
+def set_local_lancedb_search_enabled(enabled: bool) -> None:
+    set("local_lancedb_search_enabled", bool(enabled))
+
+
+def get_local_lancedb_db_path() -> str:
+    """Return the local LanceDB index directory for desktop experiments."""
+    default_path = _get_config_dir() / "lancedb_index"
+    return str(get("local_lancedb_db_path", str(default_path)))
+
+
+def set_local_lancedb_db_path(path: str | Path) -> None:
+    set("local_lancedb_db_path", str(path))

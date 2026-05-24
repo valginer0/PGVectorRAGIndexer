@@ -24,6 +24,8 @@ from desktop_app.utils.app_config import (
     get_backend_url, set_backend_url,
     get_api_key, set_api_key,
     is_remote_mode,
+    get_local_lancedb_db_path, set_local_lancedb_db_path,
+    get_local_lancedb_search_enabled, set_local_lancedb_search_enabled,
     BACKEND_MODE_LOCAL, BACKEND_MODE_REMOTE, DEFAULT_LOCAL_URL,
 )
 
@@ -131,6 +133,23 @@ class TestApiKey:
         set_api_key("pgv_abc123")
         set_api_key(None)
         assert get_api_key() is None
+
+
+class TestLocalLanceDBSearch:
+    def test_default_is_disabled(self, config_dir):
+        assert get_local_lancedb_search_enabled() is False
+
+    def test_set_enabled(self, config_dir):
+        set_local_lancedb_search_enabled(True)
+        assert get_local_lancedb_search_enabled() is True
+
+    def test_default_db_path_lives_in_config_dir(self, config_dir):
+        assert get_local_lancedb_db_path() == str(config_dir / "lancedb_index")
+
+    def test_custom_db_path(self, config_dir, tmp_path):
+        custom = tmp_path / "custom-lancedb"
+        set_local_lancedb_db_path(custom)
+        assert get_local_lancedb_db_path() == str(custom)
 
 
 # ===========================================================================

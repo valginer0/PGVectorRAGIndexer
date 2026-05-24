@@ -270,26 +270,49 @@ if ($Gate1bPass) {
 $Gate1Pass = $Gate1aPass -and $Gate1bPass
 
 # ---------------------------------------------------------------------------
-# Gate 2: Source prototype headless run
+# Gate 2: Source prototype headless run (zero-vector fallback is a FAIL)
 # ---------------------------------------------------------------------------
 Write-Gate "Gate 2: Source prototype headless run"
 
-$ProtoScript = Join-Path $RepoRoot "scripts\lancedb_pyside6_prototype.py"
+$ProtoScript  = Join-Path $RepoRoot "scripts\lancedb_pyside6_prototype.py"
 $ProtoLanceDir = Join-Path $ValidationDir "lancedb_data"
+
+# These strings appear in stderr when sentence-transformers fails to load and
+# the prototype silently falls back to zero vectors. A run that exits 0 but
+# emits either string must be treated as a failure.
+$ZeroVectorMarkers = @(
+    "Falling back to zero-vector representations",
+    "sentence_transformers could not be loaded"
+)
+
+function Test-ZeroVectorFallback {
+    param([string[]]$Output)
+    foreach ($marker in $ZeroVectorMarkers) {
+        if ($Output -match [regex]::Escape($marker)) { return $true }
+    }
+    return $false
+}
 
 if ($Gate1Pass) {
     $ProtoOutput = & $VenvPython $ProtoScript `
         --headless `
         --search "EV6 battery troubleshooting" `
         --lance-path $ProtoLanceDir 2>&1
-    $Gate2Pass = $LASTEXITCODE -eq 0
+    $ExitedClean = $LASTEXITCODE -eq 0
+    $UsedFallback = Test-ZeroVectorFallback $ProtoOutput
+    $Gate2Pass = $ExitedClean -and -not $UsedFallback
     if ($Gate2Pass) {
-        Write-Pass "Headless run exited cleanly"
+        Write-Pass "Headless run exited cleanly with real embedding model"
         $Results["gate2_source_run"] = "PASS"
+    } elseif ($UsedFallback) {
+        Write-Fail "Headless run used zero-vector fallback — embedding model failed inside prototype"
+        $ProtoOutput | Where-Object { $_ -match "zero-vector|sentence_transformers" } |
+            ForEach-Object { Write-Info $_ }
+        $Results["gate2_source_run"] = "FAIL: zero-vector fallback detected"
     } else {
-        Write-Fail "Headless run failed:"
+        Write-Fail "Headless run failed (exit code non-zero):"
         $ProtoOutput | Select-Object -Last 20 | ForEach-Object { Write-Info $_ }
-        $Results["gate2_source_run"] = "FAIL"
+        $Results["gate2_source_run"] = "FAIL: non-zero exit"
     }
 } else {
     Write-Info "Skipped (Gate 1 failed)"
@@ -342,7 +365,7 @@ if ($Gate2Pass) {
 }
 
 # ---------------------------------------------------------------------------
-# Gate 4: Frozen exe headless run
+# Gate 4: Frozen exe headless run (zero-vector fallback is a FAIL)
 # ---------------------------------------------------------------------------
 Write-Gate "Gate 4: Frozen exe headless run"
 
@@ -352,14 +375,23 @@ if ($Gate3Pass) {
         --headless `
         --search "EV6 battery troubleshooting" `
         --lance-path $FrozenLanceDir 2>&1
-    $Gate4Pass = $LASTEXITCODE -eq 0
+    $ExitedClean  = $LASTEXITCODE -eq 0
+    $UsedFallback = Test-ZeroVectorFallback $FrozenOutput
+    $Gate4Pass = $ExitedClean -and -not $UsedFallback
     if ($Gate4Pass) {
-        Write-Pass "Frozen exe ran headlessly and exited cleanly"
+        Write-Pass "Frozen exe ran headlessly with real embedding model"
         $Results["gate4_frozen_run"] = "PASS"
+    } elseif ($UsedFallback) {
+        # This is the critical case: PyInstaller froze source correctly but
+        # sentence-transformers or its data files were not bundled properly.
+        Write-Fail "Frozen exe used zero-vector fallback — model not properly bundled by PyInstaller"
+        $FrozenOutput | Where-Object { $_ -match "zero-vector|sentence_transformers" } |
+            ForEach-Object { Write-Info $_ }
+        $Results["gate4_frozen_run"] = "FAIL: zero-vector fallback in frozen exe (bundling incomplete)"
     } else {
-        Write-Fail "Frozen exe failed:"
+        Write-Fail "Frozen exe failed (exit code non-zero):"
         $FrozenOutput | Select-Object -Last 20 | ForEach-Object { Write-Info $_ }
-        $Results["gate4_frozen_run"] = "FAIL: $($FrozenOutput | Select-Object -Last 5)"
+        $Results["gate4_frozen_run"] = "FAIL: non-zero exit"
     }
 } else {
     Write-Info "Skipped (Gate 3 failed)"
@@ -418,9 +450,9 @@ $($ResultsMd -join "`n")
 
 - **Gate 1a** Import check: torch, transformers, sentence_transformers, lancedb, pyarrow, PySide6
 - **Gate 1b** Embedding model: load ``SentenceTransformer("all-MiniLM-L6-v2")``, encode one sentence, verify 384-dim non-zero vector (catches zero-vector fallback masking a real model failure)
-- **Gate 2** Source prototype: ``lancedb_pyside6_prototype.py --headless --search "EV6 battery troubleshooting"``
+- **Gate 2** Source prototype: ``lancedb_pyside6_prototype.py --headless --search "EV6 battery troubleshooting"`` — exits cleanly AND output must not contain zero-vector fallback markers
 - **Gate 3** PyInstaller freeze: ``--onefile --collect-all lancedb pyarrow sentence_transformers transformers``
-- **Gate 4** Frozen exe: run frozen binary headlessly with the same query
+- **Gate 4** Frozen exe: run frozen binary headlessly with same query — exits cleanly AND output must not contain zero-vector fallback markers (catches PyInstaller bundling incomplete sentence-transformers data)
 
 ## How to Re-run
 

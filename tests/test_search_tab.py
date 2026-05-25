@@ -173,6 +173,7 @@ def test_local_lancedb_search_rejects_missing_index_metadata(search_tab, mock_ap
 
         mock_warn.assert_called_once()
         assert mock_warn.call_args.args[1] == "Local Index Not Built"
+        assert "Rebuild Local Text/Markdown Index" in mock_warn.call_args.args[2]
         MockWorker.assert_not_called()
         mock_api_client.get_health.assert_not_called()
 
@@ -190,6 +191,7 @@ def test_local_lancedb_search_rejects_missing_index_folder(search_tab, mock_api_
 
         mock_warn.assert_called_once()
         assert mock_warn.call_args.args[1] == "Local Index Missing"
+        assert "Rebuild Local Text/Markdown Index" in mock_warn.call_args.args[2]
         MockWorker.assert_not_called()
         mock_api_client.get_health.assert_not_called()
 
@@ -209,6 +211,7 @@ def test_local_lancedb_search_rejects_stale_index_metadata(search_tab, mock_api_
 
         mock_warn.assert_called_once()
         assert mock_warn.call_args.args[1] == "Local Index Needs Rebuild"
+        assert "Rebuild Local Text/Markdown Index" in mock_warn.call_args.args[2]
         MockWorker.assert_not_called()
         mock_api_client.get_health.assert_not_called()
 
@@ -227,6 +230,7 @@ def test_local_lancedb_search_rejects_incomplete_index_metadata(search_tab, mock
 
         mock_warn.assert_called_once()
         assert mock_warn.call_args.args[1] == "Local Index Needs Rebuild"
+        assert "Rebuild Local Text/Markdown Index" in mock_warn.call_args.args[2]
         MockWorker.assert_not_called()
         mock_api_client.get_health.assert_not_called()
 

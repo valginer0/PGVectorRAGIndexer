@@ -90,6 +90,7 @@ class SearchTelemetry:
     fts_time_ms: float = 0.0
     vector_time_ms: float = 0.0
     matched_parents: list[str] = field(default_factory=list)
+    matched_parent_details: list[dict[str, Any]] = field(default_factory=list)
     filter_clause: str | None = None
     explanation: str = ""
 
@@ -100,6 +101,7 @@ class SearchTelemetry:
             "fts_time_ms": self.fts_time_ms,
             "vector_time_ms": self.vector_time_ms,
             "matched_parents": self.matched_parents,
+            "matched_parent_details": self.matched_parent_details,
             "filter_clause": self.filter_clause,
             "explanation": self.explanation,
         }
@@ -370,6 +372,14 @@ class LocalLanceDBEngine:
         )
         fts_time = (time.perf_counter() - t0) * 1000
         matched_parents = [str(row["source_uri"]) for row in parent_rows]
+        matched_parent_details = [
+            {
+                "rank": rank,
+                "source_uri": str(row["source_uri"]),
+                "fts_score": float(row["_score"]) if row.get("_score") is not None else None,
+            }
+            for rank, row in enumerate(parent_rows, 1)
+        ]
         parent_ranks = {source_uri: rank for rank, source_uri in enumerate(matched_parents, 1)}
 
         vector_time = 0.0
@@ -404,6 +414,7 @@ class LocalLanceDBEngine:
             fts_time_ms=fts_time,
             vector_time_ms=vector_time,
             matched_parents=matched_parents,
+            matched_parent_details=matched_parent_details,
             filter_clause=filter_clause,
             explanation=(
                 "Document-level FTS selected parent documents; child vector search "

@@ -81,12 +81,21 @@ def test_main_accepts_query_manifest_and_retrieval_limits(tmp_path):
             "result_files": ["ev6_service.txt"],
             "unique_result_files": ["ev6_service.txt"],
             "matched_parent_files": ["ev6_service.txt"],
+            "matched_parent_details": [
+                {
+                    "rank": 1,
+                    "source_uri": output["queries"][0]["matched_parent_details"][0]["source_uri"],
+                    "fts_score": output["queries"][0]["matched_parent_details"][0]["fts_score"],
+                    "file_name": "ev6_service.txt",
+                }
+            ],
             "missing_expected_files": [],
             "unexpected_files": [],
             "query_ms": output["queries"][0]["query_ms"],
             "passed": True,
         }
     ]
+    assert isinstance(output["queries"][0]["matched_parent_details"][0]["fts_score"], float)
 
 
 def test_load_query_specs_rejects_invalid_manifest(tmp_path):
@@ -115,11 +124,30 @@ def test_print_summary_includes_timing_fields(capsys):
         "embedder": {"mode": "hashing", "load_ms": 1.5},
         "ingestion": {"indexed_documents": 2, "chunk_count": 3, "ingest_ms": 12.0},
         "queries": [
-            {"id": "ev6", "passed": True, "result_files": ["ev6.txt"], "query_ms": 4.0}
+            {
+                "id": "ev6",
+                "passed": True,
+                "result_files": ["ev6.txt"],
+                "matched_parent_details": [
+                    {"file_name": "ev6.txt", "rank": 1, "fts_score": 6.3717}
+                ],
+                "query_ms": 4.0,
+            }
         ],
         "total_ms": 20.0,
     })
 
     output = capsys.readouterr().out
     assert "Embedder        : hashing (1.5 ms)" in output
+    assert "top parent: ev6.txt (score: 6.3717)" in output
     assert "Total runtime   : 20.0 ms" in output
+
+
+def test_top_parent_summary_handles_missing_score():
+    validator = load_validation_module()
+
+    assert validator.top_parent_summary({
+        "matched_parent_details": [
+            {"source_uri": "/docs/invoice_4421.txt", "rank": 1, "fts_score": None}
+        ]
+    }) == "invoice_4421.txt (score: n/a)"

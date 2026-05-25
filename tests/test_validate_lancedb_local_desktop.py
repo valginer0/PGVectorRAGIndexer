@@ -44,6 +44,60 @@ def test_main_writes_local_lancedb_validation_json(tmp_path):
     assert output["queries"][0]["result_files"] == ["ev6_service.txt"]
 
 
+def test_main_accepts_query_manifest_and_retrieval_limits(tmp_path):
+    validator = load_validation_module()
+    output_path = tmp_path / "validation.json"
+    manifest_path = tmp_path / "queries.json"
+    manifest_path.write_text(
+        json.dumps([
+            {
+                "id": "ev6_manifest",
+                "query": "EV6 battery diagnostic",
+                "expected_files": ["ev6_service.txt"],
+                "allow_extra_results": True,
+            }
+        ]),
+        encoding="utf-8",
+    )
+
+    status = validator.main([
+        "--embedder", "hashing",
+        "--queries-json", str(manifest_path),
+        "--parent-limit", "1",
+        "--child-limit", "4",
+        "--output-json", str(output_path),
+    ])
+
+    assert status == 0
+    output = json.loads(output_path.read_text(encoding="utf-8"))
+    assert output["passed"] is True
+    assert output["retrieval"] == {"parent_limit": 1, "child_limit": 4}
+    assert output["queries"] == [
+        {
+            "id": "ev6_manifest",
+            "query": "EV6 battery diagnostic",
+            "expected_files": ["ev6_service.txt"],
+            "allow_extra_results": True,
+            "result_files": ["ev6_service.txt"],
+            "unique_result_files": ["ev6_service.txt"],
+            "matched_parent_files": ["ev6_service.txt"],
+            "missing_expected_files": [],
+            "unexpected_files": [],
+            "query_ms": output["queries"][0]["query_ms"],
+            "passed": True,
+        }
+    ]
+
+
+def test_load_query_specs_rejects_invalid_manifest(tmp_path):
+    validator = load_validation_module()
+    manifest_path = tmp_path / "queries.json"
+    manifest_path.write_text(json.dumps([{"id": "missing_query"}]), encoding="utf-8")
+
+    with pytest.raises(SystemExit, match="non-empty string query"):
+        validator.load_query_specs(manifest_path)
+
+
 def test_dedupe_preserving_order_keeps_first_file_occurrence():
     validator = load_validation_module()
 

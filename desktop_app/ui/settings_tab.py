@@ -429,8 +429,13 @@ class SettingsTab(QWidget):
             [Path(folder)],
             db_path,
         )
+        self._local_lancedb_ingest_worker.progress.connect(self._local_lancedb_ingest_progress)
         self._local_lancedb_ingest_worker.finished.connect(self._local_lancedb_ingest_finished)
         self._local_lancedb_ingest_worker.start()
+
+    def _local_lancedb_ingest_progress(self, message: str):
+        self._local_lancedb_status.setText(message)
+        self._local_lancedb_status.setStyleSheet(f"color: {Theme.PRIMARY}; font-size: 12px;")
 
     def _local_lancedb_ingest_finished(self, success: bool, data):
         self._local_lancedb_index_btn.setEnabled(True)

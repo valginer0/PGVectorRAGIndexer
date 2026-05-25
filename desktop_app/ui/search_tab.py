@@ -380,8 +380,13 @@ class SearchTab(QWidget):
             db_path,
         )
         self.search_worker.setProperty("one_result_per_file", True)
+        self.search_worker.progress.connect(self._local_lancedb_search_progress)
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
+
+    def _local_lancedb_search_progress(self, message: str) -> None:
+        self.status_label.setText(message)
+        self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
     
     def search_finished(self, success: bool, data):
         """Handle search completion."""

@@ -11,6 +11,7 @@ _LANCEDB_EMBEDDER_CACHE = {}
 _LANCEDB_EMBEDDER_LOCK = threading.Lock()
 _LANCEDB_ACCESS_LOCKS = {}
 _LANCEDB_ACCESS_LOCKS_LOCK = threading.Lock()
+LOCAL_LANCEDB_PARENT_LIMIT = 3
 
 
 def get_lancedb_embedder(model_name=None):
@@ -140,6 +141,7 @@ def format_lancedb_search_results(results) -> list[dict]:
 class LocalLanceDBSearchWorker(QThread):
     """Worker thread for experimental local LanceDB searches."""
     finished = Signal(bool, object)
+    progress = Signal(str)
 
     def __init__(
         self,
@@ -147,7 +149,7 @@ class LocalLanceDBSearchWorker(QThread):
         top_k,
         db_path,
         *,
-        parent_limit=5,
+        parent_limit=LOCAL_LANCEDB_PARENT_LIMIT,
     ):
         super().__init__()
         self.query = query
@@ -159,8 +161,12 @@ class LocalLanceDBSearchWorker(QThread):
         try:
             from desktop_app.lancedb_engine import LocalLanceDBEngine
 
+            self.progress.emit("Waiting for local LanceDB index...")
             with lancedb_index_access(self.db_path):
-                with LocalLanceDBEngine(self.db_path, embedder=get_lancedb_embedder()) as engine:
+                self.progress.emit("Loading local embedding model...")
+                embedder = get_lancedb_embedder()
+                self.progress.emit("Searching local LanceDB index...")
+                with LocalLanceDBEngine(self.db_path, embedder=embedder) as engine:
                     results, _telemetry = engine.search_parent_child(
                         self.query,
                         parent_limit=self.parent_limit,
@@ -175,6 +181,7 @@ class LocalLanceDBSearchWorker(QThread):
 class LocalLanceDBIngestWorker(QThread):
     """Worker thread for building the experimental local LanceDB text index."""
     finished = Signal(bool, object)
+    progress = Signal(str)
 
     def __init__(
         self,
@@ -193,8 +200,12 @@ class LocalLanceDBIngestWorker(QThread):
             from desktop_app.lancedb_engine import LocalLanceDBEngine
             from desktop_app.lancedb_ingestion import ingest_local_text_paths
 
+            self.progress.emit("Waiting for local LanceDB index...")
             with lancedb_index_access(self.db_path):
-                with LocalLanceDBEngine(self.db_path, embedder=get_lancedb_embedder()) as engine:
+                self.progress.emit("Loading local embedding model...")
+                embedder = get_lancedb_embedder()
+                self.progress.emit("Building local text index...")
+                with LocalLanceDBEngine(self.db_path, embedder=embedder) as engine:
                     result = ingest_local_text_paths(
                         engine,
                         self.paths,

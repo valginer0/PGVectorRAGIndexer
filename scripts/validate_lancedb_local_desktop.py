@@ -13,6 +13,18 @@ Recommended native Windows run:
 Use ``--embedder hashing`` for a fast structural smoke test that does not load
 the sentence-transformers model. Use the default ``sentence-transformer`` mode
 for the real desktop validation gate.
+
+For larger local-folder validation, pass ``--corpus-dir`` with ``--queries-json``.
+The query manifest is a JSON list of objects:
+
+  [
+    {
+      "id": "ev6_battery",
+      "query": "EV6 battery diagnostic",
+      "expected_files": ["ev6_service.txt"],
+      "allow_extra_results": true
+    }
+  ]
 """
 
 from __future__ import annotations
@@ -54,6 +66,10 @@ QUERIES = [
 ]
 
 
+def default_query_specs() -> list[dict[str, Any]]:
+    return [dict(query_spec) for query_spec in QUERIES]
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -70,6 +86,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--output-json",
         type=Path,
         help="Optional path for JSON validation output.",
+    )
+    parser.add_argument(
+        "--queries-json",
+        type=Path,
+        help="Optional JSON query manifest for validating an existing corpus.",
+    )
+    parser.add_argument(
+        "--parent-limit",
+        type=int,
+        default=1,
+        help="Number of parent documents to retrieve per query.",
+    )
+    parser.add_argument(
+        "--child-limit",
+        type=int,
+        default=3,
+        help="Number of child chunks to return per query.",
     )
     parser.add_argument(
         "--embedder",
@@ -91,7 +124,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_arg_parser().parse_args(argv)
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+    if args.parent_limit < 1:
+        parser.error("--parent-limit must be at least 1")
+    if args.child_limit < 1:
+        parser.error("--child-limit must be at least 1")
+    query_specs = load_query_specs(args.queries_json) if args.queries_json else default_query_specs()
     temp_dir = Path(tempfile.mkdtemp(prefix="lancedb_local_desktop_"))
     created_temp = True
     try:
@@ -107,6 +146,9 @@ def main(argv: list[str] | None = None) -> int:
             db_path=db_path,
             embedder_name=args.embedder,
             model_name=args.model_name,
+            query_specs=query_specs,
+            parent_limit=args.parent_limit,
+            child_limit=args.child_limit,
         )
         output["temp_root"] = str(temp_dir) if args.keep else None
 
@@ -143,7 +185,13 @@ def run_validation(
     db_path: Path,
     embedder_name: str,
     model_name: str = DEFAULT_EMBEDDING_MODEL,
+    query_specs: list[dict[str, Any]] | None = None,
+    parent_limit: int = 1,
+    child_limit: int = 3,
 ) -> dict[str, Any]:
+    if query_specs is None:
+        query_specs = default_query_specs()
+
     start = time.perf_counter()
     embedder = make_embedder(embedder_name, model_name=model_name)
     embedder_loaded_ms = elapsed_ms(start)
@@ -154,37 +202,58 @@ def run_validation(
         ingest_ms = elapsed_ms(ingest_start)
 
         query_outputs = []
-        for query_spec in QUERIES:
+        for query_spec in query_specs:
             query_start = time.perf_counter()
             results, telemetry = engine.search_parent_child(
                 query_spec["query"],
-                parent_limit=1,
-                child_limit=3,
+                parent_limit=parent_limit,
+                child_limit=child_limit,
             )
             query_ms = elapsed_ms(query_start)
             result_files = [Path(result.source_uri).name for result in results]
             unique_result_files = dedupe_preserving_order(result_files)
             matched_parent_files = [Path(source).name for source in telemetry.matched_parents]
-            passed = unique_result_files == [query_spec["expected_file"]]
+            expected_files = expected_files_for_query(query_spec)
+            allow_extra_results = bool(query_spec.get("allow_extra_results", False))
+            missing_expected_files = [
+                expected_file
+                for expected_file in expected_files
+                if expected_file not in unique_result_files
+            ]
+            unexpected_files = [
+                result_file
+                for result_file in unique_result_files
+                if result_file not in expected_files
+            ]
+            passed = (
+                not missing_expected_files
+                and (allow_extra_results or not unexpected_files)
+            )
             query_outputs.append(
                 {
                     "id": query_spec["id"],
                     "query": query_spec["query"],
-                    "expected_file": query_spec["expected_file"],
+                    "expected_files": expected_files,
+                    "allow_extra_results": allow_extra_results,
                     "result_files": result_files,
                     "unique_result_files": unique_result_files,
                     "matched_parent_files": matched_parent_files,
+                    "missing_expected_files": missing_expected_files,
+                    "unexpected_files": unexpected_files,
                     "query_ms": query_ms,
                     "passed": passed,
                 }
             )
 
     skipped_reasons = [skipped.reason for skipped in ingest_result.skipped_files]
-    passed = (
-        ingest_result.indexed_documents == 2
-        and skipped_reasons == ["unsupported_extension"]
-        and all(item["passed"] for item in query_outputs)
-    )
+    using_default_corpus = query_specs == default_query_specs()
+    ingestion_passed = True
+    if using_default_corpus:
+        ingestion_passed = (
+            ingest_result.indexed_documents == 2
+            and skipped_reasons == ["unsupported_extension"]
+        )
+    passed = ingestion_passed and all(item["passed"] for item in query_outputs)
     return {
         "passed": passed,
         "environment": environment_info(),
@@ -197,6 +266,10 @@ def run_validation(
             "corpus_dir": str(corpus_dir),
             "db_path": str(db_path),
         },
+        "retrieval": {
+            "parent_limit": parent_limit,
+            "child_limit": child_limit,
+        },
         "ingestion": {
             "indexed_documents": ingest_result.indexed_documents,
             "source_count": ingest_result.stats.source_count,
@@ -207,6 +280,55 @@ def run_validation(
         "queries": query_outputs,
         "total_ms": elapsed_ms(start),
     }
+
+
+def load_query_specs(path: Path) -> list[dict[str, Any]]:
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid --queries-json: {exc}") from exc
+
+    if not isinstance(raw, list):
+        raise SystemExit("--queries-json must contain a JSON list")
+    if not raw:
+        raise SystemExit("--queries-json must contain at least one query")
+
+    query_specs = []
+    for index, item in enumerate(raw, start=1):
+        if not isinstance(item, dict):
+            raise SystemExit(f"Query #{index} must be an object")
+        query_id = item.get("id")
+        query_text = item.get("query")
+        if not isinstance(query_id, str) or not query_id.strip():
+            raise SystemExit(f"Query #{index} must include a non-empty string id")
+        if not isinstance(query_text, str) or not query_text.strip():
+            raise SystemExit(f"Query {query_id!r} must include a non-empty string query")
+        expected_files = expected_files_for_query(item)
+        if not expected_files:
+            raise SystemExit(f"Query {query_id!r} must include expected_file or expected_files")
+        query_specs.append(
+            {
+                "id": query_id,
+                "query": query_text,
+                "expected_files": expected_files,
+                "allow_extra_results": bool(item.get("allow_extra_results", False)),
+            }
+        )
+    return query_specs
+
+
+def expected_files_for_query(query_spec: dict[str, Any]) -> list[str]:
+    if "expected_files" in query_spec:
+        expected_files = query_spec["expected_files"]
+        if not isinstance(expected_files, list) or not all(
+            isinstance(value, str) and value for value in expected_files
+        ):
+            raise SystemExit("expected_files must be a non-empty list of strings")
+        return list(expected_files)
+    expected_file = query_spec.get("expected_file")
+    if isinstance(expected_file, str) and expected_file:
+        return [expected_file]
+    return []
 
 
 def make_embedder(embedder_name: str, *, model_name: str):

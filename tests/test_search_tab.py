@@ -118,7 +118,7 @@ def test_perform_search_can_use_local_lancedb_option(search_tab, mock_api_client
 
     with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
          patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now"}), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now", "db_path": str(db_path)}), \
          patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
         worker = MockWorker.return_value
 
@@ -150,7 +150,7 @@ def test_local_lancedb_search_rejects_busy_index(search_tab, mock_api_client, tm
 
     with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
          patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now"}), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now", "db_path": str(db_path)}), \
          patch("desktop_app.ui.search_tab.is_lancedb_index_busy", return_value=True), \
          patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
          patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
@@ -183,13 +183,50 @@ def test_local_lancedb_search_rejects_missing_index_folder(search_tab, mock_api_
 
     with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
          patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(missing_db_path)), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now"}), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now", "db_path": str(missing_db_path)}), \
          patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
          patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
         search_tab.perform_search()
 
         mock_warn.assert_called_once()
         assert mock_warn.call_args.args[1] == "Local Index Missing"
+        MockWorker.assert_not_called()
+        mock_api_client.get_health.assert_not_called()
+
+
+def test_local_lancedb_search_rejects_stale_index_metadata(search_tab, mock_api_client, tmp_path):
+    search_tab.query_input.setText("EV6")
+    db_path = tmp_path / "local-lancedb"
+    old_db_path = tmp_path / "old-lancedb"
+    db_path.mkdir()
+
+    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now", "db_path": str(old_db_path)}), \
+         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
+         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
+        search_tab.perform_search()
+
+        mock_warn.assert_called_once()
+        assert mock_warn.call_args.args[1] == "Local Index Needs Rebuild"
+        MockWorker.assert_not_called()
+        mock_api_client.get_health.assert_not_called()
+
+
+def test_local_lancedb_search_rejects_incomplete_index_metadata(search_tab, mock_api_client, tmp_path):
+    search_tab.query_input.setText("EV6")
+    db_path = tmp_path / "local-lancedb"
+    db_path.mkdir()
+
+    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now"}), \
+         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
+         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
+        search_tab.perform_search()
+
+        mock_warn.assert_called_once()
+        assert mock_warn.call_args.args[1] == "Local Index Needs Rebuild"
         MockWorker.assert_not_called()
         mock_api_client.get_health.assert_not_called()
 

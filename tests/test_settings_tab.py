@@ -164,6 +164,25 @@ def test_build_local_lancedb_index_starts_worker(qapp, tmp_path):
         assert tab._local_lancedb_index_btn.isEnabled() is False
 
 
+def test_build_local_lancedb_index_rejects_busy_index(qapp):
+    with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
+         patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
+         patch("desktop_app.ui.settings_tab.is_lancedb_index_busy", return_value=True), \
+         patch("desktop_app.ui.settings_tab.QFileDialog.getExistingDirectory") as mock_dialog, \
+         patch("desktop_app.ui.settings_tab.QMessageBox.warning") as mock_warn, \
+         patch("desktop_app.ui.settings_tab.LocalLanceDBIngestWorker") as MockWorker:
+        tab = SettingsTab(docker_manager=MagicMock())
+
+        tab._build_local_lancedb_index()
+
+        mock_warn.assert_called_once()
+        mock_dialog.assert_not_called()
+        MockWorker.assert_not_called()
+        assert tab._local_lancedb_index_btn.isEnabled() is True
+
+
 def test_local_lancedb_ingest_finished_updates_status(qapp):
     with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
          patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \

@@ -12,8 +12,11 @@ from desktop_app.ui.workers import (
     LocalLanceDBSearchWorker,
     SearchWorker,
     UploadWorker,
+    clear_lancedb_access_locks,
     clear_lancedb_embedder_cache,
     get_lancedb_embedder,
+    is_lancedb_index_busy,
+    lancedb_index_access,
 )
 
 @pytest.fixture(scope="session")
@@ -102,6 +105,20 @@ def test_lancedb_embedder_cache_reuses_model(monkeypatch):
     assert created == ["model-a", "model-b"]
 
     clear_lancedb_embedder_cache()
+
+
+def test_lancedb_index_access_marks_only_matching_path_busy():
+    clear_lancedb_access_locks()
+
+    assert is_lancedb_index_busy("/tmp/local-a") is False
+    assert is_lancedb_index_busy("/tmp/local-b") is False
+
+    with lancedb_index_access("/tmp/local-a"):
+        assert is_lancedb_index_busy("/tmp/local-a") is True
+        assert is_lancedb_index_busy("/tmp/local-b") is False
+
+    assert is_lancedb_index_busy("/tmp/local-a") is False
+    clear_lancedb_access_locks()
 
 
 def test_local_lancedb_search_worker_uses_cached_embedder(qapp, monkeypatch):

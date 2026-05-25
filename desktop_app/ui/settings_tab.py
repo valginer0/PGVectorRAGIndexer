@@ -13,7 +13,11 @@ from PySide6.QtWidgets import (
 import qtawesome as qta
 from PySide6.QtCore import QThread, Signal, QSize, Qt
 from desktop_app.ui.styles.theme import Theme
-from desktop_app.ui.workers import LocalLanceDBIngestWorker, StatsWorker
+from desktop_app.ui.workers import (
+    LocalLanceDBIngestWorker,
+    StatsWorker,
+    is_lancedb_index_busy,
+)
 from desktop_app.controllers.settings_controller import SettingsController
 from desktop_app.utils.controller_result import ControllerResult, UiAction, BackendSaveData, MessageSeverity
 
@@ -399,6 +403,16 @@ class SettingsTab(QWidget):
         """Build the experimental local LanceDB text index from a folder."""
         from desktop_app.utils import app_config
 
+        db_path = app_config.get_local_lancedb_db_path()
+        if is_lancedb_index_busy(db_path):
+            QMessageBox.warning(
+                self,
+                "Local Index Busy",
+                "The local LanceDB index is already being used. "
+                "Please wait for the current local index operation to finish."
+            )
+            return
+
         folder = QFileDialog.getExistingDirectory(
             self,
             "Select Folder for Local Text Index",
@@ -413,7 +427,7 @@ class SettingsTab(QWidget):
 
         self._local_lancedb_ingest_worker = LocalLanceDBIngestWorker(
             [Path(folder)],
-            app_config.get_local_lancedb_db_path(),
+            db_path,
         )
         self._local_lancedb_ingest_worker.finished.connect(self._local_lancedb_ingest_finished)
         self._local_lancedb_ingest_worker.start()

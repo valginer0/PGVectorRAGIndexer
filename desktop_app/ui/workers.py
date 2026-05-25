@@ -1,6 +1,7 @@
 import logging
 import threading
 import time
+from contextlib import contextmanager
 from PySide6.QtCore import QThread, Signal
 from desktop_app.utils.hashing import calculate_file_hash
 
@@ -8,6 +9,8 @@ logger = logging.getLogger(__name__)
 
 _LANCEDB_EMBEDDER_CACHE = {}
 _LANCEDB_EMBEDDER_LOCK = threading.Lock()
+_LANCEDB_ACCESS_LOCKS = {}
+_LANCEDB_ACCESS_LOCKS_LOCK = threading.Lock()
 
 
 def get_lancedb_embedder(model_name=None):
@@ -28,6 +31,48 @@ def clear_lancedb_embedder_cache():
     """Clear the cached local LanceDB embedder, primarily for tests."""
     with _LANCEDB_EMBEDDER_LOCK:
         _LANCEDB_EMBEDDER_CACHE.clear()
+
+
+def _lancedb_access_key(db_path):
+    return str(db_path)
+
+
+def _get_lancedb_access_lock(db_path):
+    key = _lancedb_access_key(db_path)
+    with _LANCEDB_ACCESS_LOCKS_LOCK:
+        lock = _LANCEDB_ACCESS_LOCKS.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _LANCEDB_ACCESS_LOCKS[key] = lock
+        return lock
+
+
+def is_lancedb_index_busy(db_path):
+    """Return whether a local LanceDB index path is currently in use."""
+    lock = _get_lancedb_access_lock(db_path)
+    acquired = lock.acquire(blocking=False)
+    if acquired:
+        lock.release()
+        return False
+    return True
+
+
+@contextmanager
+def lancedb_index_access(db_path):
+    """Serialize local LanceDB reads/rebuilds for the same index path."""
+    lock = _get_lancedb_access_lock(db_path)
+    lock.acquire()
+    try:
+        yield
+    finally:
+        lock.release()
+
+
+def clear_lancedb_access_locks():
+    """Clear local LanceDB access locks, primarily for tests."""
+    with _LANCEDB_ACCESS_LOCKS_LOCK:
+        _LANCEDB_ACCESS_LOCKS.clear()
+
 
 class SearchWorker(QThread):
     """Worker thread for performing searches."""
@@ -114,12 +159,13 @@ class LocalLanceDBSearchWorker(QThread):
         try:
             from desktop_app.lancedb_engine import LocalLanceDBEngine
 
-            with LocalLanceDBEngine(self.db_path, embedder=get_lancedb_embedder()) as engine:
-                results, _telemetry = engine.search_parent_child(
-                    self.query,
-                    parent_limit=self.parent_limit,
-                    child_limit=self.top_k,
-                )
+            with lancedb_index_access(self.db_path):
+                with LocalLanceDBEngine(self.db_path, embedder=get_lancedb_embedder()) as engine:
+                    results, _telemetry = engine.search_parent_child(
+                        self.query,
+                        parent_limit=self.parent_limit,
+                        child_limit=self.top_k,
+                    )
             self.finished.emit(True, format_lancedb_search_results(results))
         except Exception as e:
             logger.error(f"Local LanceDB search failed: {e}")
@@ -147,12 +193,13 @@ class LocalLanceDBIngestWorker(QThread):
             from desktop_app.lancedb_engine import LocalLanceDBEngine
             from desktop_app.lancedb_ingestion import ingest_local_text_paths
 
-            with LocalLanceDBEngine(self.db_path, embedder=get_lancedb_embedder()) as engine:
-                result = ingest_local_text_paths(
-                    engine,
-                    self.paths,
-                    recursive=self.recursive,
-                )
+            with lancedb_index_access(self.db_path):
+                with LocalLanceDBEngine(self.db_path, embedder=get_lancedb_embedder()) as engine:
+                    result = ingest_local_text_paths(
+                        engine,
+                        self.paths,
+                        recursive=self.recursive,
+                    )
             self.finished.emit(True, result.to_dict())
         except Exception as e:
             logger.error(f"Local LanceDB ingestion failed: {e}")

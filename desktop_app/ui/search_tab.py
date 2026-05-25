@@ -119,7 +119,7 @@ class CheckableComboBox(QComboBox):
             return []
         return [t for t in raw if t != self.SELECT_ALL]
 from .shared import populate_document_type_combo
-from .workers import LocalLanceDBSearchWorker, SearchWorker
+from .workers import LocalLanceDBSearchWorker, SearchWorker, is_lancedb_index_busy
 from ..utils.snippet_utils import extract_snippet
 from ..utils import app_config
 from ..utils.search_limits import candidate_limit_for_unique_files
@@ -359,6 +359,16 @@ class SearchTab(QWidget):
 
     def _start_local_lancedb_search(self, query: str) -> None:
         """Start the experimental local LanceDB search worker."""
+        db_path = app_config.get_local_lancedb_db_path()
+        if is_lancedb_index_busy(db_path):
+            QMessageBox.warning(
+                self,
+                "Local Index Busy",
+                "The local LanceDB index is already being used. "
+                "Please wait for the current local index operation to finish."
+            )
+            return
+
         self.search_btn.setEnabled(False)
         self.query_input.setEnabled(False)
         self.status_label.setText(f"Searching local LanceDB index for: {query}...")
@@ -367,7 +377,7 @@ class SearchTab(QWidget):
         self.search_worker = LocalLanceDBSearchWorker(
             query,
             self._display_result_limit,
-            app_config.get_local_lancedb_db_path(),
+            db_path,
         )
         self.search_worker.setProperty("one_result_per_file", True)
         self.search_worker.finished.connect(self.search_finished)

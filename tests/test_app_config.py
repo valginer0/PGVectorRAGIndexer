@@ -25,6 +25,8 @@ from desktop_app.utils.app_config import (
     get_api_key, set_api_key,
     is_remote_mode,
     get_local_lancedb_db_path, set_local_lancedb_db_path,
+    get_local_lancedb_index_metadata, set_local_lancedb_index_metadata,
+    clear_local_lancedb_index_metadata,
     get_local_lancedb_search_enabled, set_local_lancedb_search_enabled,
     BACKEND_MODE_LOCAL, BACKEND_MODE_REMOTE, DEFAULT_LOCAL_URL,
 )
@@ -150,6 +152,23 @@ class TestLocalLanceDBSearch:
         custom = tmp_path / "custom-lancedb"
         set_local_lancedb_db_path(custom)
         assert get_local_lancedb_db_path() == str(custom)
+
+    def test_index_metadata_roundtrip(self, config_dir):
+        assert get_local_lancedb_index_metadata() == {}
+
+        metadata = {
+            "built_at": "2026-05-25T04:30:00Z",
+            "source_paths": ["/docs"],
+            "indexed_documents": 2,
+            "chunk_count": 5,
+            "skipped_count": 1,
+        }
+        set_local_lancedb_index_metadata(metadata)
+
+        assert get_local_lancedb_index_metadata() == metadata
+
+        clear_local_lancedb_index_metadata()
+        assert get_local_lancedb_index_metadata() == {}
 
 
 # ===========================================================================

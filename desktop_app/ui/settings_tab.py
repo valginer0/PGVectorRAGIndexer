@@ -3,6 +3,7 @@ Settings tab for Docker management and configuration.
 """
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -41,6 +42,7 @@ class SettingsTab(QWidget):
 
         self.stats_worker = None
         self._local_lancedb_ingest_worker = None
+        self._local_lancedb_index_paths = []
         self.setup_ui()
 
     def showEvent(self, event):
@@ -386,8 +388,10 @@ class SettingsTab(QWidget):
         vbox.addWidget(self._local_lancedb_index_btn)
 
         self._local_lancedb_status = QLabel("")
+        self._local_lancedb_status.setWordWrap(True)
         self._local_lancedb_status.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
         vbox.addWidget(self._local_lancedb_status)
+        self._refresh_local_lancedb_status()
 
         desc = QLabel(
             "Default search behavior is unchanged when this is off. "
@@ -421,6 +425,7 @@ class SettingsTab(QWidget):
         if not folder:
             return
 
+        self._local_lancedb_index_paths = [Path(folder)]
         self._local_lancedb_index_btn.setEnabled(False)
         self._local_lancedb_status.setText("Building local text index...")
         self._local_lancedb_status.setStyleSheet(f"color: {Theme.PRIMARY}; font-size: 12px;")
@@ -443,15 +448,56 @@ class SettingsTab(QWidget):
             indexed = data.get("indexed_documents", 0)
             chunks = data.get("chunk_count", 0)
             skipped = len(data.get("skipped_files", []))
-            self._local_lancedb_status.setText(
-                f"Indexed {indexed} document{'s' if indexed != 1 else ''}, "
-                f"{chunks} chunk{'s' if chunks != 1 else ''}; skipped {skipped}."
-            )
+            from desktop_app.utils import app_config
+
+            metadata = {
+                "built_at": datetime.now(timezone.utc)
+                .replace(microsecond=0)
+                .isoformat()
+                .replace("+00:00", "Z"),
+                "db_path": app_config.get_local_lancedb_db_path(),
+                "source_paths": [str(path) for path in self._local_lancedb_index_paths],
+                "indexed_documents": indexed,
+                "chunk_count": chunks,
+                "skipped_count": skipped,
+            }
+            app_config.set_local_lancedb_index_metadata(metadata)
+            self._local_lancedb_status.setText(self._format_local_lancedb_status(metadata))
             self._local_lancedb_status.setStyleSheet(f"color: {Theme.SUCCESS}; font-size: 12px;")
         else:
             QMessageBox.critical(self, "Local Index Failed", f"Local indexing failed: {data}")
             self._local_lancedb_status.setText("Local indexing failed")
             self._local_lancedb_status.setStyleSheet(f"color: {Theme.ERROR}; font-size: 12px;")
+
+    def _refresh_local_lancedb_status(self):
+        from desktop_app.utils import app_config
+
+        metadata = app_config.get_local_lancedb_index_metadata()
+        self._local_lancedb_status.setText(self._format_local_lancedb_status(metadata))
+        self._local_lancedb_status.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
+
+    @staticmethod
+    def _format_local_lancedb_status(metadata: dict) -> str:
+        if not metadata:
+            return "No local text index has been built yet."
+
+        indexed = int(metadata.get("indexed_documents", 0) or 0)
+        chunks = int(metadata.get("chunk_count", 0) or 0)
+        skipped = int(metadata.get("skipped_count", 0) or 0)
+        source_paths = metadata.get("source_paths") or []
+        if len(source_paths) == 1:
+            source = Path(str(source_paths[0])).name or str(source_paths[0])
+        elif source_paths:
+            source = f"{len(source_paths)} sources"
+        else:
+            source = "unknown source"
+        built_at = str(metadata.get("built_at") or "unknown time").replace("T", " ").replace("Z", " UTC")
+
+        return (
+            f"Last indexed {indexed} document{'s' if indexed != 1 else ''}, "
+            f"{chunks} chunk{'s' if chunks != 1 else ''}; skipped {skipped}. "
+            f"Source: {source}. Built: {built_at}."
+        )
 
     # ------------------------------------------------------------------
     # Setup wizard panel (#18)

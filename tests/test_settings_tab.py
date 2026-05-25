@@ -143,6 +143,26 @@ def test_search_panel_local_lancedb_checkbox_wires_config(qapp):
     setter.assert_called_once_with(True)
 
 
+def test_search_panel_local_lancedb_status_reads_last_index_metadata(qapp):
+    metadata = {
+        "built_at": "2026-05-25T04:30:00Z",
+        "source_paths": ["/docs/corpus"],
+        "indexed_documents": 2,
+        "chunk_count": 5,
+        "skipped_count": 1,
+    }
+
+    with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
+         patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_index_metadata", return_value=metadata):
+        tab = SettingsTab(docker_manager=MagicMock())
+
+    assert "Last indexed 2 documents, 5 chunks; skipped 1." in tab._local_lancedb_status.text()
+    assert "Source: corpus." in tab._local_lancedb_status.text()
+
+
 def test_build_local_lancedb_index_starts_worker(qapp, tmp_path):
     folder = tmp_path / "corpus"
     folder.mkdir()
@@ -188,17 +208,26 @@ def test_local_lancedb_ingest_finished_updates_status(qapp):
     with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
          patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \
          patch("desktop_app.utils.app_config.get_local_lancedb_search_enabled", return_value=False), \
-         patch("desktop_app.utils.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"):
+         patch("desktop_app.utils.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
+         patch("desktop_app.utils.app_config.set_local_lancedb_index_metadata") as set_metadata:
         tab = SettingsTab(docker_manager=MagicMock())
 
         tab._local_lancedb_index_btn.setEnabled(False)
+        tab._local_lancedb_index_paths = [Path("/docs/corpus")]
         tab._local_lancedb_ingest_finished(
             True,
             {"indexed_documents": 2, "chunk_count": 5, "skipped_files": [{}, {}]},
         )
 
     assert tab._local_lancedb_index_btn.isEnabled() is True
-    assert "Indexed 2 documents, 5 chunks; skipped 2." == tab._local_lancedb_status.text()
+    assert "Last indexed 2 documents, 5 chunks; skipped 2." in tab._local_lancedb_status.text()
+    assert "Source: corpus." in tab._local_lancedb_status.text()
+    metadata = set_metadata.call_args.args[0]
+    assert metadata["db_path"] == "/tmp/local-lancedb"
+    assert metadata["source_paths"] == ["/docs/corpus"]
+    assert metadata["indexed_documents"] == 2
+    assert metadata["chunk_count"] == 5
+    assert metadata["skipped_count"] == 2
 
 
 def test_local_lancedb_ingest_progress_updates_status(qapp):

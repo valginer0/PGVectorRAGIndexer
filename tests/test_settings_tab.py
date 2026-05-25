@@ -6,7 +6,7 @@ from pathlib import Path
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QLabel
 
 from desktop_app.ui.settings_tab import SettingsTab
 from desktop_app.utils.controller_result import ControllerResult, MessageSeverity, UiAction, BackendSaveData
@@ -140,6 +140,11 @@ def test_search_panel_local_lancedb_checkbox_wires_config(qapp):
         assert tab._local_lancedb_index_btn.text() == "Rebuild Local Text/Markdown Index"
         assert ".txt, .md, and .markdown" in tab._local_lancedb_index_btn.toolTip()
         assert "overwrites" in tab._local_lancedb_index_btn.toolTip()
+        label_texts = [label.text() for label in tab.findChildren(QLabel)]
+        assert (
+            "Default search behavior is unchanged when this is off. "
+            "Local LanceDB search is experimental and currently indexes text/Markdown files only."
+        ) in label_texts
 
         checkbox.setChecked(True)
 

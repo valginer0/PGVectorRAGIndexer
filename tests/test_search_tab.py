@@ -110,18 +110,21 @@ def test_perform_search_can_use_document_level_backend_option(search_tab):
         assert args.kwargs["literal_tail_suppression"] == "identifier-token"
 
 
-def test_perform_search_can_use_local_lancedb_option(search_tab, mock_api_client):
+def test_perform_search_can_use_local_lancedb_option(search_tab, mock_api_client, tmp_path):
     search_tab.query_input.setText("EV6")
     search_tab.top_k_spin.setValue(5)
+    db_path = tmp_path / "local-lancedb"
+    db_path.mkdir()
 
     with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now"}), \
          patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
         worker = MockWorker.return_value
 
         search_tab.perform_search()
 
-        MockWorker.assert_called_once_with("EV6", 5, "/tmp/local-lancedb")
+        MockWorker.assert_called_once_with("EV6", 5, str(db_path))
         worker.progress.connect.assert_called_once_with(search_tab._local_lancedb_search_progress)
         worker.start.assert_called_once()
         mock_api_client.get_health.assert_not_called()
@@ -145,12 +148,47 @@ def test_local_lancedb_search_rejects_busy_index(search_tab, mock_api_client):
 
     with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
          patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now"}), \
+         patch("desktop_app.ui.search_tab.Path.exists", return_value=True), \
          patch("desktop_app.ui.search_tab.is_lancedb_index_busy", return_value=True), \
          patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
          patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
         search_tab.perform_search()
 
         mock_warn.assert_called_once()
+        MockWorker.assert_not_called()
+        mock_api_client.get_health.assert_not_called()
+
+
+def test_local_lancedb_search_rejects_missing_index_metadata(search_tab, mock_api_client):
+    search_tab.query_input.setText("EV6")
+
+    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={}), \
+         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
+         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
+        search_tab.perform_search()
+
+        mock_warn.assert_called_once()
+        assert mock_warn.call_args.args[1] == "Local Index Not Built"
+        MockWorker.assert_not_called()
+        mock_api_client.get_health.assert_not_called()
+
+
+def test_local_lancedb_search_rejects_missing_index_folder(search_tab, mock_api_client, tmp_path):
+    search_tab.query_input.setText("EV6")
+    missing_db_path = tmp_path / "missing-lancedb"
+
+    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(missing_db_path)), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now"}), \
+         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
+         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
+        search_tab.perform_search()
+
+        mock_warn.assert_called_once()
+        assert mock_warn.call_args.args[1] == "Local Index Missing"
         MockWorker.assert_not_called()
         mock_api_client.get_health.assert_not_called()
 

@@ -361,6 +361,24 @@ class SearchTab(QWidget):
     def _start_local_lancedb_search(self, query: str) -> None:
         """Start the experimental local LanceDB search worker."""
         db_path = app_config.get_local_lancedb_db_path()
+        if not app_config.get_local_lancedb_index_metadata():
+            QMessageBox.warning(
+                self,
+                "Local Index Not Built",
+                "Local LanceDB search is enabled, but no local text index has been built yet. "
+                "Open Settings and use Rebuild Local Text Index first."
+            )
+            return
+
+        if not Path(db_path).exists():
+            QMessageBox.warning(
+                self,
+                "Local Index Missing",
+                "The configured local LanceDB index folder was not found. "
+                "Open Settings and rebuild the local text index."
+            )
+            return
+
         if is_lancedb_index_busy(db_path):
             QMessageBox.warning(
                 self,

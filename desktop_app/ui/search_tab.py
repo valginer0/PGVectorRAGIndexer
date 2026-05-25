@@ -119,6 +119,7 @@ class CheckableComboBox(QComboBox):
             return []
         return [t for t in raw if t != self.SELECT_ALL]
 from .shared import populate_document_type_combo
+from .styles.theme import Theme
 from .workers import LocalLanceDBSearchWorker, SearchWorker, is_lancedb_index_busy
 from ..utils.snippet_utils import extract_snippet
 from ..utils import app_config
@@ -386,7 +387,7 @@ class SearchTab(QWidget):
 
     def _local_lancedb_search_progress(self, message: str) -> None:
         self.status_label.setText(message)
-        self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
+        self.status_label.setStyleSheet(f"color: {Theme.PRIMARY}; font-style: italic;")
     
     def search_finished(self, success: bool, data):
         """Handle search completion."""

@@ -121,6 +121,7 @@ def test_perform_search_can_use_local_lancedb_option(search_tab, mock_api_client
         search_tab.perform_search()
 
         MockWorker.assert_called_once_with("EV6", 5, "/tmp/local-lancedb")
+        worker.progress.connect.assert_called_once_with(search_tab._local_lancedb_search_progress)
         worker.start.assert_called_once()
         mock_api_client.get_health.assert_not_called()
 
@@ -151,6 +152,13 @@ def test_local_lancedb_search_rejects_busy_index(search_tab, mock_api_client):
         mock_warn.assert_called_once()
         MockWorker.assert_not_called()
         mock_api_client.get_health.assert_not_called()
+
+
+def test_local_lancedb_search_progress_updates_status(search_tab):
+    search_tab._local_lancedb_search_progress("Loading local embedding model...")
+
+    assert search_tab.status_label.text() == "Loading local embedding model..."
+    assert "color: #2563eb" in search_tab.status_label.styleSheet()
 
 
 def test_format_lancedb_search_results_matches_table_shape():

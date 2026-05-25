@@ -159,6 +159,7 @@ def test_build_local_lancedb_index_starts_worker(qapp, tmp_path):
         tab._build_local_lancedb_index()
 
         MockWorker.assert_called_once_with([Path(folder)], "/tmp/local-lancedb")
+        worker.progress.connect.assert_called_once_with(tab._local_lancedb_ingest_progress)
         worker.finished.connect.assert_called_once_with(tab._local_lancedb_ingest_finished)
         worker.start.assert_called_once()
         assert tab._local_lancedb_index_btn.isEnabled() is False
@@ -198,3 +199,16 @@ def test_local_lancedb_ingest_finished_updates_status(qapp):
 
     assert tab._local_lancedb_index_btn.isEnabled() is True
     assert "Indexed 2 documents, 5 chunks; skipped 2." == tab._local_lancedb_status.text()
+
+
+def test_local_lancedb_ingest_progress_updates_status(qapp):
+    with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
+         patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_search_enabled", return_value=False), \
+         patch("desktop_app.utils.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"):
+        tab = SettingsTab(docker_manager=MagicMock())
+
+        tab._local_lancedb_ingest_progress("Loading local embedding model...")
+
+    assert tab._local_lancedb_status.text() == "Loading local embedding model..."
+    assert "color:" in tab._local_lancedb_status.styleSheet()

@@ -10,6 +10,7 @@ from desktop_app.ui.workers import (
     DocumentsWorker,
     LocalLanceDBIngestWorker,
     LocalLanceDBSearchWorker,
+    LOCAL_LANCEDB_PARENT_LIMIT,
     SearchWorker,
     UploadWorker,
     clear_lancedb_access_locks,
@@ -157,10 +158,17 @@ def test_local_lancedb_search_worker_uses_cached_embedder(qapp, monkeypatch):
 
     worker = LocalLanceDBSearchWorker("EV6", 5, "/tmp/lancedb", parent_limit=2)
     results = []
+    progress = []
+    worker.progress.connect(progress.append)
     worker.finished.connect(lambda success, data: results.append((success, data)))
 
     worker.run()
 
+    assert progress == [
+        "Waiting for local LanceDB index...",
+        "Loading local embedding model...",
+        "Searching local LanceDB index...",
+    ]
     assert captured == {
         "db_path": "/tmp/lancedb",
         "embedder": cached_embedder,
@@ -170,6 +178,34 @@ def test_local_lancedb_search_worker_uses_cached_embedder(qapp, monkeypatch):
     }
     assert results[0][0] is True
     assert results[0][1][0]["source_uri"] == "/docs/ev6.txt"
+
+
+def test_local_lancedb_search_worker_defaults_to_validated_parent_limit(qapp, monkeypatch):
+    from desktop_app import lancedb_engine
+
+    captured = {}
+
+    class FakeEngine:
+        def __init__(self, db_path, embedder=None):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, traceback):
+            return None
+
+        def search_parent_child(self, query, parent_limit, child_limit):
+            captured["parent_limit"] = parent_limit
+            return [], None
+
+    monkeypatch.setattr("desktop_app.ui.workers.get_lancedb_embedder", lambda: object())
+    monkeypatch.setattr(lancedb_engine, "LocalLanceDBEngine", FakeEngine)
+
+    worker = LocalLanceDBSearchWorker("SFTP", 5, "/tmp/lancedb")
+    worker.run()
+
+    assert captured["parent_limit"] == LOCAL_LANCEDB_PARENT_LIMIT == 3
 
 
 def test_local_lancedb_ingest_worker_uses_cached_embedder(qapp, monkeypatch):
@@ -205,10 +241,17 @@ def test_local_lancedb_ingest_worker_uses_cached_embedder(qapp, monkeypatch):
 
     worker = LocalLanceDBIngestWorker(["/docs"], "/tmp/lancedb", recursive=False)
     results = []
+    progress = []
+    worker.progress.connect(progress.append)
     worker.finished.connect(lambda success, data: results.append((success, data)))
 
     worker.run()
 
+    assert progress == [
+        "Waiting for local LanceDB index...",
+        "Loading local embedding model...",
+        "Building local text index...",
+    ]
     assert captured["db_path"] == "/tmp/lancedb"
     assert captured["embedder"] is cached_embedder
     assert captured["paths"] == ["/docs"]

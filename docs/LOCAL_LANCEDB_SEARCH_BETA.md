@@ -40,8 +40,14 @@ Rebuild after:
 - The feature is experimental and off by default.
 - Local search uses its own local index; it does not search documents uploaded to the backend database.
 - Document type and extension filters are not supported in local mode.
-- The first local search or rebuild may be slower while the embedding model loads. Later operations in the same desktop session should be faster.
+- The first local operation after app startup may be slower while the embedding model loads into memory. Later operations in the same desktop session should be faster.
 - Search returns one result per source file. Nearby or related documents may also appear when they share strong terms with the query.
+
+## Model Cache Behavior
+
+The local embedding model is loaded only after local search is enabled and a local rebuild or search starts. The installer does not currently preload the model for every user, because local LanceDB search is an optional beta feature.
+
+After the model loads once, the desktop app keeps it in memory for the rest of that app session. A future beta build may warm the model in the background after startup when local search is enabled and a valid local index already exists.
 
 ## Troubleshooting
 

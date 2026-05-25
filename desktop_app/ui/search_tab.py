@@ -367,7 +367,7 @@ class SearchTab(QWidget):
                 self,
                 "Local Index Not Built",
                 "Local LanceDB search is enabled, but no local text index has been built yet. "
-                "Open Settings and use Rebuild Local Text Index first."
+                "Open Settings and use Rebuild Local Text/Markdown Index first."
             )
             return
 
@@ -377,7 +377,7 @@ class SearchTab(QWidget):
                 self,
                 "Local Index Needs Rebuild",
                 "The local LanceDB index metadata belongs to a different index folder. "
-                "Open Settings and rebuild the local text index."
+                "Open Settings and use Rebuild Local Text/Markdown Index."
             )
             return
 
@@ -386,7 +386,7 @@ class SearchTab(QWidget):
                 self,
                 "Local Index Missing",
                 "The configured local LanceDB index folder was not found. "
-                "Open Settings and rebuild the local text index."
+                "Open Settings and use Rebuild Local Text/Markdown Index."
             )
             return
 

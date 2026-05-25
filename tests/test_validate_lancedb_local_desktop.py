@@ -81,12 +81,21 @@ def test_main_accepts_query_manifest_and_retrieval_limits(tmp_path):
             "result_files": ["ev6_service.txt"],
             "unique_result_files": ["ev6_service.txt"],
             "matched_parent_files": ["ev6_service.txt"],
+            "matched_parent_details": [
+                {
+                    "rank": 1,
+                    "source_uri": output["queries"][0]["matched_parent_details"][0]["source_uri"],
+                    "fts_score": output["queries"][0]["matched_parent_details"][0]["fts_score"],
+                    "file_name": "ev6_service.txt",
+                }
+            ],
             "missing_expected_files": [],
             "unexpected_files": [],
             "query_ms": output["queries"][0]["query_ms"],
             "passed": True,
         }
     ]
+    assert isinstance(output["queries"][0]["matched_parent_details"][0]["fts_score"], float)
 
 
 def test_load_query_specs_rejects_invalid_manifest(tmp_path):

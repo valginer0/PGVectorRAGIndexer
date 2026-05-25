@@ -213,6 +213,13 @@ def run_validation(
             result_files = [Path(result.source_uri).name for result in results]
             unique_result_files = dedupe_preserving_order(result_files)
             matched_parent_files = [Path(source).name for source in telemetry.matched_parents]
+            matched_parent_details = [
+                {
+                    **parent_detail,
+                    "file_name": Path(str(parent_detail["source_uri"])).name,
+                }
+                for parent_detail in telemetry.matched_parent_details
+            ]
             expected_files = expected_files_for_query(query_spec)
             allow_extra_results = bool(query_spec.get("allow_extra_results", False))
             missing_expected_files = [
@@ -238,6 +245,7 @@ def run_validation(
                     "result_files": result_files,
                     "unique_result_files": unique_result_files,
                     "matched_parent_files": matched_parent_files,
+                    "matched_parent_details": matched_parent_details,
                     "missing_expected_files": missing_expected_files,
                     "unexpected_files": unexpected_files,
                     "query_ms": query_ms,

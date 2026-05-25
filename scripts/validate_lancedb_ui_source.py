@@ -24,6 +24,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+# SearchTab displays source paths in column 2:
+# ["Score", "Type", "Source", "Chunk", "Content Preview"].
+SEARCH_RESULTS_SOURCE_COLUMN = 2
+
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -185,7 +189,7 @@ def run_smoke(args: argparse.Namespace) -> dict:
         raise AssertionError(f"Local search failed: {failures}")
 
     result_files = [
-        Path(search_tab.results_table.item(row, 2).text()).name
+        Path(search_tab.results_table.item(row, SEARCH_RESULTS_SOURCE_COLUMN).text()).name
         for row in range(search_tab.results_table.rowCount())
     ]
     if result_files[:1] != ["ev6_service.txt"]:

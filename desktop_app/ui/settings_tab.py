@@ -359,13 +359,14 @@ class SettingsTab(QWidget):
         vbox.addWidget(self._document_level_search_checkbox)
 
         self._local_lancedb_search_checkbox = QCheckBox(
-            "Use experimental local LanceDB search"
+            "Use experimental local text/Markdown search"
         )
         self._local_lancedb_search_checkbox.setChecked(
             app_config.get_local_lancedb_search_enabled()
         )
         self._local_lancedb_search_checkbox.setToolTip(
-            "Searches the local LanceDB index folder instead of the backend API."
+            "Searches the local LanceDB index instead of the backend API. "
+            "Supported files: .txt, .md, and .markdown."
         )
         self._local_lancedb_search_checkbox.toggled.connect(
             app_config.set_local_lancedb_search_enabled
@@ -377,11 +378,11 @@ class SettingsTab(QWidget):
         path_label.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
         vbox.addWidget(path_label)
 
-        self._local_lancedb_index_btn = QPushButton("Rebuild Local Text Index")
+        self._local_lancedb_index_btn = QPushButton("Rebuild Local Text/Markdown Index")
         self._local_lancedb_index_btn.setIcon(qta.icon("fa5s.database", color="white"))
         self._local_lancedb_index_btn.setMinimumHeight(34)
         self._local_lancedb_index_btn.setToolTip(
-            "Builds a local text/Markdown LanceDB index from a folder. "
+            "Builds an experimental local LanceDB index from .txt, .md, and .markdown files. "
             "This overwrites the current local index."
         )
         self._local_lancedb_index_btn.clicked.connect(self._build_local_lancedb_index)
@@ -395,7 +396,7 @@ class SettingsTab(QWidget):
 
         desc = QLabel(
             "Default search behavior is unchanged when this is off. "
-            "These options are for validating V2 search experiments."
+            "Local LanceDB search is experimental and currently indexes text/Markdown files only."
         )
         desc.setWordWrap(True)
         desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")

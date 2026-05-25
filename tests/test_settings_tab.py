@@ -163,6 +163,39 @@ def test_search_panel_local_lancedb_status_reads_last_index_metadata(qapp):
     assert "Source: corpus." in tab._local_lancedb_status.text()
 
 
+@pytest.mark.parametrize(
+    ("metadata", "expected_parts"),
+    [
+        ({}, ["No local text index has been built yet."]),
+        (
+            {
+                "built_at": "2026-05-25T04:30:00Z",
+                "source_paths": [],
+                "indexed_documents": 0,
+                "chunk_count": 0,
+                "skipped_count": 0,
+            },
+            ["Last indexed 0 documents, 0 chunks; skipped 0.", "Source: unknown source."],
+        ),
+        (
+            {
+                "built_at": "2026-05-25T04:30:00Z",
+                "source_paths": ["/docs/a", "/docs/b"],
+                "indexed_documents": 3,
+                "chunk_count": 9,
+                "skipped_count": 1,
+            },
+            ["Last indexed 3 documents, 9 chunks; skipped 1.", "Source: 2 sources."],
+        ),
+    ],
+)
+def test_format_local_lancedb_status_edge_cases(metadata, expected_parts):
+    status = SettingsTab._format_local_lancedb_status(metadata)
+
+    for expected in expected_parts:
+        assert expected in status
+
+
 def test_build_local_lancedb_index_starts_worker(qapp, tmp_path):
     folder = tmp_path / "corpus"
     folder.mkdir()

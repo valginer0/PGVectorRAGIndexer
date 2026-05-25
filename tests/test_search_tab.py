@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
 from PySide6.QtCore import Qt, QPoint
 
 from desktop_app.ui.search_tab import SearchTab
+from desktop_app.ui.styles.theme import Theme
 from desktop_app.ui.workers import format_lancedb_search_results
 
 @pytest.fixture(scope="session")
@@ -158,7 +159,7 @@ def test_local_lancedb_search_progress_updates_status(search_tab):
     search_tab._local_lancedb_search_progress("Loading local embedding model...")
 
     assert search_tab.status_label.text() == "Loading local embedding model..."
-    assert "color: #2563eb" in search_tab.status_label.styleSheet()
+    assert f"color: {Theme.PRIMARY}" in search_tab.status_label.styleSheet()
 
 
 def test_format_lancedb_search_results_matches_table_shape():

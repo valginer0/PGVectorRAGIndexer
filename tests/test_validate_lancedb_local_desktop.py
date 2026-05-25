@@ -124,11 +124,30 @@ def test_print_summary_includes_timing_fields(capsys):
         "embedder": {"mode": "hashing", "load_ms": 1.5},
         "ingestion": {"indexed_documents": 2, "chunk_count": 3, "ingest_ms": 12.0},
         "queries": [
-            {"id": "ev6", "passed": True, "result_files": ["ev6.txt"], "query_ms": 4.0}
+            {
+                "id": "ev6",
+                "passed": True,
+                "result_files": ["ev6.txt"],
+                "matched_parent_details": [
+                    {"file_name": "ev6.txt", "rank": 1, "fts_score": 6.3717}
+                ],
+                "query_ms": 4.0,
+            }
         ],
         "total_ms": 20.0,
     })
 
     output = capsys.readouterr().out
     assert "Embedder        : hashing (1.5 ms)" in output
+    assert "top parent: ev6.txt (score: 6.3717)" in output
     assert "Total runtime   : 20.0 ms" in output
+
+
+def test_top_parent_summary_handles_missing_score():
+    validator = load_validation_module()
+
+    assert validator.top_parent_summary({
+        "matched_parent_details": [
+            {"source_uri": "/docs/invoice_4421.txt", "rank": 1, "fts_score": None}
+        ]
+    }) == "invoice_4421.txt (score: n/a)"

@@ -391,11 +391,26 @@ def print_summary(output: dict[str, Any]) -> None:
     )
     for query in output["queries"]:
         query_status = "PASS" if query["passed"] else "FAIL"
+        top_parent = top_parent_summary(query)
         print(
             f"{query_status}: {query['id']} -> "
             f"{query['result_files']} ({query['query_ms']} ms)"
         )
+        if top_parent:
+            print(f"      top parent: {top_parent}")
     print(f"Total runtime   : {output['total_ms']} ms")
+
+
+def top_parent_summary(query: dict[str, Any]) -> str | None:
+    details = query.get("matched_parent_details") or []
+    if not details:
+        return None
+    top = details[0]
+    file_name = top.get("file_name") or Path(str(top.get("source_uri", ""))).name
+    score = top.get("fts_score")
+    if score is None:
+        return f"{file_name} (score: n/a)"
+    return f"{file_name} (score: {float(score):.4f})"
 
 
 if __name__ == "__main__":

@@ -143,13 +143,14 @@ def test_local_lancedb_search_rejects_filters(search_tab):
         MockWorker.assert_not_called()
 
 
-def test_local_lancedb_search_rejects_busy_index(search_tab, mock_api_client):
+def test_local_lancedb_search_rejects_busy_index(search_tab, mock_api_client, tmp_path):
     search_tab.query_input.setText("EV6")
+    db_path = tmp_path / "local-lancedb"
+    db_path.mkdir()
 
     with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
+         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
          patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now"}), \
-         patch("desktop_app.ui.search_tab.Path.exists", return_value=True), \
          patch("desktop_app.ui.search_tab.is_lancedb_index_busy", return_value=True), \
          patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
          patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:

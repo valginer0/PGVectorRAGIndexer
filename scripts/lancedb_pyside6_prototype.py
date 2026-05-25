@@ -312,7 +312,10 @@ class SearchEngine:
         # 2. Run Vector search
         t1 = time.perf_counter()
         emb = _encode(self.embed_model, query)
-        vec_res = tbl_chunks.search(emb, vector_column_name="embedding").limit(top_k * 2).to_arrow().to_pylist()
+        vec_query = tbl_chunks.search(emb, vector_column_name="embedding")
+        if callable(getattr(vec_query, "metric", None)):
+            vec_query = vec_query.metric("cosine")
+        vec_res = vec_query.limit(top_k * 2).to_arrow().to_pylist()
         vec_time = (time.perf_counter() - t1) * 1000
 
         # Apply manual RRF
@@ -391,10 +394,13 @@ class SearchEngine:
 
             t1 = time.perf_counter()
             emb = _encode(self.embed_model, query)
-            
-            # Execute HNSW vector search with path scoping filter
+
+            # Execute vector search with path scoping filter
+            vec_query = tbl_chunks.search(emb, vector_column_name="embedding")
+            if callable(getattr(vec_query, "metric", None)):
+                vec_query = vec_query.metric("cosine")
             vec_res = (
-                tbl_chunks.search(emb, vector_column_name="embedding")
+                vec_query
                 .where(filter_str)
                 .limit(child_limit)
                 .to_arrow()

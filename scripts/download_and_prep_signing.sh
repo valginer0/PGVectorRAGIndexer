@@ -41,7 +41,8 @@ echo -e "${GREEN}Downloading artifact...${NC}"
 
 # We will download everything to temp dir and inspect contents
 
-# We assume the artifact name is "PGVectorRAGIndexer-Setup" (standard) or "PGVectorRAGIndexer.msi" (future)
+# The current release artifact is "PGVectorRAGIndexer.msi"; older workflow runs
+# may still contain a "PGVectorRAGIndexer-Setup" folder.
 # We download everything to temp dir
 gh run download "$RUN_ID" --dir "$TEMP_DIR"
 
@@ -50,8 +51,9 @@ echo -e "Contents:"
 ls -la "$TEMP_DIR"
 
 # Determine what to pass to the update script
-# If we have a folder named "PGVectorRAGIndexer-Setup", use that (legacy/current exe)
-# If we have a file named "PGVectorRAGIndexer.msi", use that (future msi)
+# If we have a file named "PGVectorRAGIndexer.msi", use that.
+# If we have a folder named "PGVectorRAGIndexer-Setup", keep supporting it as a
+# legacy artifact format.
 
 ARTIFACT_PATH=""
 

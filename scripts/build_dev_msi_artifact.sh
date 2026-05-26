@@ -62,8 +62,9 @@ Output:
 Notes:
   - This script does not sign the MSI.
   - This script does not update ragvault.net.
-  - For branch behavior, run the generated install-dev-msi.ps1 helper so the MSI
-    installer process receives PGVECTOR_REPO_REF and, optionally, APP_IMAGE.
+  - For branch/tag behavior, run the generated install-dev-msi.ps1 helper so
+    the MSI installer process receives PGVECTOR_REPO_REF and, optionally,
+    APP_IMAGE.
 EOF
 }
 
@@ -134,8 +135,33 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! git ls-remote --exit-code --heads origin "$REF" >/dev/null 2>&1 \
-  && ! git ls-remote --exit-code --tags origin "$REF" >/dev/null 2>&1; then
+resolve_remote_ref_sha() {
+  local ref="$1"
+  local sha=""
+
+  sha="$(git ls-remote origin "refs/heads/${ref}" | awk 'NR == 1 {print $1}')"
+  if [ -n "$sha" ]; then
+    printf '%s\n' "$sha"
+    return 0
+  fi
+
+  # Annotated tags need to be peeled to the commit SHA; lightweight tags are
+  # already stored as the commit SHA.
+  sha="$(git ls-remote origin "refs/tags/${ref}^{}" | awk 'NR == 1 {print $1}')"
+  if [ -z "$sha" ]; then
+    sha="$(git ls-remote origin "refs/tags/${ref}" | awk 'NR == 1 {print $1}')"
+  fi
+
+  if [ -n "$sha" ]; then
+    printf '%s\n' "$sha"
+    return 0
+  fi
+
+  return 1
+}
+
+REF_SHA="$(resolve_remote_ref_sha "$REF" || true)"
+if [ -z "$REF_SHA" ]; then
   echo "ERROR: origin does not have branch or tag '$REF'." >&2
   echo "Push the branch/tag first, then rerun this script." >&2
   exit 1
@@ -144,7 +170,7 @@ fi
 safe_ref="$(printf '%s' "$REF" | tr '/: ' '---')"
 started_epoch="$(date -u +%s)"
 
-echo "Triggering '${WORKFLOW_NAME}' for ref '${REF}'..."
+echo "Triggering '${WORKFLOW_NAME}' for ref '${REF}' (${REF_SHA})..."
 gh workflow run "$WORKFLOW_FILE" --repo "$REPO" --ref "$REF"
 
 find_run_json() {
@@ -160,7 +186,8 @@ import json
 import sys
 
 ref = sys.argv[1]
-started_epoch = int(sys.argv[2])
+ref_sha = sys.argv[2]
+started_epoch = int(sys.argv[3])
 runs = json.load(sys.stdin)
 
 def parse_epoch(value: str) -> int:
@@ -168,13 +195,15 @@ def parse_epoch(value: str) -> int:
     return int(datetime.datetime.fromisoformat(value).timestamp())
 
 for run in runs:
-    if run.get("headBranch") != ref:
+    # Branch-triggered runs are easy to identify by headBranch. Tag-triggered
+    # runs can report the target branch instead, so also match the resolved SHA.
+    if run.get("headBranch") != ref and run.get("headSha") != ref_sha:
         continue
     if parse_epoch(run["createdAt"]) < started_epoch - 5:
         continue
     print(json.dumps(run))
     break
-' "$REF" "$started_epoch"
+' "$REF" "$REF_SHA" "$started_epoch"
 }
 
 deadline=$((started_epoch + TIMEOUT_SECONDS))

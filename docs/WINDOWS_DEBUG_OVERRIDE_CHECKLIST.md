@@ -39,15 +39,24 @@ Required output:
 
 Do not continue until that tag exists in GHCR.
 
-### 3. Build the debug MSI
+### 3. Build and download the debug MSI
 
-Run the Windows installer workflow on branch:
+Use the dev MSI automation script from WSL:
 
-- `debug/windows-license-org-tab`
+```bash
+./scripts/build_dev_msi_artifact.sh debug/windows-license-org-tab \
+  --app-image ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab
+```
 
-Download artifact:
+The script:
 
-- `PGVectorRAGIndexer.msi`
+- triggers the existing `Build Windows Installer` GitHub Actions workflow for
+  the branch;
+- waits for the workflow to finish;
+- downloads the unsigned `PGVectorRAGIndexer.msi` artifact to a persistent
+  validation folder under `C:\Users\v_ale\.codex\validation\PGVectorRAGIndexer`;
+- writes an `install-dev-msi.ps1` helper beside the MSI with
+  `PGVECTOR_REPO_REF` and `APP_IMAGE` set for the same branch/image.
 
 This is a test MSI, not a public release.
 
@@ -55,14 +64,14 @@ This is a test MSI, not a public release.
 
 ## Windows Commands
 
-Open PowerShell and set the debug overrides before running the MSI:
+Open PowerShell and run the generated `install-dev-msi.ps1` helper. It sets the
+debug overrides before launching the MSI:
 
 ```powershell
-$env:PGVECTOR_REPO_REF="debug/windows-license-org-tab"
-$env:APP_IMAGE="ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
+& "C:\Users\v_ale\.codex\validation\PGVectorRAGIndexer\dev-msi\debug-windows-license-org-tab\<run-id>\install-dev-msi.ps1"
 ```
 
-Then launch the downloaded MSI from the same PowerShell session.
+Use the exact helper path printed by `build_dev_msi_artifact.sh`.
 
 ---
 

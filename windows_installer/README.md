@@ -1,8 +1,10 @@
 # PGVectorRAGIndexer Windows Installer
 
-This directory contains the source code for the Windows `.exe` installer.
+This directory contains the Windows Setup Wizard source and WiX configuration.
+The user-facing wizard remains `PGVectorRAGIndexer-Setup.exe`; the production
+release artifact is the MSI that installs that wizard.
 
-## Building the Installer
+## Building the Setup Wizard Payload Locally
 
 **Requirements:**
 - Windows 10/11
@@ -18,6 +20,36 @@ python build_installer.py
 
 **Output:**
 - `dist/PGVectorRAGIndexer-Setup.exe` (~15-20 MB)
+
+This local helper build is useful for debugging the wizard itself. It does not
+produce the real release MSI.
+
+## Building the Release MSI
+
+The real Windows installer is built by GitHub Actions in
+`.github/workflows/build-windows-installer.yml`.
+
+The release pipeline does the following:
+
+1. Generates `windows_installer/version_info.txt` from the root `VERSION` file.
+2. On release tags (`v*`), patches the frozen wizard so `DEFAULT_REPO_REF` and
+   `bootstrap_desktop_app.ps1` point at the exact release tag.
+3. Verifies that the matching GHCR backend image exists before publishing the
+   installer.
+4. Builds the `PGVectorRAGIndexer-Setup` PyInstaller onedir payload.
+5. Uses WiX `heat`, `candle`, and `light` to package that payload into:
+
+```text
+dist/PGVectorRAGIndexer.msi
+```
+
+The MSI installs `PGVectorRAGIndexer-Setup.exe` into Program Files and creates
+the Start Menu/Desktop shortcuts named `PGVector RAG Indexer Setup Wizard`.
+
+The separate Windows CI workflow (`.github/workflows/test-windows.yml`) also
+builds an MSI, silently installs it with `msiexec`, verifies the installed setup
+wizard executable exists, and uninstalls it. That is the automated MSI smoke
+path; it is distinct from source-level or PyInstaller-only validation.
 
 ## Files
 

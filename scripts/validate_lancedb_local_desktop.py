@@ -210,12 +210,22 @@ def run_validation(
                 child_limit=child_limit,
             )
             query_ms = elapsed_ms(query_start)
-            result_files = [Path(result.source_uri).name for result in results]
+            result_files = [
+                display_path_for_source(result.source_uri, corpus_dir)
+                for result in results
+            ]
             unique_result_files = dedupe_preserving_order(result_files)
-            matched_parent_files = [Path(source).name for source in telemetry.matched_parents]
+            matched_parent_files = [
+                display_path_for_source(source, corpus_dir)
+                for source in telemetry.matched_parents
+            ]
             matched_parent_details = [
                 {
                     **parent_detail,
+                    "relative_path": display_path_for_source(
+                        str(parent_detail["source_uri"]),
+                        corpus_dir,
+                    ),
                     "file_name": Path(str(parent_detail["source_uri"])).name,
                 }
                 for parent_detail in telemetry.matched_parent_details
@@ -332,11 +342,27 @@ def expected_files_for_query(query_spec: dict[str, Any]) -> list[str]:
             isinstance(value, str) and value for value in expected_files
         ):
             raise SystemExit("expected_files must be a non-empty list of strings")
-        return list(expected_files)
+        return [normalize_manifest_path(value) for value in expected_files]
     expected_file = query_spec.get("expected_file")
     if isinstance(expected_file, str) and expected_file:
-        return [expected_file]
+        return [normalize_manifest_path(expected_file)]
     return []
+
+
+def normalize_manifest_path(value: str) -> str:
+    normalized = value.replace("\\", "/").strip()
+    while normalized.startswith("./"):
+        normalized = normalized[2:]
+    return normalized
+
+
+def display_path_for_source(source_uri: str, corpus_dir: Path) -> str:
+    source_path = Path(source_uri)
+    corpus_root = corpus_dir.resolve()
+    try:
+        return source_path.resolve().relative_to(corpus_root).as_posix()
+    except (OSError, ValueError):
+        return source_path.name
 
 
 def make_embedder(embedder_name: str, *, model_name: str):
@@ -406,7 +432,11 @@ def top_parent_summary(query: dict[str, Any]) -> str | None:
     if not details:
         return None
     top = details[0]
-    file_name = top.get("file_name") or Path(str(top.get("source_uri", ""))).name
+    file_name = (
+        top.get("relative_path")
+        or top.get("file_name")
+        or Path(str(top.get("source_uri", ""))).name
+    )
     score = top.get("fts_score")
     if score is None:
         return f"{file_name} (score: n/a)"

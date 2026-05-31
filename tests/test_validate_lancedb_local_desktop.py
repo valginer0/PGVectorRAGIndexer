@@ -86,6 +86,7 @@ def test_main_accepts_query_manifest_and_retrieval_limits(tmp_path):
                     "rank": 1,
                     "source_uri": output["queries"][0]["matched_parent_details"][0]["source_uri"],
                     "fts_score": output["queries"][0]["matched_parent_details"][0]["fts_score"],
+                    "relative_path": "ev6_service.txt",
                     "file_name": "ev6_service.txt",
                 }
             ],
@@ -105,6 +106,27 @@ def test_load_query_specs_rejects_invalid_manifest(tmp_path):
 
     with pytest.raises(SystemExit, match="non-empty string query"):
         validator.load_query_specs(manifest_path)
+
+
+def test_expected_files_normalize_windows_separators():
+    validator = load_validation_module()
+
+    assert validator.expected_files_for_query({
+        "expected_files": [r"docs\api\README.md", "./guide/index.md"]
+    }) == [
+        "docs/api/README.md",
+        "guide/index.md",
+    ]
+
+
+def test_display_path_for_source_uses_corpus_relative_path(tmp_path):
+    validator = load_validation_module()
+    corpus_dir = tmp_path / "corpus"
+    source = corpus_dir / "docs" / "api" / "README.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("API docs", encoding="utf-8")
+
+    assert validator.display_path_for_source(str(source), corpus_dir) == "docs/api/README.md"
 
 
 def test_dedupe_preserving_order_keeps_first_file_occurrence():

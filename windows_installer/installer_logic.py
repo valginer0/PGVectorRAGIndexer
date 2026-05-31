@@ -147,6 +147,15 @@ class Installer:
             return override
         return default
 
+    def _local_search_enabled(self) -> bool:
+        """Whether to install the optional local LanceDB search dependencies.
+
+        Off by default. Mirrors bootstrap_desktop_app.ps1: opt in by setting
+        PGVECTOR_LOCAL_SEARCH to 1/true/yes/on (process env or HKCU Environment).
+        """
+        value = self._resolve_override("PGVECTOR_LOCAL_SEARCH", "")
+        return value.strip().lower() in ("1", "true", "yes", "on")
+
     def _default_app_image(self) -> str:
         """Return the Docker image tag that matches the selected backend ref."""
         repo_version = self._version_from_ref(getattr(self, "repo_ref", ""))
@@ -1335,12 +1344,29 @@ class Installer:
         self._update_progress(step, "Installing Python dependencies...")
         pip_path = os.path.join(venv_dir, "Scripts", "pip.exe")
         success, _ = self._run_command(f'"{pip_path}" install -q -r requirements-desktop.txt')
-        
+
         if not success:
             self._log("Warning: Some dependencies may have failed", "warning")
         else:
             self._log("Dependencies installed", "success")
-        
+
+        # Optional: experimental local LanceDB search dependencies (CPU Torch +
+        # sentence-transformers). Larger download; only installed when opted in.
+        if self._local_search_enabled():
+            self._update_progress(step, "Installing optional local search dependencies...")
+            self._log("Installing local search dependencies (CPU Torch + sentence-transformers)...", "info")
+            ls_success, _ = self._run_command(
+                f'"{pip_path}" install -r requirements-desktop-lancedb.txt'
+            )
+            if not ls_success:
+                self._log(
+                    "Local search dependencies failed; the app will run but the "
+                    "Local LanceDB search toggle will not work",
+                    "warning",
+                )
+            else:
+                self._log("Local search dependencies installed", "success")
+
         return True
 
     # =========================================================================

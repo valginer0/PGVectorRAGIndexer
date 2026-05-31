@@ -1355,7 +1355,9 @@ class Installer:
         if self._local_search_enabled():
             self._update_progress(step, "Installing optional local search dependencies...")
             self._log("Installing local search dependencies (CPU Torch + sentence-transformers)...", "info")
-            ls_success, _ = self._run_command(
+            # Stream output: this is a large download that can exceed the
+            # 300s timeout of _run_command on a fresh machine.
+            ls_success = self._run_command_stream(
                 f'"{pip_path}" install -r requirements-desktop-lancedb.txt'
             )
             if not ls_success:

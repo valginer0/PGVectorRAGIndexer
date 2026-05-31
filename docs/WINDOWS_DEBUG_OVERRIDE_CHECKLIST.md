@@ -58,6 +58,15 @@ The script:
 - writes an `install-dev-msi.ps1` helper beside the MSI with
   `PGVECTOR_REPO_REF` and `APP_IMAGE` set for the same branch/image.
 
+To also smoke-test the experimental local LanceDB search path, add
+`--local-search`. The helper then sets `PGVECTOR_LOCAL_SEARCH=1` so the MSI
+Setup Wizard installs the local search dependencies (CPU Torch +
+sentence-transformers) into the desktop venv:
+
+```bash
+./scripts/build_dev_msi_artifact.sh dev/v2 --local-search
+```
+
 This is a test MSI, not a public release.
 
 ---

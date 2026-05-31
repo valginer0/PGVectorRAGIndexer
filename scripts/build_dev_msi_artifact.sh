@@ -20,6 +20,7 @@ WORKFLOW_NAME="Build Windows Installer"
 REPO="valginer0/PGVectorRAGIndexer"
 REF=""
 APP_IMAGE_OVERRIDE="${APP_IMAGE:-}"
+LOCAL_SEARCH=0
 TIMEOUT_SECONDS=3600
 POLL_SECONDS=15
 
@@ -45,6 +46,9 @@ Arguments:
 
 Options:
   --app-image IMAGE          Write APP_IMAGE into the generated install helper.
+  --local-search             Set PGVECTOR_LOCAL_SEARCH=1 in the install helper
+                             so the MSI installs the experimental local LanceDB
+                             search dependencies (CPU Torch + sentence-transformers).
   --output-root DIR          Persistent root for downloaded artifacts.
   --timeout-seconds N        Workflow wait timeout. Default: 3600.
   --poll-seconds N           Poll interval. Default: 15.
@@ -77,6 +81,10 @@ while [ $# -gt 0 ]; do
         exit 1
       fi
       shift 2
+      ;;
+    --local-search)
+      LOCAL_SEARCH=1
+      shift
       ;;
     --output-root)
       OUTPUT_ROOT="${2:-}"
@@ -283,12 +291,25 @@ else
 EOF
 fi
 
+if [ "$LOCAL_SEARCH" = "1" ]; then
+  cat >> "$helper_path" <<'EOF'
+# Install experimental local LanceDB search dependencies during MSI setup.
+$env:PGVECTOR_LOCAL_SEARCH = "1"
+EOF
+else
+  cat >> "$helper_path" <<'EOF'
+# Optional: install experimental local LanceDB search dependencies during setup:
+# $env:PGVECTOR_LOCAL_SEARCH = "1"
+EOF
+fi
+
 cat >> "$helper_path" <<EOF
 
 \$msiPath = "$windows_msi_path"
 Write-Host "Installing dev MSI: \$msiPath"
 Write-Host "PGVECTOR_REPO_REF=\$env:PGVECTOR_REPO_REF"
 if (\$env:APP_IMAGE) { Write-Host "APP_IMAGE=\$env:APP_IMAGE" }
+if (\$env:PGVECTOR_LOCAL_SEARCH) { Write-Host "PGVECTOR_LOCAL_SEARCH=\$env:PGVECTOR_LOCAL_SEARCH" }
 Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i", \$msiPath) -Wait
 EOF
 

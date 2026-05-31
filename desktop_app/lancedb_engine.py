@@ -386,16 +386,32 @@ class LocalLanceDBEngine:
         filter_clause = None
         results: list[SearchResult] = []
         if matched_parents:
+            # Telemetry keeps the full candidate-set filter for readability.
             filter_clause = self._source_uri_filter(matched_parents)
             t1 = time.perf_counter()
             query_vector = self._encode(query)
-            child_rows = (
-                self._vector_search(chunks, query_vector)
-                .where(filter_clause)
-                .limit(child_limit)
-                .to_arrow()
-                .to_pylist()
+            # Parent-stratified fulfillment: run the child vector search per parent so
+            # a weaker parent's chunk cannot displace the top parent's chunks in a single
+            # global ranking. Rows are ordered by parent FTS rank first, then by vector
+            # distance within each parent, then truncated to child_limit. At
+            # parent_limit=1 this is identical to a single restricted vector search.
+            stratified_rows: list[dict[str, Any]] = []
+            for source_uri in matched_parents:
+                per_parent_rows = (
+                    self._vector_search(chunks, query_vector)
+                    .where(self._source_uri_filter([source_uri]))
+                    .limit(child_limit)
+                    .to_arrow()
+                    .to_pylist()
+                )
+                stratified_rows.extend(per_parent_rows)
+            stratified_rows.sort(
+                key=lambda row: (
+                    parent_ranks.get(str(row["source_uri"]), len(parent_ranks) + 1),
+                    float(row.get("_distance", 1.0)),
+                )
             )
+            child_rows = stratified_rows[:child_limit]
             vector_time = (time.perf_counter() - t1) * 1000
             results = [
                 self._result_from_row(
@@ -418,7 +434,8 @@ class LocalLanceDBEngine:
             filter_clause=filter_clause,
             explanation=(
                 "Document-level FTS selected parent documents; child vector search "
-                "was restricted to those parents."
+                "was run per parent (parent-stratified) and ordered by parent FTS rank, "
+                "then by vector distance within each parent."
             ),
         )
         return results, telemetry

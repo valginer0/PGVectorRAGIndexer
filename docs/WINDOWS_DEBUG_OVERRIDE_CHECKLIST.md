@@ -56,7 +56,9 @@ The script:
 - downloads the unsigned `PGVectorRAGIndexer.msi` artifact to a persistent
   validation folder under `C:\Users\v_ale\.codex\validation\PGVectorRAGIndexer`;
 - writes an `install-dev-msi.ps1` helper beside the MSI with
-  `PGVECTOR_REPO_REF` and `APP_IMAGE` set for the same branch/image.
+  `PGVECTOR_REPO_REF` and `APP_IMAGE` set for the same branch/image;
+- launches the installed Setup Wizard from the same helper so those process
+  environment overrides are inherited by the real setup step.
 
 To also smoke-test the experimental local LanceDB search path, add
 `--local-search`. The helper then sets `PGVECTOR_LOCAL_SEARCH=1` so the MSI

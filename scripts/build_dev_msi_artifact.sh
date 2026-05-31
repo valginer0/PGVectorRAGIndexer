@@ -311,6 +311,15 @@ Write-Host "PGVECTOR_REPO_REF=\$env:PGVECTOR_REPO_REF"
 if (\$env:APP_IMAGE) { Write-Host "APP_IMAGE=\$env:APP_IMAGE" }
 if (\$env:PGVECTOR_LOCAL_SEARCH) { Write-Host "PGVECTOR_LOCAL_SEARCH=\$env:PGVECTOR_LOCAL_SEARCH" }
 Start-Process -FilePath "msiexec.exe" -ArgumentList @("/i", \$msiPath) -Wait
+
+\$setupPath = Join-Path \$env:ProgramFiles "PGVectorRAGIndexer\\PGVectorRAGIndexer-Setup.exe"
+if (Test-Path -LiteralPath \$setupPath) {
+    Write-Host "Launching Setup Wizard with the same branch/test overrides: \$setupPath"
+    Start-Process -FilePath \$setupPath -Wait
+} else {
+    Write-Warning "Setup Wizard was not found at \$setupPath"
+    Write-Warning "Launch PGVectorRAGIndexer-Setup.exe from the MSI install location using this same PowerShell session."
+}
 EOF
 
 echo ""

@@ -1,0 +1,30 @@
+# Optional: Local LanceDB desktop search (experimental, off-by-default)
+# ----------------------------------------------------------------------------
+# These dependencies are NOT installed by the default desktop bootstrap. They
+# are only needed for the experimental "Local LanceDB search" toggle in the
+# desktop app (Settings tab), which ships hidden / off by default.
+#
+# Install them by re-running the bootstrap with the opt-in flag:
+#
+#     bootstrap_desktop_app.ps1 -WithLocalSearch
+#
+# or by setting the environment variable before running bootstrap:
+#
+#     PGVECTOR_LOCAL_SEARCH=1
+#
+# Torch is pinned to the CPU build on purpose. The --extra-index-url below plus
+# the explicit "+cpu" local-version tag force pip to resolve torch from the
+# PyTorch CPU index. PyPI does not host "+cpu" wheels, so a multi-GB CUDA build
+# cannot be pulled in by accident. Do NOT replace this with a bare "torch" pin.
+#
+# Versions are pinned to the combination validated on dev/v2. The first run of
+# local search downloads the sentence-transformers model (~90 MB) from
+# Hugging Face, so this path requires network access on first use.
+
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.8.0+cpu
+lancedb==0.30.2
+pyarrow==24.0.0
+sentence-transformers==5.1.1
+transformers==4.57.0

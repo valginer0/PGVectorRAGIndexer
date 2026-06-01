@@ -42,6 +42,7 @@ Rebuild after:
 - Document type and extension filters are not supported in local mode.
 - The first local operation after app startup may be slower while the embedding model loads into memory. Later operations in the same desktop session should be faster.
 - Search returns one result per source file. Nearby or related documents may also appear when they share strong terms with the query.
+- Local search is **precision-first**: for a specific or identifier-like query it may intentionally return a single strong match rather than filling the result list. Additional files appear only when they match the query about as strongly. Seeing fewer results is expected behavior, not an error.
 
 ## Model Cache Behavior
 

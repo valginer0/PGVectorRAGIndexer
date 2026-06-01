@@ -131,22 +131,27 @@ def run_smoke(args: argparse.Namespace) -> dict:
         failures.append({"title": str(title), "message": str(message)})
         return QMessageBox.Ok
 
-    ingest_started = time.perf_counter()
-    with patch("desktop_app.ui.settings_tab.QMessageBox.critical", side_effect=capture_failure), patch(
-        "desktop_app.ui.settings_tab.QFileDialog.getExistingDirectory",
-        return_value=str(corpus_dir),
-    ):
-        settings_tab._build_local_lancedb_index()
-        wait_for_qt(
-            app,
-            lambda: settings_tab._local_lancedb_ingest_worker
-            and not settings_tab._local_lancedb_ingest_worker.isRunning(),
-            timeout_seconds=args.timeout_seconds,
-            label="local LanceDB index rebuild",
-        )
-    ingest_ms = (time.perf_counter() - ingest_started) * 1000
-    if failures:
-        raise AssertionError(f"Local index rebuild failed: {failures}")
+    def run_index_rebuild(label: str) -> float:
+        failures.clear()
+        started = time.perf_counter()
+        with patch("desktop_app.ui.settings_tab.QMessageBox.critical", side_effect=capture_failure), patch(
+            "desktop_app.ui.settings_tab.QFileDialog.getExistingDirectory",
+            return_value=str(corpus_dir),
+        ):
+            settings_tab._build_local_lancedb_index()
+            wait_for_qt(
+                app,
+                lambda: settings_tab._local_lancedb_ingest_worker
+                and not settings_tab._local_lancedb_ingest_worker.isRunning(),
+                timeout_seconds=args.timeout_seconds,
+                label=label,
+            )
+        elapsed = (time.perf_counter() - started) * 1000
+        if failures:
+            raise AssertionError(f"{label} failed: {failures}")
+        return elapsed
+
+    ingest_ms = run_index_rebuild("first local LanceDB index rebuild")
 
     metadata = app_config.get_local_lancedb_index_metadata()
     if not metadata:
@@ -155,6 +160,13 @@ def run_smoke(args: argparse.Namespace) -> dict:
         raise AssertionError("Persisted local index metadata has the wrong db_path")
     if int(metadata.get("indexed_documents", 0)) != 2:
         raise AssertionError(f"Expected 2 indexed documents, got {metadata}")
+
+    second_ingest_ms = run_index_rebuild("second local LanceDB index rebuild")
+    metadata = app_config.get_local_lancedb_index_metadata()
+    if int(metadata.get("indexed_documents", 0)) != 2:
+        raise AssertionError(f"Second rebuild did not preserve indexed document count: {metadata}")
+    if not db_path.exists():
+        raise AssertionError("Second rebuild did not leave a local LanceDB index folder")
 
     restarted_settings_tab = SettingsTab(docker_manager=MagicMock())
     restart_status = restarted_settings_tab._local_lancedb_status.text()
@@ -203,6 +215,8 @@ def run_smoke(args: argparse.Namespace) -> dict:
         warnings.append({"title": str(title), "message": str(message)})
         return QMessageBox.Ok
 
+    warning_checks: dict[str, dict[str, str]] = {}
+
     app_config.clear_local_lancedb_index_metadata()
     with patch("desktop_app.ui.search_tab.QMessageBox.warning", side_effect=capture_warning):
         search_tab.perform_search()
@@ -211,6 +225,30 @@ def run_smoke(args: argparse.Namespace) -> dict:
         raise AssertionError(f"Expected Local Index Not Built warning, got {warnings}")
     if "Rebuild Local Text/Markdown Index" not in warnings[0]["message"]:
         raise AssertionError(f"Warning does not point to the rebuild action: {warnings[0]}")
+    warning_checks["missing_metadata"] = warnings[-1]
+
+    app_config.set_local_lancedb_index_metadata(metadata)
+    shutil.rmtree(db_path)
+    with patch("desktop_app.ui.search_tab.QMessageBox.warning", side_effect=capture_warning):
+        search_tab.perform_search()
+
+    if warnings[-1]["title"] != "Local Index Missing":
+        raise AssertionError(f"Expected Local Index Missing warning, got {warnings[-1]}")
+    if "Rebuild Local Text/Markdown Index" not in warnings[-1]["message"]:
+        raise AssertionError(f"Missing-index warning does not point to rebuild: {warnings[-1]}")
+    warning_checks["missing_folder"] = warnings[-1]
+
+    stale_metadata = dict(metadata)
+    stale_metadata["db_path"] = str(work_dir / "different_lancedb_index")
+    app_config.set_local_lancedb_index_metadata(stale_metadata)
+    with patch("desktop_app.ui.search_tab.QMessageBox.warning", side_effect=capture_warning):
+        search_tab.perform_search()
+
+    if warnings[-1]["title"] != "Local Index Needs Rebuild":
+        raise AssertionError(f"Expected Local Index Needs Rebuild warning, got {warnings[-1]}")
+    if "Rebuild Local Text/Markdown Index" not in warnings[-1]["message"]:
+        raise AssertionError(f"Stale-metadata warning does not point to rebuild: {warnings[-1]}")
+    warning_checks["stale_metadata"] = warnings[-1]
 
     return {
         "passed": True,
@@ -222,6 +260,7 @@ def run_smoke(args: argparse.Namespace) -> dict:
         "db_path": str(db_path),
         "timings_ms": {
             "ingest": round(ingest_ms, 2),
+            "second_ingest": round(second_ingest_ms, 2),
             "search": round(search_ms, 2),
         },
         "settings": {
@@ -238,6 +277,7 @@ def run_smoke(args: argparse.Namespace) -> dict:
             "result_files": result_files,
         },
         "warnings": warnings,
+        "warning_checks": warning_checks,
         "metadata": metadata,
     }
 

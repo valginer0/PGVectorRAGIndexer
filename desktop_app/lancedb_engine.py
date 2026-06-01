@@ -23,6 +23,14 @@ DEFAULT_EMBEDDING_MODEL = "all-MiniLM-L6-v2"
 DEFAULT_EMBEDDING_DIM = 384
 VECTOR_METRIC = "cosine"
 MIN_VECTOR_INDEX_ROWS = 256
+# A parent ranked below the top parent contributes child chunks only if its
+# document-level FTS score is at least this fraction of the top parent's score.
+# 1.0 means "top parent only" except exact ties; lower values allow multi-document
+# spill at the cost of precision on corpora with thin parent-score margins. We gate
+# spill on parent FTS (the reliable "is this the right document" signal), not on
+# child vector similarity, because for exact-identifier queries the correct (often
+# terse) document scores LOWER on vector similarity than chatty unrelated prose.
+DEFAULT_CHILD_PARENT_SPILL_RATIO = 1.0
 
 LOGGER = logging.getLogger(__name__)
 
@@ -352,6 +360,7 @@ class LocalLanceDBEngine:
         *,
         parent_limit: int = 5,
         child_limit: int = 10,
+        child_parent_spill_ratio: float = DEFAULT_CHILD_PARENT_SPILL_RATIO,
     ) -> tuple[list[SearchResult], SearchTelemetry]:
         """Search parent documents with FTS, then child chunks with vector search."""
         self._ensure_open()
@@ -359,6 +368,8 @@ class LocalLanceDBEngine:
         self._validate_search_args(query, child_limit)
         if parent_limit <= 0:
             raise ValueError("parent_limit must be positive")
+        if child_parent_spill_ratio < 0:
+            raise ValueError("child_parent_spill_ratio must be non-negative")
         start = time.perf_counter()
         parents = self.db.open_table(PARENT_TABLE)
         chunks = self.db.open_table(CHUNK_TABLE)
@@ -392,11 +403,16 @@ class LocalLanceDBEngine:
             query_vector = self._encode(query)
             # Parent-stratified fulfillment: run the child vector search per parent so
             # a weaker parent's chunk cannot displace the top parent's chunks in a single
-            # global ranking. Rows are ordered by parent FTS rank first, then by vector
-            # distance within each parent, then truncated to child_limit. At
-            # parent_limit=1 this is identical to a single restricted vector search.
+            # global ranking. The top parent always contributes; a lower-ranked parent
+            # contributes only if its FTS score clears child_parent_spill_ratio of the
+            # top parent's score. We do NOT pad to child_limit from unqualified parents:
+            # returning 1-3 confident chunks beats 5 with a decorative tail.
+            top_fts = matched_parent_details[0]["fts_score"]
+            spill_parents = self._spill_parents(
+                matched_parent_details, top_fts, child_parent_spill_ratio
+            )
             stratified_rows: list[dict[str, Any]] = []
-            for source_uri in matched_parents:
+            for source_uri in spill_parents:
                 per_parent_rows = (
                     self._vector_search(chunks, query_vector)
                     .where(self._source_uri_filter([source_uri]))
@@ -524,6 +540,34 @@ class LocalLanceDBEngine:
     @staticmethod
     def _quote_lancedb_string(value: str) -> str:
         return "'" + value.replace("'", "''") + "'"
+
+    @staticmethod
+    def _spill_parents(
+        matched_parent_details: list[dict[str, Any]],
+        top_fts: float | None,
+        spill_ratio: float,
+    ) -> list[str]:
+        """Parents (in FTS rank order) allowed to contribute child chunks.
+
+        The top parent always qualifies. A lower-ranked parent qualifies only if
+        its FTS score is at least ``spill_ratio`` of the top parent's score. If the
+        top FTS score is missing or non-positive we cannot judge ratios, so we fall
+        back to the top parent only.
+        """
+        allowed: list[str] = []
+        for detail in matched_parent_details:
+            if detail["rank"] == 1:
+                allowed.append(detail["source_uri"])
+                continue
+            score = detail["fts_score"]
+            if (
+                top_fts is not None
+                and top_fts > 0
+                and score is not None
+                and score >= top_fts * spill_ratio
+            ):
+                allowed.append(detail["source_uri"])
+        return allowed
 
     @classmethod
     def _source_uri_filter(cls, source_uris: Sequence[str]) -> str:

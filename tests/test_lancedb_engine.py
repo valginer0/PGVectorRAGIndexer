@@ -120,6 +120,25 @@ def test_parent_child_scopes_away_flat_global_noise(tmp_path):
     assert all(result.source_uri == "docs/ev6_service.txt" for result in parent_results)
 
 
+def test_spill_parents_gates_lower_parents_by_fts_ratio():
+    details = [
+        {"rank": 1, "source_uri": "top", "fts_score": 10.0},
+        {"rank": 2, "source_uri": "near_tie", "fts_score": 9.7},
+        {"rank": 3, "source_uri": "distant", "fts_score": 4.0},
+    ]
+    # Default ratio 1.0: top parent only; a thin-margin near-tie does not spill.
+    assert LocalLanceDBEngine._spill_parents(details, 10.0, 1.0) == ["top"]
+    # Lenient ratio admits the near-tie but still excludes the distant parent.
+    assert LocalLanceDBEngine._spill_parents(details, 10.0, 0.9) == ["top", "near_tie"]
+    assert LocalLanceDBEngine._spill_parents(details, 10.0, 0.3) == [
+        "top",
+        "near_tie",
+        "distant",
+    ]
+    # Missing or non-positive top score -> cannot judge ratios -> top parent only.
+    assert LocalLanceDBEngine._spill_parents(details, None, 0.0) == ["top"]
+
+
 def test_vector_search_uses_cosine_metric(tmp_path):
     engine = LocalLanceDBEngine(tmp_path / "lancedb", embedder=AxisEmbedder())
     engine.ingest_documents(

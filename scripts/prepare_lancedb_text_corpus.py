@@ -17,21 +17,12 @@ import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-
-from document_processor import (  # noqa: E402
-    DocumentProcessor,
-    DocumentProcessingError,
-    EncryptedPDFError,
-    LoaderError,
-    UnsupportedFormatError,
-)
-
 
 EXCLUDED_DIR_NAMES = {
     ".git",
@@ -102,7 +93,7 @@ def prepare_text_corpus(
     manifest_json: Path | None = None,
     ocr_mode: str = "skip",
     overwrite: bool = False,
-    processor: DocumentProcessor | None = None,
+    processor: Any | None = None,
 ) -> dict[str, Any]:
     source_root = source_dir.resolve()
     output_root = output_dir.resolve()
@@ -113,6 +104,13 @@ def prepare_text_corpus(
     if overwrite and output_root.exists():
         shutil.rmtree(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
+
+    document_processor_symbols = _load_document_processor_symbols()
+    DocumentProcessor = document_processor_symbols["DocumentProcessor"]
+    DocumentProcessingError = document_processor_symbols["DocumentProcessingError"]
+    EncryptedPDFError = document_processor_symbols["EncryptedPDFError"]
+    LoaderError = document_processor_symbols["LoaderError"]
+    UnsupportedFormatError = document_processor_symbols["UnsupportedFormatError"]
 
     processor = processor or DocumentProcessor()
     supported_extensions = {
@@ -200,7 +198,7 @@ def output_path_for_source(source_path: Path, source_root: Path, output_root: Pa
 
 
 def extract_source_text(
-    processor: DocumentProcessor,
+    processor: Any,
     source_path: Path,
     *,
     ocr_mode: str,
@@ -209,7 +207,10 @@ def extract_source_text(
     processor._validate_source(source_uri)
     loader = processor._get_loader(source_uri)
     if not loader:
-        raise UnsupportedFormatError(f"No loader available for: {source_uri}")
+        raise _new_document_processing_error(
+            "UnsupportedFormatError",
+            f"No loader available for: {source_uri}",
+        )
 
     signature = inspect.signature(loader.load)
     if "ocr_mode" in signature.parameters:
@@ -226,13 +227,38 @@ def extract_source_text(
         if fallback_doc:
             documents = [fallback_doc]
         else:
-            raise LoaderError("No content loaded from document")
+            raise _new_document_processing_error(
+                "LoaderError",
+                "No content loaded from document",
+            )
 
     return "\n\n".join(
         document.page_content.strip()
         for document in documents
         if getattr(document, "page_content", "").strip()
     )
+
+
+def _load_document_processor_symbols() -> dict[str, Any]:
+    from document_processor import (
+        DocumentProcessor,
+        DocumentProcessingError,
+        EncryptedPDFError,
+        LoaderError,
+        UnsupportedFormatError,
+    )
+
+    return {
+        "DocumentProcessor": DocumentProcessor,
+        "DocumentProcessingError": DocumentProcessingError,
+        "EncryptedPDFError": EncryptedPDFError,
+        "LoaderError": LoaderError,
+        "UnsupportedFormatError": UnsupportedFormatError,
+    }
+
+
+def _new_document_processing_error(name: str, message: str) -> Exception:
+    return _load_document_processor_symbols()[name](message)
 
 
 def _is_supported_source(

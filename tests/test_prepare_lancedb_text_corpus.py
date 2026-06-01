@@ -19,6 +19,12 @@ def load_prepare_module():
     return module
 
 
+def test_module_load_defers_document_processor_import():
+    prep = load_prepare_module()
+
+    assert "DocumentProcessor" not in prep.__dict__
+
+
 class FakeLoader:
     def __init__(self):
         self.calls = []

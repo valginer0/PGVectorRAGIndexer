@@ -9,7 +9,7 @@ Local LanceDB search is an experimental desktop search mode for local text and M
 3. In the Search panel, enable **Use experimental local text/Markdown search**.
 4. Select **Rebuild Local Text/Markdown Index**.
 5. Choose the folder to index.
-6. Wait for the rebuild to finish. The Settings tab shows the last indexed source and document count.
+6. Wait for the rebuild to finish. The Settings tab shows the last indexed source plus document, chunk, and skipped-file counts.
 7. Use the Search tab normally.
 
 To return to the default backend/API search path, disable **Use experimental local text/Markdown search**.
@@ -67,3 +67,7 @@ The saved local index folder is no longer present. Rebuild the local text/Markdo
 **Local Index Busy**
 
 Another local search or rebuild is using the index. Wait for the current operation to finish, then try again.
+
+**Local Index Failed**
+
+The selected folder could not be indexed. Common causes include a folder with no supported non-empty `.txt`, `.md`, or `.markdown` files, unreadable files, or a local dependency problem. Choose a supported text/Markdown folder and rebuild the local index.

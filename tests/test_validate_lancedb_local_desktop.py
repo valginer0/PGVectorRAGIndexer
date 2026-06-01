@@ -119,6 +119,38 @@ def test_expected_files_normalize_windows_separators():
     ]
 
 
+def test_validate_expected_files_exist_rejects_missing_file(tmp_path):
+    validator = load_validation_module()
+    corpus_dir = tmp_path / "corpus"
+    corpus_dir.mkdir()
+    query_specs = [
+        {
+            "id": "missing",
+            "query": "missing file",
+            "expected_files": ["docs/missing.md"],
+        }
+    ]
+
+    with pytest.raises(SystemExit, match="Expected files were not found"):
+        validator.validate_expected_files_exist(query_specs, corpus_dir)
+
+
+def test_validate_expected_files_exist_rejects_path_escape(tmp_path):
+    validator = load_validation_module()
+    corpus_dir = tmp_path / "corpus"
+    corpus_dir.mkdir()
+    query_specs = [
+        {
+            "id": "escape",
+            "query": "escape file",
+            "expected_files": ["../outside.md"],
+        }
+    ]
+
+    with pytest.raises(SystemExit, match="Expected files must stay inside"):
+        validator.validate_expected_files_exist(query_specs, corpus_dir)
+
+
 def test_display_path_for_source_uses_corpus_relative_path(tmp_path):
     validator = load_validation_module()
     corpus_dir = tmp_path / "corpus"

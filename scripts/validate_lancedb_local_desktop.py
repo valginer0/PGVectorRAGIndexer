@@ -138,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
         db_path = args.db_path or temp_dir / "lancedb"
         if args.corpus_dir is None:
             create_validation_corpus(corpus_dir)
+        validate_expected_files_exist(query_specs, corpus_dir)
         if db_path.exists():
             shutil.rmtree(db_path)
 
@@ -354,6 +355,34 @@ def normalize_manifest_path(value: str) -> str:
     while normalized.startswith("./"):
         normalized = normalized[2:]
     return normalized
+
+
+def validate_expected_files_exist(query_specs: list[dict[str, Any]], corpus_dir: Path) -> None:
+    corpus_root = corpus_dir.resolve()
+    missing: list[str] = []
+    outside_root: list[str] = []
+    for query_spec in query_specs:
+        query_id = query_spec["id"]
+        for expected_file in expected_files_for_query(query_spec):
+            expected_path = (corpus_root / expected_file).resolve()
+            try:
+                expected_path.relative_to(corpus_root)
+            except ValueError:
+                outside_root.append(f"{query_id}: {expected_file}")
+                continue
+            if not expected_path.is_file():
+                missing.append(f"{query_id}: {expected_file}")
+
+    if outside_root:
+        raise SystemExit(
+            "Expected files must stay inside --corpus-dir: "
+            + "; ".join(outside_root)
+        )
+    if missing:
+        raise SystemExit(
+            "Expected files were not found under --corpus-dir: "
+            + "; ".join(missing)
+        )
 
 
 def display_path_for_source(source_uri: str, corpus_dir: Path) -> str:

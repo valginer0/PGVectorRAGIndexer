@@ -553,12 +553,8 @@ def scan_folder(
 
     try:
         from indexer_v2 import DocumentIndexer
-        from database import get_db_manager
-        from embeddings import get_embedding_service
 
-        db = get_db_manager()
-        embedding_service = get_embedding_service()
-        indexer = DocumentIndexer(db, embedding_service)
+        indexer = DocumentIndexer()
 
         if not os.path.isdir(folder_path):
             complete_run(
@@ -577,11 +573,21 @@ def scan_folder(
                 fpath = os.path.join(root, fname)
                 scanned += 1
                 try:
-                    indexer.index_document(fpath)
+                    indexer.index_document(fpath, rebuild_fts=False)
                     added += 1
                 except Exception as e:
                     failed += 1
                     errors.append({"source_uri": fpath, "error": str(e)})
+
+        # Amortize FTS index rebuild to the end of the folder scan
+        if getattr(indexer.config.retrieval, "lancedb_enabled", False):
+            try:
+                from services import get_lancedb_adapter
+                logger.info("Rebuilding LanceDB FTS index after folder scan...")
+                get_lancedb_adapter().rebuild_fts_index(parent_only=True)
+                logger.info("LanceDB FTS index rebuild complete.")
+            except Exception as e:
+                logger.warning("Failed to rebuild LanceDB FTS index after folder scan: %s", e, exc_info=True)
 
         final_status = "success" if failed == 0 else "partial"
         complete_run(

@@ -350,11 +350,14 @@ class BackendLanceDBAdapter:
             chunk_search = chunk_search.where(" AND ".join(filter_clauses), prefilter=True)
             
             per_parent_rows = chunk_search.limit(child_limit).to_arrow().to_pylist()
+            for idx, row in enumerate(per_parent_rows):
+                row["_rank_within_parent"] = idx
             stratified_rows.extend(per_parent_rows)
             
-        # 4. Sort aggregated chunks: first by parent_rank, then by vector distance (_distance)
+        # 4. Sort aggregated chunks: round-robin interleaving by rank within parent first, then by parent_rank, then by vector distance
         stratified_rows.sort(
             key=lambda row: (
+                row.get("_rank_within_parent", 0),
                 parent_ranks.get(row["document_id"], len(parent_ranks) + 1),
                 float(row.get("_distance", 1.0))
             )

@@ -154,7 +154,7 @@ class RetrievalConfig(BaseSettings):
         description='Path to LanceDB data directory'
     )
     lancedb_child_parent_spill_ratio: float = Field(
-        default=1.0,
+        default=0.7,
         description='Ratio of parent FTS score to allow child chunk spill'
     )
     

@@ -30,7 +30,7 @@ MIN_VECTOR_INDEX_ROWS = 256
 # spill on parent FTS (the reliable "is this the right document" signal), not on
 # child vector similarity, because for exact-identifier queries the correct (often
 # terse) document scores LOWER on vector similarity than chatty unrelated prose.
-DEFAULT_CHILD_PARENT_SPILL_RATIO = 1.0
+DEFAULT_CHILD_PARENT_SPILL_RATIO = 0.7
 
 LOGGER = logging.getLogger(__name__)
 

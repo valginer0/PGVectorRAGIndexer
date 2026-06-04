@@ -129,6 +129,21 @@ def expected_hit(docs: list[dict[str, Any]], expected_files: list[str]) -> Optio
     return False
 
 
+def expected_rank(docs: list[dict[str, Any]], expected_files: list[str]) -> Optional[int]:
+    """1-based rank of the first document matching any expected file (None if
+    no expected_files, or not present in the returned docs).
+
+    This is the precision-confirmation metric: recall@k asks 'is the expected
+    doc in the top-k', but the spill-ratio question is 'is it still rank-1'.
+    """
+    if not expected_files:
+        return None
+    for rank in range(1, len(docs) + 1):
+        if expected_hit([docs[rank - 1]], expected_files):
+            return rank
+    return None
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--top-k", type=int, default=10)
@@ -184,6 +199,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 "postgres_only": [d["source_uri"] for d in pg_docs if d["document_id"] not in lance_set],
                 "lancedb_expected_hit": expected_hit(lance_docs, expected_files),
                 "postgres_expected_hit": expected_hit(pg_docs, expected_files),
+                "lancedb_expected_rank": expected_rank(lance_docs, expected_files),
+                "postgres_expected_rank": expected_rank(pg_docs, expected_files),
             })
     finally:
         set_flag(original_flag)
@@ -203,6 +220,9 @@ def main(argv: Optional[list[str]] = None) -> int:
     if gt:
         summary["lancedb_expected_recall"] = round(sum(bool(p["lancedb_expected_hit"]) for p in gt) / len(gt), 4)
         summary["postgres_expected_recall"] = round(sum(bool(p["postgres_expected_hit"]) for p in gt) / len(gt), 4)
+        # Rank-1 precision: fraction of ground-truth queries where the expected doc is the #1 result.
+        summary["lancedb_expected_rank1_rate"] = round(sum(p["lancedb_expected_rank"] == 1 for p in gt) / len(gt), 4)
+        summary["postgres_expected_rank1_rate"] = round(sum(p["postgres_expected_rank"] == 1 for p in gt) / len(gt), 4)
 
     output = {"summary": summary, "per_query": per_query}
 
@@ -220,8 +240,16 @@ def main(argv: Optional[list[str]] = None) -> int:
     if summary["full_disagreement_queries"]:
         print(f"\nFull-disagreement (0 overlap): {summary['full_disagreement_queries']}")
     if gt:
-        print(f"\nGround-truth recall  LanceDB={summary['lancedb_expected_recall']}  "
+        print(f"\nGround-truth recall@{args.top_k}  LanceDB={summary['lancedb_expected_recall']}  "
               f"Postgres={summary['postgres_expected_recall']}")
+        print(f"Expected-at-RANK-1     LanceDB={summary['lancedb_expected_rank1_rate']}  "
+              f"Postgres={summary['postgres_expected_rank1_rate']}")
+        print("\nPer-query expected rank (1=best; '-'=not in top-k):")
+        for p in gt:
+            lr = p["lancedb_expected_rank"] or "-"
+            pr = p["postgres_expected_rank"] or "-"
+            mark = "" if lr == pr else "  <-- differ"
+            print(f"  LanceDB#{lr:<3} Postgres#{pr:<3}  '{p['query']}'{mark}")
 
     if args.output_json:
         args.output_json.parent.mkdir(parents=True, exist_ok=True)

@@ -125,6 +125,26 @@ def test_backend_lancedb_lifecycle(tmp_path):
     docs_prefix_mismatch = adapter.list_documents(prefix="/other")
     assert len(docs_prefix_mismatch) == 0
 
+    # Test prefix with underscore to verify starts_with correctness (no wildcard over-matching)
+    doc_id_under = "test-doc-under"
+    adapter.upsert_document(
+        document_id=doc_id_under,
+        source_uri="/docs/ecua_garbage_water/doc.txt",
+        chunks=[(0, "content", [0.0, 0.0, 0.0, 0.0], {})],
+        aggregated_text="content",
+        doc_metadata={"type": "story"}
+    )
+    
+    docs_under_match = adapter.list_documents(prefix="/docs/ecua_garbage")
+    assert len(docs_under_match) == 1
+    
+    docs_under_nomatch = adapter.list_documents(prefix="/docs/ecuaXgarbage")
+    assert len(docs_under_nomatch) == 0
+    
+    # Cleanup underscore doc
+    adapter.delete_document(doc_id_under)
+
+
     # 5. Bulk delete
     # Delete based on mismatching filter (no-op)
     deleted_count = adapter.bulk_delete(filters={"type": "policy"})

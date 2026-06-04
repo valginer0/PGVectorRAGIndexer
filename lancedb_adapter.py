@@ -215,8 +215,9 @@ class BackendLanceDBAdapter:
             safe_prefix_forward = prefix.replace('\\', '/').replace("'", "''")
             safe_prefix_backward = prefix.replace('/', '\\').replace("'", "''")
             query = query.where(
-                f"source_uri LIKE '{safe_prefix_forward}%' OR source_uri LIKE '{safe_prefix_backward}%'"
+                f"starts_with(source_uri, '{safe_prefix_forward}') OR starts_with(source_uri, '{safe_prefix_backward}')"
             )
+
             
         rows = query.to_arrow().to_pylist()
         

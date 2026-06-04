@@ -126,6 +126,8 @@ def test_backend_lancedb_lifecycle(tmp_path):
     assert len(docs_prefix_mismatch) == 0
 
     # Test prefix with underscore to verify starts_with correctness (no wildcard over-matching)
+    # We index two documents: one matching the prefix exactly, and one with a character
+    # replacing the underscore (which SQL LIKE would over-match as a wildcard).
     doc_id_under = "test-doc-under"
     adapter.upsert_document(
         document_id=doc_id_under,
@@ -135,14 +137,26 @@ def test_backend_lancedb_lifecycle(tmp_path):
         doc_metadata={"type": "story"}
     )
     
+    doc_id_x = "test-doc-x"
+    adapter.upsert_document(
+        document_id=doc_id_x,
+        source_uri="/docs/ecuaXgarbage_water/doc.txt",
+        chunks=[(0, "content", [0.0, 0.0, 0.0, 0.0], {})],
+        aggregated_text="content",
+        doc_metadata={"type": "story"}
+    )
+    
+    # Prefix contains underscore. Under starts_with, only doc_id_under matches.
+    # If reverted to LIKE, both doc_id_under and doc_id_x would match because LIKE
+    # treats '_' as a wildcard matching 'X'.
     docs_under_match = adapter.list_documents(prefix="/docs/ecua_garbage")
     assert len(docs_under_match) == 1
+    assert docs_under_match[0]["document_id"] == doc_id_under
     
-    docs_under_nomatch = adapter.list_documents(prefix="/docs/ecuaXgarbage")
-    assert len(docs_under_nomatch) == 0
-    
-    # Cleanup underscore doc
+    # Cleanup both docs
     adapter.delete_document(doc_id_under)
+    adapter.delete_document(doc_id_x)
+
 
 
     # 5. Bulk delete

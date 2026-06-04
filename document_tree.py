@@ -65,7 +65,8 @@ def get_tree_children(
             from datetime import datetime
             
             adapter = get_lancedb_adapter()
-            docs = adapter.list_documents()
+            docs = adapter.list_documents(prefix=parent)
+
             
             # Format rows: (norm_uri, document_id, chunk_count, indexed_at, last_updated)
             all_rows = []

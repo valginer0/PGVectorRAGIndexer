@@ -112,10 +112,24 @@ def test_backend_lancedb_lifecycle(tmp_path):
     )
     assert len(results_ext_mismatch) == 0
     
+    # 4.5. Test list_documents with prefix and column projection
+    docs_all = adapter.list_documents()
+    assert len(docs_all) == 1
+    assert docs_all[0]["document_id"] == doc_id
+    assert docs_all[0]["source_uri"] == "/docs/story.txt"
+    assert docs_all[0]["chunk_count"] == 2
+    
+    docs_prefix = adapter.list_documents(prefix="/docs")
+    assert len(docs_prefix) == 1
+    
+    docs_prefix_mismatch = adapter.list_documents(prefix="/other")
+    assert len(docs_prefix_mismatch) == 0
+
     # 5. Bulk delete
     # Delete based on mismatching filter (no-op)
     deleted_count = adapter.bulk_delete(filters={"type": "policy"})
     assert deleted_count == 0
+
     
     # Delete based on valid filter
     deleted_count = adapter.bulk_delete(filters={"type": "story"})

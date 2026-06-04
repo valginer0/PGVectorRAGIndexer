@@ -198,15 +198,27 @@ class BackendLanceDBAdapter:
             logger.info(f"Deleted document {document_id} from LanceDB.")
             return chunk_count
 
-    def list_documents(self) -> List[Dict[str, Any]]:
+    def list_documents(self, prefix: Optional[str] = None) -> List[Dict[str, Any]]:
         """
-        List all parent documents in LanceDB.
+        List all parent documents in LanceDB, projecting only necessary columns.
         
+        Args:
+            prefix: Optional path prefix filter to reduce scan size.
+            
         Returns a list of dicts with document_id, source_uri, chunk_count, 
         and indexed_at (parsed from metadata).
         """
         parent_table = self.db.open_table(PARENT_TABLE)
-        rows = parent_table.search().to_arrow().to_pylist()
+        query = parent_table.search().select(["document_id", "source_uri", "chunk_count", "metadata"])
+        
+        if prefix:
+            safe_prefix_forward = prefix.replace('\\', '/').replace("'", "''")
+            safe_prefix_backward = prefix.replace('/', '\\').replace("'", "''")
+            query = query.where(
+                f"source_uri LIKE '{safe_prefix_forward}%' OR source_uri LIKE '{safe_prefix_backward}%'"
+            )
+            
+        rows = query.to_arrow().to_pylist()
         
         results = []
         for row in rows:
@@ -228,6 +240,7 @@ class BackendLanceDBAdapter:
             })
             
         return results
+
 
     def bulk_delete(self, filters: Dict[str, Any]) -> int:
         """

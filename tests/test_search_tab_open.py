@@ -95,6 +95,7 @@ def test_document_type_filter_includes_selection_in_search(monkeypatch, search_t
     monkeypatch.setattr(search_tab_module.QMessageBox, "warning", lambda *args, **kwargs: QMessageBox.Ok)
     monkeypatch.setattr(search_tab_module.QMessageBox, "critical", lambda *args, **kwargs: QMessageBox.Ok)
     monkeypatch.setattr(search_tab_module.SearchWorker, "start", lambda self: self.run())
+    monkeypatch.setattr(search_tab_module.app_config, "get_local_lancedb_search_enabled", lambda: False)
 
     search_tab.api_client.is_api_available = lambda: True
     search_tab.type_filter.setCurrentText("policy")

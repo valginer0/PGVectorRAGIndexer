@@ -145,6 +145,18 @@ class RetrievalConfig(BaseSettings):
         default=0.5,
         description='Weight for vector search in hybrid mode (0=full-text only, 1=vector only)'
     )
+    lancedb_enabled: bool = Field(
+        default=False,
+        description='Enable LanceDB backend search'
+    )
+    lancedb_storage_path: str = Field(
+        default='data/lancedb',
+        description='Path to LanceDB data directory'
+    )
+    lancedb_child_parent_spill_ratio: float = Field(
+        default=1.0,
+        description='Ratio of parent FTS score to allow child chunk spill'
+    )
     
     @field_validator('top_k')
     @classmethod
@@ -160,6 +172,14 @@ class RetrievalConfig(BaseSettings):
         """Validate values are in [0, 1] range."""
         if not 0 <= v <= 1:
             raise ValueError('Value must be between 0 and 1')
+        return v
+
+    @field_validator('lancedb_child_parent_spill_ratio')
+    @classmethod
+    def validate_spill_ratio(cls, v: float) -> float:
+        """Validate lancedb_child_parent_spill_ratio is non-negative."""
+        if v < 0:
+            raise ValueError('lancedb_child_parent_spill_ratio must be non-negative')
         return v
 
 

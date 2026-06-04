@@ -19,6 +19,7 @@ class SearchClient:
 
     def __init__(self, base_client: BaseAPIClient):
         self._base = base_client
+        self.last_message: Optional[str] = None
 
     def search(
         self,
@@ -60,14 +61,17 @@ class SearchClient:
             payload["filters"] = merged_filters
 
         data = self._post_search(payload)
+        self.last_message = data.get("message")
         if group_by_document and not _group_by_document_confirmed(data):
             logger.info(
                 "Backend did not confirm document-level search; retrying with legacy over-fetch"
             )
             fallback_payload = _legacy_document_grouping_fallback_payload(payload, top_k)
             data = self._post_search(fallback_payload)
+            self.last_message = data.get("message")
 
         return data.get("results", [])
+
 
     def _post_search(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         response = self._base.request(

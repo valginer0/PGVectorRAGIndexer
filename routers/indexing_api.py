@@ -207,6 +207,33 @@ async def upload_and_index(
         logger.info(f"Storing {len(chunks_data)} chunks in database...")
         idx.repository.insert_chunks(chunks_data)
         
+        # Dual-write to LanceDB if enabled
+        try:
+            from config import get_config
+            config = get_config()
+            if getattr(config.retrieval, "lancedb_enabled", False):
+                from services import get_lancedb_adapter
+                lancedb_adapter = get_lancedb_adapter()
+                
+                lancedb_chunks = []
+                for item in chunks_data:
+                    # item format: (doc_id, chunk_index, text_content, source_uri, embedding, chunk_metadata)
+                    lancedb_chunks.append((item[1], item[2], item[4], item[5]))
+                
+                aggregated_text = "\n\n".join(item[2] for item in chunks_data)
+                
+                lancedb_adapter.upsert_document(
+                    document_id=processed_doc.document_id,
+                    source_uri=processed_doc.source_uri,
+                    chunks=lancedb_chunks,
+                    aggregated_text=aggregated_text,
+                    doc_metadata=processed_doc.metadata
+                )
+                # Rebuild FTS index on parent table for freshness
+                lancedb_adapter.rebuild_fts_index(parent_only=True)
+        except Exception as e:
+            logger.warning(f"Failed to dual-write uploaded document to LanceDB: {e}", exc_info=True)
+        
         logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
         
         complete_run(run_id, status="success", files_scanned=1,

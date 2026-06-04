@@ -1,0 +1,407 @@
+import pytest
+from types import SimpleNamespace
+from fastapi import HTTPException
+
+from api_models import SearchRequest, BulkDeleteRequest, RestoreRequest
+from routers import search_api
+from scripts import sync_lancedb
+
+
+class _FakeRetriever:
+    def __init__(self, results, diagnostics=None):
+        self.results = results
+        self.diagnostics = diagnostics or {}
+        self.calls = []
+
+    def search_lancedb_parent_child(self, **kwargs):
+        self.calls.append(("lancedb", kwargs))
+        return self.results, self.diagnostics
+
+
+class _FakeAdapter:
+    def __init__(self):
+        self.upserts = []
+        self.deletes = []
+        self.bulk_deletes = []
+
+    def upsert_document(self, **kwargs):
+        self.upserts.append(kwargs)
+
+    def delete_document(self, doc_id):
+        self.deletes.append(doc_id)
+        return 1
+
+    def bulk_delete(self, filters):
+        self.bulk_deletes.append(filters)
+        return 1
+
+
+def _result(source_uri, *, rank_score, text_content="", chunk_index=0, chunk_id=1):
+    return SimpleNamespace(
+        chunk_id=chunk_id,
+        document_id=f"doc-{source_uri}",
+        chunk_index=chunk_index,
+        text_content=text_content,
+        source_uri=source_uri,
+        distance=1.0 - min(rank_score, 1.0),
+        relevance_score=min(rank_score, 1.0),
+        rank_score=rank_score,
+        metadata={},
+        document_type=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_api_routes_to_lancedb_when_enabled(monkeypatch):
+    """Test that search_documents routes to search_lancedb_parent_child if lancedb_enabled is True."""
+    # 1. Mock Config to return lancedb_enabled = True
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path="/tmp/test_lancedb",
+            lancedb_child_parent_spill_ratio=1.0
+        )
+    )
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    
+    # 2. Mock Retriever
+    retriever = _FakeRetriever(
+        results=[
+            _result("ev6_warranty.txt", rank_score=0.95),
+            _result("banana_bread.txt", rank_score=0.1)
+        ],
+        diagnostics={"lancedb_parent_child": {"active": True}}
+    )
+    monkeypatch.setattr(search_api, "get_retriever", lambda: retriever)
+    
+    # 3. Call search endpoint
+    response = await search_api.search_documents(SearchRequest(
+        query="EV6 battery",
+        top_k=2,
+        filters={"extensions": ["txt"]}
+    ))
+    
+    assert response.total_results == 2
+    assert response.results[0].source_uri == "ev6_warranty.txt"
+    assert response.diagnostics["lancedb_parent_child"]["active"] is True
+    assert retriever.calls[0][0] == "lancedb"
+    assert retriever.calls[0][1]["query"] == "EV6 battery"
+    assert retriever.calls[0][1]["filters"] == {"extensions": ["txt"]}
+
+
+@pytest.mark.asyncio
+async def test_bulk_delete_api_syncs_with_lancedb(monkeypatch):
+    """Test that bulk_delete_documents calls lancedb bulk_delete when enabled."""
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path="/tmp/test_lancedb"
+        )
+    )
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    
+    fake_adapter = _FakeAdapter()
+    monkeypatch.setattr("services.get_lancedb_adapter", lambda: fake_adapter)
+    
+    # Mock database repository
+    class FakeRepo:
+        def bulk_delete(self, filters):
+            return 5
+            
+    monkeypatch.setattr(search_api, "DocumentRepository", lambda _db: FakeRepo())
+    
+    response = await search_api.bulk_delete_documents(BulkDeleteRequest(
+        filters={"type": "policy"},
+        preview=False
+    ))
+    
+    assert response.chunks_deleted == 5
+    assert response.status == "success"
+    assert len(fake_adapter.bulk_deletes) == 1
+    assert fake_adapter.bulk_deletes[0] == {"type": "policy"}
+
+
+@pytest.mark.asyncio
+async def test_restore_api_syncs_with_lancedb(monkeypatch):
+    """Test that restore_documents groups chunks by doc ID and calls upsert_document on LanceDB."""
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path="/tmp/test_lancedb"
+        )
+    )
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    
+    fake_adapter = _FakeAdapter()
+    monkeypatch.setattr("services.get_lancedb_adapter", lambda: fake_adapter)
+    
+    class FakeRepo:
+        def restore_documents(self, data):
+            return len(data)
+            
+    monkeypatch.setattr(search_api, "DocumentRepository", lambda _db: FakeRepo())
+    
+    backup_data = [
+        {
+            "document_id": "doc-1",
+            "chunk_index": 0,
+            "text_content": "Text chunk 1",
+            "source_uri": "doc1.txt",
+            "embedding": [1.0, 0.0],
+            "metadata": {"type": "news"}
+        },
+        {
+            "document_id": "doc-1",
+            "chunk_index": 1,
+            "text_content": "Text chunk 2",
+            "source_uri": "doc1.txt",
+            "embedding": [0.0, 1.0],
+            "metadata": {"type": "news"}
+        },
+        {
+            "document_id": "doc-2",
+            "chunk_index": 0,
+            "text_content": "Another doc",
+            "source_uri": "doc2.txt",
+            "embedding": [0.5, 0.5],
+            "metadata": {"type": "specs"}
+        }
+    ]
+    
+    response = await search_api.restore_documents(RestoreRequest(
+        backup_data=backup_data
+    ))
+    
+    assert response["chunks_restored"] == 3
+    assert len(fake_adapter.upserts) == 2  # doc-1 and doc-2
+    
+    # Check doc-1 upsert data
+    doc1_upsert = next(x for x in fake_adapter.upserts if x["document_id"] == "doc-1")
+    assert doc1_upsert["source_uri"] == "doc1.txt"
+    assert len(doc1_upsert["chunks"]) == 2
+    assert doc1_upsert["aggregated_text"] == "Text chunk 1\n\nText chunk 2"
+
+
+def test_sync_lancedb_script(monkeypatch):
+    """Test that sync_postgres_to_lancedb queries postgres and pushes to LanceDB."""
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_storage_path="/tmp/test_lancedb"
+        ),
+        embedding=SimpleNamespace(
+            dimension=4
+        )
+    )
+    monkeypatch.setattr(sync_lancedb, "get_config", lambda: fake_config)
+    
+    fake_adapter = _FakeAdapter()
+    # Mock optimize method
+    fake_adapter.optimize_vector_index = lambda: None
+    monkeypatch.setattr(sync_lancedb, "get_lancedb_adapter", lambda: fake_adapter)
+    
+    # Mock DB cursor
+    class FakeCursor:
+        def __init__(self, data_type):
+            self.data_type = data_type
+            
+        def execute(self, _sql, params=None):
+            pass
+            
+        def fetchall(self):
+            if self.data_type == "docs":
+                return [
+                    {"document_id": "doc-a", "source_uri": "doca.txt"},
+                    {"document_id": "doc-b", "source_uri": "docb.txt"}
+                ]
+            else:  # chunks
+                return [
+                    {
+                        "document_id": "doc-a",
+                        "chunk_index": 0,
+                        "text_content": "chunk-a1",
+                        "source_uri": "doca.txt",
+                        "embedding": [1.0, 0.0, 0.0, 0.0],
+                        "metadata": '{"type": "doc"}'
+                    },
+                    {
+                        "document_id": "doc-b",
+                        "chunk_index": 0,
+                        "text_content": "chunk-b1",
+                        "source_uri": "docb.txt",
+                        "embedding": [0.0, 1.0, 0.0, 0.0],
+                        "metadata": '{"type": "doc"}'
+                    }
+                ]
+
+    class FakeCursorContext:
+        def __init__(self, data_type):
+            self.cursor = FakeCursor(data_type)
+            
+        def __enter__(self):
+            return self.cursor
+            
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class FakeDBManager:
+        def __init__(self):
+            self.call_count = 0
+            
+        def get_cursor(self, dict_cursor=True):
+            self.call_count += 1
+            if self.call_count == 1:
+                return FakeCursorContext("docs")
+            else:
+                return FakeCursorContext("chunks")
+
+    monkeypatch.setattr(sync_lancedb, "get_db_manager", lambda: FakeDBManager())
+    
+    sync_lancedb.sync_postgres_to_lancedb(batch_size=10, force=False)
+    
+    assert len(fake_adapter.upserts) == 2
+    assert fake_adapter.upserts[0]["document_id"] == "doc-a"
+    assert fake_adapter.upserts[1]["document_id"] == "doc-b"
+
+
+@pytest.mark.integration
+@pytest.mark.database
+def test_real_lancedb_write_and_search_flow(tmp_path, monkeypatch, db_manager):
+    """Test the complete dual-write, rebuild, and retriever search flow with LanceDB enabled."""
+    from indexer_v2 import DocumentIndexer
+    from retriever_v2 import DocumentRetriever
+    from services import get_lancedb_adapter
+    import services
+    
+    # 1. Config override to enable LanceDB with temp path
+    from config import get_config
+    orig_config = get_config()
+    
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path=str(tmp_path / "lancedb"),
+            lancedb_child_parent_spill_ratio=1.0,
+            top_k=5,
+            similarity_threshold=0.5,
+            distance_metric="cosine"
+        ),
+        database=orig_config.database,
+        chunking=orig_config.chunking,
+        embedding=SimpleNamespace(
+            dimension=384,
+            model_name="all-MiniLM-L6-v2"
+        )
+    )
+    
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    monkeypatch.setattr("retriever_v2.get_config", lambda: fake_config)
+    monkeypatch.setattr("indexer_v2.get_config", lambda: fake_config)
+    # Reset services cache for testing
+    services.reset_services()
+    
+    indexer = DocumentIndexer()
+    retriever = DocumentRetriever()
+    
+    # 1. Index first document (first-ever doc in table)
+    test_file_1 = tmp_path / "test_doc_1.txt"
+    test_file_1.write_text("EV6 battery diagnostic procedures outlined here.", encoding="utf-8")
+    res_1 = indexer.index_document(str(test_file_1))
+    assert res_1["status"] == "success"
+    
+    # Search for first-ever doc -> should be found
+    results_1, _ = retriever.search_lancedb_parent_child("EV6 battery")
+    assert len(results_1) == 1
+    
+    # 2. Index second document (append operation)
+    test_file_2 = tmp_path / "test_doc_2.txt"
+    test_file_2.write_text("Banana bread recipe with vanilla and chocolate chunks.", encoding="utf-8")
+    res_2 = indexer.index_document(str(test_file_2))
+    assert res_2["status"] == "success"
+    
+    # Search for second doc before rebuild (freshness lag check - on tiny datasets/tables LanceDB FTS
+    # may fallback to dynamic memory scans, so we don't strictly assert 0 to avoid test flakiness)
+    results_2_before, _ = retriever.search_lancedb_parent_child("Banana bread")
+    
+    # 3. Explicitly call optimize_vector_index to trigger rebuild_fts_index (production path)
+    adapter = get_lancedb_adapter()
+    adapter.optimize_vector_index()
+    
+    # Search for second doc after rebuild -> should be found
+    results_2_after, _ = retriever.search_lancedb_parent_child("Banana bread")
+    assert len(results_2_after) == 1
+    assert results_2_after[0].source_uri.endswith("test_doc_2.txt")
+
+
+@pytest.mark.integration
+@pytest.mark.database
+def test_lancedb_parent_only_fts_rebuild(tmp_path, monkeypatch, db_manager):
+    """Test parent-only FTS rebuild logic on the adapter."""
+    from indexer_v2 import DocumentIndexer
+    from services import get_lancedb_adapter
+    import services
+    
+    # 1. Config override to enable LanceDB with temp path
+    from config import get_config
+    orig_config = get_config()
+    
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path=str(tmp_path / "lancedb"),
+            lancedb_child_parent_spill_ratio=1.0,
+            top_k=5,
+            similarity_threshold=0.5,
+            distance_metric="cosine"
+        ),
+        database=orig_config.database,
+        chunking=orig_config.chunking,
+        embedding=SimpleNamespace(
+            dimension=384,
+            model_name="all-MiniLM-L6-v2"
+        )
+    )
+    
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    
+    services.reset_services()
+    adapter = get_lancedb_adapter()
+    
+    parent_rebuilt = False
+    chunk_rebuilt = False
+    
+    orig_parent_table = adapter.db.open_table("parent_documents")
+    orig_chunk_table = adapter.db.open_table("document_chunks")
+    
+    def mock_parent_create_fts(*args, **kwargs):
+        nonlocal parent_rebuilt
+        parent_rebuilt = True
+        
+    def mock_chunk_create_fts(*args, **kwargs):
+        nonlocal chunk_rebuilt
+        chunk_rebuilt = True
+        
+    monkeypatch.setattr(orig_parent_table, "create_fts_index", mock_parent_create_fts)
+    monkeypatch.setattr(orig_chunk_table, "create_fts_index", mock_chunk_create_fts)
+    
+    def mock_open_table(name):
+        if name == "parent_documents":
+            return orig_parent_table
+        elif name == "document_chunks":
+            return orig_chunk_table
+        raise ValueError(name)
+        
+    monkeypatch.setattr(adapter.db, "open_table", mock_open_table)
+    
+    # Call rebuild_fts_index with parent_only=True
+    adapter.rebuild_fts_index(parent_only=True)
+    assert parent_rebuilt is True
+    assert chunk_rebuilt is False
+    
+    # Reset and call with parent_only=False
+    parent_rebuilt = False
+    chunk_rebuilt = False
+    adapter.rebuild_fts_index(parent_only=False)
+    assert parent_rebuilt is True
+    assert chunk_rebuilt is True
+
+

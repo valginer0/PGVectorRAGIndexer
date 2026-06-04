@@ -207,6 +207,73 @@ class DocumentRetriever:
         self.repository = DocumentRepository(self.db_manager)
         self.embedding_service = get_embedding_service()
         self._reranker_v0 = None
+
+    def search_lancedb_parent_child(
+        self,
+        query: str,
+        top_k: Optional[int] = None,
+        filters: Optional[Dict[str, Any]] = None
+    ) -> Tuple[List[SearchResult], Dict[str, Any]]:
+        """
+        Search using the backend LanceDB parent-child engine.
+        
+        Returns:
+            Tuple of (results, diagnostics)
+        """
+        top_k = top_k if top_k is not None else self.config.retrieval.top_k
+        spill_ratio = self.config.retrieval.lancedb_child_parent_spill_ratio
+        
+        logger.info(f"LanceDB parent-child search for: '{query}' (top_k={top_k}, spill_ratio={spill_ratio})")
+        
+        start_time = time.perf_counter()
+        
+        # 1. Generate query embedding using standard embedding service
+        query_embedding = self.embedding_service.encode(query)
+        
+        # 2. Call the LanceDB adapter
+        from services import get_lancedb_adapter
+        adapter = get_lancedb_adapter()
+        
+        raw_results = adapter.search_parent_child(
+            query_text=query,
+            query_vector=query_embedding,
+            parent_limit=max(5, top_k),
+            child_limit=top_k,
+            child_parent_spill_ratio=spill_ratio,
+            filters=filters
+        )
+        
+        # 3. Convert to SearchResult objects
+        results = []
+        for i, row in enumerate(raw_results, 1):
+            relevance_score = max(0.0, min(1.0, 1.0 - row["distance"]))
+            
+            results.append(SearchResult(
+                chunk_id=row["chunk_id"],
+                document_id=row["document_id"],
+                chunk_index=row["chunk_index"],
+                text_content=row["text_content"],
+                source_uri=row["source_uri"],
+                distance=row["distance"],
+                relevance_score=relevance_score,
+                rank_score=relevance_score,
+                metadata=row.get("metadata"),
+                document_type=row.get("metadata", {}).get("type")
+            ))
+            
+        latency_ms = (time.perf_counter() - start_time) * 1000
+        
+        diagnostics = {
+            "lancedb_parent_child": {
+                "active": True,
+                "top_k": top_k,
+                "child_parent_spill_ratio": spill_ratio,
+                "latency_ms": round(latency_ms, 2),
+                "matched_count": len(results),
+            }
+        }
+        
+        return results, diagnostics
     
     def _calculate_relevance_score(self, distance: float, metric: str = 'cosine') -> float:
         """
@@ -669,6 +736,14 @@ class DocumentRetriever:
         Returns:
             List of SearchResult objects
         """
+        if getattr(self.config.retrieval, "lancedb_enabled", False):
+            # Note: We intentionally ignore min_score / similarity_threshold in the LanceDB path.
+            # LanceDB parent-child search utilizes FTS-staged parent retrieval, which means relevant
+            # documents can have low or negative vector similarity scores in their child chunks.
+            # Applying a similarity threshold would filter out valid FTS-selected results.
+            results, _ = self.search_lancedb_parent_child(query, top_k, filters)
+            return results
+
         # Use config defaults if not specified
         top_k = top_k if top_k is not None else self.config.retrieval.top_k
         min_score = min_score if min_score is not None else self.config.retrieval.similarity_threshold
@@ -738,6 +813,10 @@ class DocumentRetriever:
         Returns:
             List of SearchResult objects
         """
+        if getattr(self.config.retrieval, "lancedb_enabled", False):
+            results, _ = self.search_lancedb_parent_child(query, top_k, filters)
+            return results
+
         top_k = top_k or self.config.retrieval.top_k
         alpha = alpha if alpha is not None else self.config.retrieval.hybrid_alpha
 

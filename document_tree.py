@@ -38,6 +38,7 @@ def get_tree_children(
     parent_path: str = "",
     limit: int = 200,
     offset: int = 0,
+    source: str = "postgres",
 ) -> Dict[str, Any]:
     """Get one level of the document tree under parent_path.
 
@@ -50,38 +51,71 @@ def get_tree_children(
                      Uses forward slashes, no trailing slash.
         limit: Max items to return.
         offset: Pagination offset.
+        source: The database source ('postgres' or 'lancedb').
 
     Returns:
         Dict with 'folders', 'files', 'total_folders', 'total_files'.
     """
     try:
-        with _get_db_connection() as conn:
-            cur = conn.cursor()
+        # Normalize parent
+        parent = _normalize_path(parent_path).rstrip("/")
 
-            # Normalize parent
-            parent = _normalize_path(parent_path).rstrip("/")
-            if parent:
-                like_prefix = parent + "/%"
-            else:
-                like_prefix = "%"
+        if source == "lancedb":
+            from services import get_lancedb_adapter
+            from datetime import datetime
+            
+            adapter = get_lancedb_adapter()
+            docs = adapter.list_documents()
+            
+            # Format rows: (norm_uri, document_id, chunk_count, indexed_at, last_updated)
+            all_rows = []
+            for doc in docs:
+                norm_uri = _normalize_path(doc["source_uri"])
+                
+                # Parse datetime if present
+                indexed_at = None
+                if doc.get("indexed_at"):
+                    try:
+                        indexed_at = datetime.fromisoformat(doc["indexed_at"])
+                    except Exception:
+                        pass
+                
+                all_rows.append((norm_uri, doc["document_id"], doc["chunk_count"], indexed_at, indexed_at))
+                
+            # Filter in Python if parent is set
+            rows = []
+            for row in all_rows:
+                norm_uri = row[0]
+                if parent:
+                    if norm_uri.startswith(parent + "/"):
+                        rows.append(row)
+                else:
+                    rows.append(row)
+        else:
+            with _get_db_connection() as conn:
+                cur = conn.cursor()
+                if parent:
+                    like_prefix = parent + "/%"
+                else:
+                    like_prefix = "%"
 
-            # Get all distinct normalized source_uri paths under this parent
-            cur.execute(
-                f"""
-                SELECT
-                    {NORMALIZED_URI_SQL} AS norm_uri,
-                    document_id,
-                    COUNT(*) AS chunk_count,
-                    MIN(indexed_at) AS indexed_at,
-                    MAX(indexed_at) AS last_updated
-                FROM document_chunks
-                WHERE {NORMALIZED_URI_SQL} LIKE %s
-                GROUP BY norm_uri, document_id
-                ORDER BY norm_uri
-                """,
-                (like_prefix,),
-            )
-            rows = cur.fetchall()
+                # Get all distinct normalized source_uri paths under this parent
+                cur.execute(
+                    f"""
+                    SELECT
+                        {NORMALIZED_URI_SQL} AS norm_uri,
+                        document_id,
+                        COUNT(*) AS chunk_count,
+                        MIN(indexed_at) AS indexed_at,
+                        MAX(indexed_at) AS last_updated
+                    FROM document_chunks
+                    WHERE {NORMALIZED_URI_SQL} LIKE %s
+                    GROUP BY norm_uri, document_id
+                    ORDER BY norm_uri
+                    """,
+                    (like_prefix,),
+                )
+                rows = cur.fetchall()
 
             # Build tree level
             folders: Dict[str, Dict[str, Any]] = {}
@@ -180,39 +214,60 @@ def get_tree_children(
         }
 
 
-def get_tree_stats() -> Dict[str, Any]:
+def get_tree_stats(source: str = "postgres") -> Dict[str, Any]:
     """Get overall tree statistics.
 
     Returns:
         Dict with total_documents, total_folders (top-level), total_chunks.
     """
     try:
-        with _get_db_connection() as conn:
-            cur = conn.cursor()
-
-            cur.execute("SELECT COUNT(DISTINCT document_id) FROM document_chunks")
-            total_docs = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM document_chunks")
-            total_chunks = cur.fetchone()[0]
-
-            # Count distinct top-level folders
-            cur.execute(f"""
-                SELECT COUNT(DISTINCT
-                    SPLIT_PART(
-                        {NORMALIZED_URI_SQL},
-                        '/', 1
-                    )
-                )
-                FROM document_chunks
-            """)
-            top_level_count = cur.fetchone()[0]
-
+        if source == "lancedb":
+            from services import get_lancedb_adapter
+            adapter = get_lancedb_adapter()
+            stats = adapter.get_statistics()
+            docs = adapter.list_documents()
+            
+            # Count distinct top-level folders/files
+            top_levels = set()
+            for doc in docs:
+                norm_uri = _normalize_path(doc["source_uri"]).lstrip("/")
+                parts = norm_uri.split("/")
+                if parts:
+                    top_levels.add(parts[0])
+            top_level_count = len(top_levels)
+            
             return {
-                "total_documents": total_docs,
-                "total_chunks": total_chunks,
+                "total_documents": stats["total_documents"],
+                "total_chunks": stats["total_chunks"],
                 "top_level_items": top_level_count,
             }
+        else:
+            with _get_db_connection() as conn:
+                cur = conn.cursor()
+
+                cur.execute("SELECT COUNT(DISTINCT document_id) FROM document_chunks")
+                total_docs = cur.fetchone()[0]
+
+                cur.execute("SELECT COUNT(*) FROM document_chunks")
+                total_chunks = cur.fetchone()[0]
+
+                # Count distinct top-level folders
+                cur.execute(f"""
+                    SELECT COUNT(DISTINCT
+                        SPLIT_PART(
+                            {NORMALIZED_URI_SQL},
+                            '/', 1
+                        )
+                    )
+                    FROM document_chunks
+                """)
+                top_level_count = cur.fetchone()[0]
+
+                return {
+                    "total_documents": total_docs,
+                    "total_chunks": total_chunks,
+                    "top_level_items": top_level_count,
+                }
     except Exception as e:
         logger.warning("Failed to get tree stats: %s", e)
         return {
@@ -225,42 +280,70 @@ def get_tree_stats() -> Dict[str, Any]:
 def search_tree(
     query: str,
     limit: int = 50,
+    source: str = "postgres",
 ) -> List[Dict[str, Any]]:
     """Search for documents matching a path pattern.
 
     Returns matching documents with their full paths.
     """
     try:
-        with _get_db_connection() as conn:
-            cur = conn.cursor()
+        if source == "lancedb":
+            from services import get_lancedb_adapter
+            from datetime import datetime
+            adapter = get_lancedb_adapter()
+            docs = adapter.list_documents()
+            
+            pattern = _normalize_path(query).lower()
+            results = []
+            for doc in docs:
+                norm_uri = _normalize_path(doc["source_uri"])
+                if pattern in norm_uri.lower():
+                    indexed_at = None
+                    if doc.get("indexed_at"):
+                        try:
+                            indexed_at = datetime.fromisoformat(doc["indexed_at"])
+                        except Exception:
+                            pass
+                    results.append({
+                        "path": norm_uri,
+                        "document_id": doc["document_id"],
+                        "chunk_count": doc["chunk_count"],
+                        "indexed_at": indexed_at.isoformat() if indexed_at else None,
+                    })
+            
+            results.sort(key=lambda x: x["path"])
+            return results[:limit]
+        else:
+            with _get_db_connection() as conn:
+                cur = conn.cursor()
 
-            pattern = f"%{_normalize_path(query)}%"
-            cur.execute(
-                f"""
-                SELECT
-                    {NORMALIZED_URI_SQL} AS norm_uri,
-                    document_id,
-                    COUNT(*) AS chunk_count,
-                    MIN(indexed_at) AS indexed_at
-                FROM document_chunks
-                WHERE {NORMALIZED_URI_SQL} ILIKE %s
-                GROUP BY norm_uri, document_id
-                ORDER BY norm_uri
-                LIMIT %s
-                """,
-                (pattern, limit),
-            )
-            rows = cur.fetchall()
+                pattern = f"%{_normalize_path(query)}%"
+                cur.execute(
+                    f"""
+                    SELECT
+                        {NORMALIZED_URI_SQL} AS norm_uri,
+                        document_id,
+                        COUNT(*) AS chunk_count,
+                        MIN(indexed_at) AS indexed_at
+                    FROM document_chunks
+                    WHERE {NORMALIZED_URI_SQL} ILIKE %s
+                    GROUP BY norm_uri, document_id
+                    ORDER BY norm_uri
+                    LIMIT %s
+                    """,
+                    (pattern, limit),
+                )
+                rows = cur.fetchall()
 
-            return [
-                {
-                    "path": norm_uri,
-                    "document_id": doc_id,
-                    "chunk_count": chunk_count,
-                    "indexed_at": indexed_at.isoformat() if indexed_at else None,
-                }
-                for norm_uri, doc_id, chunk_count, indexed_at in rows
-            ]
+                return [
+                    {
+                        "path": norm_uri,
+                        "document_id": doc_id,
+                        "chunk_count": chunk_count,
+                        "indexed_at": indexed_at.isoformat() if indexed_at else None,
+                    }
+                    for norm_uri, doc_id, chunk_count, indexed_at in rows
+                ]
     except Exception as e:
         logger.warning("Failed to search tree for '%s': %s", query, e)
         return []

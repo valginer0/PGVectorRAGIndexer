@@ -440,19 +440,26 @@ class APIClient:
         parent_path: str = "",
         limit: int = 200,
         offset: int = 0,
+        source: str = "postgres",
     ) -> Dict[str, Any]:
         """Get one level of the document tree under parent_path."""
-        return self._document.get_document_tree(parent_path, limit, offset)
+        return self._document.get_document_tree(parent_path, limit, offset, source)
 
-    def get_document_tree_stats(self) -> Dict[str, Any]:
+    def get_document_tree_stats(self, source: str = "postgres") -> Dict[str, Any]:
         """Get overall document tree statistics."""
-        return self._document.get_document_tree_stats()
+        return self._document.get_document_tree_stats(source)
 
     def search_document_tree(
-        self, query: str, limit: int = 50
+        self, query: str, limit: int = 50, source: str = "postgres"
     ) -> Dict[str, Any]:
         """Search for documents matching a path pattern."""
-        return self._document.search_document_tree(query, limit)
+        return self._document.search_document_tree(query, limit, source)
+
+    @property
+    def last_search_message(self) -> Optional[str]:
+        """Return the last search warning message (e.g. empty index warning)."""
+        return self._search.last_message
+
 
     # ------------------------------------------------------------------
     # Document Locks (#3 Multi-User, Phase 1)

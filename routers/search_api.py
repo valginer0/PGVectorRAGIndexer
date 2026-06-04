@@ -210,8 +210,17 @@ async def search_documents(request: SearchRequest):
         if request.group_by_document and request.top_k:
             search_top_k = request.top_k * DOCUMENT_GROUPING_BACKEND_MULTIPLIER
         
+        from config import get_config
+        config = get_config()
+        
         retrieval_diagnostics = None
-        if request.use_hybrid:
+        if config.retrieval.lancedb_enabled:
+            results, retrieval_diagnostics = ret.search_lancedb_parent_child(
+                query=request.query,
+                top_k=search_top_k,
+                filters=request.filters
+            )
+        elif request.use_hybrid:
             if request.hybrid_mode == HYBRID_MODE_LEXICAL_FUSION_V0:
                 fusion_search = getattr(ret, "search_hybrid_fusion_v0", None)
                 if fusion_search is None:
@@ -276,6 +285,28 @@ async def search_documents(request: SearchRequest):
             results = grouped_results[:request.top_k] if request.top_k else grouped_results
         search_time = (time.time() - start_time) * 1000  # Convert to ms
         
+        # Check active index document count for state-aware search messages
+        total_documents = 0
+        if config.retrieval.lancedb_enabled:
+            try:
+                from services import get_lancedb_adapter
+                total_documents = get_lancedb_adapter().get_statistics().get("total_documents", 0)
+            except Exception:
+                pass
+        else:
+            try:
+                from document_tree import get_tree_stats
+                total_documents = get_tree_stats(source="postgres").get("total_documents", 0)
+            except Exception:
+                pass
+
+        message = None
+        if total_documents == 0:
+            if config.retrieval.lancedb_enabled:
+                message = "The search index is empty. See the Documents tab → switch to the LanceDB view."
+            else:
+                message = "The search index is empty. See the Documents tab."
+
         result_models = [
             SearchResultModel(
                 chunk_id=r.chunk_id,
@@ -298,6 +329,7 @@ async def search_documents(request: SearchRequest):
             total_results=len(result_models),
             search_time_ms=round(search_time, 2),
             diagnostics=diagnostics,
+            message=message,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
@@ -410,11 +442,12 @@ async def get_document_tree(
     parent_path: str = Query(default=""),
     limit: int = Query(default=200, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    source: str = Query(default="postgres"),
 ):
     """Get one level of the document tree."""
     from document_tree import get_tree_children
     try:
-        result = get_tree_children(parent_path=parent_path, limit=limit, offset=offset)
+        result = get_tree_children(parent_path=parent_path, limit=limit, offset=offset, source=source)
         return result
     except Exception as e:
         logger.error(f"Failed to get document tree: {e}")
@@ -425,11 +458,13 @@ async def get_document_tree(
 
 
 @search_router.get("/documents/tree/stats", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
-async def get_document_tree_stats():
+async def get_document_tree_stats(
+    source: str = Query(default="postgres"),
+):
     """Get overall document tree statistics."""
     from document_tree import get_tree_stats
     try:
-        return get_tree_stats()
+        return get_tree_stats(source=source)
     except Exception as e:
         logger.error(f"Failed to get tree stats: {e}")
         raise HTTPException(
@@ -442,11 +477,12 @@ async def get_document_tree_stats():
 async def search_document_tree(
     q: str = Query(..., min_length=1),
     limit: int = Query(default=50, ge=1, le=500),
+    source: str = Query(default="postgres"),
 ):
     """Search for documents matching a path pattern."""
     from document_tree import search_tree
     try:
-        results = search_tree(query=q, limit=limit)
+        results = search_tree(query=q, limit=limit, source=source)
         return {"results": results, "count": len(results), "query": q}
     except Exception as e:
         logger.error(f"Failed to search document tree: {e}")
@@ -630,6 +666,17 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
         else:
             # Actually delete
             chunks_deleted = repo.bulk_delete(request.filters)
+            
+            # Dual-delete in LanceDB if enabled
+            from config import get_config
+            if getattr(get_config().retrieval, "lancedb_enabled", False):
+                try:
+                    from services import get_lancedb_adapter
+                    get_lancedb_adapter().bulk_delete(request.filters)
+                except Exception as e:
+                    logger.error(f"Failed to bulk delete from LanceDB: {e}", exc_info=True)
+                    raise
+                
             from api_models import BulkDeleteResponse as BDR
             return BDR(
                 status="success",
@@ -675,6 +722,47 @@ async def restore_documents(request: RestoreRequest):
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
         chunks_restored = repo.restore_documents(request.backup_data)
+        
+        # Dual-restore to LanceDB if enabled
+        from config import get_config
+        if getattr(get_config().retrieval, "lancedb_enabled", False):
+            try:
+                from services import get_lancedb_adapter
+                adapter = get_lancedb_adapter()
+                
+                # Group chunks by document_id
+                docs_chunks = {}
+                docs_meta = {}
+                docs_uri = {}
+                
+                for chunk in request.backup_data:
+                    doc_id = chunk["document_id"]
+                    if doc_id not in docs_chunks:
+                        docs_chunks[doc_id] = []
+                        docs_meta[doc_id] = chunk.get("metadata") or {}
+                        docs_uri[doc_id] = chunk["source_uri"]
+                    
+                    docs_chunks[doc_id].append((
+                        chunk["chunk_index"],
+                        chunk["text_content"],
+                        chunk["embedding"],
+                        chunk.get("metadata") or {}
+                    ))
+                
+                for doc_id, c_list in docs_chunks.items():
+                    c_list.sort(key=lambda x: x[0])
+                    aggregated_text = "\n\n".join(x[1] for x in c_list)
+                    adapter.upsert_document(
+                        document_id=doc_id,
+                        source_uri=docs_uri[doc_id],
+                        chunks=c_list,
+                        aggregated_text=aggregated_text,
+                        doc_metadata=docs_meta[doc_id]
+                    )
+            except Exception as e:
+                logger.error(f"Failed to restore documents to LanceDB: {e}", exc_info=True)
+                raise
+            
         return {
             "status": "success",
             "chunks_restored": chunks_restored,

@@ -428,14 +428,23 @@ class SearchTab(QWidget):
             results = data
             self.display_results(results)
             n = self.results_table.rowCount()
-            suffix = " (1 per file)" if self._current_search_is_one_per_file() else ""
-            self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix}")
-            self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
+            
+            # Check for empty-state message from backend
+            backend_msg = getattr(self.api_client, "last_search_message", None)
+            if backend_msg and isinstance(backend_msg, str):
+                self.status_label.setText(backend_msg)
+                self.status_label.setStyleSheet("color: #f59e0b; font-style: italic; font-weight: bold;")
+
+            else:
+                suffix = " (1 per file)" if self._current_search_is_one_per_file() else ""
+                self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix}")
+                self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
         else:
             error_msg = data
             QMessageBox.critical(self, "Search Failed", f"Search failed: {error_msg}")
             self.status_label.setText("Search failed")
             self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+
     
     def display_results(self, results: List[Dict[str, Any]]):
         """Display search results in the table."""

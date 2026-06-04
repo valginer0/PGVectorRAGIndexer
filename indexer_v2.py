@@ -56,7 +56,8 @@ class DocumentIndexer:
         source_uri: str,
         force_reindex: bool = False,
         custom_metadata: Optional[Dict[str, Any]] = None,
-        ocr_mode: Optional[str] = None
+        ocr_mode: Optional[str] = None,
+        rebuild_fts: bool = True
     ) -> Dict[str, Any]:
         """
         Index a single document.
@@ -129,6 +130,32 @@ class DocumentIndexer:
             logger.info(f"Storing {len(chunks_data)} chunks in database...")
             self.repository.insert_chunks(chunks_data)
             
+            # Dual-write to LanceDB if enabled
+            try:
+                if self.config.retrieval.lancedb_enabled:
+                    from services import get_lancedb_adapter
+                    lancedb_adapter = get_lancedb_adapter()
+                    
+                    lancedb_chunks = []
+                    for item in chunks_data:
+                        # item format: (doc_id, chunk_index, text_content, source_uri, embedding, chunk_metadata)
+                        lancedb_chunks.append((item[1], item[2], item[4], item[5]))
+                    
+                    aggregated_text = "\n\n".join(item[2] for item in chunks_data)
+                    
+                    lancedb_adapter.upsert_document(
+                        document_id=processed_doc.document_id,
+                        source_uri=processed_doc.source_uri,
+                        chunks=lancedb_chunks,
+                        aggregated_text=aggregated_text,
+                        doc_metadata=processed_doc.metadata
+                    )
+                    
+                    if rebuild_fts:
+                        lancedb_adapter.rebuild_fts_index(parent_only=True)
+            except Exception as e:
+                logger.warning(f"Failed to dual-write document to LanceDB: {e}", exc_info=True)
+            
             logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
             
             return {
@@ -185,8 +212,16 @@ class DocumentIndexer:
         results = []
         
         for source_uri in source_uris:
-            result = self.index_document(source_uri, force_reindex, custom_metadata)
+            result = self.index_document(source_uri, force_reindex, custom_metadata, rebuild_fts=False)
             results.append(result)
+        
+        # Amortize FTS index rebuild to the end of the batch
+        if getattr(self.config.retrieval, "lancedb_enabled", False):
+            try:
+                from services import get_lancedb_adapter
+                get_lancedb_adapter().rebuild_fts_index(parent_only=True)
+            except Exception as e:
+                logger.warning(f"Failed to rebuild FTS index after batch: {e}", exc_info=True)
         
         # Summary
         successful = sum(1 for r in results if r['status'] == 'success')
@@ -227,6 +262,16 @@ class DocumentIndexer:
             return False
         
         deleted_count = self.repository.delete_document(document_id)
+        
+        # Dual-delete from LanceDB if enabled
+        if getattr(self.config.retrieval, "lancedb_enabled", False):
+            try:
+                from services import get_lancedb_adapter
+                get_lancedb_adapter().delete_document(document_id)
+            except Exception as e:
+                logger.error(f"Failed to dual-delete document from LanceDB: {e}", exc_info=True)
+                raise
+
         logger.info(f"Deleted document {document_id} ({deleted_count} chunks)")
         return True
     

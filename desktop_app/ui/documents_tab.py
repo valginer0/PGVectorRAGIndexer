@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (
 import qtawesome as qta
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, QThread, Signal, QPoint, QSignalBlocker, QSize
-from .workers import DocumentsWorker, DeleteWorker
+from .workers import DocumentsWorker, DeleteWorker, TreeStatsWorker
 from .document_tree_model import DocumentTreeModel
+
 
 # ... imports ...
 
@@ -80,12 +81,26 @@ class DocumentsTab(QWidget):
         self._list_btn.clicked.connect(lambda: self._set_view_mode("list"))
         header_layout.addWidget(self._list_btn)
 
+        # Database source selector (Postgres View vs LanceDB View)
+        self.db_source_combo = QComboBox()
+        self.db_source_combo.addItem("Postgres View", "postgres")
+        self.db_source_combo.addItem("LanceDB View", "lancedb")
+        self.db_source_combo.currentIndexChanged.connect(self._on_db_source_changed)
+        self.db_source_combo.setStyleSheet("padding: 6px; font-weight: bold; border: 1px solid #374151;")
+        header_layout.addWidget(self.db_source_combo)
+
+        # Count stats label
+        self.tree_stats_label = QLabel("")
+        self.tree_stats_label.setStyleSheet("color: #9ca3af; font-size: 12px; margin-left: 10px; font-weight: bold;")
+        header_layout.addWidget(self.tree_stats_label)
+
         self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
         self.refresh_btn.clicked.connect(self._refresh_current_view)
         header_layout.addWidget(self.refresh_btn)
 
         layout.addLayout(header_layout)
+
         
         # Stacked widget to switch between list and tree views
         self._view_stack = QStackedWidget()
@@ -615,21 +630,62 @@ class DocumentsTab(QWidget):
             self._list_btn.setIcon(qta.icon('fa5s.list', color='#6366f1'))
             self._tree_btn.setStyleSheet(_inactive)
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='white'))
+            self.db_source_combo.setVisible(False)
+            self.tree_stats_label.setVisible(False)
         else:
             self._view_stack.setCurrentIndex(0)
             self._tree_btn.setStyleSheet(_active)
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='#6366f1'))
             self._list_btn.setStyleSheet(_inactive)
             self._list_btn.setIcon(qta.icon('fa5s.list', color='white'))
+            self.db_source_combo.setVisible(True)
+            self.tree_stats_label.setVisible(True)
             if not self._tree_model.is_initialized():
                 self._tree_model.load_root()
+                self._load_tree_stats()
 
     def _refresh_current_view(self) -> None:
         """Refresh whichever view is currently active."""
         if self._view_mode == "tree":
             self._tree_model.refresh()
+            self._load_tree_stats()
         else:
             self.load_documents()
+
+    def _on_db_source_changed(self, index: int) -> None:
+        """Handle database source change."""
+        source = self.db_source_combo.itemData(index)
+        self._tree_model.set_source(source)
+        self._load_tree_stats()
+
+    def _load_tree_stats(self) -> None:
+        """Load tree statistics for comparison."""
+        self.tree_stats_label.setText("Comparing indexes...")
+        self.tree_stats_worker = TreeStatsWorker(self.api_client)
+        self.tree_stats_worker.finished.connect(self._on_tree_stats_loaded)
+        self.tree_stats_worker.start()
+
+    def _on_tree_stats_loaded(self, success: bool, data: Any) -> None:
+        """Handle tree stats loaded."""
+        if success and data:
+            pg = data.get("postgres", {})
+            ldb = data.get("lancedb", {})
+            pg_docs = pg.get("total_documents", 0)
+            ldb_docs = ldb.get("total_documents", 0)
+            pg_chunks = pg.get("total_chunks", 0)
+            ldb_chunks = ldb.get("total_chunks", 0)
+            self.tree_stats_label.setText(
+                f"Postgres: {pg_docs} docs ({pg_chunks} chunks) | "
+                f"LanceDB: {ldb_docs} docs ({ldb_chunks} chunks)"
+            )
+            # If they diverge, highlight it in warning yellow, otherwise green/subdued
+            if pg_docs != ldb_docs or pg_chunks != ldb_chunks:
+                self.tree_stats_label.setStyleSheet("color: #f59e0b; font-size: 12px; margin-left: 10px; font-weight: bold;")
+                self.tree_stats_label.setToolTip("Index drift detected between Postgres and LanceDB. Run maintenance sync.")
+            else:
+                self.tree_stats_label.setStyleSheet("color: #10b981; font-size: 12px; margin-left: 10px; font-weight: bold;")
+                self.tree_stats_label.setToolTip("Postgres and LanceDB are fully synchronized.")
+
 
     # ------------------------------------------------------------------
     # Tree view signals

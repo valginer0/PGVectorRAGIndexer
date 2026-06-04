@@ -79,6 +79,8 @@ class SearchResponse(BaseModel):
     total_results: int
     search_time_ms: float
     diagnostics: Optional[Dict[str, Any]] = None
+    message: Optional[str] = Field(default=None, description="Optional informational or warning message")
+
 
 
 class DocumentInfo(BaseModel):

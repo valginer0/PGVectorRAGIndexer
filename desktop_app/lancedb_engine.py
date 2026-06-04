@@ -188,6 +188,10 @@ class HashingEmbedder:
 class LocalLanceDBEngine:
     """Embedded LanceDB engine for local desktop search."""
 
+    # Cap of chunks per parent document to prevent a single document from monopolizing search results.
+    # Preserves precision-first ordering while ensuring diversity across documents.
+    MAX_CHUNKS_PER_PARENT = 3
+
     def __init__(self, db_path: str | Path, *, embedder: Embedder | None = None):
         self.db_path = Path(db_path)
         self.embedder = embedder or SentenceTransformerEmbedder()
@@ -416,7 +420,7 @@ class LocalLanceDBEngine:
                 per_parent_rows = (
                     self._vector_search(chunks, query_vector)
                     .where(self._source_uri_filter([source_uri]))
-                    .limit(child_limit)
+                    .limit(min(child_limit, self.MAX_CHUNKS_PER_PARENT))
                     .to_arrow()
                     .to_pylist()
                 )

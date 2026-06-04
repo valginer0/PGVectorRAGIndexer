@@ -175,20 +175,24 @@ def test_backend_lancedb_lifecycle(tmp_path):
 
 
 def test_stratified_children_spill_ratio(tmp_path):
-    """Test parent FTS selection, stratified child retrieval, and zero-padding/spill gating logic."""
+    """Test parent FTS selection, stratified child retrieval, and parent capping/precision sorting logic."""
     db_dir = tmp_path / "test_lancedb_stratified"
     adapter = BackendLanceDBAdapter(db_path=str(db_dir), embedding_dimension=2)
     
     # Document A: Top parent. FTS query 'ev6' matches this document with highest rank.
-    # It has exactly 1 chunk.
+    # It has 5 chunks (chunk-rich top parent).
     chunks_a = [
-        (0, "The EV6 owner notes outline standard battery diagnostic procedures.", [1.0, 0.0], {"page": 1})
+        (0, "The EV6 owner notes outline standard battery diagnostic procedures.", [1.0, 0.0], {"page": 1}),
+        (1, "Battery capacity check diagnostic steps.", [1.0, 0.0], {"page": 2}),
+        (2, "Cell voltage test instructions.", [1.0, 0.0], {"page": 3}),
+        (3, "Thermal monitoring parameters.", [1.0, 0.0], {"page": 4}),
+        (4, "End of diagnostic procedures.", [1.0, 0.0], {"page": 5})
     ]
     adapter.upsert_document(
         document_id="doc-a",
         source_uri="ev6_owner_notes.txt",
         chunks=chunks_a,
-        aggregated_text="The EV6 owner notes outline standard battery diagnostic procedures.",
+        aggregated_text="The EV6 owner notes outline standard battery diagnostic procedures. Battery capacity check diagnostic steps. Cell voltage test instructions. Thermal monitoring parameters. End of diagnostic procedures.",
         doc_metadata={"type": "owner_notes"}
     )
     
@@ -221,46 +225,56 @@ def test_stratified_children_spill_ratio(tmp_path):
     
     # Verify tables have correct row counts
     assert adapter.get_statistics()["total_documents"] == 3
-    assert adapter.get_statistics()["total_chunks"] == 5
+    assert adapter.get_statistics()["total_chunks"] == 9
 
     # Rebuild FTS index so the newly upserted documents are indexed and searchable using production adapter method
     adapter.rebuild_fts_index()
     
     # Case 1: Search with spill_ratio = 1.0 (strict pre-filter / spill gate closed).
     # Since Document B's FTS score will be lower than Document A's, the spill gate
-    # should restrict retrieval to Document A only. 
-    # Because A only has 1 chunk, we expect exactly 1 result returned (no padding with B).
+    # should restrict retrieval to Document A only.
+    # A has 5 chunks, but is capped at MAX_CHUNKS_PER_PARENT = 3.
+    # We expect exactly 3 results returned (all from Document A).
     results_strict = adapter.search_parent_child(
         query_text="EV6 owner notes",
         query_vector=[1.0, 0.0],
         parent_limit=3,
-        child_limit=3,
+        child_limit=5,
         child_parent_spill_ratio=1.0
     )
     
     # Validate strict results
-    assert len(results_strict) == 1
-    assert results_strict[0]["document_id"] == "doc-a"
-    assert results_strict[0]["chunk_index"] == 0
+    assert len(results_strict) == 3
+    for r in results_strict:
+        assert r["document_id"] == "doc-a"
     
     # Case 2: Search with spill_ratio = 0.1 (loose pre-filter / spill gate open).
-    # Now Document B is also allowed since its FTS score matches the spill gate.
-    # We expect results from both Document A and B, up to child_limit=3.
+    # Document B is also allowed. We ask for child_limit = 5.
+    # Since Doc A is capped at MAX_CHUNKS_PER_PARENT = 3 chunks, the remaining 2 slots
+    # should be filled by Doc B's chunks (no monopoly by Doc A).
+    # Also, precision-first sorting must place Doc A's chunks before Doc B's chunks.
     results_loose = adapter.search_parent_child(
         query_text="EV6 owner notes",
         query_vector=[1.0, 0.0],
         parent_limit=3,
-        child_limit=3,
+        child_limit=5,
         child_parent_spill_ratio=0.1
     )
     
-    # Validate loose results: A's chunks should come first (since A is rank 1),
-    # then B's chunks (rank 2), up to child_limit=3.
-    assert len(results_loose) == 3
+    # Validate loose results
+    assert len(results_loose) == 5
+    
+    # First 3 chunks must belong to doc-a (precision-first rank 1)
     assert results_loose[0]["document_id"] == "doc-a"
     assert results_loose[0]["parent_rank"] == 1
-    assert results_loose[1]["document_id"] == "doc-b"
-    assert results_loose[1]["parent_rank"] == 2
-    assert results_loose[2]["document_id"] == "doc-b"
-    assert results_loose[2]["parent_rank"] == 2
+    assert results_loose[1]["document_id"] == "doc-a"
+    assert results_loose[1]["parent_rank"] == 1
+    assert results_loose[2]["document_id"] == "doc-a"
+    assert results_loose[2]["parent_rank"] == 1
+    
+    # Last 2 chunks must belong to doc-b (precision-first rank 2)
+    assert results_loose[3]["document_id"] == "doc-b"
+    assert results_loose[3]["parent_rank"] == 2
+    assert results_loose[4]["document_id"] == "doc-b"
+    assert results_loose[4]["parent_rank"] == 2
 

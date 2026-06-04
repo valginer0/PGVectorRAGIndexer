@@ -31,6 +31,10 @@ def generate_chunk_id(document_id: str, chunk_index: int) -> int:
 class BackendLanceDBAdapter:
     """Manages backend-side LanceDB tables and search query routing."""
 
+    # Cap of chunks per parent document to prevent a single document from monopolizing search results.
+    # Preserves precision-first ordering while ensuring diversity across documents.
+    MAX_CHUNKS_PER_PARENT = 3
+
     def __init__(self, db_path: str, embedding_dimension: int = 384):
         self.db_path = Path(db_path)
         self.embedding_dimension = embedding_dimension
@@ -349,15 +353,14 @@ class BackendLanceDBAdapter:
                     
             chunk_search = chunk_search.where(" AND ".join(filter_clauses), prefilter=True)
             
-            per_parent_rows = chunk_search.limit(child_limit).to_arrow().to_pylist()
-            for idx, row in enumerate(per_parent_rows):
-                row["_rank_within_parent"] = idx
+            # Cap child retrieval per parent to prevent a single document from dominating results
+            limit_val = min(child_limit, self.MAX_CHUNKS_PER_PARENT)
+            per_parent_rows = chunk_search.limit(limit_val).to_arrow().to_pylist()
             stratified_rows.extend(per_parent_rows)
             
-        # 4. Sort aggregated chunks: round-robin interleaving by rank within parent first, then by parent_rank, then by vector distance
+        # 4. Sort aggregated chunks: precision-first (first by parent_rank, then by vector distance)
         stratified_rows.sort(
             key=lambda row: (
-                row.get("_rank_within_parent", 0),
                 parent_ranks.get(row["document_id"], len(parent_ranks) + 1),
                 float(row.get("_distance", 1.0))
             )

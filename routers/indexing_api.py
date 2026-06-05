@@ -232,7 +232,8 @@ async def upload_and_index(
                 # Rebuild FTS index on parent table for freshness
                 lancedb_adapter.rebuild_fts_index(parent_only=True)
         except Exception as e:
-            logger.warning(f"Failed to dual-write uploaded document to LanceDB: {e}", exc_info=True)
+            logger.error(f"Failed to dual-write uploaded document to LanceDB: {e}", exc_info=True)
+            raise
         
         logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
         

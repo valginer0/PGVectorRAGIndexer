@@ -154,7 +154,8 @@ class DocumentIndexer:
                     if rebuild_fts:
                         lancedb_adapter.rebuild_fts_index(parent_only=True)
             except Exception as e:
-                logger.warning(f"Failed to dual-write document to LanceDB: {e}", exc_info=True)
+                logger.error(f"Failed to dual-write document to LanceDB: {e}", exc_info=True)
+                raise
             
             logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
             

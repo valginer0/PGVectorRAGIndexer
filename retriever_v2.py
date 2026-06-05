@@ -207,6 +207,47 @@ class DocumentRetriever:
         self.repository = DocumentRepository(self.db_manager)
         self.embedding_service = get_embedding_service()
         self._reranker_v0 = None
+        self._lancedb_ready = None
+
+    def _should_use_lancedb(self) -> bool:
+        """
+        Check if LanceDB search is enabled and populated.
+        If LanceDB is enabled but empty while Postgres contains documents,
+        we fall back to Postgres search.
+        """
+        if not getattr(self.config.retrieval, "lancedb_enabled", False):
+            return False
+            
+        if getattr(self, "_lancedb_ready", False):
+            return True
+            
+        try:
+            from services import get_lancedb_adapter
+            lancedb_adapter = get_lancedb_adapter()
+            lancedb_stats = lancedb_adapter.get_statistics()
+            lancedb_docs = lancedb_stats.get("total_documents", 0)
+            
+            if lancedb_docs > 0:
+                self._lancedb_ready = True
+                return True
+                
+            # LanceDB is empty. Check if Postgres has documents
+            pg_stats = self.repository.get_statistics()
+            pg_docs = pg_stats.get("total_documents", 0)
+            if pg_docs > 0:
+                logger.warning(
+                    "LanceDB search is enabled but index is empty. "
+                    f"Postgres contains {pg_docs} documents. "
+                    "Falling back to Postgres search."
+                )
+                return False
+            else:
+                # Both are empty
+                self._lancedb_ready = True
+                return True
+        except Exception as e:
+            logger.warning(f"Error checking LanceDB status, falling back to Postgres: {e}")
+            return False
 
     def search_lancedb_parent_child(
         self,
@@ -736,7 +777,7 @@ class DocumentRetriever:
         Returns:
             List of SearchResult objects
         """
-        if getattr(self.config.retrieval, "lancedb_enabled", False):
+        if self._should_use_lancedb():
             # Note: We intentionally ignore min_score / similarity_threshold in the LanceDB path.
             # LanceDB parent-child search utilizes FTS-staged parent retrieval, which means relevant
             # documents can have low or negative vector similarity scores in their child chunks.
@@ -813,7 +854,7 @@ class DocumentRetriever:
         Returns:
             List of SearchResult objects
         """
-        if getattr(self.config.retrieval, "lancedb_enabled", False):
+        if self._should_use_lancedb():
             results, _ = self.search_lancedb_parent_child(query, top_k, filters)
             return results
 

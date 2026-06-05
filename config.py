@@ -146,7 +146,7 @@ class RetrievalConfig(BaseSettings):
         description='Weight for vector search in hybrid mode (0=full-text only, 1=vector only)'
     )
     lancedb_enabled: bool = Field(
-        default=False,
+        default=True,
         description='Enable LanceDB backend search'
     )
     lancedb_storage_path: str = Field(

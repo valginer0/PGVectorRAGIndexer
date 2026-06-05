@@ -214,7 +214,7 @@ async def search_documents(request: SearchRequest):
         config = get_config()
         
         retrieval_diagnostics = None
-        if config.retrieval.lancedb_enabled:
+        if getattr(ret, "_should_use_lancedb", lambda: False)():
             results, retrieval_diagnostics = ret.search_lancedb_parent_child(
                 query=request.query,
                 top_k=search_top_k,
@@ -287,7 +287,7 @@ async def search_documents(request: SearchRequest):
         
         # Check active index document count for state-aware search messages
         total_documents = 0
-        if config.retrieval.lancedb_enabled:
+        if getattr(ret, "_should_use_lancedb", lambda: False)():
             try:
                 from services import get_lancedb_adapter
                 total_documents = get_lancedb_adapter().get_statistics().get("total_documents", 0)
@@ -302,7 +302,7 @@ async def search_documents(request: SearchRequest):
 
         message = None
         if total_documents == 0:
-            if config.retrieval.lancedb_enabled:
+            if getattr(ret, "_should_use_lancedb", lambda: False)():
                 message = "The search index is empty. See the Documents tab → switch to the LanceDB view."
             else:
                 message = "The search index is empty. See the Documents tab."

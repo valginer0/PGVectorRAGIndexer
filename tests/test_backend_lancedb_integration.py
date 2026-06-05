@@ -13,6 +13,9 @@ class _FakeRetriever:
         self.diagnostics = diagnostics or {}
         self.calls = []
 
+    def _should_use_lancedb(self) -> bool:
+        return True
+
     def search_lancedb_parent_child(self, **kwargs):
         self.calls.append(("lancedb", kwargs))
         return self.results, self.diagnostics
@@ -403,5 +406,122 @@ def test_lancedb_parent_only_fts_rebuild(tmp_path, monkeypatch, db_manager):
     adapter.rebuild_fts_index(parent_only=False)
     assert parent_rebuilt is True
     assert chunk_rebuilt is True
+
+
+@pytest.mark.integration
+@pytest.mark.database
+def test_populate_on_enable_guard(tmp_path, monkeypatch, db_manager):
+    """Test that retriever falls back to Postgres when LanceDB is enabled but empty."""
+    from indexer_v2 import DocumentIndexer
+    from retriever_v2 import DocumentRetriever
+    from config import get_config
+    import services
+    
+    orig_config = get_config()
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=False,  # Start disabled so we write to Postgres only
+            lancedb_storage_path=str(tmp_path / "lancedb"),
+            lancedb_child_parent_spill_ratio=0.7,
+            top_k=5,
+            similarity_threshold=0.5,
+            distance_metric="cosine",
+            hybrid_alpha=0.5
+        ),
+        database=orig_config.database,
+        chunking=orig_config.chunking,
+        embedding=SimpleNamespace(
+            dimension=384,
+            model_name="all-MiniLM-L6-v2"
+        )
+    )
+    
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    monkeypatch.setattr("retriever_v2.get_config", lambda: fake_config)
+    monkeypatch.setattr("indexer_v2.get_config", lambda: fake_config)
+    services.reset_services()
+    
+    indexer = DocumentIndexer()
+    # 1. Index document into Postgres only
+    test_file = tmp_path / "postgres_only_doc.txt"
+    test_file.write_text("Unique keyword postgres fallback test message.")
+    res = indexer.index_document(str(test_file))
+    assert res['status'] == 'success'
+    
+    # 2. Now enable LanceDB
+    fake_config.retrieval.lancedb_enabled = True
+    services.reset_services()
+    
+    retriever = DocumentRetriever()
+    # Check that it falls back to Postgres search (since LanceDB has 0 docs)
+    results = retriever.search_hybrid("postgres fallback test")
+    assert len(results) > 0
+    assert "postgres_only_doc.txt" in results[0].source_uri
+    
+    # Check that _should_use_lancedb() evaluated to False
+    assert retriever._should_use_lancedb() is False
+
+    # 3. Now index a document with LanceDB enabled
+    test_file_2 = tmp_path / "lancedb_doc.txt"
+    test_file_2.write_text("Unique keyword lancedb test message.")
+    res_2 = indexer.index_document(str(test_file_2))
+    assert res_2['status'] == 'success'
+    
+    # Retriever should now use LanceDB
+    retriever_new = DocumentRetriever()
+    assert retriever_new._should_use_lancedb() is True
+    results_2 = retriever_new.search_hybrid("lancedb test")
+    assert len(results_2) > 0
+    assert "lancedb_doc.txt" in results_2[0].source_uri
+
+
+@pytest.mark.integration
+@pytest.mark.database
+def test_fail_closed_dual_writes(tmp_path, monkeypatch, db_manager):
+    """Test that indexing fails-closed when LanceDB is enabled but write fails."""
+    from indexer_v2 import DocumentIndexer
+    from services import get_lancedb_adapter
+    from config import get_config
+    import services
+    
+    orig_config = get_config()
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path=str(tmp_path / "lancedb"),
+            lancedb_child_parent_spill_ratio=0.7,
+            top_k=5,
+            similarity_threshold=0.5,
+            distance_metric="cosine"
+        ),
+        database=orig_config.database,
+        chunking=orig_config.chunking,
+        embedding=SimpleNamespace(
+            dimension=384,
+            model_name="all-MiniLM-L6-v2"
+        )
+    )
+    
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    monkeypatch.setattr("retriever_v2.get_config", lambda: fake_config)
+    monkeypatch.setattr("indexer_v2.get_config", lambda: fake_config)
+    services.reset_services()
+    
+    # Mock upsert_document on LanceDB adapter to raise an exception
+    adapter = get_lancedb_adapter()
+    def mock_upsert_document(*args, **kwargs):
+        raise Exception("LanceDB disk full error")
+    
+    monkeypatch.setattr(adapter, "upsert_document", mock_upsert_document)
+    
+    indexer = DocumentIndexer()
+    test_file = tmp_path / "fail_closed_test.txt"
+    test_file.write_text("Fail closed dual write test.")
+    
+    # The index_document method should fail-closed and return error status
+    res = indexer.index_document(str(test_file))
+    assert res['status'] == 'error'
+    assert 'LanceDB disk full error' in res['message']
+
 
 

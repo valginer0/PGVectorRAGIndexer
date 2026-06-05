@@ -486,20 +486,7 @@ class BackendLanceDBAdapter:
             except Exception as e:
                 logger.warning(f"Chunk table optimization failed: {e}")
 
-            logger.info("Creating/updating vector index on LanceDB chunk table...")
-            try:
-                # Build IVF_PQ index for vector search. Only build if we have enough rows to train
-                total_chunks = chunk_table.count_rows()
-                if total_chunks >= 256:
-                    chunk_table.create_index(
-                        vector_column_name="embedding",
-                        metric="cosine",
-                        index_type="IVF_PQ",
-                        replace=True
-                    )
-                    logger.info("LanceDB chunk table vector index created successfully.")
-            except Exception as e:
-                logger.warning(f"Failed to create vector index on chunk table: {e}")
+
         
         # Explicitly rebuild FTS indexes to restore query freshness
         self.rebuild_fts_index()

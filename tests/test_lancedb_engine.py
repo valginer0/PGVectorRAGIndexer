@@ -94,11 +94,11 @@ def test_ingests_reopens_and_searches_parent_child(tmp_path):
 
     assert results
     assert results[0].score_label.startswith("Cosine similarity:")
-    assert telemetry.query_type == "parent_child"
+    assert telemetry.query_type == "parent_child_hybrid"
     assert telemetry.matched_parents == ["docs/ev6_service.txt"]
     assert telemetry.matched_parent_details[0]["rank"] == 1
     assert telemetry.matched_parent_details[0]["source_uri"] == "docs/ev6_service.txt"
-    assert telemetry.matched_parent_details[0]["fts_score"] > 0
+    assert telemetry.matched_parent_details[0]["rrf_score"] > 0
     assert telemetry.to_dict()["matched_parent_details"] == telemetry.matched_parent_details
     assert {result.source_uri for result in results} == {"docs/ev6_service.txt"}
 

@@ -570,16 +570,8 @@ class LocalLanceDBEngine:
 
     @staticmethod
     def _create_vector_index(table: Any, *, row_count: int) -> None:
-        if row_count < MIN_VECTOR_INDEX_ROWS:
-            return
-        try:
-            table.create_index(
-                metric=VECTOR_METRIC,
-                vector_column_name="embedding",
-                replace=True,
-            )
-        except Exception as exc:  # pragma: no cover - index remains an optimization
-            LOGGER.debug("Could not create LanceDB vector index: %s", exc)
+        # Avoid creating any vector index (IVF-PQ) to keep search exact (no index)
+        return
 
     @staticmethod
     def _quote_lancedb_string(value: str) -> str:

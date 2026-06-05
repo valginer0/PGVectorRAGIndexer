@@ -366,7 +366,7 @@ class LocalLanceDBEngine:
         child_limit: int = 10,
         child_parent_spill_ratio: float = DEFAULT_CHILD_PARENT_SPILL_RATIO,
     ) -> tuple[list[SearchResult], SearchTelemetry]:
-        """Search parent documents with FTS, then child chunks with vector search."""
+        """Search parent documents with a hybrid fusion of FTS and global vector candidate ranks."""
         self._ensure_open()
         self._ensure_indexed()
         self._validate_search_args(query, child_limit)
@@ -378,6 +378,7 @@ class LocalLanceDBEngine:
         parents = self.db.open_table(PARENT_TABLE)
         chunks = self.db.open_table(CHUNK_TABLE)
 
+        # 1. Lexical Path: Search parent documents using FTS
         t0 = time.perf_counter()
         parent_rows = (
             parents.search(query, query_type="fts")
@@ -386,36 +387,63 @@ class LocalLanceDBEngine:
             .to_pylist()
         )
         fts_time = (time.perf_counter() - t0) * 1000
-        matched_parents = [str(row["source_uri"]) for row in parent_rows]
-        matched_parent_details = [
-            {
-                "rank": rank,
-                "source_uri": str(row["source_uri"]),
-                "fts_score": float(row["_score"]) if row.get("_score") is not None else None,
-            }
-            for rank, row in enumerate(parent_rows, 1)
-        ]
-        parent_ranks = {source_uri: rank for rank, source_uri in enumerate(matched_parents, 1)}
-
-        vector_time = 0.0
-        filter_clause = None
+        
+        # Filter FTS parents using spill ratio
+        fts_parent_ranks: dict[str, int] = {}
+        if parent_rows:
+            top_fts = float(parent_rows[0]["_score"]) if parent_rows[0].get("_score") is not None else None
+            for rank, row in enumerate(parent_rows, 1):
+                source_uri = str(row["source_uri"])
+                score = float(row["_score"]) if row.get("_score") is not None else None
+                if rank == 1 or (
+                    top_fts is not None
+                    and top_fts > 0
+                    and score is not None
+                    and score >= top_fts * child_parent_spill_ratio
+                ):
+                    fts_parent_ranks[source_uri] = rank
+                    
+        # 2. Semantic Path: Search globally for candidate chunks and extract parent source URIs
+        t1 = time.perf_counter()
+        query_vector = self._encode(query)
+        global_chunk_rows = (
+            self._vector_search(chunks, query_vector)
+            .limit(50)
+            .to_arrow()
+            .to_pylist()
+        )
+        
+        vector_parent_ranks: dict[str, int] = {}
+        vector_rank_counter = 1
+        for row in global_chunk_rows:
+            source_uri = str(row["source_uri"])
+            if source_uri not in vector_parent_ranks:
+                vector_parent_ranks[source_uri] = vector_rank_counter
+                vector_rank_counter += 1
+                
+        # 3. Hybrid Fusion: Merge FTS and Vector parent candidate lists using RRF
+        all_source_uris = set(fts_parent_ranks.keys()) | set(vector_parent_ranks.keys())
+        
+        parent_scores = []
+        for source_uri in all_source_uris:
+            fts_rank = fts_parent_ranks.get(source_uri)
+            vector_rank = vector_parent_ranks.get(source_uri)
+            
+            fts_score = 1.0 / (60.0 + fts_rank) if fts_rank is not None else 0.0
+            vector_score = 1.0 / (60.0 + vector_rank) if vector_rank is not None else 0.0
+            rrf_score = fts_score + vector_score
+            parent_scores.append((source_uri, rrf_score))
+            
+        parent_scores.sort(key=lambda x: -x[1])
+        selected_parents = parent_scores[:parent_limit]
+        
+        spill_parents = [p[0] for p in selected_parents]
+        parent_ranks = {source_uri: rank for rank, (source_uri, _) in enumerate(selected_parents, 1)}
+        
+        # 4. Vector search per qualified parent
         results: list[SearchResult] = []
-        if matched_parents:
-            # Telemetry keeps the full candidate-set filter for readability.
-            filter_clause = self._source_uri_filter(matched_parents)
-            t1 = time.perf_counter()
-            query_vector = self._encode(query)
-            # Parent-stratified fulfillment: run the child vector search per parent so
-            # a weaker parent's chunk cannot displace the top parent's chunks in a single
-            # global ranking. The top parent always contributes; a lower-ranked parent
-            # contributes only if its FTS score clears child_parent_spill_ratio of the
-            # top parent's score. We do NOT pad to child_limit from unqualified parents:
-            # returning 1-3 confident chunks beats 5 with a decorative tail.
-            top_fts = matched_parent_details[0]["fts_score"]
-            spill_parents = self._spill_parents(
-                matched_parent_details, top_fts, child_parent_spill_ratio
-            )
-            stratified_rows: list[dict[str, Any]] = []
+        stratified_rows: list[dict[str, Any]] = []
+        if spill_parents:
             for source_uri in spill_parents:
                 per_parent_rows = (
                     self._vector_search(chunks, query_vector)
@@ -425,6 +453,8 @@ class LocalLanceDBEngine:
                     .to_pylist()
                 )
                 stratified_rows.extend(per_parent_rows)
+                
+            # 5. Sort aggregated chunks: precision-first (first by parent_rank, then by vector distance)
             stratified_rows.sort(
                 key=lambda row: (
                     parent_ranks.get(str(row["source_uri"]), len(parent_ranks) + 1),
@@ -433,6 +463,7 @@ class LocalLanceDBEngine:
             )
             child_rows = stratified_rows[:child_limit]
             vector_time = (time.perf_counter() - t1) * 1000
+            
             results = [
                 self._result_from_row(
                     row,
@@ -443,18 +474,27 @@ class LocalLanceDBEngine:
                 )
                 for rank, row in enumerate(child_rows, 1)
             ]
+        else:
+            vector_time = (time.perf_counter() - t1) * 1000
 
         telemetry = SearchTelemetry(
-            query_type="parent_child",
+            query_type="parent_child_hybrid",
             total_time_ms=(time.perf_counter() - start) * 1000,
             fts_time_ms=fts_time,
             vector_time_ms=vector_time,
-            matched_parents=matched_parents,
-            matched_parent_details=matched_parent_details,
-            filter_clause=filter_clause,
+            matched_parents=[p[0] for p in selected_parents],
+            matched_parent_details=[
+                {
+                    "rank": rank,
+                    "source_uri": p[0],
+                    "rrf_score": p[1],
+                }
+                for rank, p in enumerate(selected_parents, 1)
+            ],
+            filter_clause=self._source_uri_filter(spill_parents) if spill_parents else None,
             explanation=(
-                "Document-level FTS selected parent documents; child vector search "
-                "was run per parent (parent-stratified) and ordered by parent FTS rank, "
+                "Fused document-level FTS and global chunk vector search candidate parents via RRF; "
+                "child vector search was run per parent and ordered by parent fusion rank, "
                 "then by vector distance within each parent."
             ),
         )

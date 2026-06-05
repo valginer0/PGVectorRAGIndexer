@@ -282,20 +282,19 @@ class BackendLanceDBAdapter:
         filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Perform a parent-stratified child chunk vector retrieval.
+        Perform a parent-stratified child chunk vector retrieval with parallel hybrid parent selection.
         
-        1. FTS search on parent aggregated text.
-        2. Qualify parents based on FTS score and spill ratio.
-        3. Local vector search per qualified parent.
-        4. Interleave results.
+        1. FTS search on parent aggregated text (lexical path).
+        2. Global vector search on chunk embeddings to select candidate parent documents (semantic path).
+        3. Fuse lexical and semantic parent candidates using Reciprocal Rank Fusion (RRF).
+        4. Local vector search per qualified parent, capped to MAX_CHUNKS_PER_PARENT.
+        5. Interleave and sort results.
         """
         parents = self.db.open_table(PARENT_TABLE)
         chunks = self.db.open_table(CHUNK_TABLE)
         
-        # 1. Search parent documents using FTS
+        # 1. Lexical Path: Search parent documents using FTS
         parent_search = parents.search(query_text, query_type="fts")
-        
-        # Apply filters to parents
         if filters:
             parent_where = self._build_lancedb_filter_clause(filters)
             if parent_where:
@@ -303,43 +302,59 @@ class BackendLanceDBAdapter:
                 
         parent_rows = parent_search.limit(parent_limit).to_arrow().to_pylist()
         
-        if not parent_rows:
+        # Determine allowed parent document_ids from FTS branch using FTS rank
+        fts_parent_ranks = {}
+        for rank, row in enumerate(parent_rows, 1):
+            fts_parent_ranks[row["document_id"]] = rank
+                    
+        # 2. Semantic Path: Search globally for candidate chunks and extract parent IDs
+        global_chunk_search = chunks.search(query_vector, vector_column_name="embedding").metric("cosine")
+        if filters:
+            chunk_filter = self._build_lancedb_filter_clause(filters)
+            if chunk_filter:
+                global_chunk_search = global_chunk_search.where(chunk_filter, prefilter=True)
+                
+        # Retrieve 50 global candidate chunks to allow semantic rescue of lexically-weak docs
+        global_chunk_rows = global_chunk_search.limit(50).to_arrow().to_pylist()
+        
+        vector_parent_ranks = {}
+        vector_rank_counter = 1
+        for row in global_chunk_rows:
+            doc_id = row["document_id"]
+            if doc_id not in vector_parent_ranks:
+                vector_parent_ranks[doc_id] = vector_rank_counter
+                vector_rank_counter += 1
+                
+        # 3. Hybrid Fusion: Merge FTS and Vector parent candidate lists using RRF
+        all_parent_ids = set(fts_parent_ranks.keys()) | set(vector_parent_ranks.keys())
+        if not all_parent_ids:
             return []
             
-        # 2. Stratify child chunks based on FTS score of parents
-        matched_parent_details = [
-            {
-                "rank": rank,
-                "document_id": row["document_id"],
-                "source_uri": row["source_uri"],
-                "fts_score": float(row["_score"]) if row.get("_score") is not None else None,
-            }
-            for rank, row in enumerate(parent_rows, 1)
+        parent_scores = []
+        for doc_id in all_parent_ids:
+            fts_rank = fts_parent_ranks.get(doc_id)
+            vector_rank = vector_parent_ranks.get(doc_id)
+            
+            fts_score = 1.0 / (60.0 + fts_rank) if fts_rank is not None else 0.0
+            vector_score = 1.0 / (60.0 + vector_rank) if vector_rank is not None else 0.0
+            rrf_score = fts_score + vector_score
+            parent_scores.append((doc_id, rrf_score))
+            
+        # Sort parents by unified RRF score descending
+        parent_scores.sort(key=lambda x: -x[1])
+        selected_parents = parent_scores[:parent_limit]
+        
+        # Apply child_parent_spill_ratio to filter the fused RRF scores
+        top_rrf = selected_parents[0][1]
+        allowed_parents = [
+            p for p in selected_parents
+            if p[1] >= top_rrf * child_parent_spill_ratio
         ]
         
-        top_fts = matched_parent_details[0]["fts_score"]
-        
-        # Determine allowed parent document_ids based on spill ratio
-        allowed_parent_ids = []
-        parent_ranks = {}
-        for detail in matched_parent_details:
-            doc_id = detail["document_id"]
-            if detail["rank"] == 1:
-                allowed_parent_ids.append(doc_id)
-                parent_ranks[doc_id] = detail["rank"]
-                continue
+        allowed_parent_ids = [p[0] for p in allowed_parents]
+        parent_ranks = {doc_id: rank for rank, (doc_id, _) in enumerate(allowed_parents, 1)}
                 
-            score = detail["fts_score"]
-            if (
-                top_fts is not None
-                and top_fts > 0
-                and score is not None
-                and score >= top_fts * child_parent_spill_ratio
-            ):
-                allowed_parent_ids.append(doc_id)
-                parent_ranks[doc_id] = detail["rank"]
-                
-        # 3. Vector search per allowed parent
+        # 4. Vector search per qualified parent
         stratified_rows = []
         for doc_id in allowed_parent_ids:
             chunk_search = chunks.search(query_vector, vector_column_name="embedding").metric("cosine")
@@ -358,7 +373,7 @@ class BackendLanceDBAdapter:
             per_parent_rows = chunk_search.limit(limit_val).to_arrow().to_pylist()
             stratified_rows.extend(per_parent_rows)
             
-        # 4. Sort aggregated chunks: precision-first (first by parent_rank, then by vector distance)
+        # 5. Sort aggregated chunks: precision-first (first by parent_rank, then by vector distance)
         stratified_rows.sort(
             key=lambda row: (
                 parent_ranks.get(row["document_id"], len(parent_ranks) + 1),
@@ -369,7 +384,7 @@ class BackendLanceDBAdapter:
         # Take the top child_limit chunks
         final_rows = stratified_rows[:child_limit]
         
-        # 5. Format results to match search API model
+        # 6. Format results to match search API model
         formatted_results = []
         for row in final_rows:
             meta_str = row.get("metadata", "{}")
@@ -470,6 +485,21 @@ class BackendLanceDBAdapter:
                 chunk_table.cleanup_old_versions()
             except Exception as e:
                 logger.warning(f"Chunk table optimization failed: {e}")
+
+            logger.info("Creating/updating vector index on LanceDB chunk table...")
+            try:
+                # Build IVF_PQ index for vector search. Only build if we have enough rows to train
+                total_chunks = chunk_table.count_rows()
+                if total_chunks >= 256:
+                    chunk_table.create_index(
+                        vector_column_name="embedding",
+                        metric="cosine",
+                        index_type="IVF_PQ",
+                        replace=True
+                    )
+                    logger.info("LanceDB chunk table vector index created successfully.")
+            except Exception as e:
+                logger.warning(f"Failed to create vector index on chunk table: {e}")
         
         # Explicitly rebuild FTS indexes to restore query freshness
         self.rebuild_fts_index()

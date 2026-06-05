@@ -461,6 +461,9 @@ def test_populate_on_enable_guard(tmp_path, monkeypatch, db_manager):
     # Check that _should_use_lancedb() evaluated to False
     assert retriever._should_use_lancedb() is False
 
+    # Delete postgres-only document so counts are in sync at 0 before indexing the new one
+    indexer.delete_document(res['document_id'])
+
     # 3. Now index a document with LanceDB enabled
     test_file_2 = tmp_path / "lancedb_doc.txt"
     test_file_2.write_text("Unique keyword lancedb test message.")
@@ -478,7 +481,7 @@ def test_populate_on_enable_guard(tmp_path, monkeypatch, db_manager):
 @pytest.mark.integration
 @pytest.mark.database
 def test_fail_closed_dual_writes(tmp_path, monkeypatch, db_manager):
-    """Test that indexing fails-closed when LanceDB is enabled but write fails."""
+    """Test that indexing fails-closed and rolls back Postgres when LanceDB is enabled but write fails."""
     from indexer_v2 import DocumentIndexer
     from services import get_lancedb_adapter
     from config import get_config
@@ -522,6 +525,124 @@ def test_fail_closed_dual_writes(tmp_path, monkeypatch, db_manager):
     res = indexer.index_document(str(test_file))
     assert res['status'] == 'error'
     assert 'LanceDB disk full error' in res['message']
+    
+    # Verify rollback: document should NOT exist in PostgreSQL repository
+    pg_stats = indexer.repository.get_statistics()
+    assert pg_stats.get("total_documents", 0) == 0
+
+
+@pytest.mark.integration
+@pytest.mark.database
+def test_drift_gate_fallback(tmp_path, monkeypatch, db_manager):
+    """Test that when counts differ (drift), retriever falls back to Postgres."""
+    from indexer_v2 import DocumentIndexer
+    from retriever_v2 import DocumentRetriever
+    from services import get_lancedb_adapter
+    from config import get_config
+    import services
+    
+    orig_config = get_config()
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path=str(tmp_path / "lancedb"),
+            lancedb_child_parent_spill_ratio=0.7,
+            top_k=5,
+            similarity_threshold=0.5,
+            distance_metric="cosine"
+        ),
+        database=orig_config.database,
+        chunking=orig_config.chunking,
+        embedding=SimpleNamespace(
+            dimension=384,
+            model_name="all-MiniLM-L6-v2"
+        )
+    )
+    
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    monkeypatch.setattr("retriever_v2.get_config", lambda: fake_config)
+    monkeypatch.setattr("indexer_v2.get_config", lambda: fake_config)
+    services.reset_services()
+    
+    indexer = DocumentIndexer()
+    test_file = tmp_path / "drift_test.txt"
+    test_file.write_text("Drift test file content.")
+    
+    # Ingest normally (both in sync)
+    res = indexer.index_document(str(test_file))
+    assert res['status'] == 'success'
+    
+    retriever = DocumentRetriever()
+    assert retriever._should_use_lancedb() is True
+    
+    # Introduce drift by deleting the document only from LanceDB
+    adapter = get_lancedb_adapter()
+    adapter.delete_document(res['document_id'])
+    
+    # Reset retriever cache
+    from retriever_v2 import invalidate_lancedb_cache
+    invalidate_lancedb_cache()
+    
+    # Verify that retriever detects drift (Postgres has 1 doc, LanceDB has 0 docs)
+    # and returns False for _should_use_lancedb
+    assert retriever._should_use_lancedb() is False
+
+
+@pytest.mark.integration
+@pytest.mark.database
+def test_delete_fail_closed(tmp_path, monkeypatch, db_manager):
+    """Test that if LanceDB deletion fails, delete_document fails-closed and Postgres is not modified."""
+    from indexer_v2 import DocumentIndexer
+    from services import get_lancedb_adapter
+    from config import get_config
+    import services
+    
+    orig_config = get_config()
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path=str(tmp_path / "lancedb"),
+            lancedb_child_parent_spill_ratio=0.7,
+            top_k=5,
+            similarity_threshold=0.5,
+            distance_metric="cosine"
+        ),
+        database=orig_config.database,
+        chunking=orig_config.chunking,
+        embedding=SimpleNamespace(
+            dimension=384,
+            model_name="all-MiniLM-L6-v2"
+        )
+    )
+    
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    monkeypatch.setattr("retriever_v2.get_config", lambda: fake_config)
+    monkeypatch.setattr("indexer_v2.get_config", lambda: fake_config)
+    services.reset_services()
+    
+    indexer = DocumentIndexer()
+    test_file = tmp_path / "delete_test.txt"
+    test_file.write_text("Delete test content.")
+    
+    # Ingest document
+    res = indexer.index_document(str(test_file))
+    assert res['status'] == 'success'
+    doc_id = res['document_id']
+    
+    # Mock delete_document on LanceDB adapter to raise an exception
+    adapter = get_lancedb_adapter()
+    def mock_delete_document(*args, **kwargs):
+        raise Exception("LanceDB delete lock error")
+        
+    monkeypatch.setattr(adapter, "delete_document", mock_delete_document)
+    
+    # Attempting to delete should raise/propagate exception
+    with pytest.raises(Exception, match="LanceDB delete lock error"):
+        indexer.delete_document(doc_id)
+        
+    # Verify Postgres still contains the document (fail-closed, no deletion executed in Postgres)
+    assert indexer.repository.document_exists(doc_id) is True
+
 
 
 

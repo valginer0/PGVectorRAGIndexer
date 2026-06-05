@@ -665,9 +665,7 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
             return BDP(**preview)
         else:
             # Actually delete
-            chunks_deleted = repo.bulk_delete(request.filters)
-            
-            # Dual-delete in LanceDB if enabled
+            # Dual-delete from LanceDB first if enabled to prevent split-brain if LanceDB fails
             from config import get_config
             if getattr(get_config().retrieval, "lancedb_enabled", False):
                 try:
@@ -675,8 +673,16 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
                     get_lancedb_adapter().bulk_delete(request.filters)
                 except Exception as e:
                     logger.error(f"Failed to bulk delete from LanceDB: {e}", exc_info=True)
+                    from retriever_v2 import invalidate_lancedb_cache
+                    invalidate_lancedb_cache()
                     raise
-                
+            
+            chunks_deleted = repo.bulk_delete(request.filters)
+            
+            # Invalidate readiness cache on successful delete
+            from retriever_v2 import invalidate_lancedb_cache
+            invalidate_lancedb_cache()
+            
             from api_models import BulkDeleteResponse as BDR
             return BDR(
                 status="success",
@@ -759,9 +765,24 @@ async def restore_documents(request: RestoreRequest):
                         aggregated_text=aggregated_text,
                         doc_metadata=docs_meta[doc_id]
                     )
+                
+                # Invalidate readiness cache on successful restore
+                from retriever_v2 import invalidate_lancedb_cache
+                invalidate_lancedb_cache()
             except Exception as e:
-                logger.error(f"Failed to restore documents to LanceDB: {e}", exc_info=True)
+                logger.error(f"Failed to restore documents to LanceDB: {e}. Rolling back PostgreSQL...", exc_info=True)
+                try:
+                    doc_ids = set(chunk["document_id"] for chunk in request.backup_data)
+                    for doc_id in doc_ids:
+                        repo.delete_document(doc_id)
+                except Exception as rollback_err:
+                    logger.critical(f"PostgreSQL rollback restore delete failed: {rollback_err}", exc_info=True)
+                from retriever_v2 import invalidate_lancedb_cache
+                invalidate_lancedb_cache()
                 raise
+        else:
+            from retriever_v2 import invalidate_lancedb_cache
+            invalidate_lancedb_cache()
             
         return {
             "status": "success",

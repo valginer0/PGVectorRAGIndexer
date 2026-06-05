@@ -230,3 +230,6 @@ docs/internal/
 activity_log.csv
 Pivaro_LLC_Single_Member_Operating_Agreement.docx
 venv-windows/
+
+# Local database runtime storage
+/data/

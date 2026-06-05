@@ -54,6 +54,7 @@ services:
       - "${API_PORT:-8000}:8000"
     volumes:
       - ./documents:/app/documents
+      - ./data:/app/data
       - model_cache:/root/.cache/huggingface
     depends_on:
       db:

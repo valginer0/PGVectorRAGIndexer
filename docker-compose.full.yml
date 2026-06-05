@@ -43,6 +43,8 @@ services:
       - ./documents:/app/documents:ro
       # Persist auto-backups on host
       - ./backups:/app/backups
+      # Persist LanceDB search index
+      - ./data:/app/data
       # Mount for model cache
       - model_cache:/root/.cache/huggingface
     depends_on:

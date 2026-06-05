@@ -231,8 +231,18 @@ async def upload_and_index(
                 )
                 # Rebuild FTS index on parent table for freshness
                 lancedb_adapter.rebuild_fts_index(parent_only=True)
+            
+            # Invalidate readiness cache on successful write
+            from retriever_v2 import invalidate_lancedb_cache
+            invalidate_lancedb_cache()
         except Exception as e:
-            logger.error(f"Failed to dual-write uploaded document to LanceDB: {e}", exc_info=True)
+            logger.error(f"Failed to dual-write uploaded document to LanceDB: {e}. Rolling back PostgreSQL...", exc_info=True)
+            try:
+                idx.repository.delete_document(processed_doc.document_id)
+            except Exception as rollback_err:
+                logger.critical(f"PostgreSQL rollback delete failed for document {processed_doc.document_id}: {rollback_err}", exc_info=True)
+            from retriever_v2 import invalidate_lancedb_cache
+            invalidate_lancedb_cache()
             raise
         
         logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")

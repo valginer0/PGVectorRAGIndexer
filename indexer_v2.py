@@ -153,8 +153,18 @@ class DocumentIndexer:
                     
                     if rebuild_fts:
                         lancedb_adapter.rebuild_fts_index(parent_only=True)
+                
+                # Invalidate readiness cache on successful write
+                from retriever_v2 import invalidate_lancedb_cache
+                invalidate_lancedb_cache()
             except Exception as e:
-                logger.error(f"Failed to dual-write document to LanceDB: {e}", exc_info=True)
+                logger.error(f"Failed to dual-write document to LanceDB: {e}. Rolling back PostgreSQL...", exc_info=True)
+                try:
+                    self.repository.delete_document(processed_doc.document_id)
+                except Exception as rollback_err:
+                    logger.critical(f"PostgreSQL rollback delete failed for document {processed_doc.document_id}: {rollback_err}", exc_info=True)
+                from retriever_v2 import invalidate_lancedb_cache
+                invalidate_lancedb_cache()
                 raise
             
             logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
@@ -262,16 +272,22 @@ class DocumentIndexer:
             logger.warning(f"Document not found: {document_id}")
             return False
         
-        deleted_count = self.repository.delete_document(document_id)
-        
-        # Dual-delete from LanceDB if enabled
+        # Dual-delete from LanceDB first if enabled to prevent split-brain if LanceDB fails
         if getattr(self.config.retrieval, "lancedb_enabled", False):
             try:
                 from services import get_lancedb_adapter
                 get_lancedb_adapter().delete_document(document_id)
             except Exception as e:
                 logger.error(f"Failed to dual-delete document from LanceDB: {e}", exc_info=True)
+                from retriever_v2 import invalidate_lancedb_cache
+                invalidate_lancedb_cache()
                 raise
+        
+        deleted_count = self.repository.delete_document(document_id)
+        
+        # Invalidate readiness cache on successful delete
+        from retriever_v2 import invalidate_lancedb_cache
+        invalidate_lancedb_cache()
 
         logger.info(f"Deleted document {document_id} ({deleted_count} chunks)")
         return True

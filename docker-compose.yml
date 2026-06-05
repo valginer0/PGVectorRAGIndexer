@@ -52,6 +52,7 @@ services:
     volumes:
       - ./documents:/app/documents
       - ./backups:/app/backups
+      - ./data:/app/data
       - model_cache:/root/.cache/huggingface
       - ${HOME:-.}/.pgvector-license:/root/.pgvector-license:ro
     depends_on:

@@ -192,6 +192,15 @@ class SearchResult:
             f"Text: {self.text_content[:200]}..."
         )
 
+_lancedb_cache_dirty = True
+_lancedb_cached_ready = False
+
+def invalidate_lancedb_cache():
+    """Invalidate the cached LanceDB readiness/drift status."""
+    global _lancedb_cache_dirty
+    _lancedb_cache_dirty = True
+    logger.info("LanceDB readiness cache invalidated.")
+
 
 class DocumentRetriever:
     """
@@ -207,44 +216,52 @@ class DocumentRetriever:
         self.repository = DocumentRepository(self.db_manager)
         self.embedding_service = get_embedding_service()
         self._reranker_v0 = None
-        self._lancedb_ready = None
 
     def _should_use_lancedb(self) -> bool:
         """
-        Check if LanceDB search is enabled and populated.
-        If LanceDB is enabled but empty while Postgres contains documents,
-        we fall back to Postgres search.
+        Check if LanceDB search is enabled and populated without count drift.
+        If LanceDB has a different document/chunk count than PostgreSQL,
+        we fall back to PostgreSQL.
         """
         if not getattr(self.config.retrieval, "lancedb_enabled", False):
             return False
             
-        if getattr(self, "_lancedb_ready", False):
-            return True
+        global _lancedb_cache_dirty, _lancedb_cached_ready
+        if not _lancedb_cache_dirty:
+            return _lancedb_cached_ready
             
         try:
             from services import get_lancedb_adapter
             lancedb_adapter = get_lancedb_adapter()
             lancedb_stats = lancedb_adapter.get_statistics()
             lancedb_docs = lancedb_stats.get("total_documents", 0)
+            lancedb_chunks = lancedb_stats.get("total_chunks", 0)
             
-            if lancedb_docs > 0:
-                self._lancedb_ready = True
-                return True
-                
-            # LanceDB is empty. Check if Postgres has documents
             pg_stats = self.repository.get_statistics()
             pg_docs = pg_stats.get("total_documents", 0)
-            if pg_docs > 0:
+            pg_chunks = pg_stats.get("total_chunks", 0)
+            
+            # Check for count drift
+            if pg_docs != lancedb_docs or pg_chunks != lancedb_chunks:
                 logger.warning(
-                    "LanceDB search is enabled but index is empty. "
-                    f"Postgres contains {pg_docs} documents. "
-                    "Falling back to Postgres search."
+                    f"LanceDB drift detected! PostgreSQL has {pg_docs} docs ({pg_chunks} chunks), "
+                    f"LanceDB has {lancedb_docs} docs ({lancedb_chunks} chunks). "
+                    "Falling back to PostgreSQL search."
                 )
+                _lancedb_cached_ready = False
+                _lancedb_cache_dirty = False
                 return False
-            else:
-                # Both are empty
-                self._lancedb_ready = True
+                
+            # Both are empty
+            if pg_docs == 0:
+                _lancedb_cached_ready = True
+                _lancedb_cache_dirty = False
                 return True
+                
+            # In sync and populated
+            _lancedb_cached_ready = True
+            _lancedb_cache_dirty = False
+            return True
         except Exception as e:
             logger.warning(f"Error checking LanceDB status, falling back to Postgres: {e}")
             return False

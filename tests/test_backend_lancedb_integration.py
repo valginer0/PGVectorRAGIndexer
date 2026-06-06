@@ -38,6 +38,16 @@ class _FakeAdapter:
     def upsert_document(self, **kwargs):
         self.upserts.append(kwargs)
 
+    def add_documents_bulk(self, documents):
+        for doc_id, source_uri, chunks, aggregated_text, doc_metadata in documents:
+            self.upserts.append({
+                "document_id": doc_id,
+                "source_uri": source_uri,
+                "chunks": chunks,
+                "aggregated_text": aggregated_text,
+                "doc_metadata": doc_metadata
+            })
+
     def delete_document(self, doc_id):
         self.deletes.append(doc_id)
         return 1
@@ -817,3 +827,117 @@ def test_explicit_postgres_toggle(tmp_path, monkeypatch, db_manager):
     results = retriever.search_hybrid("toggle test", source="postgres")
     assert len(results) > 0
     assert "postgres_only_doc.txt" in results[0].source_uri
+
+
+@pytest.mark.integration
+@pytest.mark.database
+def test_add_documents_bulk_correctness(tmp_path, monkeypatch):
+    """Test that add_documents_bulk yields identical counts, schemas, and search results to upsert_document."""
+    from services import get_lancedb_adapter
+    import services
+    from config import get_config
+    
+    orig_config = get_config()
+    
+    # 1. Setup config for bulk adapter
+    bulk_path = tmp_path / "lancedb_bulk"
+    fake_config_bulk = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path=str(bulk_path),
+            lancedb_child_parent_spill_ratio=1.0,
+            top_k=5,
+            similarity_threshold=0.1,
+            distance_metric="cosine"
+        ),
+        database=orig_config.database,
+        chunking=orig_config.chunking,
+        embedding=SimpleNamespace(
+            dimension=384,
+            model_name="all-MiniLM-L6-v2"
+        )
+    )
+    
+    monkeypatch.setattr("config.get_config", lambda: fake_config_bulk)
+    services.reset_services()
+    adapter_bulk = get_lancedb_adapter()
+    
+    # Define document inputs
+    docs_to_sync = [
+        (
+            "doc-1",
+            "file:///doc1.txt",
+            [
+                (0, "Apple pie is delicious.", [0.1] * 384, {"category": "food"}),
+                (1, "Bananas are yellow fruit.", [0.2] * 384, {"category": "fruit"})
+            ],
+            "Apple pie is delicious.\n\nBananas are yellow fruit.",
+            {"namespace": "test-ns", "type": "text"}
+        ),
+        (
+            "doc-2",
+            "file:///doc2.txt",
+            [
+                (0, "Tesla Model S has great range.", [0.5] * 384, {"category": "car"}),
+                (1, "EV6 charging speed is very fast.", [0.6] * 384, {"category": "car"})
+            ],
+            "Tesla Model S has great range.\n\nEV6 charging speed is very fast.",
+            {"namespace": "test-ns", "type": "text"}
+        )
+    ]
+    
+    # Bulk write
+    adapter_bulk.add_documents_bulk(docs_to_sync)
+    adapter_bulk.optimize_vector_index()
+    stats_bulk = adapter_bulk.get_statistics()
+    
+    # 2. Setup config for sequential adapter
+    seq_path = tmp_path / "lancedb_seq"
+    fake_config_seq = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path=str(seq_path),
+            lancedb_child_parent_spill_ratio=1.0,
+            top_k=5,
+            similarity_threshold=0.1,
+            distance_metric="cosine"
+        ),
+        database=orig_config.database,
+        chunking=orig_config.chunking,
+        embedding=SimpleNamespace(
+            dimension=384,
+            model_name="all-MiniLM-L6-v2"
+        )
+    )
+    
+    monkeypatch.setattr("config.get_config", lambda: fake_config_seq)
+    services.reset_services()
+    adapter_seq = get_lancedb_adapter()
+    
+    # Sequential write
+    for doc_id, uri, chunks, text, meta in docs_to_sync:
+        adapter_seq.upsert_document(doc_id, uri, chunks, text, meta)
+    adapter_seq.optimize_vector_index()
+    stats_seq = adapter_seq.get_statistics()
+    
+    # Assert statistical equality
+    assert stats_bulk["total_documents"] == stats_seq["total_documents"]
+    assert stats_bulk["total_chunks"] == stats_seq["total_chunks"]
+    assert stats_bulk["total_documents"] == 2
+    assert stats_bulk["total_chunks"] == 4
+    
+    # Verify row contents match exactly (ignoring internal metadata and using pandas dataframe)
+    df_parent_bulk = adapter_bulk.db.open_table("parent_documents").to_pandas()
+    df_parent_seq = adapter_seq.db.open_table("parent_documents").to_pandas()
+    assert len(df_parent_bulk) == len(df_parent_seq)
+    
+    df_chunk_bulk = adapter_bulk.db.open_table("document_chunks").to_pandas()
+    df_chunk_seq = adapter_seq.db.open_table("document_chunks").to_pandas()
+    assert len(df_chunk_bulk) == len(df_chunk_seq)
+    
+    # Verify both can run FTS search
+    results_parent_bulk = adapter_bulk.db.open_table("parent_documents").search("Apple", query_type="fts").to_list()
+    results_parent_seq = adapter_seq.db.open_table("parent_documents").search("Apple", query_type="fts").to_list()
+    assert len(results_parent_bulk) == len(results_parent_seq)
+    assert results_parent_bulk[0]["document_id"] == "doc-1"
+

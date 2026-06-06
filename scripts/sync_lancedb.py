@@ -38,7 +38,7 @@ def _assert_count_parity(adapter, expected_docs: int, expected_chunks: int) -> N
         )
 
 
-def sync_postgres_to_lancedb(batch_size: int = 50, force: bool = False) -> None:
+def sync_postgres_to_lancedb(batch_size: int = 200, force: bool = False) -> None:
     """Sync all document chunks from PostgreSQL to LanceDB in batches."""
     config = get_config()
     db_manager = get_db_manager()
@@ -81,6 +81,15 @@ def sync_postgres_to_lancedb(batch_size: int = 50, force: bool = False) -> None:
         _assert_count_parity(adapter, expected_docs=0, expected_chunks=0)
         return
 
+    # Check if empty at start to choose bulk fast path vs per-doc slow path
+    stats = adapter.get_statistics()
+    is_empty = (stats.get("total_documents", 0) == 0 and stats.get("total_chunks", 0) == 0)
+    
+    if is_empty:
+        logger.info("LanceDB tables are empty. Using fast bulk-add sync path...")
+    else:
+        logger.info("LanceDB tables are not empty. Using slow per-document upsert sync path to prevent duplicates...")
+
     # Process in batches
     chunks_query = """
     SELECT 
@@ -119,47 +128,82 @@ def sync_postgres_to_lancedb(batch_size: int = 50, force: bool = False) -> None:
                 grouped_chunks[doc_id] = []
             grouped_chunks[doc_id].append(row)
             
-        # Upsert each document into LanceDB
-        for doc_id, rows in grouped_chunks.items():
-            # Find the source_uri and doc-level metadata
-            source_uri = rows[0]["source_uri"]
-            
-            # Formulate chunks list for upsert_document:
-            # List[Tuple[chunk_index, text_content, embedding, chunk_metadata]]
-            lancedb_chunks = []
-            for row in rows:
-                meta = row["metadata"] or {}
-                if isinstance(meta, str):
-                    import json
-                    try:
-                        meta = json.loads(meta)
-                    except Exception:
-                        meta = {}
-                lancedb_chunks.append((
-                    row["chunk_index"],
-                    row["text_content"],
-                    # Convert embedding vector to list of floats if needed
-                    list(row["embedding"]) if hasattr(row["embedding"], "__iter__") else row["embedding"],
-                    meta
+        if is_empty:
+            # Fast path: collect all document tuples and bulk-add
+            batch_tuples = []
+            for doc_id, rows in grouped_chunks.items():
+                source_uri = rows[0]["source_uri"]
+                lancedb_chunks = []
+                for row in rows:
+                    meta = row["metadata"] or {}
+                    if isinstance(meta, str):
+                        import json
+                        try:
+                            meta = json.loads(meta)
+                        except Exception:
+                            meta = {}
+                    lancedb_chunks.append((
+                        row["chunk_index"],
+                        row["text_content"],
+                        list(row["embedding"]) if hasattr(row["embedding"], "__iter__") else row["embedding"],
+                        meta
+                    ))
+                doc_metadata = lancedb_chunks[0][3] if lancedb_chunks else {}
+                aggregated_text = "\n\n".join(row["text_content"] for row in rows)
+                
+                batch_tuples.append((
+                    doc_id,
+                    source_uri,
+                    lancedb_chunks,
+                    aggregated_text,
+                    doc_metadata
                 ))
             
-            # Document metadata (inherit from first chunk metadata or use empty)
-            doc_metadata = lancedb_chunks[0][3] if lancedb_chunks else {}
-            aggregated_text = "\n\n".join(row["text_content"] for row in rows)
-            
-            try:
-                adapter.upsert_document(
-                    document_id=doc_id,
-                    source_uri=source_uri,
-                    chunks=lancedb_chunks,
-                    aggregated_text=aggregated_text,
-                    doc_metadata=doc_metadata
-                )
-                synced_docs += 1
-                synced_chunks += len(lancedb_chunks)
-            except Exception as e:
-                logger.error(f"Failed to sync document {doc_id} to LanceDB: {e}", exc_info=True)
-                failed_docs.append(str(doc_id))
+            if batch_tuples:
+                try:
+                    adapter.add_documents_bulk(batch_tuples)
+                    synced_docs += len(batch_tuples)
+                    synced_chunks += sum(len(t[2]) for t in batch_tuples)
+                except Exception as e:
+                    logger.error(f"Failed to bulk sync batch starting with doc {batch_ids[0]}: {e}", exc_info=True)
+                    failed_docs.extend(str(tid) for tid in batch_ids)
+        else:
+            # Slow path: Upsert each document into LanceDB
+            for doc_id, rows in grouped_chunks.items():
+                source_uri = rows[0]["source_uri"]
+                
+                lancedb_chunks = []
+                for row in rows:
+                    meta = row["metadata"] or {}
+                    if isinstance(meta, str):
+                        import json
+                        try:
+                            meta = json.loads(meta)
+                        except Exception:
+                            meta = {}
+                    lancedb_chunks.append((
+                        row["chunk_index"],
+                        row["text_content"],
+                        list(row["embedding"]) if hasattr(row["embedding"], "__iter__") else row["embedding"],
+                        meta
+                    ))
+                
+                doc_metadata = lancedb_chunks[0][3] if lancedb_chunks else {}
+                aggregated_text = "\n\n".join(row["text_content"] for row in rows)
+                
+                try:
+                    adapter.upsert_document(
+                        document_id=doc_id,
+                        source_uri=source_uri,
+                        chunks=lancedb_chunks,
+                        aggregated_text=aggregated_text,
+                        doc_metadata=doc_metadata
+                    )
+                    synced_docs += 1
+                    synced_chunks += len(lancedb_chunks)
+                except Exception as e:
+                    logger.error(f"Failed to sync document {doc_id} to LanceDB: {e}", exc_info=True)
+                    failed_docs.append(str(doc_id))
 
         logger.info(f"Processed batch: {synced_docs}/{total_docs} documents synced ({synced_chunks} chunks).")
 

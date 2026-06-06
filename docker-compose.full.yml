@@ -45,6 +45,8 @@ services:
       - ./backups:/app/backups
       # Persist LanceDB search index
       - ./data:/app/data
+      # LanceDB storage path (named volume overlay to bypass slow 9p bridge on Windows/WSL2)
+      - lancedb_data:/app/data/lancedb
       # Mount for model cache
       - model_cache:/root/.cache/huggingface
     depends_on:
@@ -57,6 +59,7 @@ services:
 volumes:
   postgres_data:
   model_cache:
+  lancedb_data:
 
 networks:
   rag_network:

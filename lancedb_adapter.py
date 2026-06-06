@@ -10,7 +10,7 @@ import os
 import json
 import xxhash
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Tuple, Sequence
+from typing import List, Dict, Any, Optional, Tuple, Sequence, Iterable
 import pyarrow as pa
 import lancedb
 from filelock import FileLock
@@ -122,6 +122,59 @@ class BackendLanceDBAdapter:
                 f"LanceDB table directory exists but could not be opened: {table_path} ({e})"
             ) from e
 
+    def _build_doc_rows(
+        self,
+        document_id: str,
+        source_uri: str,
+        chunks: List[Tuple[int, str, List[float], Dict[str, Any]]],
+        aggregated_text: str,
+        doc_metadata: Dict[str, Any]
+    ) -> Tuple[Dict[str, Any], List[Dict[str, Any]]]:
+        """Build pyarrow parent and chunk row dictionaries for a document."""
+        doc_type = doc_metadata.get("type") or doc_metadata.get("document_type")
+        namespace = doc_metadata.get("namespace")
+        category = doc_metadata.get("category")
+        
+        # Prepare parent row
+        parent_row = {
+            "document_id": document_id,
+            "source_uri": source_uri,
+            "aggregated_text": aggregated_text,
+            "chunk_count": len(chunks),
+            "document_type": doc_type,
+            "namespace": namespace,
+            "category": category,
+            "metadata": json.dumps(doc_metadata)
+        }
+        
+        # Prepare chunk rows
+        chunk_rows = []
+        for chunk_index, text, embedding, chunk_meta in chunks:
+            chunk_id = generate_chunk_id(document_id, chunk_index)
+            
+            # Inherit core metadata if not specified in chunk
+            c_type = chunk_meta.get("type") or chunk_meta.get("document_type") or doc_type
+            c_namespace = chunk_meta.get("namespace") or namespace
+            c_category = chunk_meta.get("category") or category
+            
+            # Merge document-level and chunk-level metadata
+            merged_meta = {**doc_metadata, **chunk_meta}
+            
+            chunk_rows.append({
+                "chunk_id": chunk_id,
+                "document_id": document_id,
+                "chunk_index": chunk_index,
+                "text_content": text,
+                "source_uri": source_uri,
+                "embedding": embedding,
+                "document_type": c_type,
+                "namespace": c_namespace,
+                "category": c_category,
+                "metadata": json.dumps(merged_meta)
+            })
+            
+        return parent_row, chunk_rows
+
     def upsert_document(
         self,
         document_id: str,
@@ -148,57 +201,61 @@ class BackendLanceDBAdapter:
             if not chunks:
                 return
 
-            # Extract standard metadata fields
-            doc_type = doc_metadata.get("type") or doc_metadata.get("document_type")
-            namespace = doc_metadata.get("namespace")
-            category = doc_metadata.get("category")
+            parent_row, chunk_rows = self._build_doc_rows(
+                document_id, source_uri, chunks, aggregated_text, doc_metadata
+            )
             
-            # Prepare parent row
-            parent_rows = [{
-                "document_id": document_id,
-                "source_uri": source_uri,
-                "aggregated_text": aggregated_text,
-                "chunk_count": len(chunks),
-                "document_type": doc_type,
-                "namespace": namespace,
-                "category": category,
-                "metadata": json.dumps(doc_metadata)
-            }]
-            
-            # Prepare chunk rows
-            chunk_rows = []
-            for chunk_index, text, embedding, chunk_meta in chunks:
-                chunk_id = generate_chunk_id(document_id, chunk_index)
-                
-                # Inherit core metadata if not specified in chunk
-                c_type = chunk_meta.get("type") or chunk_meta.get("document_type") or doc_type
-                c_namespace = chunk_meta.get("namespace") or namespace
-                c_category = chunk_meta.get("category") or category
-                
-                # Merge document-level and chunk-level metadata
-                merged_meta = {**doc_metadata, **chunk_meta}
-                
-                chunk_rows.append({
-                    "chunk_id": chunk_id,
-                    "document_id": document_id,
-                    "chunk_index": chunk_index,
-                    "text_content": text,
-                    "source_uri": source_uri,
-                    "embedding": embedding,
-                    "document_type": c_type,
-                    "namespace": c_namespace,
-                    "category": c_category,
-                    "metadata": json.dumps(merged_meta)
-                })
-
             # Append new records to tables
-            parent_arrow = pa.Table.from_pylist(parent_rows, schema=self.parent_schema)
+            parent_arrow = pa.Table.from_pylist([parent_row], schema=self.parent_schema)
             chunk_arrow = pa.Table.from_pylist(chunk_rows, schema=self.chunk_schema)
             
             parent_table.add(parent_arrow)
             chunk_table.add(chunk_arrow)
             
             logger.info(f"Upserted document {document_id} with {len(chunks)} chunks to LanceDB.")
+
+    def add_documents_bulk(
+        self, 
+        documents: Iterable[Tuple[str, str, List[Tuple[int, str, List[float], Dict[str, Any]]], str, Dict[str, Any]]]
+    ) -> None:
+        """Bulk-append many documents to EMPTY/fresh tables (no per-doc delete).
+        `documents` is an iterable of
+        (document_id, source_uri, chunks, aggregated_text, doc_metadata).
+        Caller guarantees no pre-existing rows for these ids (used for from-empty
+        rebuild) — duplicates are NOT prevented here."""
+        with self.write_lock:
+            parent_table = self.db.open_table(PARENT_TABLE)
+            chunk_table = self.db.open_table(CHUNK_TABLE)
+            
+            parent_rows = []
+            chunk_rows = []
+            
+            for doc_id, source_uri, chunks, aggregated_text, doc_metadata in documents:
+                if not chunks:
+                    continue
+                parent_row, doc_chunks = self._build_doc_rows(
+                    doc_id, source_uri, chunks, aggregated_text, doc_metadata
+                )
+                parent_rows.append(parent_row)
+                chunk_rows.extend(doc_chunks)
+                
+                # Flush chunks in batches of 25000 to keep memory consumption low
+                if len(chunk_rows) >= 25000:
+                    chunk_arrow = pa.Table.from_pylist(chunk_rows, schema=self.chunk_schema)
+                    chunk_table.add(chunk_arrow)
+                    chunk_rows = []
+            
+            # Flush remaining chunks
+            if chunk_rows:
+                chunk_arrow = pa.Table.from_pylist(chunk_rows, schema=self.chunk_schema)
+                chunk_table.add(chunk_arrow)
+            
+            # Flush parents once at the end
+            if parent_rows:
+                parent_arrow = pa.Table.from_pylist(parent_rows, schema=self.parent_schema)
+                parent_table.add(parent_arrow)
+                
+            logger.info(f"Bulk-added {len(parent_rows)} documents to LanceDB.")
 
     def delete_document(self, document_id: str) -> int:
         """

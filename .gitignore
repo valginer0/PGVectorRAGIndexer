@@ -233,3 +233,6 @@ venv-windows/
 
 # Local database runtime storage
 /data/
+
+# Local WSL convenience shims (e.g. scripts/bin/gh -> Windows gh.exe); machine-specific
+scripts/bin/

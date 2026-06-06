@@ -205,15 +205,13 @@ def test_search_finished_success(search_tab):
 
 
 def test_search_finished_marks_local_results_one_per_file(search_tab):
-    search_tab.search_worker = MagicMock()
-    search_tab.search_worker.property.return_value = True
+    with patch("desktop_app.ui.search_tab.app_config.get_document_level_search_enabled", return_value=True):
+        search_tab.search_finished(
+            True,
+            [{"score": 0.9, "source_uri": "/path/1", "text_content": "content 1", "chunk_index": 1}],
+        )
 
-    search_tab.search_finished(
-        True,
-        [{"score": 0.9, "source_uri": "/path/1", "text_content": "content 1", "chunk_index": 1}],
-    )
-
-    assert search_tab.status_label.text() == "Found 1 result (1 per file)"
+        assert search_tab.status_label.text() == "Found 1 result (1 per file)"
 
 def test_search_finished_failure(search_tab):
     """Test handling of search failure."""
@@ -311,6 +309,43 @@ def test_search_finished_503_not_ready(search_tab):
         assert search_tab.search_btn.isEnabled()
         assert search_tab.results_table.rowCount() == 0
         assert "LanceDB index is not ready / syncing — please wait" in search_tab.status_label.text()
-        assert "Please open the Documents tab (tree) to watch progress" in search_tab.status_label.text()
+        assert "Open the Documents tab (tree) and refresh to check sync status" in search_tab.status_label.text()
+        assert "color: #f59e0b" in search_tab.status_label.styleSheet()
+
+
+def test_perform_search_sends_source_parameter(search_tab):
+    """SearchWorker is constructed with source=None for LanceDB and source='postgres' for Postgres."""
+    search_tab.query_input.setText("test query")
+    
+    # 1. LanceDB (default, index 0)
+    search_tab.engine_combo.setCurrentIndex(0)
+    with patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
+        search_tab.perform_search()
+        MockWorker.assert_called_once()
+        args, kwargs = MockWorker.call_args
+        assert kwargs.get("source") is None
+        assert search_tab._active_engine == "lancedb"
+
+    # 2. Postgres (debug, index 1)
+    search_tab.engine_combo.setCurrentIndex(1)
+    with patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
+        search_tab.perform_search()
+        MockWorker.assert_called_once()
+        args, kwargs = MockWorker.call_args
+        assert kwargs.get("source") == "postgres"
+        assert search_tab._active_engine == "postgres"
+
+
+def test_search_finished_postgres_amber_warning(search_tab):
+    """Postgres search success shows amber styling and custom warning suffix."""
+    search_tab._active_engine = "postgres"
+    
+    with patch.object(search_tab, "display_results") as mock_display:
+        search_tab.results_table.setRowCount(3) # Mock that display_results sets 3 rows
+        search_tab.search_finished(True, [{"id": "1"}, {"id": "2"}, {"id": "3"}])
+        
+        mock_display.assert_called_once()
+        assert "Postgres (debug) engine — not the product engine" in search_tab.status_label.text()
+        assert "Found 3 results" in search_tab.status_label.text()
         assert "color: #f59e0b" in search_tab.status_label.styleSheet()
 

@@ -76,6 +76,21 @@ def test_search_worker_passes_document_level_options(qapp, mock_api_client):
     assert mock_api_client.search.call_args.kwargs["literal_tail_suppression"] == "identifier-token"
 
 
+def test_search_worker_passes_source(qapp, mock_api_client):
+    """SearchWorker passes source parameter to search client."""
+    mock_api_client.search.return_value = []
+    
+    worker = SearchWorker(
+        mock_api_client,
+        query="test",
+        top_k=5,
+        min_score=0.5,
+        metric="cosine",
+        source="postgres"
+    )
+    worker.run()
+    
+    assert mock_api_client.search.call_args.kwargs["source"] == "postgres"
 
 
 def test_search_worker_failure(qapp, mock_api_client):

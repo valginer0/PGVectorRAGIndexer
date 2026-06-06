@@ -139,6 +139,7 @@ class SearchTab(QWidget):
         self.source_manager = source_manager
         self.current_query = ""  # Store for snippet extraction
         self._display_result_limit = 10
+        self._active_engine = "lancedb"
         self.setup_ui()
     
     def setup_ui(self):
@@ -201,6 +202,15 @@ class SearchTab(QWidget):
         self.metric_combo.setMinimumWidth(120)
         self.metric_combo.setMinimumHeight(35)  # Prevent crushing at min window height
         options_layout.addWidget(self.metric_combo)
+        
+        # Engine
+        options_layout.addWidget(QLabel("Engine:"))
+        self.engine_combo = QComboBox()
+        self.engine_combo.addItem("LanceDB", "lancedb")          # index 0 = default
+        self.engine_combo.addItem("Postgres (debug)", "postgres")
+        self.engine_combo.setMinimumHeight(35)
+        self.engine_combo.currentIndexChanged.connect(self._on_engine_changed)
+        options_layout.addWidget(self.engine_combo)
         
         options_layout.addStretch()
         layout.addWidget(options_group)
@@ -334,6 +344,10 @@ class SearchTab(QWidget):
             else self._candidate_limit_for_unique_files(self._display_result_limit)
         )
 
+        engine = self.engine_combo.currentData()          # "lancedb" | "postgres"
+        self._active_engine = engine
+        source = "postgres" if engine == "postgres" else None
+
         self.search_worker = SearchWorker(
             self.api_client,
             query,
@@ -344,6 +358,7 @@ class SearchTab(QWidget):
             extensions=extensions or None,
             group_by_document=use_document_level_search,
             literal_tail_suppression="identifier-token" if use_document_level_search else None,
+            source=source,
         )
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
@@ -369,8 +384,12 @@ class SearchTab(QWidget):
 
             else:
                 suffix = " (1 per file)" if self._current_search_is_one_per_file() else ""
-                self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix}")
-                self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
+                if self._active_engine == "postgres":
+                    self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix} · ⚠ Postgres (debug) engine — not the product engine")
+                    self.status_label.setStyleSheet("color: #f59e0b; font-style: italic; font-weight: bold;")
+                else:
+                    self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix}")
+                    self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
         else:
             error_msg = str(data)
             is_503 = False
@@ -379,7 +398,7 @@ class SearchTab(QWidget):
 
             if is_503:
                 self.results_table.setRowCount(0)
-                friendly_msg = f"{error_msg} — Please open the Documents tab (tree) to watch progress."
+                friendly_msg = f"{error_msg} — Open the Documents tab (tree) and refresh to check sync status."
                 self.status_label.setText(friendly_msg)
                 self.status_label.setStyleSheet("color: #f59e0b; font-style: italic; font-weight: bold;")
             else:
@@ -609,3 +628,10 @@ class SearchTab(QWidget):
 
     def _current_search_is_one_per_file(self) -> bool:
         return bool(app_config.get_document_level_search_enabled())
+
+    def _on_engine_changed(self) -> None:
+        """Visual feedback when Postgres engine is selected."""
+        if self.engine_combo.currentData() == "postgres":
+            self.engine_combo.setStyleSheet("border: 1px solid #f59e0b;")
+        else:
+            self.engine_combo.setStyleSheet("")

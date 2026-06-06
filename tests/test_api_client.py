@@ -85,6 +85,26 @@ def test_search_success(api_client):
         assert payload["use_hybrid"] is True
 
 
+def test_search_source_parameter(api_client):
+    """Test that source parameter is conditionally included in payload."""
+    with patch.object(api_client._base, "request") as mock_request:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"results": []}
+        mock_request.return_value = mock_response
+
+        # Scenario A: source=None (default) -> no source key in payload
+        api_client.search(query="test", source=None)
+        payload = mock_request.call_args[1]["json"]
+        assert "source" not in payload
+
+        # Scenario B: source="postgres" -> source key in payload
+        mock_request.reset_mock()
+        api_client.search(query="test", source="postgres")
+        payload = mock_request.call_args[1]["json"]
+        assert payload["source"] == "postgres"
+
+
 def test_search_can_request_document_level_options(api_client):
     """Search can opt into backend document grouping without changing defaults."""
     with patch.object(api_client._base, "request") as mock_request:

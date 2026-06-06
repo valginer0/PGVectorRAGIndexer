@@ -34,6 +34,7 @@ class SearchClient:
         literal_tail_suppression: Optional[str] = None,
         literal_anchor_threshold: Optional[float] = None,
         literal_tail_threshold: Optional[float] = None,
+        source: Optional[str] = None,
     ) -> list:
         """Search the indexed documents."""
         payload = {
@@ -51,6 +52,8 @@ class SearchClient:
             payload["literal_anchor_threshold"] = literal_anchor_threshold
         if literal_tail_threshold is not None:
             payload["literal_tail_threshold"] = literal_tail_threshold
+        if source:
+            payload["source"] = source
 
         merged_filters: Dict[str, Any] = dict(filters) if filters else {}
         if document_type:

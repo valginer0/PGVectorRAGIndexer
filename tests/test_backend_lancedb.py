@@ -1,7 +1,12 @@
 import pytest
 import json
 from pathlib import Path
-from lancedb_adapter import BackendLanceDBAdapter, generate_chunk_id
+from lancedb_adapter import (
+    BackendLanceDBAdapter,
+    CHUNK_TABLE,
+    PARENT_TABLE,
+    generate_chunk_id,
+)
 
 
 def test_generate_chunk_id():
@@ -174,6 +179,70 @@ def test_backend_lancedb_lifecycle(tmp_path):
     assert stats_post_delete["total_chunks"] == 0
 
 
+def test_ensure_tables_exist_opens_unlisted_existing_tables(tmp_path):
+    """Existing .lance directories should be opened before creating empty tables."""
+    db_dir = tmp_path / "test_lancedb_unlisted"
+    adapter = BackendLanceDBAdapter(db_path=str(db_dir), embedding_dimension=2)
+
+    # Simulate a backend restart where LanceDB's listing API returns no names even
+    # though the table directories are present and openable on disk.
+    (db_dir / "parent_documents.lance").mkdir(exist_ok=True)
+    (db_dir / "document_chunks.lance").mkdir(exist_ok=True)
+
+    opened = []
+    created = []
+
+    class FakeTable:
+        def create_scalar_index(self, _column):
+            return None
+
+    class FakeDB:
+        def table_names(self):
+            return []
+
+        def open_table(self, name):
+            opened.append(name)
+            return FakeTable()
+
+        def create_table(self, name, schema):
+            created.append((name, schema))
+            return FakeTable()
+
+    adapter.db = FakeDB()
+    adapter._ensure_tables_exist()
+
+    assert created == []
+    assert PARENT_TABLE in opened
+    assert CHUNK_TABLE in opened
+
+
+def test_ensure_tables_exist_does_not_recreate_unopenable_existing_table(tmp_path):
+    """A present but unopenable table directory is corruption, not an empty-table cue."""
+    db_dir = tmp_path / "test_lancedb_unopenable"
+    adapter = BackendLanceDBAdapter(db_path=str(db_dir), embedding_dimension=2)
+
+    (db_dir / "parent_documents.lance").mkdir(exist_ok=True)
+
+    created = []
+
+    class FakeDB:
+        def table_names(self):
+            return []
+
+        def open_table(self, name):
+            raise ValueError(f"cannot open {name}")
+
+        def create_table(self, name, schema):
+            created.append((name, schema))
+
+    adapter.db = FakeDB()
+
+    with pytest.raises(RuntimeError, match="could not be opened"):
+        adapter._ensure_tables_exist()
+
+    assert created == []
+
+
 def test_stratified_children_spill_ratio(tmp_path):
     """Test parent FTS selection, stratified child retrieval, and parent capping/precision sorting logic."""
     db_dir = tmp_path / "test_lancedb_stratified"
@@ -277,4 +346,3 @@ def test_stratified_children_spill_ratio(tmp_path):
     assert results_loose[3]["parent_rank"] == 2
     assert results_loose[4]["document_id"] == "doc-b"
     assert results_loose[4]["parent_rank"] == 2
-

@@ -76,14 +76,12 @@ class BackendLanceDBAdapter:
     def _ensure_tables_exist(self) -> None:
         """Create tables and FTS indexes if they do not exist. Thread/Process safe."""
         with self.write_lock:
-            tables = set(self.db.table_names())
-            
-            if PARENT_TABLE not in tables:
+            if not self._table_exists(PARENT_TABLE):
                 logger.info(f"Creating LanceDB table: {PARENT_TABLE}")
                 parent_table = self.db.create_table(PARENT_TABLE, schema=self.parent_schema)
                 parent_table.create_fts_index("aggregated_text")
                 
-            if CHUNK_TABLE not in tables:
+            if not self._table_exists(CHUNK_TABLE):
                 logger.info(f"Creating LanceDB table: {CHUNK_TABLE}")
                 chunk_table = self.db.create_table(CHUNK_TABLE, schema=self.chunk_schema)
                 chunk_table.create_fts_index("text_content")
@@ -98,6 +96,31 @@ class BackendLanceDBAdapter:
                 self.db.open_table(CHUNK_TABLE).create_scalar_index("document_id")
             except Exception as e:
                 logger.warning(f"Failed to create scalar index on chunk table document_id: {e}")
+
+    def _table_exists(self, table_name: str) -> bool:
+        """Return True when a LanceDB table is listed or can be opened from disk."""
+        try:
+            if table_name in set(self.db.table_names()):
+                return True
+        except Exception as e:
+            logger.warning("Failed to list LanceDB tables: %s", e)
+
+        table_path = self.db_path / f"{table_name}.lance"
+        if not table_path.exists():
+            return False
+
+        try:
+            self.db.open_table(table_name)
+            logger.warning(
+                "LanceDB table %s was not listed but opened from existing directory %s.",
+                table_name,
+                table_path,
+            )
+            return True
+        except Exception as e:
+            raise RuntimeError(
+                f"LanceDB table directory exists but could not be opened: {table_path} ({e})"
+            ) from e
 
     def upsert_document(
         self,

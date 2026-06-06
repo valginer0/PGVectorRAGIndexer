@@ -21,6 +21,7 @@ COPY *.py ./
 COPY VERSION ./
 COPY init-db.sql ./
 COPY routers/ ./routers/
+COPY scripts/ ./scripts/
 
 # Copy migration infrastructure
 COPY alembic.ini ./

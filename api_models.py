@@ -5,7 +5,7 @@ This module centralizes request and response models to be shared across
 the modular routers.
 """
 
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -55,6 +55,10 @@ class SearchRequest(BaseModel):
     literal_tail_threshold: Optional[float] = Field(
         default=None,
         description="Rank-score floor for non-literal tails; dynamic defaults are resolved in search_api.py",
+    )
+    source: Literal["lancedb", "postgres"] = Field(
+        default="lancedb",
+        description="Search backend to query: 'lancedb' or 'postgres'",
     )
 
 

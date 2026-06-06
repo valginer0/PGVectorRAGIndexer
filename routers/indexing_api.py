@@ -38,7 +38,7 @@ async def index_document(request: IndexRequest):
             force_reindex=request.force_reindex,
             custom_metadata=request.metadata
         )
-        
+
         if result['status'] == 'error':
             complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
                          errors=[{"source_uri": request.source_uri, "error": result.get('message', '')}])
@@ -46,7 +46,7 @@ async def index_document(request: IndexRequest):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=result['message']
             )
-        
+
         added = 1 if result.get('status') == 'success' else 0
         skipped = 1 if result.get('status') == 'skipped' else 0
         complete_run(run_id, status="success", files_scanned=1,
@@ -77,11 +77,11 @@ async def upload_and_index(
     Upload a file and index it immediately.
     """
     from indexing_runs import start_run, complete_run
-    
+
     # Robust bool conversion for Form data
     if isinstance(force_reindex, str):
         force_reindex = force_reindex.lower() in ("true", "1", "t", "y", "yes")
-    
+
     source = custom_source_uri or file.filename or "upload"
     run_id = start_run(trigger="upload", source_uri=source)
     temp_path = None
@@ -100,13 +100,13 @@ async def upload_and_index(
                 hasher.update(chunk)
                 temp_file.write(chunk)
         uploaded_file_hash = hasher.hexdigest()
-        
+
         logger.info(f"Uploaded file: {file.filename} ({bytes_written} bytes) -> {temp_path}")
-        
+
         # Determine the source URI to use (custom path or filename)
         display_name = custom_source_uri or file.filename or "upload"
         logger.info(f"upload_and_index: force_reindex={force_reindex} (type={type(force_reindex)})")
-        
+
         # Process the file using temp path, but with custom source_uri for document_id
         idx = get_indexer()
         document_id = hashlib.sha256(display_name.encode()).hexdigest()[:16]
@@ -143,7 +143,7 @@ async def upload_and_index(
         })
         if custom_source_uri:
             metadata['custom_source_uri'] = custom_source_uri
-        
+
         # document_type is the explicit form-field override for metadata.type.
         if document_type:
             metadata['type'] = document_type
@@ -164,14 +164,14 @@ async def upload_and_index(
                 "Existing upload %s will be reindexed because file hash changed or is missing",
                 document_id,
             )
-        
+
         # Process document from temp file
         processed_doc = idx.processor.process(
             source_uri=temp_path,
             custom_metadata=metadata,
             ocr_mode=ocr_mode  # Pass OCR mode to processor
         )
-        
+
         # Regenerate document_id based on the display name (not temp path)
         processed_doc.document_id = document_id
         processed_doc.source_uri = display_name
@@ -179,18 +179,18 @@ async def upload_and_index(
         processed_doc.metadata['document_id'] = processed_doc.document_id
         if custom_source_uri:
             processed_doc.metadata['custom_source_uri'] = custom_source_uri
-        
+
         # Delete existing document before replacing it when force reindexing or
         # when the uploaded file hash differs from the indexed metadata.
         if existing_doc:
             logger.info(f"Removing existing document: {processed_doc.document_id}")
             idx.repository.delete_document(processed_doc.document_id)
-        
+
         # Generate embeddings
         logger.info(f"Generating embeddings for {len(processed_doc.chunks)} chunks...")
         chunk_texts = processed_doc.get_chunk_texts()
         embeddings = idx.embedding_service.encode_batch(chunk_texts, show_progress=False)
-        
+
         # Prepare chunks for insertion
         chunks_data = []
         for i, (chunk, embedding) in enumerate(zip(processed_doc.chunks, embeddings)):
@@ -202,26 +202,32 @@ async def upload_and_index(
                 embedding,
                 processed_doc.metadata  # Include metadata
             ))
-        
-        # Insert into database
-        logger.info(f"Storing {len(chunks_data)} chunks in database...")
-        idx.repository.insert_chunks(chunks_data)
-        
-        # Dual-write to LanceDB if enabled
+
+        from config import get_config
+        config = get_config()
+        mutation_active = bool(getattr(config.retrieval, "lancedb_enabled", False))
+        if mutation_active:
+            from retriever_v2 import begin_lancedb_mutation
+            begin_lancedb_mutation()
+        postgres_inserted = False
         try:
-            from config import get_config
-            config = get_config()
+            # Insert into database
+            logger.info(f"Storing {len(chunks_data)} chunks in database...")
+            idx.repository.insert_chunks(chunks_data)
+            postgres_inserted = True
+
+            # Dual-write to LanceDB if enabled
             if getattr(config.retrieval, "lancedb_enabled", False):
                 from services import get_lancedb_adapter
                 lancedb_adapter = get_lancedb_adapter()
-                
+
                 lancedb_chunks = []
                 for item in chunks_data:
                     # item format: (doc_id, chunk_index, text_content, source_uri, embedding, chunk_metadata)
                     lancedb_chunks.append((item[1], item[2], item[4], item[5]))
-                
+
                 aggregated_text = "\n\n".join(item[2] for item in chunks_data)
-                
+
                 lancedb_adapter.upsert_document(
                     document_id=processed_doc.document_id,
                     source_uri=processed_doc.source_uri,
@@ -231,22 +237,27 @@ async def upload_and_index(
                 )
                 # Rebuild FTS index on parent table for freshness
                 lancedb_adapter.rebuild_fts_index(parent_only=True)
-            
+
             # Invalidate readiness cache on successful write
             from retriever_v2 import invalidate_lancedb_cache
             invalidate_lancedb_cache()
         except Exception as e:
-            logger.error(f"Failed to dual-write uploaded document to LanceDB: {e}. Rolling back PostgreSQL...", exc_info=True)
-            try:
-                idx.repository.delete_document(processed_doc.document_id)
-            except Exception as rollback_err:
-                logger.critical(f"PostgreSQL rollback delete failed for document {processed_doc.document_id}: {rollback_err}", exc_info=True)
+            logger.error(f"Failed to index uploaded document into LanceDB-backed stores: {e}. Rolling back PostgreSQL if needed...", exc_info=True)
+            if postgres_inserted:
+                try:
+                    idx.repository.delete_document(processed_doc.document_id)
+                except Exception as rollback_err:
+                    logger.critical(f"PostgreSQL rollback delete failed for document {processed_doc.document_id}: {rollback_err}", exc_info=True)
             from retriever_v2 import invalidate_lancedb_cache
             invalidate_lancedb_cache()
             raise
-        
+        finally:
+            if mutation_active:
+                from retriever_v2 import end_lancedb_mutation
+                end_lancedb_mutation()
+
         logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
-        
+
         complete_run(run_id, status="success", files_scanned=1,
                      files_added=1 if not force_reindex else 0,
                      files_updated=1 if force_reindex else 0)
@@ -256,7 +267,7 @@ async def upload_and_index(
             source_uri=processed_doc.source_uri,
             chunks_indexed=len(chunks_data)
         )
-        
+
     except HTTPException:
         raise
     except EncryptedPDFError as e:
@@ -264,17 +275,17 @@ async def upload_and_index(
         # Return 403 with specific error type for encrypted PDFs
         source = custom_source_uri or file.filename
         logger.warning(f"Encrypted PDF detected: {source}")
-        
+
         # Record for later querying
         encrypted_pdfs_encountered.append({
             "source_uri": source,
             "filename": file.filename,
             "detected_at": datetime.now(timezone.utc).isoformat()
         })
-        
+
         complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
                      errors=[{"source_uri": source, "error": "encrypted_pdf"}])
-        
+
         raise_api_error(
             ErrorCode.ENCRYPTED_PDF,
             message=str(e),
@@ -283,7 +294,7 @@ async def upload_and_index(
     except (UnsupportedFormatError, DocumentProcessingError) as e:
         from errors import raise_api_error, ErrorCode
         error_message = str(e) if str(e) else ""
-        
+
         # Check if this is an OCR mode "only" skip (not an error, just skipped)
         if error_message.startswith("Skipped:"):
             logger.info(f"File skipped due to OCR mode: {file.filename}")
@@ -296,11 +307,11 @@ async def upload_and_index(
                 chunks_indexed=0,
                 message=error_message
             )
-        
+
         complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
                      errors=[{"source_uri": source, "error": error_message}])
         logger.error(f"Upload and index failed: {e}")
-        
+
         raise_api_error(
             ErrorCode.UNSUPPORTED_FORMAT if isinstance(e, UnsupportedFormatError) else ErrorCode.DOCUMENT_PROCESSING_FAILED,
             message=error_message,

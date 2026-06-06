@@ -15,6 +15,7 @@ from api_models import (
     ExportRequest, RestoreRequest, APIErrorResponse
 )
 from services import get_indexer, get_retriever
+from retriever_v2 import LanceDBNotReadyError
 from auth import require_api_key
 from database import get_db_manager, DocumentRepository
 from embeddings import get_embedding_service
@@ -209,12 +210,12 @@ async def search_documents(request: SearchRequest):
         search_top_k = request.top_k
         if request.group_by_document and request.top_k:
             search_top_k = request.top_k * DOCUMENT_GROUPING_BACKEND_MULTIPLIER
-        
+
         from config import get_config
         config = get_config()
-        
+
         retrieval_diagnostics = None
-        if getattr(ret, "_should_use_lancedb", lambda: False)():
+        if ret._should_use_lancedb(source=request.source):
             results, retrieval_diagnostics = ret.search_lancedb_parent_child(
                 query=request.query,
                 top_k=search_top_k,
@@ -251,15 +252,17 @@ async def search_documents(request: SearchRequest):
                     top_k=search_top_k,
                     alpha=request.alpha,
                     filters=request.filters,
+                    source=request.source,
                 )
         else:
             results = ret.search(
                 query=request.query,
                 top_k=search_top_k,
                 filters=request.filters,
-                min_score=request.min_score
+                min_score=request.min_score,
+                source=request.source,
             )
-        
+
         diagnostics = dict(retrieval_diagnostics) if retrieval_diagnostics else None
         if request.group_by_document:
             raw_result_count = len(results)
@@ -284,10 +287,10 @@ async def search_documents(request: SearchRequest):
                 diagnostics["group_by_document"]["suppressed_grouped_result_count"] = len(grouped_results)
             results = grouped_results[:request.top_k] if request.top_k else grouped_results
         search_time = (time.time() - start_time) * 1000  # Convert to ms
-        
+
         # Check active index document count for state-aware search messages
         total_documents = 0
-        if getattr(ret, "_should_use_lancedb", lambda: False)():
+        if ret._should_use_lancedb(source=request.source):
             try:
                 from services import get_lancedb_adapter
                 total_documents = get_lancedb_adapter().get_statistics().get("total_documents", 0)
@@ -302,7 +305,7 @@ async def search_documents(request: SearchRequest):
 
         message = None
         if total_documents == 0:
-            if getattr(ret, "_should_use_lancedb", lambda: False)():
+            if ret._should_use_lancedb(source=request.source):
                 message = "The search index is empty. See the Documents tab → switch to the LanceDB view."
             else:
                 message = "The search index is empty. See the Documents tab."
@@ -322,7 +325,7 @@ async def search_documents(request: SearchRequest):
             )
             for r in results
         ]
-        
+
         return SearchResponse(
             query=request.query,
             results=result_models,
@@ -331,6 +334,8 @@ async def search_documents(request: SearchRequest):
             diagnostics=diagnostics,
             message=message,
         )
+    except LanceDBNotReadyError as e:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
@@ -411,9 +416,9 @@ async def list_encrypted_pdfs(
 ):
     """List encrypted PDFs that were skipped during indexing."""
     from services import encrypted_pdfs_encountered
-    
+
     result = encrypted_pdfs_encountered.copy()
-    
+
     if since:
         try:
             since_dt = datetime.fromisoformat(since.replace('Z', '+00:00'))
@@ -426,11 +431,11 @@ async def list_encrypted_pdfs(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Invalid datetime format: {since}"
             )
-    
+
     if clear:
         from services import encrypted_pdfs_encountered as epfe
         epfe.clear()
-    
+
     return {
         "count": len(result),
         "encrypted_pdfs": result
@@ -499,14 +504,14 @@ async def get_document(document_id: str):
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
         doc = repo.get_document_by_id(document_id)
-        
+
         if not doc:
             from errors import raise_api_error, ErrorCode
             raise_api_error(
                 ErrorCode.DOCUMENT_NOT_FOUND,
                 message=f"Document not found: {document_id}"
             )
-        
+
         return DocumentInfo(
             document_id=doc['document_id'],
             source_uri=doc['source_uri'],
@@ -555,10 +560,10 @@ async def get_statistics():
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
         stats = repo.get_statistics()
-        
+
         embedding_service = get_embedding_service()
         model_info = embedding_service.get_model_info()
-        
+
         return {
             "total_documents": stats.get('total_documents', 0),
             "total_chunks": stats.get('total_chunks', 0),
@@ -577,13 +582,19 @@ async def get_statistics():
 async def get_context(
     query: str = Query(...),
     top_k: int = Query(default=5, ge=1, le=20),
-    use_hybrid: bool = Query(default=False)
+    use_hybrid: bool = Query(default=False),
+    source: str = Query(default="lancedb")
 ):
     """Get concatenated context for RAG applications."""
     try:
         ret = get_retriever()
-        context = ret.get_context(query, top_k=top_k, use_hybrid=use_hybrid)
+        context = ret.get_context(query, top_k=top_k, use_hybrid=use_hybrid, source=source)
         return {"query": query, "context": context, "chunks_used": top_k}
+    except LanceDBNotReadyError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(e)
+        )
     except Exception as e:
         logger.error(f"Failed to get context: {e}")
         raise HTTPException(
@@ -630,7 +641,7 @@ async def get_metadata_values(
 ):
     """
     Get all unique values for a specific metadata key.
-    
+
     Useful for building filter dropdowns in UI.
     """
     try:
@@ -657,7 +668,7 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="At least one filter must be provided"
             )
-        
+
         if request.preview:
             # Preview mode - show what would be deleted
             preview = repo.preview_delete(request.filters)
@@ -665,24 +676,34 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
             return BDP(**preview)
         else:
             # Actually delete
-            # Dual-delete from LanceDB first if enabled to prevent split-brain if LanceDB fails
             from config import get_config
-            if getattr(get_config().retrieval, "lancedb_enabled", False):
-                try:
-                    from services import get_lancedb_adapter
-                    get_lancedb_adapter().bulk_delete(request.filters)
-                except Exception as e:
-                    logger.error(f"Failed to bulk delete from LanceDB: {e}", exc_info=True)
-                    from retriever_v2 import invalidate_lancedb_cache
-                    invalidate_lancedb_cache()
-                    raise
-            
-            chunks_deleted = repo.bulk_delete(request.filters)
-            
-            # Invalidate readiness cache on successful delete
-            from retriever_v2 import invalidate_lancedb_cache
-            invalidate_lancedb_cache()
-            
+            config = get_config()
+            mutation_active = bool(getattr(config.retrieval, "lancedb_enabled", False))
+            if mutation_active:
+                from retriever_v2 import begin_lancedb_mutation
+                begin_lancedb_mutation()
+            try:
+                # Dual-delete from LanceDB first if enabled to prevent split-brain if LanceDB fails
+                if getattr(config.retrieval, "lancedb_enabled", False):
+                    try:
+                        from services import get_lancedb_adapter
+                        get_lancedb_adapter().bulk_delete(request.filters)
+                    except Exception as e:
+                        logger.error(f"Failed to bulk delete from LanceDB: {e}", exc_info=True)
+                        from retriever_v2 import invalidate_lancedb_cache
+                        invalidate_lancedb_cache()
+                        raise
+
+                chunks_deleted = repo.bulk_delete(request.filters)
+
+                # Invalidate readiness cache on successful delete
+                from retriever_v2 import invalidate_lancedb_cache
+                invalidate_lancedb_cache()
+            finally:
+                if mutation_active:
+                    from retriever_v2 import end_lancedb_mutation
+                    end_lancedb_mutation()
+
             from api_models import BulkDeleteResponse as BDR
             return BDR(
                 status="success",
@@ -727,34 +748,39 @@ async def restore_documents(request: RestoreRequest):
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
-        chunks_restored = repo.restore_documents(request.backup_data)
-        
-        # Dual-restore to LanceDB if enabled
         from config import get_config
-        if getattr(get_config().retrieval, "lancedb_enabled", False):
-            try:
+        config = get_config()
+        mutation_active = bool(getattr(config.retrieval, "lancedb_enabled", False))
+        if mutation_active:
+            from retriever_v2 import begin_lancedb_mutation
+            begin_lancedb_mutation()
+        try:
+            chunks_restored = repo.restore_documents(request.backup_data)
+
+            # Dual-restore to LanceDB if enabled
+            if getattr(config.retrieval, "lancedb_enabled", False):
                 from services import get_lancedb_adapter
                 adapter = get_lancedb_adapter()
-                
+
                 # Group chunks by document_id
                 docs_chunks = {}
                 docs_meta = {}
                 docs_uri = {}
-                
+
                 for chunk in request.backup_data:
                     doc_id = chunk["document_id"]
                     if doc_id not in docs_chunks:
                         docs_chunks[doc_id] = []
                         docs_meta[doc_id] = chunk.get("metadata") or {}
                         docs_uri[doc_id] = chunk["source_uri"]
-                    
+
                     docs_chunks[doc_id].append((
                         chunk["chunk_index"],
                         chunk["text_content"],
                         chunk["embedding"],
                         chunk.get("metadata") or {}
                     ))
-                
+
                 for doc_id, c_list in docs_chunks.items():
                     c_list.sort(key=lambda x: x[0])
                     aggregated_text = "\n\n".join(x[1] for x in c_list)
@@ -765,25 +791,26 @@ async def restore_documents(request: RestoreRequest):
                         aggregated_text=aggregated_text,
                         doc_metadata=docs_meta[doc_id]
                     )
-                
-                # Invalidate readiness cache on successful restore
-                from retriever_v2 import invalidate_lancedb_cache
-                invalidate_lancedb_cache()
-            except Exception as e:
-                logger.error(f"Failed to restore documents to LanceDB: {e}. Rolling back PostgreSQL...", exc_info=True)
-                try:
-                    doc_ids = set(chunk["document_id"] for chunk in request.backup_data)
-                    for doc_id in doc_ids:
-                        repo.delete_document(doc_id)
-                except Exception as rollback_err:
-                    logger.critical(f"PostgreSQL rollback restore delete failed: {rollback_err}", exc_info=True)
-                from retriever_v2 import invalidate_lancedb_cache
-                invalidate_lancedb_cache()
-                raise
-        else:
+
+            # Invalidate readiness cache on successful restore
             from retriever_v2 import invalidate_lancedb_cache
             invalidate_lancedb_cache()
-            
+        except Exception as e:
+            logger.error(f"Failed to restore documents to LanceDB-backed stores: {e}. Rolling back PostgreSQL if needed...", exc_info=True)
+            try:
+                doc_ids = set(chunk["document_id"] for chunk in request.backup_data)
+                for doc_id in doc_ids:
+                    repo.delete_document(doc_id)
+            except Exception as rollback_err:
+                logger.critical(f"PostgreSQL rollback restore delete failed: {rollback_err}", exc_info=True)
+            from retriever_v2 import invalidate_lancedb_cache
+            invalidate_lancedb_cache()
+            raise
+        finally:
+            if mutation_active:
+                from retriever_v2 import end_lancedb_mutation
+                end_lancedb_mutation()
+
         return {
             "status": "success",
             "chunks_restored": chunks_restored,

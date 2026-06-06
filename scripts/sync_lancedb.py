@@ -23,6 +23,21 @@ logging.basicConfig(
 logger = logging.getLogger("sync_lancedb")
 
 
+def _assert_count_parity(adapter, expected_docs: int, expected_chunks: int) -> None:
+    """Raise if LanceDB does not match the PostgreSQL snapshot just synced."""
+    lancedb_stats = adapter.get_statistics()
+
+    lancedb_docs = int(lancedb_stats.get("total_documents") or 0)
+    lancedb_chunks = int(lancedb_stats.get("total_chunks") or 0)
+
+    if expected_docs != lancedb_docs or expected_chunks != lancedb_chunks:
+        raise RuntimeError(
+            "LanceDB sync did not converge: "
+            f"PostgreSQL snapshot has {expected_docs} docs / {expected_chunks} chunks; "
+            f"LanceDB has {lancedb_docs} docs / {lancedb_chunks} chunks"
+        )
+
+
 def sync_postgres_to_lancedb(batch_size: int = 50, force: bool = False) -> None:
     """Sync all document chunks from PostgreSQL to LanceDB in batches."""
     config = get_config()
@@ -56,13 +71,14 @@ def sync_postgres_to_lancedb(batch_size: int = 50, force: bool = False) -> None:
             all_docs = list(cursor.fetchall())
     except Exception as e:
         logger.error(f"Failed to query PostgreSQL: {e}")
-        sys.exit(1)
+        raise
         
     total_docs = len(all_docs)
     logger.info(f"Found {total_docs} documents in PostgreSQL to sync.")
     
     if total_docs == 0:
         logger.info("No documents to sync.")
+        _assert_count_parity(adapter, expected_docs=0, expected_chunks=0)
         return
 
     # Process in batches
@@ -81,6 +97,7 @@ def sync_postgres_to_lancedb(batch_size: int = 50, force: bool = False) -> None:
     
     synced_docs = 0
     synced_chunks = 0
+    failed_docs: List[str] = []
     
     for i in range(0, total_docs, batch_size):
         batch_docs = all_docs[i:i + batch_size]
@@ -92,7 +109,7 @@ def sync_postgres_to_lancedb(batch_size: int = 50, force: bool = False) -> None:
                 chunk_rows = list(cursor.fetchall())
         except Exception as e:
             logger.error(f"Failed to fetch chunk batch: {e}")
-            continue
+            raise
 
         # Group by document_id
         grouped_chunks = {}
@@ -142,12 +159,19 @@ def sync_postgres_to_lancedb(batch_size: int = 50, force: bool = False) -> None:
                 synced_chunks += len(lancedb_chunks)
             except Exception as e:
                 logger.error(f"Failed to sync document {doc_id} to LanceDB: {e}", exc_info=True)
+                failed_docs.append(str(doc_id))
 
         logger.info(f"Processed batch: {synced_docs}/{total_docs} documents synced ({synced_chunks} chunks).")
+
+    if failed_docs:
+        sample = ", ".join(failed_docs[:10])
+        more = "" if len(failed_docs) <= 10 else f" (+{len(failed_docs) - 10} more)"
+        raise RuntimeError(f"Failed to sync {len(failed_docs)} documents to LanceDB: {sample}{more}")
 
     # Optimize vector index at the end
     logger.info("Optimizing LanceDB vector index...")
     adapter.optimize_vector_index()
+    _assert_count_parity(adapter, expected_docs=total_docs, expected_chunks=synced_chunks)
     logger.info("✓ Sync completed successfully.")
 
 

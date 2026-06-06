@@ -27,6 +27,9 @@ class _FakeRetriever:
         self.results = results
         self.calls = []
 
+    def _should_use_lancedb(self, source: str = "lancedb") -> bool:
+        return False
+
     def search_hybrid(self, **kwargs):
         self.calls.append(("hybrid", kwargs))
         return self.results
@@ -45,6 +48,9 @@ class _FakeRetriever:
 
 
 class _FakeLegacyOnlyRetriever:
+    def _should_use_lancedb(self, source: str = "lancedb") -> bool:
+        return False
+
     def search_hybrid(self, **_kwargs):
         return []
 

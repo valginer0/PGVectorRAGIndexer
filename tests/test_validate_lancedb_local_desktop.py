@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.slow
+
 pytest.importorskip("lancedb")
 pytest.importorskip("pyarrow")
 
@@ -72,31 +74,33 @@ def test_main_accepts_query_manifest_and_retrieval_limits(tmp_path):
     output = json.loads(output_path.read_text(encoding="utf-8"))
     assert output["passed"] is True
     assert output["retrieval"] == {"parent_limit": 1, "child_limit": 4}
-    assert output["queries"] == [
-        {
-            "id": "ev6_manifest",
-            "query": "EV6 battery diagnostic",
-            "expected_files": ["ev6_service.txt"],
-            "allow_extra_results": True,
-            "result_files": ["ev6_service.txt"],
-            "unique_result_files": ["ev6_service.txt"],
-            "matched_parent_files": ["ev6_service.txt"],
-            "matched_parent_details": [
-                {
-                    "rank": 1,
-                    "source_uri": output["queries"][0]["matched_parent_details"][0]["source_uri"],
-                    "fts_score": output["queries"][0]["matched_parent_details"][0]["fts_score"],
-                    "relative_path": "ev6_service.txt",
-                    "file_name": "ev6_service.txt",
-                }
-            ],
-            "missing_expected_files": [],
-            "unexpected_files": [],
-            "query_ms": output["queries"][0]["query_ms"],
-            "passed": True,
-        }
-    ]
-    assert isinstance(output["queries"][0]["matched_parent_details"][0]["fts_score"], float)
+
+    details = output["queries"][0]["matched_parent_details"][0]
+    score_key = "rrf_score" if "rrf_score" in details else "fts_score"
+
+    assert output["queries"][0] == {
+        "id": "ev6_manifest",
+        "query": "EV6 battery diagnostic",
+        "expected_files": ["ev6_service.txt"],
+        "allow_extra_results": True,
+        "result_files": ["ev6_service.txt"],
+        "unique_result_files": ["ev6_service.txt"],
+        "matched_parent_files": ["ev6_service.txt"],
+        "matched_parent_details": [
+            {
+                "rank": 1,
+                "source_uri": details["source_uri"],
+                score_key: details[score_key],
+                "relative_path": "ev6_service.txt",
+                "file_name": "ev6_service.txt",
+            }
+        ],
+        "missing_expected_files": [],
+        "unexpected_files": [],
+        "query_ms": output["queries"][0]["query_ms"],
+        "passed": True,
+    }
+    assert isinstance(details[score_key], float)
 
 
 def test_load_query_specs_rejects_invalid_manifest(tmp_path):

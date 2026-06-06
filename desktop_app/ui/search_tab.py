@@ -440,10 +440,20 @@ class SearchTab(QWidget):
                 self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix}")
                 self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
         else:
-            error_msg = data
-            QMessageBox.critical(self, "Search Failed", f"Search failed: {error_msg}")
-            self.status_label.setText("Search failed")
-            self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+            error_msg = str(data)
+            is_503 = False
+            if hasattr(data, 'status_code') and data.status_code == 503:
+                is_503 = True
+
+            if is_503:
+                self.results_table.setRowCount(0)
+                friendly_msg = f"{error_msg} — Please open the Documents tab (tree) to watch progress."
+                self.status_label.setText(friendly_msg)
+                self.status_label.setStyleSheet("color: #f59e0b; font-style: italic; font-weight: bold;")
+            else:
+                QMessageBox.critical(self, "Search Failed", f"Search failed: {error_msg}")
+                self.status_label.setText("Search failed")
+                self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
 
     
     def display_results(self, results: List[Dict[str, Any]]):

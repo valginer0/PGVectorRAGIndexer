@@ -457,3 +457,20 @@ def test_context_menu(search_tab, mock_source_manager):
         mock_menu_instance.exec.assert_called_once()
 
 # NOTE: open_source_path method was moved to source_manager, these tests are obsolete
+
+
+def test_search_finished_503_not_ready(search_tab):
+    """Test handling of 503 (LanceDB index not ready / syncing) error."""
+    from desktop_app.utils.errors import APIError
+    error = APIError("LanceDB index is not ready / syncing — please wait", status_code=503)
+    
+    with patch("PySide6.QtWidgets.QMessageBox.critical") as mock_crit:
+        search_tab.search_finished(False, error)
+        
+        mock_crit.assert_not_called()
+        assert search_tab.search_btn.isEnabled()
+        assert search_tab.results_table.rowCount() == 0
+        assert "LanceDB index is not ready / syncing — please wait" in search_tab.status_label.text()
+        assert "Please open the Documents tab (tree) to watch progress" in search_tab.status_label.text()
+        assert "color: #f59e0b" in search_tab.status_label.styleSheet()
+

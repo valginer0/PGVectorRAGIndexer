@@ -117,7 +117,7 @@ class SearchWorker(QThread):
             self.finished.emit(True, results)
         except Exception as e:
             logger.error(f"Search failed: {e}")
-            self.finished.emit(False, str(e))
+            self.finished.emit(False, e)
 
 
 def format_lancedb_search_results(results) -> list[dict]:
@@ -464,7 +464,7 @@ class TreeStatsWorker(QThread):
             lancedb_stats = self.api_client.get_document_tree_stats(source="lancedb")
         except Exception as e:
             logger.error(f"Load LanceDB tree stats failed: {e}")
-            lancedb_stats = {"total_documents": 0, "total_chunks": 0}
+            lancedb_stats = None
 
         self.finished.emit(True, {
             "postgres": postgres_stats,

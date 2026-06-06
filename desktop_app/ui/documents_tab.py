@@ -32,6 +32,7 @@ class DocumentsTab(QWidget):
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
         self.api_client = api_client
+        self._lancedb_available = True
         self.source_manager: Optional[object] = None
         self.documents_worker = None
         self.delete_worker = None
@@ -638,7 +639,7 @@ class DocumentsTab(QWidget):
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='#6366f1'))
             self._list_btn.setStyleSheet(_inactive)
             self._list_btn.setIcon(qta.icon('fa5s.list', color='white'))
-            self.db_source_combo.setVisible(True)
+            self.db_source_combo.setVisible(self._lancedb_available)
             self.tree_stats_label.setVisible(True)
             if not self._tree_model.is_initialized():
                 self._tree_model.load_root()
@@ -671,20 +672,29 @@ class DocumentsTab(QWidget):
             pg = data.get("postgres", {})
             ldb = data.get("lancedb", {})
             pg_docs = pg.get("total_documents", 0)
-            ldb_docs = ldb.get("total_documents", 0)
             pg_chunks = pg.get("total_chunks", 0)
-            ldb_chunks = ldb.get("total_chunks", 0)
-            self.tree_stats_label.setText(
-                f"Postgres: {pg_docs} docs ({pg_chunks} chunks) | "
-                f"LanceDB: {ldb_docs} docs ({ldb_chunks} chunks)"
-            )
-            # If they diverge, highlight it in warning yellow, otherwise green/subdued
-            if pg_docs != ldb_docs or pg_chunks != ldb_chunks:
-                self.tree_stats_label.setStyleSheet("color: #f59e0b; font-size: 12px; margin-left: 10px; font-weight: bold;")
-                self.tree_stats_label.setToolTip("Index drift detected between Postgres and LanceDB. Run maintenance sync.")
+            
+            if ldb is None:
+                self._lancedb_available = False
+                self.db_source_combo.setVisible(False)
+                self.db_source_combo.setCurrentIndex(0)
+                self._tree_model.set_source("postgres")
+                self.tree_stats_label.setText(
+                    f"Postgres: {pg_docs} docs ({pg_chunks} chunks)"
+                )
+                self.tree_stats_label.setStyleSheet("color: #9ca3af; font-size: 12px; margin-left: 10px; font-weight: bold;")
+                self.tree_stats_label.setToolTip("")
             else:
-                self.tree_stats_label.setStyleSheet("color: #10b981; font-size: 12px; margin-left: 10px; font-weight: bold;")
-                self.tree_stats_label.setToolTip("Postgres and LanceDB are fully synchronized.")
+                self._lancedb_available = True
+                self.db_source_combo.setVisible(self._view_mode == "tree")
+                ldb_docs = ldb.get("total_documents", 0)
+                ldb_chunks = ldb.get("total_chunks", 0)
+                self.tree_stats_label.setText(
+                    f"Postgres: {pg_docs} docs ({pg_chunks} chunks) | "
+                    f"LanceDB: {ldb_docs} docs ({ldb_chunks} chunks)"
+                )
+                self.tree_stats_label.setStyleSheet("color: #9ca3af; font-size: 12px; margin-left: 10px; font-weight: bold;")
+                self.tree_stats_label.setToolTip("")
 
 
     # ------------------------------------------------------------------

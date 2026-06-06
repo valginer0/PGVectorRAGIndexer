@@ -321,3 +321,43 @@ def test_page_size_changed_no_op(documents_tab):
         index = documents_tab.page_size_combo.findText("25")
         documents_tab.on_page_size_changed(index)
         mock_load.assert_not_called()
+
+
+def test_tree_stats_loaded_lancedb_unavailable(documents_tab):
+    """Test when LanceDB stats loading fails (returns None)."""
+    documents_tab._view_mode = "tree"
+    documents_tab.db_source_combo.setVisible(True)
+    
+    data = {
+        "postgres": {"total_documents": 10, "total_chunks": 50},
+        "lancedb": None
+    }
+    
+    documents_tab._on_tree_stats_loaded(True, data)
+    
+    assert documents_tab._lancedb_available is False
+    assert documents_tab.db_source_combo.isVisible() is False
+    assert documents_tab.db_source_combo.currentIndex() == 0
+    assert documents_tab.tree_stats_label.text() == "Postgres: 10 docs (50 chunks)"
+    assert "color: #9ca3af" in documents_tab.tree_stats_label.styleSheet()
+    assert documents_tab.tree_stats_label.toolTip() == ""
+
+
+def test_tree_stats_loaded_lancedb_available(documents_tab):
+    """Test when LanceDB stats loading succeeds."""
+    documents_tab._view_mode = "tree"
+    documents_tab.db_source_combo.setVisible(True)
+    
+    data = {
+        "postgres": {"total_documents": 10, "total_chunks": 50},
+        "lancedb": {"total_documents": 12, "total_chunks": 60}
+    }
+    
+    documents_tab._on_tree_stats_loaded(True, data)
+    
+    assert documents_tab._lancedb_available is True
+    assert documents_tab.db_source_combo.isVisible() is True
+    assert documents_tab.tree_stats_label.text() == "Postgres: 10 docs (50 chunks) | LanceDB: 12 docs (60 chunks)"
+    assert "color: #9ca3af" in documents_tab.tree_stats_label.styleSheet()
+    assert documents_tab.tree_stats_label.toolTip() == ""
+

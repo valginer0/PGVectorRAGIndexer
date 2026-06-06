@@ -7,8 +7,7 @@ param(
     [string]$InstallDir = "$env:USERPROFILE\PGVectorRAGIndexer",
     [ValidateSet("prod", "dev")]
     [string]$Channel = "prod",
-    [string]$RemoteBackend = "",
-    [switch]$WithLocalSearch
+    [string]$RemoteBackend = ""
 )
 
 function Get-EffectiveOverride {
@@ -32,11 +31,7 @@ function Get-EffectiveOverride {
 
 $RepoRef = Get-EffectiveOverride -Name "PGVECTOR_REPO_REF" -DefaultValue $Branch
 
-# Opt-in for the experimental local LanceDB search dependencies (CPU Torch +
-# sentence-transformers). Off by default; enabled by -WithLocalSearch or by
-# setting PGVECTOR_LOCAL_SEARCH to 1/true/yes/on.
-$LocalSearchOverride = Get-EffectiveOverride -Name "PGVECTOR_LOCAL_SEARCH" -DefaultValue ""
-$InstallLocalSearch = $WithLocalSearch.IsPresent -or ($LocalSearchOverride -match '^(?i)(1|true|yes|on)$')
+
 
 function Update-RepoRef {
     param(
@@ -166,21 +161,7 @@ if (-not (Test-Path "venv-windows")) {
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
 & ".\venv-windows\Scripts\pip.exe" install -q -r requirements-desktop.txt
 
-# Optional: experimental local LanceDB search dependencies (CPU Torch +
-# sentence-transformers). Larger download; only needed for the off-by-default
-# Local LanceDB search toggle in the Settings tab.
-if ($InstallLocalSearch) {
-    Write-Host ""
-    Write-Host "Installing optional local search dependencies (CPU Torch + sentence-transformers)..." -ForegroundColor Yellow
-    Write-Host "  Larger download; only needed for the experimental Local LanceDB search toggle." -ForegroundColor DarkGray
-    & ".\venv-windows\Scripts\pip.exe" install -r requirements-desktop-lancedb.txt
-    if ($LASTEXITCODE -ne 0) {
-        Write-Host "✗ ERROR: Failed to install local search dependencies" -ForegroundColor Red
-        Write-Host "  The desktop app will still run, but the Local LanceDB search toggle will not work." -ForegroundColor Yellow
-    } else {
-        Write-Host "✓ Local search dependencies installed" -ForegroundColor Green
-    }
-}
+
 
 Write-Host ""
 
@@ -232,15 +213,7 @@ Write-Host "Or use the shortcut:" -ForegroundColor Cyan
 Write-Host "  cd $InstallDir" -ForegroundColor White
 Write-Host "  .\run_desktop_app.ps1" -ForegroundColor White
 Write-Host ""
-if ($InstallLocalSearch) {
-    Write-Host "Experimental local LanceDB search dependencies are installed." -ForegroundColor Cyan
-    Write-Host "Enable the toggle in the Settings tab to use it." -ForegroundColor Cyan
-    Write-Host ""
-} else {
-    Write-Host "To enable experimental local (offline) search, re-run this installer with:" -ForegroundColor DarkGray
-    Write-Host "  bootstrap_desktop_app.ps1 -WithLocalSearch" -ForegroundColor DarkGray
-    Write-Host ""
-}
+
 
 # Auto-start the desktop app
 Write-Host "Starting desktop app..." -ForegroundColor Green

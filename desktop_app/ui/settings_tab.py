@@ -15,9 +15,7 @@ import qtawesome as qta
 from PySide6.QtCore import QThread, Signal, QSize, Qt
 from desktop_app.ui.styles.theme import Theme
 from desktop_app.ui.workers import (
-    LocalLanceDBIngestWorker,
     StatsWorker,
-    is_lancedb_index_busy,
 )
 from desktop_app.controllers.settings_controller import SettingsController
 from desktop_app.utils.controller_result import ControllerResult, UiAction, BackendSaveData, MessageSeverity
@@ -41,8 +39,7 @@ class SettingsTab(QWidget):
         self.controller = SettingsController(api_client=self.api_client)
 
         self.stats_worker = None
-        self._local_lancedb_ingest_worker = None
-        self._local_lancedb_index_paths = []
+
         self.setup_ui()
 
     def showEvent(self, event):
@@ -358,147 +355,11 @@ class SettingsTab(QWidget):
         )
         vbox.addWidget(self._document_level_search_checkbox)
 
-        self._local_lancedb_search_checkbox = QCheckBox(
-            "Use experimental local text/Markdown search"
-        )
-        self._local_lancedb_search_checkbox.setChecked(
-            app_config.get_local_lancedb_search_enabled()
-        )
-        self._local_lancedb_search_checkbox.setToolTip(
-            "Searches the local LanceDB index instead of the backend API. "
-            "Supported files: .txt, .md, and .markdown."
-        )
-        self._local_lancedb_search_checkbox.toggled.connect(
-            app_config.set_local_lancedb_search_enabled
-        )
-        vbox.addWidget(self._local_lancedb_search_checkbox)
 
-        path_label = QLabel(f"Local index: {app_config.get_local_lancedb_db_path()}")
-        path_label.setWordWrap(True)
-        path_label.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
-        vbox.addWidget(path_label)
-
-        self._local_lancedb_index_btn = QPushButton("Rebuild Local Text/Markdown Index")
-        self._local_lancedb_index_btn.setIcon(qta.icon("fa5s.database", color="white"))
-        self._local_lancedb_index_btn.setMinimumHeight(34)
-        self._local_lancedb_index_btn.setToolTip(
-            "Builds an experimental local LanceDB index from .txt, .md, and .markdown files. "
-            "This overwrites the current local index."
-        )
-        self._local_lancedb_index_btn.clicked.connect(self._build_local_lancedb_index)
-        vbox.addWidget(self._local_lancedb_index_btn)
-
-        self._local_lancedb_status = QLabel("")
-        self._local_lancedb_status.setWordWrap(True)
-        self._local_lancedb_status.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
-        vbox.addWidget(self._local_lancedb_status)
-        self._refresh_local_lancedb_status()
-
-        desc = QLabel(
-            "Default search behavior is unchanged when this is off. "
-            "Local LanceDB search is experimental and currently indexes text/Markdown files only."
-        )
-        desc.setWordWrap(True)
-        desc.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
-        vbox.addWidget(desc)
 
         parent_layout.addWidget(group)
 
-    def _build_local_lancedb_index(self):
-        """Build the experimental local LanceDB text index from a folder."""
-        from desktop_app.utils import app_config
 
-        db_path = app_config.get_local_lancedb_db_path()
-        if is_lancedb_index_busy(db_path):
-            QMessageBox.warning(
-                self,
-                "Local Index Busy",
-                "The local LanceDB index is already being used. "
-                "Please wait for the current local index operation to finish."
-            )
-            return
-
-        folder = QFileDialog.getExistingDirectory(
-            self,
-            "Select Folder for Local Text Index",
-            str(Path.home()),
-        )
-        if not folder:
-            return
-
-        self._local_lancedb_index_paths = [Path(folder)]
-        self._local_lancedb_index_btn.setEnabled(False)
-        self._local_lancedb_status.setText("Building local text index...")
-        self._local_lancedb_status.setStyleSheet(f"color: {Theme.PRIMARY}; font-size: 12px;")
-
-        self._local_lancedb_ingest_worker = LocalLanceDBIngestWorker(
-            [Path(folder)],
-            db_path,
-        )
-        self._local_lancedb_ingest_worker.progress.connect(self._local_lancedb_ingest_progress)
-        self._local_lancedb_ingest_worker.finished.connect(self._local_lancedb_ingest_finished)
-        self._local_lancedb_ingest_worker.start()
-
-    def _local_lancedb_ingest_progress(self, message: str):
-        self._local_lancedb_status.setText(message)
-        self._local_lancedb_status.setStyleSheet(f"color: {Theme.PRIMARY}; font-size: 12px;")
-
-    def _local_lancedb_ingest_finished(self, success: bool, data):
-        self._local_lancedb_index_btn.setEnabled(True)
-        if success:
-            indexed = data.get("indexed_documents", 0)
-            chunks = data.get("chunk_count", 0)
-            skipped = len(data.get("skipped_files", []))
-            from desktop_app.utils import app_config
-
-            metadata = {
-                "built_at": datetime.now(timezone.utc)
-                .replace(microsecond=0)
-                .isoformat()
-                .replace("+00:00", "Z"),
-                "db_path": app_config.get_local_lancedb_db_path(),
-                "source_paths": [str(path) for path in self._local_lancedb_index_paths],
-                "indexed_documents": indexed,
-                "chunk_count": chunks,
-                "skipped_count": skipped,
-            }
-            app_config.set_local_lancedb_index_metadata(metadata)
-            self._local_lancedb_status.setText(self._format_local_lancedb_status(metadata))
-            self._local_lancedb_status.setStyleSheet(f"color: {Theme.SUCCESS}; font-size: 12px;")
-        else:
-            QMessageBox.critical(self, "Local Index Failed", f"Local indexing failed: {data}")
-            self._local_lancedb_status.setText("Local indexing failed")
-            self._local_lancedb_status.setStyleSheet(f"color: {Theme.ERROR}; font-size: 12px;")
-
-    def _refresh_local_lancedb_status(self):
-        from desktop_app.utils import app_config
-
-        metadata = app_config.get_local_lancedb_index_metadata()
-        self._local_lancedb_status.setText(self._format_local_lancedb_status(metadata))
-        self._local_lancedb_status.setStyleSheet(f"color: {Theme.TEXT_SECONDARY}; font-size: 12px;")
-
-    @staticmethod
-    def _format_local_lancedb_status(metadata: dict) -> str:
-        if not metadata:
-            return "No local text index has been built yet."
-
-        indexed = int(metadata.get("indexed_documents", 0) or 0)
-        chunks = int(metadata.get("chunk_count", 0) or 0)
-        skipped = int(metadata.get("skipped_count", 0) or 0)
-        source_paths = metadata.get("source_paths") or []
-        if len(source_paths) == 1:
-            source = Path(str(source_paths[0])).name or str(source_paths[0])
-        elif source_paths:
-            source = f"{len(source_paths)} sources"
-        else:
-            source = "unknown source"
-        built_at = str(metadata.get("built_at") or "unknown time").replace("T", " ").replace("Z", " UTC")
-
-        return (
-            f"Last indexed {indexed} document{'s' if indexed != 1 else ''}, "
-            f"{chunks} chunk{'s' if chunks != 1 else ''}; skipped {skipped}. "
-            f"Source: {source}. Built: {built_at}."
-        )
 
     # ------------------------------------------------------------------
     # Setup wizard panel (#18)

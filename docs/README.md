@@ -2,9 +2,6 @@
 
 This folder contains various guides, policies, and reference materials for the PGVectorRAGIndexer project.
 
-## User Guides
-
-- [Local LanceDB Search Beta](LOCAL_LANCEDB_SEARCH_BETA.md)
 
 ## `docs/internal/` Structure Diagram
 

@@ -24,10 +24,6 @@ from desktop_app.utils.app_config import (
     get_backend_url, set_backend_url,
     get_api_key, set_api_key,
     is_remote_mode,
-    get_local_lancedb_db_path, set_local_lancedb_db_path,
-    get_local_lancedb_index_metadata, set_local_lancedb_index_metadata,
-    clear_local_lancedb_index_metadata,
-    get_local_lancedb_search_enabled, set_local_lancedb_search_enabled,
     BACKEND_MODE_LOCAL, BACKEND_MODE_REMOTE, DEFAULT_LOCAL_URL,
 )
 
@@ -137,38 +133,6 @@ class TestApiKey:
         assert get_api_key() is None
 
 
-class TestLocalLanceDBSearch:
-    def test_default_is_disabled(self, config_dir):
-        assert get_local_lancedb_search_enabled() is False
-
-    def test_set_enabled(self, config_dir):
-        set_local_lancedb_search_enabled(True)
-        assert get_local_lancedb_search_enabled() is True
-
-    def test_default_db_path_lives_in_config_dir(self, config_dir):
-        assert get_local_lancedb_db_path() == str(config_dir / "lancedb_index")
-
-    def test_custom_db_path(self, config_dir, tmp_path):
-        custom = tmp_path / "custom-lancedb"
-        set_local_lancedb_db_path(custom)
-        assert get_local_lancedb_db_path() == str(custom)
-
-    def test_index_metadata_roundtrip(self, config_dir):
-        assert get_local_lancedb_index_metadata() == {}
-
-        metadata = {
-            "built_at": "2026-05-25T04:30:00Z",
-            "source_paths": ["/docs"],
-            "indexed_documents": 2,
-            "chunk_count": 5,
-            "skipped_count": 1,
-        }
-        set_local_lancedb_index_metadata(metadata)
-
-        assert get_local_lancedb_index_metadata() == metadata
-
-        clear_local_lancedb_index_metadata()
-        assert get_local_lancedb_index_metadata() == {}
 
 
 # ===========================================================================

@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, QPoint
 
 from desktop_app.ui.search_tab import SearchTab
 from desktop_app.ui.styles.theme import Theme
-from desktop_app.ui.workers import format_lancedb_search_results
+
 
 @pytest.fixture(scope="session")
 def qapp():
@@ -61,8 +61,7 @@ def test_perform_search_api_unavailable(search_tab, mock_api_client):
     search_tab.query_input.setText("test")
     mock_api_client.get_health.return_value = {"status": "unreachable"}
     
-    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=False), \
-         patch("PySide6.QtWidgets.QMessageBox.critical") as mock_crit:
+    with patch("PySide6.QtWidgets.QMessageBox.critical") as mock_crit:
         search_tab.perform_search()
         mock_crit.assert_called_once()
 
@@ -73,8 +72,7 @@ def test_perform_search_success(search_tab):
     search_tab.min_score_spin.setValue(0.5)
     search_tab.metric_combo.setCurrentText("cosine")
     
-    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=False), \
-         patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
+    with patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
         mock_worker_instance = MockWorker.return_value
         
         search_tab.perform_search()
@@ -99,7 +97,6 @@ def test_perform_search_can_use_document_level_backend_option(search_tab):
     search_tab.metric_combo.setCurrentText("cosine")
 
     with patch("desktop_app.ui.search_tab.app_config.get_document_level_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=False), \
          patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
         search_tab.perform_search()
 
@@ -110,163 +107,6 @@ def test_perform_search_can_use_document_level_backend_option(search_tab):
         assert args.kwargs["literal_tail_suppression"] == "identifier-token"
 
 
-def test_perform_search_can_use_local_lancedb_option(search_tab, mock_api_client, tmp_path):
-    search_tab.query_input.setText("EV6")
-    search_tab.top_k_spin.setValue(5)
-    db_path = tmp_path / "local-lancedb"
-    db_path.mkdir()
-
-    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now", "db_path": str(db_path)}), \
-         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
-        worker = MockWorker.return_value
-
-        search_tab.perform_search()
-
-        MockWorker.assert_called_once_with("EV6", 5, str(db_path))
-        worker.progress.connect.assert_called_once_with(search_tab._local_lancedb_search_progress)
-        worker.start.assert_called_once()
-        mock_api_client.get_health.assert_not_called()
-
-
-def test_local_lancedb_search_rejects_filters(search_tab):
-    search_tab.query_input.setText("EV6")
-    search_tab.type_filter.setCurrentText("policy")
-
-    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
-         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
-         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
-        search_tab.perform_search()
-
-        mock_warn.assert_called_once()
-        MockWorker.assert_not_called()
-
-
-def test_local_lancedb_search_rejects_busy_index(search_tab, mock_api_client, tmp_path):
-    search_tab.query_input.setText("EV6")
-    db_path = tmp_path / "local-lancedb"
-    db_path.mkdir()
-
-    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now", "db_path": str(db_path)}), \
-         patch("desktop_app.ui.search_tab.is_lancedb_index_busy", return_value=True), \
-         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
-         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
-        search_tab.perform_search()
-
-        mock_warn.assert_called_once()
-        MockWorker.assert_not_called()
-        mock_api_client.get_health.assert_not_called()
-
-
-def test_local_lancedb_search_rejects_missing_index_metadata(search_tab, mock_api_client):
-    search_tab.query_input.setText("EV6")
-
-    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value="/tmp/local-lancedb"), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={}), \
-         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
-         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
-        search_tab.perform_search()
-
-        mock_warn.assert_called_once()
-        assert mock_warn.call_args.args[1] == "Local Index Not Built"
-        assert "Rebuild Local Text/Markdown Index" in mock_warn.call_args.args[2]
-        MockWorker.assert_not_called()
-        mock_api_client.get_health.assert_not_called()
-
-
-def test_local_lancedb_search_rejects_missing_index_folder(search_tab, mock_api_client, tmp_path):
-    search_tab.query_input.setText("EV6")
-    missing_db_path = tmp_path / "missing-lancedb"
-
-    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(missing_db_path)), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now", "db_path": str(missing_db_path)}), \
-         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
-         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
-        search_tab.perform_search()
-
-        mock_warn.assert_called_once()
-        assert mock_warn.call_args.args[1] == "Local Index Missing"
-        assert "Rebuild Local Text/Markdown Index" in mock_warn.call_args.args[2]
-        MockWorker.assert_not_called()
-        mock_api_client.get_health.assert_not_called()
-
-
-def test_local_lancedb_search_rejects_stale_index_metadata(search_tab, mock_api_client, tmp_path):
-    search_tab.query_input.setText("EV6")
-    db_path = tmp_path / "local-lancedb"
-    old_db_path = tmp_path / "old-lancedb"
-    db_path.mkdir()
-
-    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now", "db_path": str(old_db_path)}), \
-         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
-         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
-        search_tab.perform_search()
-
-        mock_warn.assert_called_once()
-        assert mock_warn.call_args.args[1] == "Local Index Needs Rebuild"
-        assert "Rebuild Local Text/Markdown Index" in mock_warn.call_args.args[2]
-        MockWorker.assert_not_called()
-        mock_api_client.get_health.assert_not_called()
-
-
-def test_local_lancedb_search_rejects_incomplete_index_metadata(search_tab, mock_api_client, tmp_path):
-    search_tab.query_input.setText("EV6")
-    db_path = tmp_path / "local-lancedb"
-    db_path.mkdir()
-
-    with patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_db_path", return_value=str(db_path)), \
-         patch("desktop_app.ui.search_tab.app_config.get_local_lancedb_index_metadata", return_value={"built_at": "now"}), \
-         patch("PySide6.QtWidgets.QMessageBox.warning") as mock_warn, \
-         patch("desktop_app.ui.search_tab.LocalLanceDBSearchWorker") as MockWorker:
-        search_tab.perform_search()
-
-        mock_warn.assert_called_once()
-        assert mock_warn.call_args.args[1] == "Local Index Needs Rebuild"
-        assert "Rebuild Local Text/Markdown Index" in mock_warn.call_args.args[2]
-        MockWorker.assert_not_called()
-        mock_api_client.get_health.assert_not_called()
-
-
-def test_local_lancedb_search_progress_updates_status(search_tab):
-    search_tab._local_lancedb_search_progress("Loading local embedding model...")
-
-    assert search_tab.status_label.text() == "Loading local embedding model..."
-    assert f"color: {Theme.PRIMARY}" in search_tab.status_label.styleSheet()
-
-
-def test_format_lancedb_search_results_matches_table_shape():
-    result = MagicMock(
-        score=0.75,
-        source_uri="/docs/ev6.txt",
-        text="EV6 local chunk",
-        chunk_index=3,
-        score_label="Cosine similarity: 0.7500",
-        parent_rank=1,
-    )
-
-    formatted = format_lancedb_search_results([result])
-
-    assert formatted == [
-        {
-            "score": 0.75,
-            "source_uri": "/docs/ev6.txt",
-            "text_content": "EV6 local chunk",
-            "chunk_index": 3,
-            "metadata": {
-                "search_backend": "local_lancedb",
-                "score_label": "Cosine similarity: 0.7500",
-                "parent_rank": 1,
-            },
-        }
-    ]
 
 
 def test_load_extensions_defaults_to_select_all(search_tab, mock_api_client):

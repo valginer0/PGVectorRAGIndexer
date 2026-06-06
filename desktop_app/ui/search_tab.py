@@ -120,7 +120,7 @@ class CheckableComboBox(QComboBox):
         return [t for t in raw if t != self.SELECT_ALL]
 from .shared import populate_document_type_combo
 from .styles.theme import Theme
-from .workers import LocalLanceDBSearchWorker, SearchWorker, is_lancedb_index_busy
+from .workers import SearchWorker
 from ..utils.snippet_utils import extract_snippet
 from ..utils import app_config
 from ..utils.search_limits import candidate_limit_for_unique_files
@@ -300,17 +300,7 @@ class SearchTab(QWidget):
         extensions = self.ext_filter.checked_items() if hasattr(self, "ext_filter") else []
 
         self._display_result_limit = self.top_k_spin.value()
-        use_local_lancedb_search = app_config.get_local_lancedb_search_enabled()
-        if use_local_lancedb_search:
-            if document_type is not None or extensions:
-                QMessageBox.warning(
-                    self,
-                    "Local Search Filters Unsupported",
-                    "Local LanceDB search does not support document type or extension filters yet."
-                )
-                return
-            self._start_local_lancedb_search(query)
-            return
+
 
         health = self.api_client.get_health()
         if health.get("status") == "initializing":
@@ -358,65 +348,7 @@ class SearchTab(QWidget):
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
 
-    def _start_local_lancedb_search(self, query: str) -> None:
-        """Start the experimental local LanceDB search worker."""
-        db_path = app_config.get_local_lancedb_db_path()
-        index_metadata = app_config.get_local_lancedb_index_metadata()
-        if not index_metadata:
-            QMessageBox.warning(
-                self,
-                "Local Index Not Built",
-                "Local LanceDB search is enabled, but no local text index has been built yet. "
-                "Open Settings and use Rebuild Local Text/Markdown Index first."
-            )
-            return
 
-        metadata_db_path = index_metadata.get("db_path")
-        if not metadata_db_path or Path(str(metadata_db_path)) != Path(db_path):
-            QMessageBox.warning(
-                self,
-                "Local Index Needs Rebuild",
-                "The local LanceDB index metadata belongs to a different index folder. "
-                "Open Settings and use Rebuild Local Text/Markdown Index."
-            )
-            return
-
-        if not Path(db_path).exists():
-            QMessageBox.warning(
-                self,
-                "Local Index Missing",
-                "The configured local LanceDB index folder was not found. "
-                "Open Settings and use Rebuild Local Text/Markdown Index."
-            )
-            return
-
-        if is_lancedb_index_busy(db_path):
-            QMessageBox.warning(
-                self,
-                "Local Index Busy",
-                "The local LanceDB index is already being used. "
-                "Please wait for the current local index operation to finish."
-            )
-            return
-
-        self.search_btn.setEnabled(False)
-        self.query_input.setEnabled(False)
-        self.status_label.setText(f"Searching local LanceDB index for: {query}...")
-        self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
-
-        self.search_worker = LocalLanceDBSearchWorker(
-            query,
-            self._display_result_limit,
-            db_path,
-        )
-        self.search_worker.setProperty("one_result_per_file", True)
-        self.search_worker.progress.connect(self._local_lancedb_search_progress)
-        self.search_worker.finished.connect(self.search_finished)
-        self.search_worker.start()
-
-    def _local_lancedb_search_progress(self, message: str) -> None:
-        self.status_label.setText(message)
-        self.status_label.setStyleSheet(f"color: {Theme.PRIMARY}; font-style: italic;")
     
     def search_finished(self, success: bool, data):
         """Handle search completion."""
@@ -676,7 +608,4 @@ class SearchTab(QWidget):
         return candidate_limit_for_unique_files(visible_limit)
 
     def _current_search_is_one_per_file(self) -> bool:
-        worker = getattr(self, "search_worker", None)
-        if worker is not None and bool(worker.property("one_result_per_file")):
-            return True
         return bool(app_config.get_document_level_search_enabled())

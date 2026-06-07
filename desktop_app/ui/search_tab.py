@@ -622,7 +622,7 @@ class SearchTab(QWidget):
         return candidate_limit_for_unique_files(visible_limit)
 
     def _current_search_is_one_per_file(self) -> bool:
-        return bool(app_config.get_document_level_search_enabled())
+        return True
 
     def _on_engine_changed(self) -> None:
         """Visual feedback when Postgres engine is selected."""

@@ -687,12 +687,15 @@ class DocumentsTab(QWidget):
                 self.tree_stats_label.setStyleSheet("color: #9ca3af; font-size: 12px; margin-left: 10px; font-weight: bold;")
                 self.tree_stats_label.setToolTip("")
             else:
-                self._lancedb_available = True
-                self.db_source_combo.setVisible(self._view_mode == "tree")
-                lancedb_index = self.db_source_combo.findData("lancedb")
-                if lancedb_index >= 0 and self.db_source_combo.currentData() != "lancedb":
-                    self.db_source_combo.setCurrentIndex(lancedb_index)
-                    self._tree_model.set_source("lancedb")
+                if not self._lancedb_available:
+                    self._lancedb_available = True
+                    self.db_source_combo.setVisible(self._view_mode == "tree")
+                    lancedb_index = self.db_source_combo.findData("lancedb")
+                    if lancedb_index >= 0:
+                        self.db_source_combo.setCurrentIndex(lancedb_index)
+                        self._tree_model.set_source("lancedb")
+                else:
+                    self.db_source_combo.setVisible(self._view_mode == "tree")
                 ldb_docs = ldb.get("total_documents", 0)
                 ldb_chunks = ldb.get("total_chunks", 0)
                 self.tree_stats_label.setText(

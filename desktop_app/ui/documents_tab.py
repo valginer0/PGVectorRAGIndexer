@@ -84,8 +84,8 @@ class DocumentsTab(QWidget):
 
         # Database source selector (Postgres View vs LanceDB View)
         self.db_source_combo = QComboBox()
-        self.db_source_combo.addItem("Postgres View", "postgres")
         self.db_source_combo.addItem("LanceDB View", "lancedb")
+        self.db_source_combo.addItem("Postgres View", "postgres")
         self.db_source_combo.currentIndexChanged.connect(self._on_db_source_changed)
         self.db_source_combo.setStyleSheet("padding: 6px; font-weight: bold; border: 1px solid #374151;")
         header_layout.addWidget(self.db_source_combo)
@@ -677,7 +677,9 @@ class DocumentsTab(QWidget):
             if ldb is None:
                 self._lancedb_available = False
                 self.db_source_combo.setVisible(False)
-                self.db_source_combo.setCurrentIndex(0)
+                postgres_index = self.db_source_combo.findData("postgres")
+                if postgres_index >= 0:
+                    self.db_source_combo.setCurrentIndex(postgres_index)
                 self._tree_model.set_source("postgres")
                 self.tree_stats_label.setText(
                     f"Postgres: {pg_docs} docs ({pg_chunks} chunks)"
@@ -687,6 +689,10 @@ class DocumentsTab(QWidget):
             else:
                 self._lancedb_available = True
                 self.db_source_combo.setVisible(self._view_mode == "tree")
+                lancedb_index = self.db_source_combo.findData("lancedb")
+                if lancedb_index >= 0 and self.db_source_combo.currentData() != "lancedb":
+                    self.db_source_combo.setCurrentIndex(lancedb_index)
+                    self._tree_model.set_source("lancedb")
                 ldb_docs = ldb.get("total_documents", 0)
                 ldb_chunks = ldb.get("total_chunks", 0)
                 self.tree_stats_label.setText(

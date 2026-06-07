@@ -23,6 +23,38 @@ def test_docker_manager_resolves_app_image_from_windows_user_env(monkeypatch):
         assert manager._resolve_app_image() == "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
 
 
+def test_docker_manager_prefers_user_dev_image_over_stale_inherited_process_image(monkeypatch):
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:feat-admin-console-write-ops")
+    monkeypatch.delenv("PGVECTOR_REPO_REF", raising=False)
+    manager = DockerManager(PROJECT_ROOT)
+
+    def read_user_env(name):
+        values = {
+            "APP_IMAGE": "ghcr.io/valginer0/pgvectorragindexer:dev",
+            "PGVECTOR_REPO_REF": "dev/v2",
+        }
+        return values.get(name, "")
+
+    with patch.object(manager, "_read_windows_user_env", side_effect=read_user_env):
+        assert manager._resolve_app_image() == "ghcr.io/valginer0/pgvectorragindexer:dev"
+
+
+def test_docker_manager_keeps_explicit_process_image_when_process_ref_is_set(monkeypatch):
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:feature-image")
+    monkeypatch.setenv("PGVECTOR_REPO_REF", "feature/ref")
+    manager = DockerManager(PROJECT_ROOT)
+
+    def read_user_env(name):
+        values = {
+            "APP_IMAGE": "ghcr.io/valginer0/pgvectorragindexer:dev",
+            "PGVECTOR_REPO_REF": "dev/v2",
+        }
+        return values.get(name, "")
+
+    with patch.object(manager, "_read_windows_user_env", side_effect=read_user_env):
+        assert manager._resolve_app_image() == "ghcr.io/valginer0/pgvectorragindexer:feature-image"
+
+
 def test_docker_manager_ignores_stale_release_image_from_windows_user_env(monkeypatch):
     monkeypatch.delenv("APP_IMAGE", raising=False)
     manager = DockerManager(PROJECT_ROOT)

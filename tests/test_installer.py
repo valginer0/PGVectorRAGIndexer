@@ -445,6 +445,42 @@ def test_resolve_app_image_uses_override(monkeypatch, tmp_path):
     assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
 
 
+def test_resolve_app_image_prefers_user_dev_image_over_stale_inherited_process_image(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:feat-admin-console-write-ops")
+    monkeypatch.delenv("PGVECTOR_REPO_REF", raising=False)
+
+    def read_user_env(self, name):
+        values = {
+            "APP_IMAGE": "ghcr.io/valginer0/pgvectorragindexer:dev",
+            "PGVECTOR_REPO_REF": "dev/v2",
+        }
+        return values.get(name, "")
+
+    with patch.object(Installer, "_read_windows_user_env", read_user_env):
+        installer = Installer(install_dir=str(tmp_path / "install-image-user-dev-wins"))
+
+    installer._log = MagicMock()
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:dev"
+
+
+def test_resolve_app_image_keeps_explicit_process_image_when_process_ref_is_set(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:feature-image")
+    monkeypatch.setenv("PGVECTOR_REPO_REF", "feature/ref")
+
+    def read_user_env(self, name):
+        values = {
+            "APP_IMAGE": "ghcr.io/valginer0/pgvectorragindexer:dev",
+            "PGVECTOR_REPO_REF": "dev/v2",
+        }
+        return values.get(name, "")
+
+    with patch.object(Installer, "_read_windows_user_env", read_user_env):
+        installer = Installer(install_dir=str(tmp_path / "install-image-process-ref-wins"))
+
+    installer._log = MagicMock()
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:feature-image"
+
+
 def test_resolve_app_image_ignores_stale_project_release_override_for_pinned_release(monkeypatch, tmp_path):
     monkeypatch.setattr(Installer, "DEFAULT_REPO_REF", "v2.14.5")
     monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:2.14.4")
@@ -602,7 +638,9 @@ def test_manage_ps1_honors_app_image_override_textually():
     content = (PROJECT_ROOT / "manage.ps1").read_text()
     assert "APP_IMAGE" in content
     assert "function Get-EffectiveOverride" in content
-    assert '$image = Get-EffectiveOverride -Name "APP_IMAGE" -DefaultValue $defaultImage' in content
+    assert "function Resolve-AppImageOverride" in content
+    assert "function Assert-ComposeWorkdirSupported" in content
+    assert '$image = Resolve-AppImageOverride -DefaultValue $defaultImage' in content
     assert 'Write-Host "Backend image: $image" -ForegroundColor Cyan' in content
     assert 'docker compose --file "docker-compose.yml" --env-file $envFile pull' in content
 

@@ -333,33 +333,7 @@ class SettingsTab(QWidget):
 
     def _build_search_panel(self, parent_layout):
         """Build search behavior settings."""
-        from desktop_app.utils import app_config
-
-        _compact_gb = "QGroupBox { margin-top: 0.8em; padding-top: 8px; }"
-        group = QGroupBox("Search")
-        group.setStyleSheet(_compact_gb)
-        vbox = QVBoxLayout(group)
-        vbox.setSpacing(8)
-
-        self._document_level_search_checkbox = QCheckBox(
-            "Use experimental document-level search results"
-        )
-        self._document_level_search_checkbox.setChecked(
-            app_config.get_document_level_search_enabled()
-        )
-        self._document_level_search_checkbox.setToolTip(
-            "Requests one ranked result per source document from backends that support it."
-        )
-        self._document_level_search_checkbox.toggled.connect(
-            app_config.set_document_level_search_enabled
-        )
-        vbox.addWidget(self._document_level_search_checkbox)
-
-
-
-        parent_layout.addWidget(group)
-
-
+        return
 
     # ------------------------------------------------------------------
     # Setup wizard panel (#18)

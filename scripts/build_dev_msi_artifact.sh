@@ -278,6 +278,7 @@ if [ -n "$APP_IMAGE_OVERRIDE" ]; then
 EOF
 else
   cat >> "$helper_path" <<'EOF'
+Remove-Item Env:APP_IMAGE -ErrorAction SilentlyContinue
 # Optional backend image override for Local Docker tests:
 # $env:APP_IMAGE = "ghcr.io/valginer0/pgvectorragindexer:your-debug-tag"
 EOF

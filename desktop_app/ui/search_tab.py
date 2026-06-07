@@ -337,12 +337,7 @@ class SearchTab(QWidget):
         self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
 
         # Start search worker
-        use_document_level_search = app_config.get_document_level_search_enabled()
-        candidate_limit = (
-            self._display_result_limit
-            if use_document_level_search
-            else self._candidate_limit_for_unique_files(self._display_result_limit)
-        )
+        candidate_limit = self._display_result_limit
 
         engine = self.engine_combo.currentData()          # "lancedb" | "postgres"
         self._active_engine = engine
@@ -356,8 +351,8 @@ class SearchTab(QWidget):
             self.metric_combo.currentText(),
             document_type=document_type,
             extensions=extensions or None,
-            group_by_document=use_document_level_search,
-            literal_tail_suppression="identifier-token" if use_document_level_search else None,
+            group_by_document=True,
+            literal_tail_suppression="identifier-token",
             source=source,
         )
         self.search_worker.finished.connect(self.search_finished)

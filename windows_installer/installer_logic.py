@@ -123,6 +123,21 @@ class Installer:
         return repo.lower(), tag
 
     @classmethod
+    def _is_project_image(cls, image: str) -> bool:
+        repo, _ = cls._split_project_image(image)
+        return repo == cls._IMAGE_REPO
+
+    def _should_prefer_user_app_image(self, process_image: str, user_image: str) -> bool:
+        if not process_image or not user_image or process_image == user_image:
+            return False
+        if not self._is_project_image(process_image) or not self._is_project_image(user_image):
+            return False
+
+        process_ref = os.environ.get("PGVECTOR_REPO_REF", "").strip()
+        user_ref = self._read_windows_user_env("PGVECTOR_REPO_REF")
+        return not process_ref and bool(user_ref)
+
+    @classmethod
     def _is_stale_release_image_override(cls, override: str, default: str) -> bool:
         override_repo, override_tag = cls._split_project_image(override)
         default_repo, default_tag = cls._split_project_image(default)
@@ -169,13 +184,16 @@ class Installer:
         env_val = os.environ.get("APP_IMAGE", "").strip()
         reg_val = self._read_windows_user_env("APP_IMAGE")
         default = self._default_app_image()
+
+        if self._should_prefer_user_app_image(env_val, reg_val):
+            env_val = ""
         
         override = env_val if env_val else reg_val
         if override:
-            if self.DEFAULT_REPO_REF != "main" and override == reg_val:
+            if self._version_from_ref(self.DEFAULT_REPO_REF) and override == reg_val:
                 # Persistent registry override (or propagated) -> ignore in pinned releases
                 return default
-            if self.DEFAULT_REPO_REF != "main" and self._is_stale_release_image_override(override, default):
+            if self._version_from_ref(self.DEFAULT_REPO_REF) and self._is_stale_release_image_override(override, default):
                 # Stale user, machine, or inherited APP_IMAGE should not move a release installer
                 # back to a previous project release image. Non-version debug/custom tags still work.
                 return default

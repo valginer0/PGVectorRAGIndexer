@@ -125,11 +125,3 @@ def is_remote_mode() -> bool:
     return get_backend_mode() == BACKEND_MODE_REMOTE
 
 
-def get_document_level_search_enabled() -> bool:
-    """Return whether desktop search should request backend document grouping."""
-    return bool(get("document_level_search_enabled", False))
-
-
-def set_document_level_search_enabled(enabled: bool) -> None:
-    set("document_level_search_enabled", bool(enabled))
-

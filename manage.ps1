@@ -35,6 +35,42 @@ function Get-EffectiveOverride {
     return $DefaultValue
 }
 
+function Test-ProjectImage {
+    param([string]$Image)
+    if ([string]::IsNullOrWhiteSpace($Image)) {
+        return $false
+    }
+    return $Image.Trim().ToLowerInvariant().StartsWith("ghcr.io/valginer0/pgvectorragindexer:")
+}
+
+function Resolve-AppImageOverride {
+    param([string]$DefaultValue)
+
+    $processImage = [Environment]::GetEnvironmentVariable("APP_IMAGE", "Process")
+    $userImage = [Environment]::GetEnvironmentVariable("APP_IMAGE", "User")
+    $processRef = [Environment]::GetEnvironmentVariable("PGVECTOR_REPO_REF", "Process")
+    $userRef = [Environment]::GetEnvironmentVariable("PGVECTOR_REPO_REF", "User")
+
+    if (-not [string]::IsNullOrWhiteSpace($processImage) -and
+        -not [string]::IsNullOrWhiteSpace($userImage) -and
+        $processImage -ne $userImage -and
+        (Test-ProjectImage -Image $processImage) -and
+        (Test-ProjectImage -Image $userImage) -and
+        [string]::IsNullOrWhiteSpace($processRef) -and
+        -not [string]::IsNullOrWhiteSpace($userRef)) {
+        Write-Host "Ignoring inherited APP_IMAGE=$processImage because Windows user APP_IMAGE=$userImage is paired with PGVECTOR_REPO_REF=$userRef" -ForegroundColor Yellow
+        return $userImage
+    }
+
+    return Get-EffectiveOverride -Name "APP_IMAGE" -DefaultValue $DefaultValue
+}
+
+function Assert-ComposeWorkdirSupported {
+    if ($ScriptRoot.StartsWith("\\wsl", [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Docker Compose update cannot run from a WSL UNC checkout ($ScriptRoot). Run from the installed Windows checkout, or run docker compose from inside WSL using this checkout's Linux path."
+    }
+}
+
 function Show-Usage {
     Write-Host "Usage:" -ForegroundColor Cyan
     Write-Host "  .\\manage.ps1 -Action bootstrap [-Channel prod|dev] [-InstallDir <path>]" -ForegroundColor Yellow
@@ -73,7 +109,7 @@ function Invoke-ComposeUpdate {
     )
 
     $defaultImage = if ($SelectedChannel -eq "dev") { "ghcr.io/valginer0/pgvectorragindexer:dev" } else { "ghcr.io/valginer0/pgvectorragindexer:latest" }
-    $image = Get-EffectiveOverride -Name "APP_IMAGE" -DefaultValue $defaultImage
+    $image = Resolve-AppImageOverride -DefaultValue $defaultImage
     $envFile = Join-Path $ScriptRoot ".env.manage.tmp"
     $envContent = @("APP_IMAGE=$image")
 
@@ -86,6 +122,8 @@ function Invoke-ComposeUpdate {
         Write-Host "[DRY RUN] docker compose --file docker-compose.yml --env-file $envFile up -d" -ForegroundColor Yellow
         return
     }
+
+    Assert-ComposeWorkdirSupported
 
     try {
         $envContent | Set-Content -Path $envFile -Encoding UTF8

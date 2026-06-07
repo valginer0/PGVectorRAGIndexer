@@ -83,7 +83,9 @@ class DocumentsTab(QWidget):
         header_layout.addWidget(self._list_btn)
 
         # Database source selector (Postgres View vs LanceDB View)
+        from PySide6.QtWidgets import QListView
         self.db_source_combo = QComboBox()
+        self.db_source_combo.setView(QListView())
         self.db_source_combo.addItem("LanceDB View", "lancedb")
         self.db_source_combo.addItem("Postgres View", "postgres")
         self.db_source_combo.currentIndexChanged.connect(self._on_db_source_changed)
@@ -138,6 +140,7 @@ class DocumentsTab(QWidget):
         pagination_layout.addWidget(page_size_label)
         
         self.page_size_combo = QComboBox()
+        self.page_size_combo.setView(QListView())
         for size in self.page_size_options:
             self.page_size_combo.addItem(str(size))
         with QSignalBlocker(self.page_size_combo):

@@ -193,11 +193,11 @@ class SearchTab(QWidget):
         self.min_score_spin.setSingleStep(0.05)
         self.min_score_spin.setValue(0.3)
         self.min_score_spin.setMinimumWidth(80)
-        options_layout.addWidget(self.min_score_spin)
-        
-        # Metric
+        options_layout.addWidget(self.min_score_spin)        # Metric
+        from PySide6.QtWidgets import QListView
         options_layout.addWidget(QLabel("Metric:"))
         self.metric_combo = QComboBox()
+        self.metric_combo.setView(QListView())
         self.metric_combo.addItems(["cosine", "euclidean", "dot_product"])
         self.metric_combo.setMinimumWidth(120)
         self.metric_combo.setMinimumHeight(35)  # Prevent crushing at min window height
@@ -206,6 +206,7 @@ class SearchTab(QWidget):
         # Engine
         options_layout.addWidget(QLabel("Engine:"))
         self.engine_combo = QComboBox()
+        self.engine_combo.setView(QListView())
         self.engine_combo.addItem("LanceDB", "lancedb")          # index 0 = default
         self.engine_combo.addItem("Postgres (debug)", "postgres")
         self.engine_combo.setMinimumHeight(35)
@@ -214,12 +215,13 @@ class SearchTab(QWidget):
         
         options_layout.addStretch()
         layout.addWidget(options_group)
-
+ 
         # Document type filter
         type_group = QGroupBox("Document Type Filter (Optional)")
         type_layout = QHBoxLayout(type_group)
         type_layout.addWidget(QLabel("Document Type:"))
         self.type_filter = QComboBox()
+        self.type_filter.setView(QListView())
         self.type_filter.setEditable(True)
         # We will populate this dynamically, but default is *
         self.type_filter.addItem("*")

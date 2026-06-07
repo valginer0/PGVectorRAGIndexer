@@ -118,90 +118,90 @@ def get_tree_children(
                 )
                 rows = cur.fetchall()
 
-            # Build tree level
-            folders: Dict[str, Dict[str, Any]] = {}
-            files: List[Dict[str, Any]] = []
+        # Build tree level
+        folders: Dict[str, Dict[str, Any]] = {}
+        files: List[Dict[str, Any]] = []
 
-            parent_depth = len(parent.split("/")) if parent else 0
+        parent_depth = len(parent.split("/")) if parent else 0
 
-            for norm_uri, document_id, chunk_count, indexed_at, last_updated in rows:
-                # Strip the parent prefix to get relative path
-                if parent:
-                    if not norm_uri.startswith(parent + "/"):
-                        continue
-                    relative = norm_uri[len(parent) + 1:]
+        for norm_uri, document_id, chunk_count, indexed_at, last_updated in rows:
+            # Strip the parent prefix to get relative path
+            if parent:
+                if not norm_uri.startswith(parent + "/"):
+                    continue
+                relative = norm_uri[len(parent) + 1:]
+            else:
+                relative = norm_uri
+
+            # Handle absolute Linux paths: /home/... → treat "/" as a root folder
+            # so the first split component isn't an empty string.
+            if not parent and relative.startswith("/"):
+                relative = relative.lstrip("/")
+                # Reconstruct with "/" prefix for folder_path below
+                _linux_root = True
+            else:
+                _linux_root = False
+
+            parts = relative.split("/")
+
+            if len(parts) == 1:
+                # Direct child file
+                files.append({
+                    "name": parts[0],
+                    "path": norm_uri,
+                    "type": "file",
+                    "document_id": document_id,
+                    "chunk_count": chunk_count,
+                    "indexed_at": indexed_at.isoformat() if indexed_at else None,
+                    "last_updated": last_updated.isoformat() if last_updated else None,
+                })
+            else:
+                # Child is inside a subfolder
+                folder_name = parts[0]
+                if _linux_root:
+                    # Use "/" prefix so expanding this folder fetches the right children
+                    folder_path = "/" + folder_name
+                elif parent:
+                    folder_path = parent + "/" + folder_name
                 else:
-                    relative = norm_uri
+                    folder_path = folder_name
 
-                # Handle absolute Linux paths: /home/... → treat "/" as a root folder
-                # so the first split component isn't an empty string.
-                if not parent and relative.startswith("/"):
-                    relative = relative.lstrip("/")
-                    # Reconstruct with "/" prefix for folder_path below
-                    _linux_root = True
-                else:
-                    _linux_root = False
+                if folder_name not in folders:
+                    folders[folder_name] = {
+                        "name": folder_name,
+                        "path": folder_path,
+                        "type": "folder",
+                        "document_count": 0,
+                        "latest_indexed_at": None,
+                    }
 
-                parts = relative.split("/")
+                folders[folder_name]["document_count"] += 1
+                if indexed_at:
+                    ts = indexed_at.isoformat()
+                    prev = folders[folder_name]["latest_indexed_at"]
+                    if prev is None or ts > prev:
+                        folders[folder_name]["latest_indexed_at"] = ts
 
-                if len(parts) == 1:
-                    # Direct child file
-                    files.append({
-                        "name": parts[0],
-                        "path": norm_uri,
-                        "type": "file",
-                        "document_id": document_id,
-                        "chunk_count": chunk_count,
-                        "indexed_at": indexed_at.isoformat() if indexed_at else None,
-                        "last_updated": last_updated.isoformat() if last_updated else None,
-                    })
-                else:
-                    # Child is inside a subfolder
-                    folder_name = parts[0]
-                    if _linux_root:
-                        # Use "/" prefix so expanding this folder fetches the right children
-                        folder_path = "/" + folder_name
-                    elif parent:
-                        folder_path = parent + "/" + folder_name
-                    else:
-                        folder_path = folder_name
+        # Sort folders alphabetically, files alphabetically
+        sorted_folders = sorted(folders.values(), key=lambda f: f["name"].lower())
+        sorted_files = sorted(files, key=lambda f: f["name"].lower())
 
-                    if folder_name not in folders:
-                        folders[folder_name] = {
-                            "name": folder_name,
-                            "path": folder_path,
-                            "type": "folder",
-                            "document_count": 0,
-                            "latest_indexed_at": None,
-                        }
+        total_folders = len(sorted_folders)
+        total_files = len(sorted_files)
 
-                    folders[folder_name]["document_count"] += 1
-                    if indexed_at:
-                        ts = indexed_at.isoformat()
-                        prev = folders[folder_name]["latest_indexed_at"]
-                        if prev is None or ts > prev:
-                            folders[folder_name]["latest_indexed_at"] = ts
+        # Combine and paginate
+        all_items = sorted_folders + sorted_files
+        paginated = all_items[offset:offset + limit]
 
-            # Sort folders alphabetically, files alphabetically
-            sorted_folders = sorted(folders.values(), key=lambda f: f["name"].lower())
-            sorted_files = sorted(files, key=lambda f: f["name"].lower())
-
-            total_folders = len(sorted_folders)
-            total_files = len(sorted_files)
-
-            # Combine and paginate
-            all_items = sorted_folders + sorted_files
-            paginated = all_items[offset:offset + limit]
-
-            return {
-                "parent_path": parent,
-                "children": paginated,
-                "total_folders": total_folders,
-                "total_files": total_files,
-                "total": total_folders + total_files,
-                "limit": limit,
-                "offset": offset,
-            }
+        return {
+            "parent_path": parent,
+            "children": paginated,
+            "total_folders": total_folders,
+            "total_files": total_files,
+            "total": total_folders + total_files,
+            "limit": limit,
+            "offset": offset,
+        }
     except Exception as e:
         logger.warning("Failed to get tree children for '%s': %s", parent_path, e)
         return {

@@ -380,7 +380,7 @@ class SearchTab(QWidget):
                 self.status_label.setStyleSheet("color: #f59e0b; font-style: italic; font-weight: bold;")
 
             else:
-                suffix = " (1 per file)" if self._current_search_is_one_per_file() else ""
+                suffix = " (1 per file)"
                 if self._active_engine == "postgres":
                     self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix} · ⚠ Postgres (debug) engine — not the product engine")
                     self.status_label.setStyleSheet("color: #f59e0b; font-style: italic; font-weight: bold;")
@@ -622,9 +622,6 @@ class SearchTab(QWidget):
     def _candidate_limit_for_unique_files(self, visible_limit: int) -> int:
         """Fetch extra chunk-level matches so file-level dedupe does not hide files."""
         return candidate_limit_for_unique_files(visible_limit)
-
-    def _current_search_is_one_per_file(self) -> bool:
-        return True
 
     def _on_engine_changed(self) -> None:
         """Visual feedback when Postgres engine is selected."""

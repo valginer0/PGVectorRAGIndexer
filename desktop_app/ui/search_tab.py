@@ -629,6 +629,9 @@ class SearchTab(QWidget):
     def _on_engine_changed(self) -> None:
         """Visual feedback when Postgres engine is selected."""
         if self.engine_combo.currentData() == "postgres":
-            self.engine_combo.setStyleSheet("border: 1px solid #f59e0b;")
+            self.engine_combo.setStyleSheet(
+                "background-color: #374151; border: 1px solid #f59e0b; "
+                "border-radius: 6px; color: #f9fafb; padding: 8px;"
+            )
         else:
             self.engine_combo.setStyleSheet("")

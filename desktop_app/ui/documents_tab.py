@@ -89,7 +89,10 @@ class DocumentsTab(QWidget):
         self.db_source_combo.addItem("LanceDB View", "lancedb")
         self.db_source_combo.addItem("Postgres View", "postgres")
         self.db_source_combo.currentIndexChanged.connect(self._on_db_source_changed)
-        self.db_source_combo.setStyleSheet("padding: 6px; font-weight: bold; border: 1px solid #374151;")
+        self.db_source_combo.setStyleSheet(
+            "padding: 6px; font-weight: bold; border: 1px solid #374151; "
+            "color: #f9fafb; background-color: #1f2937;"
+        )
         header_layout.addWidget(self.db_source_combo)
 
         # Count stats label

@@ -36,9 +36,34 @@ def main():
     )
     
     app = QApplication(sys.argv)
+    app.setStyle("Fusion")
     app.setApplicationName("PGVectorRAGIndexer")
     app.setOrganizationName("ValginerSoft")
     app.setApplicationVersion(__version__)
+    
+    # Force application-wide dark palette so native item delegates render text in white
+    from PySide6.QtGui import QPalette, QColor
+    dark_palette = QPalette()
+    dark_palette.setColor(QPalette.Window, QColor("#111827"))
+    dark_palette.setColor(QPalette.WindowText, QColor("#f9fafb"))
+    dark_palette.setColor(QPalette.Base, QColor("#1f2937"))
+    dark_palette.setColor(QPalette.AlternateBase, QColor("#111827"))
+    dark_palette.setColor(QPalette.ToolTipBase, QColor("#1f2937"))
+    dark_palette.setColor(QPalette.ToolTipText, QColor("#f9fafb"))
+    dark_palette.setColor(QPalette.Text, QColor("#f9fafb"))
+    dark_palette.setColor(QPalette.Button, QColor("#1f2937"))
+    dark_palette.setColor(QPalette.ButtonText, QColor("#f9fafb"))
+    dark_palette.setColor(QPalette.BrightText, Qt.red)
+    dark_palette.setColor(QPalette.Link, QColor("#6366f1"))
+    dark_palette.setColor(QPalette.Highlight, QColor("#6366f1"))
+    dark_palette.setColor(QPalette.HighlightedText, Qt.white)
+    
+    # Disabled state colors
+    dark_palette.setColor(QPalette.Disabled, QPalette.Text, QColor("#4b5563"))
+    dark_palette.setColor(QPalette.Disabled, QPalette.ButtonText, QColor("#4b5563"))
+    dark_palette.setColor(QPalette.Disabled, QPalette.WindowText, QColor("#4b5563"))
+    
+    app.setPalette(dark_palette)
     
     # Create and show main window
     # Create and show main window

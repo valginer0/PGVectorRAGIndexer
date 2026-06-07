@@ -47,6 +47,7 @@ class DocumentsTab(QWidget):
         self.sort_directions: List[str] = ["desc"]
         self.is_loading = False
         self._view_mode = "tree"  # "list" or "tree"
+        self._polling_timer = None
         self.sort_column_mapping = {
             0: "source_uri",
             1: "document_type",
@@ -95,10 +96,28 @@ class DocumentsTab(QWidget):
         )
         header_layout.addWidget(self.db_source_combo)
 
-        # Count stats label
-        self.tree_stats_label = QLabel("")
-        self.tree_stats_label.setStyleSheet("color: #9ca3af; font-size: 12px; margin-left: 10px; font-weight: bold;")
-        header_layout.addWidget(self.tree_stats_label)
+        # Index comparison panel
+        from PySide6.QtWidgets import QGroupBox
+        self.comparison_group = QGroupBox("Index comparison")
+        self.comparison_group.setObjectName("indexComparisonGroup")
+        self.comparison_group.setStyleSheet(
+            "QGroupBox { border: 1px solid #374151; border-radius: 6px; "
+            "margin-top: 0px; padding: 5px; font-weight: bold; color: #6366f1; }"
+            "QLabel { font-size: 12px; font-weight: bold; color: #9ca3af; }"
+        )
+        comp_layout = QVBoxLayout(self.comparison_group)
+        comp_layout.setSpacing(2)
+        comp_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.pg_stats_label = QLabel("Postgres : -")
+        self.ldb_stats_label = QLabel("LanceDB  : -")
+        self.status_stats_label = QLabel("Status   : -")
+
+        comp_layout.addWidget(self.pg_stats_label)
+        comp_layout.addWidget(self.ldb_stats_label)
+        comp_layout.addWidget(self.status_stats_label)
+
+        header_layout.addWidget(self.comparison_group)
 
         self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
@@ -638,7 +657,8 @@ class DocumentsTab(QWidget):
             self._tree_btn.setStyleSheet(_inactive)
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='white'))
             self.db_source_combo.setVisible(False)
-            self.tree_stats_label.setVisible(False)
+            self.comparison_group.setVisible(False)
+            self._stop_polling_timer()
         else:
             self._view_stack.setCurrentIndex(0)
             self._tree_btn.setStyleSheet(_active)
@@ -646,10 +666,10 @@ class DocumentsTab(QWidget):
             self._list_btn.setStyleSheet(_inactive)
             self._list_btn.setIcon(qta.icon('fa5s.list', color='white'))
             self.db_source_combo.setVisible(self._lancedb_available)
-            self.tree_stats_label.setVisible(True)
+            self.comparison_group.setVisible(True)
             if not self._tree_model.is_initialized():
                 self._tree_model.load_root()
-                self._load_tree_stats()
+            self._load_tree_stats()
 
     def _refresh_current_view(self) -> None:
         """Refresh whichever view is currently active."""
@@ -667,7 +687,8 @@ class DocumentsTab(QWidget):
 
     def _load_tree_stats(self) -> None:
         """Load tree statistics for comparison."""
-        self.tree_stats_label.setText("Comparing indexes...")
+        self.status_stats_label.setText("Status   : comparing...")
+        self.status_stats_label.setStyleSheet("color: #9ca3af; font-weight: bold;")
         self.tree_stats_worker = TreeStatsWorker(self.api_client)
         self.tree_stats_worker.finished.connect(self._on_tree_stats_loaded)
         self.tree_stats_worker.start()
@@ -680,6 +701,8 @@ class DocumentsTab(QWidget):
             pg_docs = pg.get("total_documents", 0)
             pg_chunks = pg.get("total_chunks", 0)
             
+            self.pg_stats_label.setText(f"Postgres : {pg_docs} docs / {pg_chunks} chunks")
+            
             if ldb is None:
                 self._lancedb_available = False
                 self.db_source_combo.setVisible(False)
@@ -687,11 +710,9 @@ class DocumentsTab(QWidget):
                 if postgres_index >= 0:
                     self.db_source_combo.setCurrentIndex(postgres_index)
                 self._tree_model.set_source("postgres")
-                self.tree_stats_label.setText(
-                    f"Postgres: {pg_docs} docs ({pg_chunks} chunks)"
-                )
-                self.tree_stats_label.setStyleSheet("color: #9ca3af; font-size: 12px; margin-left: 10px; font-weight: bold;")
-                self.tree_stats_label.setToolTip("")
+                self.ldb_stats_label.setVisible(False)
+                self.status_stats_label.setVisible(False)
+                self._stop_polling_timer()
             else:
                 if not self._lancedb_available:
                     self._lancedb_available = True
@@ -704,12 +725,43 @@ class DocumentsTab(QWidget):
                     self.db_source_combo.setVisible(self._view_mode == "tree")
                 ldb_docs = ldb.get("total_documents", 0)
                 ldb_chunks = ldb.get("total_chunks", 0)
-                self.tree_stats_label.setText(
-                    f"Postgres: {pg_docs} docs ({pg_chunks} chunks) | "
-                    f"LanceDB: {ldb_docs} docs ({ldb_chunks} chunks)"
-                )
-                self.tree_stats_label.setStyleSheet("color: #9ca3af; font-size: 12px; margin-left: 10px; font-weight: bold;")
-                self.tree_stats_label.setToolTip("")
+                self.ldb_stats_label.setText(f"LanceDB  : {ldb_docs} docs / {ldb_chunks} chunks")
+                self.ldb_stats_label.setVisible(True)
+                self.status_stats_label.setVisible(True)
+                
+                # Determine sync status
+                if pg_docs == ldb_docs and pg_chunks == ldb_chunks:
+                    self.status_stats_label.setText("Status   : ✓ in sync")
+                    self.status_stats_label.setStyleSheet("color: #10b981; font-weight: bold;")
+                    self._stop_polling_timer()
+                elif ldb_docs < pg_docs or (pg_docs == ldb_docs and ldb_chunks < pg_chunks):
+                    self.status_stats_label.setText("Status   : ⟳ syncing — LanceDB behind")
+                    self.status_stats_label.setStyleSheet("color: #f59e0b; font-weight: bold;")
+                    if self._view_mode == "tree":
+                        self._start_polling_timer()
+                else:
+                    self.status_stats_label.setText("Status   : counts differ")
+                    self.status_stats_label.setStyleSheet("color: #9ca3af; font-weight: bold;")
+                    self._stop_polling_timer()
+
+    def _start_polling_timer(self) -> None:
+        """Start polling stats every ~4s if active and not already running."""
+        from PySide6.QtCore import QTimer
+        if self._polling_timer is None:
+            self._polling_timer = QTimer(self)
+            self._polling_timer.setInterval(4000)
+            self._polling_timer.timeout.connect(self._load_tree_stats)
+        if not self._polling_timer.isActive():
+            self._polling_timer.start()
+
+    def _stop_polling_timer(self) -> None:
+        """Stop the stats polling timer."""
+        if self._polling_timer and self._polling_timer.isActive():
+            self._polling_timer.stop()
+
+    def hideEvent(self, event) -> None:
+        self._stop_polling_timer()
+        super().hideEvent(event)
 
 
     # ------------------------------------------------------------------

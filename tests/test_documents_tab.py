@@ -337,27 +337,55 @@ def test_tree_stats_loaded_lancedb_unavailable(documents_tab):
     
     assert documents_tab._lancedb_available is False
     assert documents_tab.db_source_combo.isVisible() is False
-    assert documents_tab.db_source_combo.currentIndex() == 0
-    assert documents_tab.tree_stats_label.text() == "Postgres: 10 docs (50 chunks)"
-    assert "color: #9ca3af" in documents_tab.tree_stats_label.styleSheet()
-    assert documents_tab.tree_stats_label.toolTip() == ""
+    assert documents_tab.db_source_combo.currentIndex() == 1
+    assert documents_tab.pg_stats_label.text() == "Postgres : 10 docs / 50 chunks"
+    assert documents_tab.ldb_stats_label.isVisible() is False
+    assert documents_tab.status_stats_label.isVisible() is False
+    assert documents_tab._polling_timer is None or not documents_tab._polling_timer.isActive()
 
 
-def test_tree_stats_loaded_lancedb_available(documents_tab):
-    """Test when LanceDB stats loading succeeds."""
+def test_tree_stats_loaded_lancedb_available_in_sync(documents_tab):
+    """Test when LanceDB stats match Postgres (in sync)."""
     documents_tab._view_mode = "tree"
     documents_tab.db_source_combo.setVisible(True)
     
     data = {
         "postgres": {"total_documents": 10, "total_chunks": 50},
-        "lancedb": {"total_documents": 12, "total_chunks": 60}
+        "lancedb": {"total_documents": 10, "total_chunks": 50}
     }
     
     documents_tab._on_tree_stats_loaded(True, data)
     
     assert documents_tab._lancedb_available is True
     assert documents_tab.db_source_combo.isVisible() is True
-    assert documents_tab.tree_stats_label.text() == "Postgres: 10 docs (50 chunks) | LanceDB: 12 docs (60 chunks)"
-    assert "color: #9ca3af" in documents_tab.tree_stats_label.styleSheet()
-    assert documents_tab.tree_stats_label.toolTip() == ""
+    assert documents_tab.pg_stats_label.text() == "Postgres : 10 docs / 50 chunks"
+    assert documents_tab.ldb_stats_label.text() == "LanceDB  : 10 docs / 50 chunks"
+    assert documents_tab.ldb_stats_label.isVisible() is True
+    assert documents_tab.status_stats_label.isVisible() is True
+    assert documents_tab.status_stats_label.text() == "Status   : ✓ in sync"
+    assert "color: #10b981" in documents_tab.status_stats_label.styleSheet()
+    assert documents_tab._polling_timer is None or not documents_tab._polling_timer.isActive()
+
+
+def test_tree_stats_loaded_lancedb_available_behind(documents_tab):
+    """Test when LanceDB is behind Postgres (syncing)."""
+    documents_tab._view_mode = "tree"
+    documents_tab.db_source_combo.setVisible(True)
+    
+    data = {
+        "postgres": {"total_documents": 10, "total_chunks": 50},
+        "lancedb": {"total_documents": 8, "total_chunks": 40}
+    }
+    
+    documents_tab._on_tree_stats_loaded(True, data)
+    
+    assert documents_tab._lancedb_available is True
+    assert documents_tab.db_source_combo.isVisible() is True
+    assert documents_tab.pg_stats_label.text() == "Postgres : 10 docs / 50 chunks"
+    assert documents_tab.ldb_stats_label.text() == "LanceDB  : 8 docs / 40 chunks"
+    assert documents_tab.ldb_stats_label.isVisible() is True
+    assert documents_tab.status_stats_label.isVisible() is True
+    assert documents_tab.status_stats_label.text() == "Status   : ⟳ syncing — LanceDB behind"
+    assert "color: #f59e0b" in documents_tab.status_stats_label.styleSheet()
+    assert documents_tab._polling_timer is not None and documents_tab._polling_timer.isActive()
 

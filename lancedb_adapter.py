@@ -359,6 +359,7 @@ class BackendLanceDBAdapter:
         parent_limit: int = 5,
         child_limit: int = 10,
         child_parent_spill_ratio: float = 1.0,
+        semantic_candidate_pool: int = 100,
         filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -394,8 +395,8 @@ class BackendLanceDBAdapter:
             if chunk_filter:
                 global_chunk_search = global_chunk_search.where(chunk_filter, prefilter=True)
                 
-        # Retrieve 50 global candidate chunks to allow semantic rescue of lexically-weak docs
-        global_chunk_rows = global_chunk_search.limit(50).to_arrow().to_pylist()
+        # Retrieve global candidate chunks to allow semantic rescue of lexically-weak docs
+        global_chunk_rows = global_chunk_search.limit(semantic_candidate_pool).to_arrow().to_pylist()
         
         vector_parent_ranks = {}
         vector_rank_counter = 1

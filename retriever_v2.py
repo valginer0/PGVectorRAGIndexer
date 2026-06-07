@@ -413,6 +413,7 @@ class DocumentRetriever:
             parent_limit=max(5, top_k),
             child_limit=top_k,
             child_parent_spill_ratio=spill_ratio,
+            semantic_candidate_pool=getattr(self.config.retrieval, "lancedb_semantic_candidate_pool", 100),
             filters=filters
         )
 

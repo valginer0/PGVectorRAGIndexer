@@ -157,7 +157,13 @@ class RetrievalConfig(BaseSettings):
         default=0.7,
         description='Ratio of parent FTS score to allow child chunk spill'
     )
-    
+    lancedb_semantic_candidate_pool: int = Field(
+        default=100,
+        description="How many global nearest chunks to scan for semantic parent rescue "
+                    "in parent-child search. Larger = better semantic recall on big "
+                    "corpora; selected parents are still capped by parent_limit."
+    )
+
     @field_validator('top_k')
     @classmethod
     def validate_top_k(cls, v: int) -> int:
@@ -180,6 +186,14 @@ class RetrievalConfig(BaseSettings):
         """Validate lancedb_child_parent_spill_ratio is non-negative."""
         if v < 0:
             raise ValueError('lancedb_child_parent_spill_ratio must be non-negative')
+        return v
+
+    @field_validator('lancedb_semantic_candidate_pool')
+    @classmethod
+    def validate_pool_size(cls, v: int) -> int:
+        """Validate lancedb_semantic_candidate_pool is positive."""
+        if v <= 0:
+            raise ValueError('lancedb_semantic_candidate_pool must be positive')
         return v
 
 

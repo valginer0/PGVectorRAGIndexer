@@ -346,3 +346,18 @@ def test_stratified_children_spill_ratio(tmp_path):
     assert results_loose[3]["parent_rank"] == 2
     assert results_loose[4]["document_id"] == "doc-b"
     assert results_loose[4]["parent_rank"] == 2
+
+
+def test_semantic_candidate_pool_config():
+    """The semantic candidate pool is configurable, defaults to 100, and must be positive."""
+    from config import RetrievalConfig
+
+    # Default is 100 (margin over observed ~rank-46 semantic matches).
+    assert RetrievalConfig().lancedb_semantic_candidate_pool == 100
+
+    # Custom positive value is accepted.
+    assert RetrievalConfig(lancedb_semantic_candidate_pool=250).lancedb_semantic_candidate_pool == 250
+
+    # Non-positive values are rejected by the validator.
+    with pytest.raises(Exception):
+        RetrievalConfig(lancedb_semantic_candidate_pool=0)

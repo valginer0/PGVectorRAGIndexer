@@ -112,12 +112,19 @@ QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleS
     background-color: #4b5563;
 }
 
-QComboBox QAbstractItemView {
-    background-color: #1f2937;
-    color: #f9fafb;
-    selection-background-color: #6366f1;
-    selection-color: white;
-    border: 1px solid #374151;
+QComboBox QAbstractItemView, QComboBox QListView {
+    background-color: #1f2937 !important;
+    color: #f9fafb !important;
+    selection-background-color: #6366f1 !important;
+    selection-color: white !important;
+    border: 1px solid #374151 !important;
+}
+
+QComboBox QAbstractItemView::item, QComboBox QListView::item {
+    background-color: #1f2937 !important;
+    color: #f9fafb !important;
+    selection-background-color: #6366f1 !important;
+    selection-color: white !important;
 }
 
 

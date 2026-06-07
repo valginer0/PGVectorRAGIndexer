@@ -112,6 +112,15 @@ QLineEdit:focus, QTextEdit:focus, QPlainTextEdit:focus, QSpinBox:focus, QDoubleS
     background-color: #4b5563;
 }
 
+QComboBox QAbstractItemView {
+    background-color: #1f2937;
+    color: #f9fafb;
+    selection-background-color: #6366f1;
+    selection-color: white;
+    border: 1px solid #374151;
+}
+
+
 /* QGroupBox */
 QGroupBox {
     border: 1px solid #374151;

@@ -560,7 +560,13 @@ class BackendLanceDBAdapter:
             elif key in ['document_id', 'source_uri']:
                 safe_val = str(value).replace("'", "''")
                 clauses.append(f"{key} = '{safe_val}'")
-        
+            elif key == 'excluded_document_ids':
+                if isinstance(value, list) and value:
+                    safe_ids = ", ".join(
+                        "'{}'".format(str(doc_id).replace("'", "''")) for doc_id in value
+                    )
+                    clauses.append(f"document_id NOT IN ({safe_ids})")
+
         return " AND ".join(clauses) if clauses else None
 
     def rebuild_fts_index(self, parent_only: bool = False) -> None:

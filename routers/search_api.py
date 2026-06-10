@@ -159,9 +159,17 @@ def _apply_identifier_tail_suppression(
     return kept, diagnostics
 
 
-@search_router.post("/search", response_model=SearchResponse, dependencies=[Depends(require_api_key)], responses={401: {"model": APIErrorResponse}})
-async def search_documents(request: SearchRequest):
-    """Search for relevant documents."""
+@search_router.post("/search", response_model=SearchResponse, responses={401: {"model": APIErrorResponse}})
+async def search_documents(
+    request: SearchRequest,
+    key_record: Optional[dict] = Depends(require_api_key),
+):
+    """Search for relevant documents.
+
+    Results are visibility-filtered: private documents owned by another user
+    are excluded from the searching user's results (admins see everything;
+    local/no-auth mode is unfiltered).
+    """
     try:
         if request.hybrid_mode is not None:
             if not request.use_hybrid:
@@ -206,6 +214,16 @@ async def search_documents(request: SearchRequest):
             raise ValueError("literal_tail_threshold must be non-negative")
 
         ret = get_retriever()
+
+        # Per-user document visibility: exclude other users' private documents.
+        # Fails closed — a DB error here aborts the search rather than leaking.
+        from document_visibility import search_exclusions_for_key_record
+        excluded_ids = search_exclusions_for_key_record(key_record)
+        effective_filters = dict(request.filters) if request.filters else {}
+        if excluded_ids:
+            effective_filters["excluded_document_ids"] = excluded_ids
+        effective_filters = effective_filters or None
+
         start_time = time.time()
         search_top_k = request.top_k
         if request.group_by_document and request.top_k:
@@ -219,7 +237,7 @@ async def search_documents(request: SearchRequest):
             results, retrieval_diagnostics = ret.search_lancedb_parent_child(
                 query=request.query,
                 top_k=search_top_k,
-                filters=request.filters
+                filters=effective_filters
             )
         elif request.use_hybrid:
             if request.hybrid_mode == HYBRID_MODE_LEXICAL_FUSION_V0:
@@ -232,7 +250,7 @@ async def search_documents(request: SearchRequest):
                     query=request.query,
                     top_k=search_top_k,
                     alpha=request.alpha,
-                    filters=request.filters,
+                    filters=effective_filters,
                 )
             elif request.hybrid_mode == HYBRID_MODE_RERANK_V0:
                 rerank_search = getattr(ret, "search_hybrid_rerank_v0", None)
@@ -244,21 +262,21 @@ async def search_documents(request: SearchRequest):
                     query=request.query,
                     top_k=search_top_k,
                     alpha=request.alpha,
-                    filters=request.filters,
+                    filters=effective_filters,
                 )
             else:
                 results = ret.search_hybrid(
                     query=request.query,
                     top_k=search_top_k,
                     alpha=request.alpha,
-                    filters=request.filters,
+                    filters=effective_filters,
                     source=request.source,
                 )
         else:
             results = ret.search(
                 query=request.query,
                 top_k=search_top_k,
-                filters=request.filters,
+                filters=effective_filters,
                 min_score=request.min_score,
                 source=request.source,
             )

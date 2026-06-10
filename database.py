@@ -655,6 +655,10 @@ class DocumentRepository:
                         ext_clauses.append("source_uri ILIKE %s")
                         params.append(f'%{normalized}')
                     where_clauses.append(f"({' OR '.join(ext_clauses)})")
+                elif key == 'excluded_document_ids':
+                    if isinstance(value, list) and value:
+                        where_clauses.append("document_id != ALL(%s)")
+                        params.append(list(value))
                 else:
                     # Direct column match (e.g., document_id, source_uri)
                     where_clauses.append(f"{key} = %s")

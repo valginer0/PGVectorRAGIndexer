@@ -500,6 +500,10 @@ class DocumentRetriever:
                 elif key in ['document_id', 'source_uri']:
                     filter_clauses.append(f"{key} = %s")
                     filter_params.append(value)
+                elif key == 'excluded_document_ids':
+                    if isinstance(value, list) and value:
+                        filter_clauses.append("document_id != ALL(%s)")
+                        filter_params.append(list(value))
                 else:
                     raise ValueError(
                         f"Unsupported filter key '{key}' for hybrid search. "
@@ -1024,6 +1028,10 @@ class DocumentRetriever:
                 elif key in ['document_id', 'source_uri']:
                     filter_clauses.append(f"{key} = %s")
                     filter_params.append(value)
+                elif key == 'excluded_document_ids':
+                    if isinstance(value, list) and value:
+                        filter_clauses.append("document_id != ALL(%s)")
+                        filter_params.append(list(value))
                 else:
                     raise ValueError(
                         f"Unsupported filter key '{key}' for hybrid search. "

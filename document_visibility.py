@@ -88,6 +88,66 @@ def visibility_where_clause_for_document(
         return "document_id = %s", [document_id]
 
 
+def get_hidden_document_ids(user_id: Optional[str] = None, is_admin: bool = False) -> List[str]:
+    """Return document_ids the given user must NOT see in search results.
+
+    These are private documents owned by someone else. Admins see everything
+    (empty list). A caller with no user context (user_id=None but auth
+    enforced) is hidden from ALL private documents.
+    """
+    if is_admin:
+        return []
+    try:
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            if user_id:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT document_id FROM document_chunks
+                    WHERE visibility = 'private' AND owner_id IS NOT NULL AND owner_id != %s
+                    """,
+                    (user_id,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT document_id FROM document_chunks
+                    WHERE visibility = 'private' AND owner_id IS NOT NULL
+                    """
+                )
+            return [row[0] for row in cursor.fetchall()]
+    except Exception as e:
+        # Silently failing open would leak private docs into search results.
+        # Re-raise so the search endpoint errors instead of leaking.
+        logger.error("Failed to compute hidden document ids: %s", e)
+        raise
+
+
+def search_exclusions_for_key_record(key_record: Optional[Dict[str, Any]]) -> List[str]:
+    """Resolve the searching identity from an API key record and return the
+    document_ids that must be excluded from their search results.
+
+    - key_record None (auth disabled / local single-user mode): no filtering.
+    - Key linked to an admin user: no filtering.
+    - Key linked to a regular user: hide other users' private docs.
+    - Key not linked to any user: hide all private docs.
+
+    Anything that is not a dict (e.g. an unresolved FastAPI ``Depends``
+    sentinel when the endpoint is invoked directly in tests) is treated as
+    no auth context.
+    """
+    if not isinstance(key_record, dict):
+        return []
+    from users import get_user_by_api_key
+    from role_permissions import has_permission
+
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        return get_hidden_document_ids(user_id=None, is_admin=False)
+    is_admin = has_permission(user.get("role", ""), "system.admin")
+    return get_hidden_document_ids(user_id=user["id"], is_admin=is_admin)
+
+
 # ---------------------------------------------------------------------------
 # Ownership management
 # ---------------------------------------------------------------------------

@@ -123,6 +123,62 @@ Notes:
 - The server must be migrated (`alembic upgrade head`) to at least
   migration `020` for collection grants.
 
+## Validating Team mode (staging checklist)
+
+Before rolling Team mode out on your internal server, you can validate the
+entire access-control stack on any machine with Docker — no external hosting
+is involved at any point (the server in this product is always *your*
+machine, on *your* network).
+
+### 1. Start the stack with auth enforced
+
+The same image you already run; auth is a runtime switch:
+
+```bash
+APP_IMAGE=ghcr.io/valginer0/pgvectorragindexer:latest \
+  docker compose -f docker-compose.yml -f docker-compose.smoke.yml up -d
+docker compose run --rm app alembic upgrade head
+```
+
+(`docker-compose.smoke.yml` sets `API_REQUIRE_AUTH=true`. It also sets
+`API_AUTH_FORCE_ALL=true`, which is for CI — on a real server omit it so the
+desktop app running on the server machine itself stays exempt while all
+remote connections require keys.)
+
+### 2. Install a Team license and create users
+
+```bash
+# Bootstrap the first (admin) API key
+docker compose run --rm app python -c \
+  "from auth import create_api_key_record; print(create_api_key_record('admin')['key'])"
+
+# Create users linked to keys (admin key required; Team edition)
+curl -X POST "$BASE/api/v1/users" -H "X-API-Key: $ADMIN_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"email": "alice@example.com", "role": "researcher", "api_key_id": 2}'
+```
+
+### 3. Connect a desktop client from another machine
+
+Point the desktop app's server URL at the host's **LAN address** (not
+`localhost`) — e.g. `http://192.168.1.20:8000` — and enter that user's API
+key. A non-loopback connection is exactly what your team members' desktops
+will be: auth enforced, role applied.
+
+### 4. What to verify
+
+- [ ] Search without a key → rejected (401)
+- [ ] User A's private document never appears in user B's search results
+- [ ] A role granted one collection only gets results from that collection
+- [ ] An admin key sees everything
+- [ ] Exceeding licensed seats adds `X-License-Overage` warning headers
+      (requests keep working — seat watching, not lockout)
+
+The repository's CI runs the deployment half of this automatically on every
+push (`.github/workflows/fresh-image-smoke.yml`): fresh image, clean
+volumes, migrations, enforced auth, index → search → restart persistence →
+drift self-heal.
+
 ## Related guides
 
 - [DEPLOYMENT.md](DEPLOYMENT.md) — running the shared server

@@ -1,0 +1,18 @@
+# CI override for the fresh-image deployment smoke (and a reference for
+# enabling enforced auth on a real server — see docs/ACCESS_CONTROL_GUIDE.md).
+#
+# Usage:
+#   APP_IMAGE=<image> docker compose -f docker-compose.yml -f docker-compose.smoke.yml up -d
+#
+# API_REQUIRE_AUTH enables API-key auth (remote connections must present a
+# key; loopback is exempt). API_AUTH_FORCE_ALL removes the loopback
+# exemption so CI's localhost curls exercise the enforced-auth path — do NOT
+# set it on a real server or the on-box desktop app will need a key too.
+services:
+  app:
+    restart: "no"
+    environment:
+      API_REQUIRE_AUTH: "true"
+      API_AUTH_FORCE_ALL: "true"
+  db:
+    restart: "no"

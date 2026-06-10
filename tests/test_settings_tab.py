@@ -5,7 +5,6 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QLabel
 
 from desktop_app.ui.settings_tab import SettingsTab
@@ -101,23 +100,6 @@ def test_dispatcher_none_action_must_be_alone(mock_tab):
     
     with pytest.raises(ValueError, match="UiAction.NONE must be the only action"):
         mock_tab._handle_controller_result(result, title="Mix")
-
-
-def test_search_panel_document_level_checkbox_wires_config(qapp):
-    """The experimental document-level search checkbox reads and writes app config."""
-    setter = MagicMock()
-
-    with patch("desktop_app.ui.settings_tab.qta.icon", return_value=QIcon()), \
-         patch("desktop_app.utils.app_config.get_document_level_search_enabled", return_value=False), \
-         patch("desktop_app.utils.app_config.set_document_level_search_enabled", setter):
-        tab = SettingsTab(docker_manager=MagicMock())
-
-        checkbox = tab._document_level_search_checkbox
-        assert checkbox.isChecked() is False
-
-        checkbox.setChecked(True)
-
-    setter.assert_called_once_with(True)
 
 
 

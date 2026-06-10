@@ -81,7 +81,7 @@ def test_perform_search_success(search_tab):
         # Verify args
         args = MockWorker.call_args
         assert args[0][1] == "test query"
-        assert args[0][2] == 100
+        assert args[0][2] == 5  # candidate_limit = top_k spin value
         assert args[0][3] == 0.5
         assert args[0][4] == "cosine"
         
@@ -89,15 +89,15 @@ def test_perform_search_success(search_tab):
         assert not search_tab.search_btn.isEnabled()
 
 
-def test_perform_search_can_use_document_level_backend_option(search_tab):
-    """Experimental document-level search sends a visible-limit request to the API."""
+def test_perform_search_always_sends_document_level_grouping(search_tab):
+    """Document-level grouping is now always-on: every search sends the
+    group_by_document + literal_tail_suppression options to the API."""
     search_tab.query_input.setText("EV6")
     search_tab.top_k_spin.setValue(5)
     search_tab.min_score_spin.setValue(0.3)
     search_tab.metric_combo.setCurrentText("cosine")
 
-    with patch("desktop_app.ui.search_tab.app_config.get_document_level_search_enabled", return_value=True), \
-         patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
+    with patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
         search_tab.perform_search()
 
         args = MockWorker.call_args
@@ -201,17 +201,17 @@ def test_search_finished_success(search_tab):
     assert search_tab.results_table.rowCount() == 2
     assert search_tab.results_table.item(0, 0).text() == "0.9000"  # Score
     assert search_tab.results_table.item(0, 2).text() == "/path/1"  # Source (column 2 now)
-    assert search_tab.status_label.text() == "Found 2 results"
+    assert search_tab.status_label.text() == "Found 2 results (1 per file)"
 
 
 def test_search_finished_marks_local_results_one_per_file(search_tab):
-    with patch("desktop_app.ui.search_tab.app_config.get_document_level_search_enabled", return_value=True):
-        search_tab.search_finished(
-            True,
-            [{"score": 0.9, "source_uri": "/path/1", "text_content": "content 1", "chunk_index": 1}],
-        )
+    # Document-level grouping is always-on, so the status always carries the suffix.
+    search_tab.search_finished(
+        True,
+        [{"score": 0.9, "source_uri": "/path/1", "text_content": "content 1", "chunk_index": 1}],
+    )
 
-        assert search_tab.status_label.text() == "Found 1 result (1 per file)"
+    assert search_tab.status_label.text() == "Found 1 result (1 per file)"
 
 def test_search_finished_failure(search_tab):
     """Test handling of search failure."""

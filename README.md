@@ -4,6 +4,7 @@
 > **Start here:**
 > - 🟢 **Most Users (Desktop App)**: [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md)
 > - 🏢 **Teams & Organizations**: [DEPLOYMENT.md](docs/DEPLOYMENT.md) — one shared server, many desktop clients
+> - 🔐 **Access Control**: [ACCESS_CONTROL_GUIDE.md](docs/ACCESS_CONTROL_GUIDE.md) — roles, private documents & collections
 > - ⚡ **Quick 5-Minute Setup (Docker)**: [QUICK_START.md](QUICK_START.md)
 > - 🔵 **Usage & API Reference**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
 

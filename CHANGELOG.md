@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- feat(search): per-user document visibility enforced in search results on
+  both engines (LanceDB and PostgreSQL) — other users' private documents are
+  excluded; admins and local mode unaffected
+- feat(access): documents uploaded while authenticated are automatically
+  owned by the uploading user, making private visibility effective
+- feat(desktop): Make Private / Make Shared context-menu actions in the
+  Documents tab
+- feat(access): role-based collection grants — restrict a role to document
+  collections (`namespace`); admin endpoints under `/roles/.../collections`;
+  enforced in search on both engines. See `docs/ACCESS_CONTROL_GUIDE.md`
+- docs: new public Access Control Guide (users, roles, visibility,
+  collections)
+
 ## [2.15.0] - 2026-05-19
 
 ### Added

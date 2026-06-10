@@ -236,3 +236,6 @@ venv-windows/
 
 # Local WSL convenience shims (e.g. scripts/bin/gh -> Windows gh.exe); machine-specific
 scripts/bin/
+
+# Local agent scratch + large LanceDB smoke corpora (1+ GB, machine-specific)
+.codex/

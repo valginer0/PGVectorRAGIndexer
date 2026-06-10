@@ -145,10 +145,40 @@ docker compose run --rm app alembic upgrade head
 desktop app running on the server machine itself stays exempt while all
 remote connections require keys.)
 
-### 2. Install a Team license and create users
+### 2. Install a Team license
+
+Licensing is fully offline — there is no license server and the app never
+phones home. A license is a signed token (issued by the vendor); the app
+verifies it with a built-in public key. **No license = Community edition**
+(team features off). **Team license = Team edition** (users, roles, seat
+watching).
+
+Install the license token one of two ways:
 
 ```bash
-# Bootstrap the first (admin) API key
+# Option A — license file on the server host (picked up at startup;
+# docker-compose already mounts this folder into the container):
+mkdir -p ~/.pgvector-license
+cp license.key ~/.pgvector-license/license.key
+docker compose restart app
+
+# Option B — via the API. Security note: this endpoint only accepts
+# requests from the server machine itself (loopback), even with a key:
+curl -X POST "http://localhost:8000/api/v1/license/install" \
+  -H "X-API-Key: $ADMIN_KEY" -H "Content-Type: application/json" \
+  -d '{"license_key": "<token>"}'
+
+# Verify the edition took effect:
+curl "http://localhost:8000/license"
+```
+
+Multiple keys stack: seats add up across valid keys (e.g. buy 10 seats now,
+add 5 later). `"action": "replace"` swaps the whole stack instead.
+
+### 3. Bootstrap the admin key and create users
+
+```bash
+# First (admin) API key — run on the server:
 docker compose run --rm app python -c \
   "from auth import create_api_key_record; print(create_api_key_record('admin')['key'])"
 
@@ -158,14 +188,14 @@ curl -X POST "$BASE/api/v1/users" -H "X-API-Key: $ADMIN_KEY" \
   -d '{"email": "alice@example.com", "role": "researcher", "api_key_id": 2}'
 ```
 
-### 3. Connect a desktop client from another machine
+### 4. Connect a desktop client from another machine
 
 Point the desktop app's server URL at the host's **LAN address** (not
 `localhost`) — e.g. `http://192.168.1.20:8000` — and enter that user's API
 key. A non-loopback connection is exactly what your team members' desktops
 will be: auth enforced, role applied.
 
-### 4. What to verify
+### 5. What to verify
 
 - [ ] Search without a key → rejected (401)
 - [ ] User A's private document never appears in user B's search results

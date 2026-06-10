@@ -6,6 +6,7 @@ process-safe file locking, and parent-stratified hybrid search.
 """
 
 import logging
+import math
 import os
 import json
 import xxhash
@@ -20,6 +21,28 @@ logger = logging.getLogger(__name__)
 PARENT_TABLE = "parent_documents"
 CHUNK_TABLE = "document_chunks"
 VECTOR_METRIC = "cosine"
+
+# Defaults for the auto-sized semantic rescue pool (see auto_semantic_pool).
+SEMANTIC_POOL_FLOOR_DEFAULT = 100
+SEMANTIC_POOL_CAP_DEFAULT = 1000
+
+
+def auto_semantic_pool(
+    chunk_count: int,
+    floor: int = SEMANTIC_POOL_FLOOR_DEFAULT,
+    cap: int = SEMANTIC_POOL_CAP_DEFAULT,
+) -> int:
+    """Auto-size the semantic rescue pool from the live corpus size.
+
+    A frozen pool (e.g. 100) covers a shrinking fraction of the corpus as it
+    grows, silently degrading semantic recall on lexically-weak documents. We
+    scale the scan depth as sqrt(chunk_count) -- a sub-linear compromise that
+    grows enough to keep pace, yet slow enough to bound latency -- and clamp it
+    to [floor, cap] so search has a guaranteed speed ceiling on huge corpora.
+    """
+    if chunk_count <= 0:
+        return floor
+    return max(floor, min(cap, round(math.sqrt(chunk_count))))
 
 
 def generate_chunk_id(document_id: str, chunk_index: int) -> int:
@@ -359,7 +382,9 @@ class BackendLanceDBAdapter:
         parent_limit: int = 5,
         child_limit: int = 10,
         child_parent_spill_ratio: float = 1.0,
-        semantic_candidate_pool: int = 100,
+        semantic_candidate_pool: Optional[int] = None,
+        semantic_pool_floor: int = SEMANTIC_POOL_FLOOR_DEFAULT,
+        semantic_pool_cap: int = SEMANTIC_POOL_CAP_DEFAULT,
         filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
@@ -373,7 +398,18 @@ class BackendLanceDBAdapter:
         """
         parents = self.db.open_table(PARENT_TABLE)
         chunks = self.db.open_table(CHUNK_TABLE)
-        
+
+        # Auto-size the semantic rescue pool from the live corpus when not pinned,
+        # so recall keeps pace as the corpus grows (count_rows is a cheap metadata read).
+        if semantic_candidate_pool is None:
+            semantic_candidate_pool = auto_semantic_pool(
+                chunks.count_rows(), semantic_pool_floor, semantic_pool_cap
+            )
+            logger.debug(
+                "Auto-sized semantic_candidate_pool=%d (chunks=%d, floor=%d, cap=%d)",
+                semantic_candidate_pool, chunks.count_rows(), semantic_pool_floor, semantic_pool_cap,
+            )
+
         # 1. Lexical Path: Search parent documents using FTS
         parent_search = parents.search(query_text, query_type="fts")
         if filters:
@@ -395,8 +431,14 @@ class BackendLanceDBAdapter:
             if chunk_filter:
                 global_chunk_search = global_chunk_search.where(chunk_filter, prefilter=True)
                 
-        # Retrieve global candidate chunks to allow semantic rescue of lexically-weak docs
-        global_chunk_rows = global_chunk_search.limit(semantic_candidate_pool).to_arrow().to_pylist()
+        # Retrieve global candidate chunks to allow semantic rescue of lexically-weak docs.
+        # This stage only needs the parent document_id (+ implicit _distance for rank), so we
+        # select just that column -- skipping embedding/text payload makes deep scans much cheaper.
+        global_chunk_rows = (
+            global_chunk_search.limit(semantic_candidate_pool)
+            .select(["document_id"])
+            .to_arrow().to_pylist()
+        )
         
         vector_parent_ranks = {}
         vector_rank_counter = 1

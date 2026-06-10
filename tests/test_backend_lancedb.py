@@ -349,15 +349,30 @@ def test_stratified_children_spill_ratio(tmp_path):
 
 
 def test_semantic_candidate_pool_config():
-    """The semantic candidate pool is configurable, defaults to 100, and must be positive."""
+    """The pool defaults to None (auto-sized) and accepts a positive override."""
     from config import RetrievalConfig
 
-    # Default is 100 (margin over observed ~rank-46 semantic matches).
-    assert RetrievalConfig().lancedb_semantic_candidate_pool == 100
+    # Default is None => adapter auto-sizes from the live corpus at search time.
+    assert RetrievalConfig().lancedb_semantic_candidate_pool is None
+    # Floor/cap have sensible defaults.
+    assert RetrievalConfig().lancedb_semantic_pool_floor == 100
+    assert RetrievalConfig().lancedb_semantic_pool_cap == 1000
 
-    # Custom positive value is accepted.
+    # An explicit positive value pins a fixed pool.
     assert RetrievalConfig(lancedb_semantic_candidate_pool=250).lancedb_semantic_candidate_pool == 250
 
-    # Non-positive values are rejected by the validator.
+    # Non-positive overrides are rejected by the validator.
     with pytest.raises(Exception):
         RetrievalConfig(lancedb_semantic_candidate_pool=0)
+
+
+def test_auto_semantic_pool_sizing():
+    """sqrt-based auto-sizing is clamped to [floor, cap]."""
+    from lancedb_adapter import auto_semantic_pool
+
+    assert auto_semantic_pool(0) == 100              # empty corpus -> floor
+    assert auto_semantic_pool(100) == 100            # sqrt=10 -> clamped up to floor
+    assert auto_semantic_pool(129_189) == 359        # ~sqrt(N)
+    assert auto_semantic_pool(10_000_000) == 1000    # clamped down to cap
+    # Custom bounds are honoured.
+    assert auto_semantic_pool(1_000_000, floor=50, cap=500) == 500

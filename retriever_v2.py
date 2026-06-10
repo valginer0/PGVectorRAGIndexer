@@ -413,7 +413,10 @@ class DocumentRetriever:
             parent_limit=max(5, top_k),
             child_limit=top_k,
             child_parent_spill_ratio=spill_ratio,
-            semantic_candidate_pool=getattr(self.config.retrieval, "lancedb_semantic_candidate_pool", 100),
+            # None => adapter auto-sizes the pool as sqrt(chunk_count), clamped to [floor, cap].
+            semantic_candidate_pool=getattr(self.config.retrieval, "lancedb_semantic_candidate_pool", None),
+            semantic_pool_floor=getattr(self.config.retrieval, "lancedb_semantic_pool_floor", 100),
+            semantic_pool_cap=getattr(self.config.retrieval, "lancedb_semantic_pool_cap", 1000),
             filters=filters
         )
 

@@ -771,6 +771,26 @@ DB_MAX_OVERFLOW=40
 DB_POOL_TIMEOUT=30
 ```
 
+### Search Retrieval Tuning
+
+LanceDB parent-child search uses a "semantic rescue" pool — a global vector
+scan that surfaces relevant documents keyword search would miss. By default the
+pool **auto-sizes from the live corpus** as `sqrt(chunk_count)`, clamped to a
+floor/cap, so recall keeps pace as the index grows without manual tuning. You
+normally don't need to touch this; the knobs exist for large-corpus tuning:
+
+```bash
+# Pin a fixed pool (disables auto-sizing); leave unset for auto.
+RETRIEVAL_LANCEDB_SEMANTIC_CANDIDATE_POOL=500
+# Bounds for the auto-sized pool (defaults shown).
+RETRIEVAL_LANCEDB_SEMANTIC_POOL_FLOOR=100   # never scan shallower than this
+RETRIEVAL_LANCEDB_SEMANTIC_POOL_CAP=1000    # latency ceiling on huge corpora
+```
+
+Raising the cap improves recall on very large (10M+ chunk) indexes at the cost
+of higher search latency. See `experiments/semantic_pool_sizing/` for the
+measurements behind these defaults.
+
 ##  Monitoring
 
 ### Health Checks

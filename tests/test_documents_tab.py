@@ -389,3 +389,70 @@ def test_tree_stats_loaded_lancedb_available_behind(documents_tab):
     assert "color: #f59e0b" in documents_tab.status_stats_label.styleSheet()
     assert documents_tab._polling_timer is not None and documents_tab._polling_timer.isActive()
 
+
+
+# ---------------------------------------------------------------------------
+# Document visibility context-menu actions
+# ---------------------------------------------------------------------------
+
+
+def test_set_visibility_shared_updates_status(documents_tab):
+    """Successful 'Make Shared' shows confirmation in the status label."""
+    documents_tab.api_client.set_document_visibility = MagicMock()
+
+    documents_tab.set_document_visibility("doc-1", "shared")
+
+    documents_tab.api_client.set_document_visibility.assert_called_once_with(
+        "doc-1", visibility="shared"
+    )
+    assert "shared" in documents_tab.status_label.text()
+
+
+def test_set_visibility_private_with_owner_updates_status(documents_tab):
+    documents_tab.api_client.set_document_visibility = MagicMock()
+    documents_tab.api_client.get_document_visibility = MagicMock(
+        return_value={"owner_id": "u-1", "visibility": "private"}
+    )
+
+    documents_tab.set_document_visibility("doc-1", "private")
+
+    assert "private" in documents_tab.status_label.text()
+
+
+def test_set_visibility_private_without_owner_warns(documents_tab):
+    """Private without an owner is ineffective — the user must be told."""
+    documents_tab.api_client.set_document_visibility = MagicMock()
+    documents_tab.api_client.get_document_visibility = MagicMock(
+        return_value={"owner_id": None, "visibility": "private"}
+    )
+
+    with patch.object(QMessageBox, "information") as info_box:
+        documents_tab.set_document_visibility("doc-1", "private")
+
+    info_box.assert_called_once()
+    assert "no owner" in info_box.call_args[0][2]
+
+
+def test_set_visibility_api_failure_shows_error(documents_tab):
+    documents_tab.api_client.set_document_visibility = MagicMock(
+        side_effect=RuntimeError("backend down")
+    )
+
+    with patch.object(QMessageBox, "critical") as critical_box:
+        documents_tab.set_document_visibility("doc-1", "private")
+
+    critical_box.assert_called_once()
+
+
+def test_display_documents_stores_document_id_for_menu(documents_tab):
+    """Rows must carry document_id so the context menu can act on them."""
+    docs = [{
+        "source_uri": "/tmp/a.txt",
+        "document_id": "doc-abc",
+        "chunk_count": 1,
+        "metadata": {},
+    }]
+    documents_tab.display_documents(docs)
+
+    item = documents_tab.documents_table.item(0, 0)
+    assert item.data(Qt.UserRole + 1) == "doc-abc"

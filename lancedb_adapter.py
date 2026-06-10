@@ -566,6 +566,17 @@ class BackendLanceDBAdapter:
                         "'{}'".format(str(doc_id).replace("'", "''")) for doc_id in value
                     )
                     clauses.append(f"document_id NOT IN ({safe_ids})")
+            elif key == 'allowed_namespaces':
+                if isinstance(value, list):
+                    if value:
+                        safe_ns = ", ".join(
+                            "'{}'".format(str(ns).replace("'", "''")) for ns in value
+                        )
+                        clauses.append(f"namespace IN ({safe_ns})")
+                    else:
+                        # Empty allowlist = access to nothing (fail closed);
+                        # document_id is non-nullable so this matches no rows.
+                        clauses.append("document_id IS NULL")
 
         return " AND ".join(clauses) if clauses else None
 

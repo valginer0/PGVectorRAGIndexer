@@ -659,6 +659,14 @@ class DocumentRepository:
                     if isinstance(value, list) and value:
                         where_clauses.append("document_id != ALL(%s)")
                         params.append(list(value))
+                elif key == 'allowed_namespaces':
+                    if isinstance(value, list):
+                        if value:
+                            where_clauses.append("metadata->>'namespace' = ANY(%s)")
+                            params.append(list(value))
+                        else:
+                            # Empty allowlist = access to nothing (fail closed)
+                            where_clauses.append("FALSE")
                 else:
                     # Direct column match (e.g., document_id, source_uri)
                     where_clauses.append(f"{key} = %s")

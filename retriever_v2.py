@@ -504,6 +504,14 @@ class DocumentRetriever:
                     if isinstance(value, list) and value:
                         filter_clauses.append("document_id != ALL(%s)")
                         filter_params.append(list(value))
+                elif key == 'allowed_namespaces':
+                    if isinstance(value, list):
+                        if value:
+                            filter_clauses.append("metadata->>'namespace' = ANY(%s)")
+                            filter_params.append(list(value))
+                        else:
+                            # Empty allowlist = access to nothing (fail closed)
+                            filter_clauses.append("FALSE")
                 else:
                     raise ValueError(
                         f"Unsupported filter key '{key}' for hybrid search. "
@@ -1032,6 +1040,14 @@ class DocumentRetriever:
                     if isinstance(value, list) and value:
                         filter_clauses.append("document_id != ALL(%s)")
                         filter_params.append(list(value))
+                elif key == 'allowed_namespaces':
+                    if isinstance(value, list):
+                        if value:
+                            filter_clauses.append("metadata->>'namespace' = ANY(%s)")
+                            filter_params.append(list(value))
+                        else:
+                            # Empty allowlist = access to nothing (fail closed)
+                            filter_clauses.append("FALSE")
                 else:
                     raise ValueError(
                         f"Unsupported filter key '{key}' for hybrid search. "

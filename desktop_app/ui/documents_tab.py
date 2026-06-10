@@ -365,8 +365,9 @@ class DocumentsTab(QWidget):
         self.documents_table.setRowCount(len(documents))
         
         for i, doc in enumerate(documents):
-            # Source URI
+            # Source URI (document_id stored for context-menu actions)
             source_item = self._create_source_item(doc.get('source_uri', ''))
+            source_item.setData(Qt.UserRole + 1, doc.get('document_id'))
             self.documents_table.setItem(i, 0, source_item)
             
             # Document Type: prefer metadata.type, fallback to document_type
@@ -517,8 +518,23 @@ class DocumentsTab(QWidget):
         reindex_action = menu.addAction("Reindex Now")
         remove_action = menu.addAction("Remove from Recent")
 
+        document_id = item.data(Qt.UserRole + 1)
+        make_private_action = None
+        make_shared_action = None
+        if document_id:
+            menu.addSeparator()
+            make_private_action = menu.addAction("Make Private")
+            make_shared_action = menu.addAction("Make Shared")
+
         action = menu.exec(self.documents_table.viewport().mapToGlobal(pos))
         if action is None:
+            return
+
+        if document_id and action == make_private_action:
+            self.set_document_visibility(document_id, "private")
+            return
+        if document_id and action == make_shared_action:
+            self.set_document_visibility(document_id, "shared")
             return
 
         if action == open_action:
@@ -535,6 +551,40 @@ class DocumentsTab(QWidget):
             self.source_manager.trigger_reindex_path(source_uri)
         elif action == remove_action:
             self.source_manager.remove_entry(source_uri)
+
+    def set_document_visibility(self, document_id: str, visibility: str) -> None:
+        """Set a document's visibility via the backend (shared/private)."""
+        try:
+            self.api_client.set_document_visibility(document_id, visibility=visibility)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Visibility Change Failed",
+                f"Could not set the document to {visibility}:\n{exc}",
+            )
+            return
+
+        if visibility == "private":
+            owner_id = None
+            try:
+                info = self.api_client.get_document_visibility(document_id) or {}
+                owner_id = info.get("owner_id")
+            except Exception:
+                pass
+            if not owner_id:
+                QMessageBox.information(
+                    self,
+                    "Private — Owner Needed",
+                    "The document is marked private, but it has no owner yet, "
+                    "so it remains visible to everyone.\n\n"
+                    "Documents uploaded while signed in get an owner "
+                    "automatically; for existing documents an admin can assign "
+                    "one via the ownership transfer API.",
+                )
+                return
+
+        self.status_label.setText(f"Document set to {visibility}")
+        self.status_label.setStyleSheet("color: #22c55e; font-style: italic;")
 
     def open_source_path(self, path: str) -> None:
         """Open the given path with the OS default application."""

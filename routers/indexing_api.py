@@ -26,8 +26,30 @@ logger = logging.getLogger(__name__)
 indexing_router = APIRouter(tags=["Indexing"])
 
 
-@indexing_router.post("/index", response_model=IndexResponse, dependencies=[Depends(require_api_key)])
-async def index_document(request: IndexRequest):
+def _assign_owner_if_authenticated(key_record: Optional[dict], document_id: Optional[str]) -> None:
+    """Auto-assign document ownership to the uploading user (auth mode only).
+
+    Best-effort: a failure leaves the document with the default shared
+    visibility (same as before this feature) and must not fail the indexing
+    that already succeeded.
+    """
+    if not document_id:
+        return
+    try:
+        from document_visibility import resolve_user_id_for_key_record, set_document_owner
+        user_id = resolve_user_id_for_key_record(key_record)
+        if user_id:
+            set_document_owner(document_id, user_id)
+            logger.info(f"Assigned owner {user_id} to document {document_id}")
+    except Exception as e:
+        logger.warning(f"Could not auto-assign owner for document {document_id}: {e}")
+
+
+@indexing_router.post("/index", response_model=IndexResponse)
+async def index_document(
+    request: IndexRequest,
+    key_record: Optional[dict] = Depends(require_api_key),
+):
     """Index a document from URI."""
     from indexing_runs import start_run, complete_run
     run_id = start_run(trigger="api", source_uri=request.source_uri)
@@ -49,6 +71,8 @@ async def index_document(request: IndexRequest):
 
         added = 1 if result.get('status') == 'success' else 0
         skipped = 1 if result.get('status') == 'skipped' else 0
+        if added:
+            _assign_owner_if_authenticated(key_record, result.get('document_id'))
         complete_run(run_id, status="success", files_scanned=1,
                      files_added=added, files_skipped=skipped)
         return IndexResponse(**result)
@@ -64,14 +88,15 @@ async def index_document(request: IndexRequest):
         )
 
 
-@indexing_router.post("/upload-and-index", response_model=IndexResponse, dependencies=[Depends(require_api_key)])
+@indexing_router.post("/upload-and-index", response_model=IndexResponse)
 async def upload_and_index(
     file: UploadFile = File(...),
     force_reindex: Any = Form(default=False),
     custom_source_uri: Optional[str] = Form(default=None),
     document_type: Optional[str] = Form(default=None),
     metadata_json: Optional[str] = Form(default=None, alias="metadata"),
-    ocr_mode: Optional[str] = Form(default=None)
+    ocr_mode: Optional[str] = Form(default=None),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
     """
     Upload a file and index it immediately.
@@ -258,6 +283,7 @@ async def upload_and_index(
 
         logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
 
+        _assign_owner_if_authenticated(key_record, processed_doc.document_id)
         complete_run(run_id, status="success", files_scanned=1,
                      files_added=1 if not force_reindex else 0,
                      files_updated=1 if force_reindex else 0)

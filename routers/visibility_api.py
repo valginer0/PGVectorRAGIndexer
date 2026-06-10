@@ -164,3 +164,76 @@ async def bulk_set_visibility_endpoint(request: Request):
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to bulk set visibility: {str(e)}",
         )
+
+
+# ---------------------------------------------------------------------------
+# Role collection grants (document-set access control)
+# ---------------------------------------------------------------------------
+
+
+@visibility_router.get("/roles/collections", dependencies=[Depends(require_admin)])
+async def list_collection_grants_endpoint(role: Optional[str] = Query(default=None)):
+    """List role→collection grants (admin only). Optionally filter by role."""
+    from collection_grants import list_grants
+    try:
+        grants = list_grants(role=role)
+        return {"grants": grants, "count": len(grants)}
+    except Exception as e:
+        logger.error(f"Failed to list collection grants: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to list collection grants: {str(e)}",
+        )
+
+
+@visibility_router.put("/roles/{role}/collections/{namespace}", dependencies=[Depends(require_admin)])
+async def grant_collection_endpoint(role: str, namespace: str):
+    """Grant a role read access to a collection/namespace (admin only).
+
+    Use namespace '*' to make a listed role unrestricted. A role with no
+    grants at all is unrestricted (grants are opt-in per role).
+    """
+    from collection_grants import grant_collection
+    try:
+        if not grant_collection(role, namespace):
+            raise HTTPException(status_code=404, detail=f"Unknown role: {role}")
+        from activity_log import log_activity
+        log_activity(
+            "role.collection_granted",
+            details={"role": role, "namespace": namespace},
+        )
+        return {"ok": True, "role": role, "namespace": namespace}
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Failed to grant collection: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to grant collection: {str(e)}",
+        )
+
+
+@visibility_router.delete("/roles/{role}/collections/{namespace}", dependencies=[Depends(require_admin)])
+async def revoke_collection_endpoint(role: str, namespace: str):
+    """Revoke a role's access to a collection/namespace (admin only)."""
+    from collection_grants import revoke_collection
+    try:
+        deleted = revoke_collection(role, namespace)
+        if not deleted:
+            raise HTTPException(status_code=404, detail="Grant not found")
+        from activity_log import log_activity
+        log_activity(
+            "role.collection_revoked",
+            details={"role": role, "namespace": namespace},
+        )
+        return {"ok": True, "role": role, "namespace": namespace}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to revoke collection: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to revoke collection: {str(e)}",
+        )

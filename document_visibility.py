@@ -123,6 +123,20 @@ def get_hidden_document_ids(user_id: Optional[str] = None, is_admin: bool = Fals
         raise
 
 
+def resolve_user_id_for_key_record(key_record: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Return the user id linked to an API key record, or None.
+
+    None means no user context: auth disabled (local mode), an unresolved
+    dependency sentinel, or a key not linked to any user.
+    """
+    if not isinstance(key_record, dict):
+        return None
+    from users import get_user_by_api_key
+
+    user = get_user_by_api_key(key_record["id"])
+    return user["id"] if user else None
+
+
 def search_exclusions_for_key_record(key_record: Optional[Dict[str, Any]]) -> List[str]:
     """Resolve the searching identity from an API key record and return the
     document_ids that must be excluded from their search results.

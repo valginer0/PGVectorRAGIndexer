@@ -222,6 +222,17 @@ async def search_documents(
         effective_filters = dict(request.filters) if request.filters else {}
         if excluded_ids:
             effective_filters["excluded_document_ids"] = excluded_ids
+
+        # Role collection grants: a role with grants is restricted to its
+        # granted namespaces (None = unrestricted). Client-supplied
+        # allowed_namespaces is overwritten — it must never widen access.
+        from collection_grants import search_allowed_namespaces_for_key_record
+        allowed_namespaces = search_allowed_namespaces_for_key_record(key_record)
+        if allowed_namespaces is not None:
+            effective_filters["allowed_namespaces"] = allowed_namespaces
+        elif "allowed_namespaces" in effective_filters:
+            del effective_filters["allowed_namespaces"]
+
         effective_filters = effective_filters or None
 
         start_time = time.time()

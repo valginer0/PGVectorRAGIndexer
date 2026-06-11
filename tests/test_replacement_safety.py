@@ -9,6 +9,7 @@ Covers two P1 findings:
 """
 
 import io
+import hashlib
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -292,3 +293,49 @@ async def test_upload_replacement_restores_old_doc_on_failure(monkeypatch):
     # then the backup restored.
     assert repo.delete_document.call_count == 2
     assert inserts[-1] == BACKUP_CHUNKS
+
+
+async def test_upload_replacement_restores_old_doc_on_lancedb_failure(monkeypatch):
+    import routers.indexing_api as mod
+    from fastapi import HTTPException
+    from starlette.datastructures import UploadFile as StarletteUploadFile
+
+    repo = _repo_with_existing(file_hash="different-from-upload")
+    inserts = []
+    repo.insert_chunks.side_effect = lambda chunks: inserts.append(chunks) or len(chunks)
+
+    fake_idx = MagicMock()
+    fake_idx.repository = repo
+    fake_idx.processor.process.return_value = _fake_processed_doc()
+    fake_idx.embedding_service.encode_batch.side_effect = (
+        lambda texts, show_progress=False: [[0.1, 0.2] for _ in texts]
+    )
+
+    adapter = MagicMock()
+    adapter.upsert_document.side_effect = RuntimeError("LanceDB disk full")
+
+    monkeypatch.setattr(mod, "get_indexer", lambda: fake_idx)
+    monkeypatch.setattr("services.get_lancedb_adapter", lambda: adapter)
+    monkeypatch.setattr(
+        "config.get_config",
+        lambda: SimpleNamespace(retrieval=SimpleNamespace(lancedb_enabled=True)),
+    )
+    _patch_runs(monkeypatch, {})
+
+    upload = StarletteUploadFile(file=io.BytesIO(b"new content"), filename="t.txt")
+
+    with pytest.raises(HTTPException):
+        await mod.upload_and_index(
+            file=upload,
+            force_reindex=True,
+            custom_source_uri=None,
+            document_type=None,
+            metadata_json=None,
+            ocr_mode=None,
+            key_record=None,
+        )
+
+    document_id = hashlib.sha256(b"t.txt").hexdigest()[:16]
+    assert len(inserts) == 2
+    assert inserts[-1] == BACKUP_CHUNKS
+    adapter.delete_document.assert_called_with(document_id)

@@ -375,11 +375,13 @@ async def upload_and_index(
         source = custom_source_uri or file.filename
         logger.warning(f"Encrypted PDF detected: {source}")
 
-        # Record for later querying
+        # Record for later querying (uploader recorded so the listing can be
+        # scoped to the caller's own entries in team mode)
         encrypted_pdfs_encountered.append({
             "source_uri": source,
             "filename": file.filename,
-            "detected_at": datetime.now(timezone.utc).isoformat()
+            "detected_at": datetime.now(timezone.utc).isoformat(),
+            "uploader_key_id": key_record["id"] if isinstance(key_record, dict) else None,
         })
 
         complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
@@ -524,14 +526,16 @@ async def force_release_document_lock(request: Request):
         )
 
 
-@indexing_router.get("/documents/locks", tags=["Document Locks"], dependencies=[Depends(require_api_key)])
+@indexing_router.get("/documents/locks", tags=["Document Locks"])
 async def list_document_locks(
     client_id: Optional[str] = Query(default=None),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
-    """List all active document locks."""
+    """List active document locks (locks on documents hidden from the caller are omitted)."""
     from document_locks import list_locks
+    from document_visibility import filter_entries_by_hidden_source
     try:
-        locks = list_locks(client_id=client_id)
+        locks = filter_entries_by_hidden_source(list_locks(client_id=client_id), key_record)
         return {"locks": locks, "count": len(locks)}
     except Exception as e:
         logger.error(f"Failed to list locks: {e}")

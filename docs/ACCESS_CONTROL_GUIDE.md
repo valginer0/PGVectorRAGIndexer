@@ -128,14 +128,22 @@ Notes:
   document's visibility requires `documents.visibility` and, unless the
   role has `documents.visibility.all`, only works on documents the caller
   owns — so nobody can flip your private document to shared.
-- **Overwrite protection:** uploading a file with the same name as a
-  document owned by another user is rejected — only the owner or an admin
-  can replace it. (Re-uploading an identical file is still skipped
-  harmlessly.)
-- **Not yet enforced:** document *listing* and tree views still show names
-  and metadata of all documents (not their content). Treat lists as visible
-  to all authenticated users for now; this is planned before the visible
-  multi-user release.
+- **Overwrite protection:** uploading or indexing a file with the same name
+  as a document owned by another user is rejected — only the owner or an
+  admin can replace it. (Re-uploading an identical file is still skipped
+  harmlessly.) A failed replacement restores the previous version instead
+  of losing it.
+- **Visibility-filtered reads:** document listing (`/documents`,
+  `/documents/{id}`), the document tree (children, stats, path search, for
+  both the PostgreSQL and LanceDB sources), `/statistics` counts,
+  `/extensions`, and metadata discovery (`/metadata/keys`,
+  `/metadata/values`) only reflect documents the caller can see: shared
+  documents plus their own. Hidden documents return 404 from
+  `/documents/{id}` — their existence is not revealed.
+- **Filtered auxiliary listings:** document lock listings and indexing-run
+  history omit entries whose source path maps to a document hidden from the
+  caller; the encrypted-PDF report only shows (and clears) the caller's own
+  entries unless the caller is an admin.
 - The server must be migrated (`alembic upgrade head`) to at least
   migration `020` for collection grants.
 

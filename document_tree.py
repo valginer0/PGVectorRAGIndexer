@@ -8,7 +8,7 @@ per folder for the Hierarchical Document Browser.
 
 import logging
 import posixpath
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from path_utils import normalize_path, NORMALIZED_URI_SQL
 
@@ -34,11 +34,31 @@ def _normalize_path(path: str) -> str:
     return normalize_path(path)
 
 
+def _visibility_sql(visibility: Optional[Tuple[str, list]]) -> Tuple[str, list]:
+    """Return ("AND <fragment>", params) for a visibility filter, or ("", [])."""
+    if visibility and visibility[0]:
+        return f"AND {visibility[0]}", list(visibility[1])
+    return "", []
+
+
+def _filter_hidden_docs(
+    docs: List[Dict[str, Any]],
+    hidden_document_ids: Optional[List[str]],
+) -> List[Dict[str, Any]]:
+    """Drop LanceDB-sourced docs the caller must not see (private, other owner)."""
+    if not hidden_document_ids:
+        return docs
+    hidden = set(hidden_document_ids)
+    return [doc for doc in docs if doc.get("document_id") not in hidden]
+
+
 def get_tree_children(
     parent_path: str = "",
     limit: int = 200,
     offset: int = 0,
     source: str = "postgres",
+    visibility: Optional[Tuple[str, list]] = None,
+    hidden_document_ids: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """Get one level of the document tree under parent_path.
 
@@ -52,6 +72,10 @@ def get_tree_children(
         limit: Max items to return.
         offset: Pagination offset.
         source: The database source ('postgres' or 'lancedb').
+        visibility: Optional (sql_fragment, params) visibility filter for the
+            Postgres source.
+        hidden_document_ids: Document ids the caller must not see; used to
+            filter the LanceDB source (which has no visibility columns).
 
     Returns:
         Dict with 'folders', 'files', 'total_folders', 'total_files'.
@@ -63,9 +87,9 @@ def get_tree_children(
         if source == "lancedb":
             from services import get_lancedb_adapter
             from datetime import datetime
-            
+
             adapter = get_lancedb_adapter()
-            docs = adapter.list_documents(prefix=parent)
+            docs = _filter_hidden_docs(adapter.list_documents(prefix=parent), hidden_document_ids)
 
             
             # Format rows: (norm_uri, document_id, chunk_count, indexed_at, last_updated)
@@ -100,6 +124,8 @@ def get_tree_children(
                 else:
                     like_prefix = "%"
 
+                vis_sql, vis_params = _visibility_sql(visibility)
+
                 # Get all distinct normalized source_uri paths under this parent
                 cur.execute(
                     f"""
@@ -110,11 +136,11 @@ def get_tree_children(
                         MIN(indexed_at) AS indexed_at,
                         MAX(indexed_at) AS last_updated
                     FROM document_chunks
-                    WHERE {NORMALIZED_URI_SQL} LIKE %s
+                    WHERE {NORMALIZED_URI_SQL} LIKE %s {vis_sql}
                     GROUP BY norm_uri, document_id
                     ORDER BY norm_uri
                     """,
-                    (like_prefix,),
+                    (like_prefix, *vis_params),
                 )
                 rows = cur.fetchall()
 
@@ -215,7 +241,11 @@ def get_tree_children(
         }
 
 
-def get_tree_stats(source: str = "postgres") -> Dict[str, Any]:
+def get_tree_stats(
+    source: str = "postgres",
+    visibility: Optional[Tuple[str, list]] = None,
+    hidden_document_ids: Optional[List[str]] = None,
+) -> Dict[str, Any]:
     """Get overall tree statistics.
 
     Returns:
@@ -225,9 +255,8 @@ def get_tree_stats(source: str = "postgres") -> Dict[str, Any]:
         if source == "lancedb":
             from services import get_lancedb_adapter
             adapter = get_lancedb_adapter()
-            stats = adapter.get_statistics()
-            docs = adapter.list_documents()
-            
+            docs = _filter_hidden_docs(adapter.list_documents(), hidden_document_ids)
+
             # Count distinct top-level folders/files
             top_levels = set()
             for doc in docs:
@@ -236,20 +265,39 @@ def get_tree_stats(source: str = "postgres") -> Dict[str, Any]:
                 if parts:
                     top_levels.add(parts[0])
             top_level_count = len(top_levels)
-            
+
+            if hidden_document_ids:
+                # Compute counts from the filtered listing so hidden documents
+                # are not reflected in the caller's totals.
+                total_documents = len(docs)
+                total_chunks = sum(doc.get("chunk_count") or 0 for doc in docs)
+            else:
+                stats = adapter.get_statistics()
+                total_documents = stats["total_documents"]
+                total_chunks = stats["total_chunks"]
+
             return {
-                "total_documents": stats["total_documents"],
-                "total_chunks": stats["total_chunks"],
+                "total_documents": total_documents,
+                "total_chunks": total_chunks,
                 "top_level_items": top_level_count,
             }
         else:
+            vis_sql, vis_params = _visibility_sql(visibility)
+            vis_where = f"WHERE TRUE {vis_sql}" if vis_sql else ""
+
             with _get_db_connection() as conn:
                 cur = conn.cursor()
 
-                cur.execute("SELECT COUNT(DISTINCT document_id) FROM document_chunks")
+                cur.execute(
+                    f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {vis_where}",
+                    tuple(vis_params) or None,
+                )
                 total_docs = cur.fetchone()[0]
 
-                cur.execute("SELECT COUNT(*) FROM document_chunks")
+                cur.execute(
+                    f"SELECT COUNT(*) FROM document_chunks {vis_where}",
+                    tuple(vis_params) or None,
+                )
                 total_chunks = cur.fetchone()[0]
 
                 # Count distinct top-level folders
@@ -261,7 +309,8 @@ def get_tree_stats(source: str = "postgres") -> Dict[str, Any]:
                         )
                     )
                     FROM document_chunks
-                """)
+                    {vis_where}
+                """, tuple(vis_params) or None)
                 top_level_count = cur.fetchone()[0]
 
                 return {
@@ -282,6 +331,8 @@ def search_tree(
     query: str,
     limit: int = 50,
     source: str = "postgres",
+    visibility: Optional[Tuple[str, list]] = None,
+    hidden_document_ids: Optional[List[str]] = None,
 ) -> List[Dict[str, Any]]:
     """Search for documents matching a path pattern.
 
@@ -292,7 +343,7 @@ def search_tree(
             from services import get_lancedb_adapter
             from datetime import datetime
             adapter = get_lancedb_adapter()
-            docs = adapter.list_documents()
+            docs = _filter_hidden_docs(adapter.list_documents(), hidden_document_ids)
             
             pattern = _normalize_path(query).lower()
             results = []
@@ -318,6 +369,7 @@ def search_tree(
             with _get_db_connection() as conn:
                 cur = conn.cursor()
 
+                vis_sql, vis_params = _visibility_sql(visibility)
                 pattern = f"%{_normalize_path(query)}%"
                 cur.execute(
                     f"""
@@ -327,12 +379,12 @@ def search_tree(
                         COUNT(*) AS chunk_count,
                         MIN(indexed_at) AS indexed_at
                     FROM document_chunks
-                    WHERE {NORMALIZED_URI_SQL} ILIKE %s
+                    WHERE {NORMALIZED_URI_SQL} ILIKE %s {vis_sql}
                     GROUP BY norm_uri, document_id
                     ORDER BY norm_uri
                     LIMIT %s
                     """,
-                    (pattern, limit),
+                    (pattern, *vis_params, limit),
                 )
                 rows = cur.fetchall()
 

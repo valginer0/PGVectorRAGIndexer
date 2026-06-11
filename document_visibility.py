@@ -137,6 +137,45 @@ def resolve_user_id_for_key_record(key_record: Optional[Dict[str, Any]]) -> Opti
     return user["id"] if user else None
 
 
+def visibility_clause_for_key_record(key_record: Optional[Dict[str, Any]]) -> Tuple[str, list]:
+    """Resolve the caller behind an API key record into a SQL visibility filter.
+
+    Returns (sql_fragment, params) to AND into a document_chunks query.
+
+    - key_record not a dict (auth disabled / local mode / test sentinel): no filter.
+    - Key linked to an admin user: no filter.
+    - Key linked to a regular user: shared docs + own docs.
+    - Key not linked to any user: shared docs only.
+    """
+    if not isinstance(key_record, dict):
+        return "", []
+    from users import get_user_by_api_key
+    from role_permissions import has_permission
+
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        return visibility_where_clause(None, False)
+    is_admin = has_permission(user.get("role", ""), "system.admin")
+    return visibility_where_clause(user["id"], is_admin)
+
+
+def is_admin_key_record(key_record: Optional[Dict[str, Any]]) -> bool:
+    """True if the caller is local mode (no auth context) or an admin user.
+
+    Used by read surfaces that show all entries to admins but only a
+    caller's own entries otherwise.
+    """
+    if not isinstance(key_record, dict):
+        return True
+    from users import get_user_by_api_key
+    from role_permissions import has_permission
+
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        return False
+    return has_permission(user.get("role", ""), "system.admin")
+
+
 def search_exclusions_for_key_record(key_record: Optional[Dict[str, Any]]) -> List[str]:
     """Resolve the searching identity from an API key record and return the
     document_ids that must be excluded from their search results.
@@ -160,6 +199,30 @@ def search_exclusions_for_key_record(key_record: Optional[Dict[str, Any]]) -> Li
         return get_hidden_document_ids(user_id=None, is_admin=False)
     is_admin = has_permission(user.get("role", ""), "system.admin")
     return get_hidden_document_ids(user_id=user["id"], is_admin=is_admin)
+
+
+def filter_entries_by_hidden_source(
+    entries: List[Dict[str, Any]],
+    key_record: Optional[Dict[str, Any]],
+    uri_key: str = "source_uri",
+) -> List[Dict[str, Any]]:
+    """Drop entries whose source path maps to a document hidden from the caller.
+
+    Document ids derive from sha256(source_uri / display name)[:16], so
+    auxiliary records keyed by path (locks, indexing runs) can be matched
+    against the caller's hidden-document list. Best-effort: entries whose
+    path doesn't map to any indexed document pass through.
+    """
+    hidden = search_exclusions_for_key_record(key_record)
+    if not hidden:
+        return list(entries)
+    import hashlib
+
+    hidden_set = set(hidden)
+    return [
+        entry for entry in entries
+        if hashlib.sha256(str(entry.get(uri_key, "")).encode()).hexdigest()[:16] not in hidden_set
+    ]
 
 
 # ---------------------------------------------------------------------------

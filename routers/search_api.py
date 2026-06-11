@@ -383,15 +383,17 @@ async def search_documents(
         )
 
 
-@search_router.get("/documents", response_model=DocumentListResponse, tags=["Documents"], dependencies=[Depends(require_api_key)], responses={401: {"model": APIErrorResponse}})
+@search_router.get("/documents", response_model=DocumentListResponse, tags=["Documents"], responses={401: {"model": APIErrorResponse}})
 async def list_documents(
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     sort_by: str = Query(default="indexed_at"),
     sort_dir: str = Query(default="desc"),
     source_prefix: Optional[str] = Query(default=None),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
-    """List all indexed documents."""
+    """List indexed documents visible to the caller."""
+    from document_visibility import visibility_clause_for_key_record
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
@@ -405,7 +407,8 @@ async def list_documents(
                 sort_by=normalized_sort_by,
                 sort_dir=normalized_sort_dir,
                 source_prefix=source_prefix,
-                with_total=True
+                with_total=True,
+                visibility=visibility_clause_for_key_record(key_record)
             )
         except ValueError as e:
             raise HTTPException(
@@ -446,15 +449,28 @@ async def list_documents(
         )
 
 
-@search_router.get("/documents/encrypted", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@search_router.get("/documents/encrypted", tags=["Documents"])
 async def list_encrypted_pdfs(
     since: Optional[str] = Query(default=None),
-    clear: bool = Query(default=False)
+    clear: bool = Query(default=False),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
-    """List encrypted PDFs that were skipped during indexing."""
-    from services import encrypted_pdfs_encountered
+    """List encrypted PDFs that were skipped during indexing.
 
-    result = encrypted_pdfs_encountered.copy()
+    Non-admin callers only see (and clear) entries from their own uploads.
+    """
+    from services import encrypted_pdfs_encountered
+    from document_visibility import is_admin_key_record
+
+    is_admin = is_admin_key_record(key_record)
+
+    def _own_entry(item: dict) -> bool:
+        return isinstance(key_record, dict) and item.get("uploader_key_id") == key_record["id"]
+
+    result = [
+        item for item in encrypted_pdfs_encountered
+        if is_admin or _own_entry(item)
+    ]
 
     if since:
         try:
@@ -471,7 +487,10 @@ async def list_encrypted_pdfs(
 
     if clear:
         from services import encrypted_pdfs_encountered as epfe
-        epfe.clear()
+        if is_admin:
+            epfe.clear()
+        else:
+            epfe[:] = [item for item in epfe if not _own_entry(item)]
 
     return {
         "count": len(result),
@@ -479,17 +498,34 @@ async def list_encrypted_pdfs(
     }
 
 
-@search_router.get("/documents/tree", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
+def _tree_read_filters(key_record: Optional[dict], source: str):
+    """Visibility filters for tree reads: SQL clause for Postgres, hidden-id
+    exclusion list for LanceDB (which has no visibility columns)."""
+    from document_visibility import (
+        visibility_clause_for_key_record,
+        search_exclusions_for_key_record,
+    )
+    visibility = visibility_clause_for_key_record(key_record)
+    hidden_ids = search_exclusions_for_key_record(key_record) if source == "lancedb" else None
+    return visibility, hidden_ids
+
+
+@search_router.get("/documents/tree", tags=["Document Tree"])
 async def get_document_tree(
     parent_path: str = Query(default=""),
     limit: int = Query(default=200, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
     source: str = Query(default="postgres"),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
-    """Get one level of the document tree."""
+    """Get one level of the document tree (visibility-filtered)."""
     from document_tree import get_tree_children
     try:
-        result = get_tree_children(parent_path=parent_path, limit=limit, offset=offset, source=source)
+        visibility, hidden_ids = _tree_read_filters(key_record, source)
+        result = get_tree_children(
+            parent_path=parent_path, limit=limit, offset=offset, source=source,
+            visibility=visibility, hidden_document_ids=hidden_ids,
+        )
         return result
     except Exception as e:
         logger.error(f"Failed to get document tree: {e}")
@@ -499,14 +535,18 @@ async def get_document_tree(
         )
 
 
-@search_router.get("/documents/tree/stats", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
+@search_router.get("/documents/tree/stats", tags=["Document Tree"])
 async def get_document_tree_stats(
     source: str = Query(default="postgres"),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
-    """Get overall document tree statistics."""
+    """Get overall document tree statistics (visibility-filtered)."""
     from document_tree import get_tree_stats
     try:
-        return get_tree_stats(source=source)
+        visibility, hidden_ids = _tree_read_filters(key_record, source)
+        return get_tree_stats(
+            source=source, visibility=visibility, hidden_document_ids=hidden_ids,
+        )
     except Exception as e:
         logger.error(f"Failed to get tree stats: {e}")
         raise HTTPException(
@@ -515,16 +555,21 @@ async def get_document_tree_stats(
         )
 
 
-@search_router.get("/documents/tree/search", tags=["Document Tree"], dependencies=[Depends(require_api_key)])
+@search_router.get("/documents/tree/search", tags=["Document Tree"])
 async def search_document_tree(
     q: str = Query(..., min_length=1),
     limit: int = Query(default=50, ge=1, le=500),
     source: str = Query(default="postgres"),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
-    """Search for documents matching a path pattern."""
+    """Search for documents matching a path pattern (visibility-filtered)."""
     from document_tree import search_tree
     try:
-        results = search_tree(query=q, limit=limit, source=source)
+        visibility, hidden_ids = _tree_read_filters(key_record, source)
+        results = search_tree(
+            query=q, limit=limit, source=source,
+            visibility=visibility, hidden_document_ids=hidden_ids,
+        )
         return {"results": results, "count": len(results), "query": q}
     except Exception as e:
         logger.error(f"Failed to search document tree: {e}")
@@ -534,13 +579,20 @@ async def search_document_tree(
         )
 
 
-@search_router.get("/documents/{document_id}", response_model=DocumentInfo, tags=["Documents"], dependencies=[Depends(require_api_key)])
-async def get_document(document_id: str):
-    """Get document information by ID."""
+@search_router.get("/documents/{document_id}", response_model=DocumentInfo, tags=["Documents"])
+async def get_document(
+    document_id: str,
+    key_record: Optional[dict] = Depends(require_api_key),
+):
+    """Get document information by ID. Hidden documents return 404."""
+    from document_visibility import visibility_clause_for_key_record
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
-        doc = repo.get_document_by_id(document_id)
+        doc = repo.get_document_by_id(
+            document_id,
+            visibility=visibility_clause_for_key_record(key_record),
+        )
 
         if not doc:
             from errors import raise_api_error, ErrorCode
@@ -590,13 +642,16 @@ async def delete_document(document_id: str):
         )
 
 
-@search_router.get("/statistics", tags=["General"], dependencies=[Depends(require_api_key)])
-async def get_statistics():
-    """Get system statistics."""
+@search_router.get("/statistics", tags=["General"])
+async def get_statistics(
+    key_record: Optional[dict] = Depends(require_api_key),
+):
+    """Get system statistics. Document/chunk counts cover visible documents only."""
+    from document_visibility import visibility_clause_for_key_record
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
-        stats = repo.get_statistics()
+        stats = repo.get_statistics(visibility=visibility_clause_for_key_record(key_record))
 
         embedding_service = get_embedding_service()
         model_info = embedding_service.get_model_info()
@@ -649,13 +704,16 @@ async def get_context(
         )
 
 
-@search_router.get("/extensions", response_model=List[str], tags=["Search & Documents"], dependencies=[Depends(require_api_key)])
-async def get_indexed_extensions():
-    """Return sorted list of distinct file extensions present in the index."""
+@search_router.get("/extensions", response_model=List[str], tags=["Search & Documents"])
+async def get_indexed_extensions(
+    key_record: Optional[dict] = Depends(require_api_key),
+):
+    """Return sorted list of distinct file extensions among visible documents."""
+    from document_visibility import visibility_clause_for_key_record
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
-        return repo.get_indexed_extensions()
+        return repo.get_indexed_extensions(visibility=visibility_clause_for_key_record(key_record))
     except Exception as e:
         logger.error(f"Failed to get indexed extensions: {e}")
         raise HTTPException(
@@ -664,13 +722,20 @@ async def get_indexed_extensions():
         )
 
 
-@search_router.get("/metadata/keys", response_model=List[str], tags=["Metadata"], dependencies=[Depends(require_api_key)])
-async def get_metadata_keys(pattern: Optional[str] = Query(default=None)):
-    """List all unique metadata keys."""
+@search_router.get("/metadata/keys", response_model=List[str], tags=["Metadata"])
+async def get_metadata_keys(
+    pattern: Optional[str] = Query(default=None),
+    key_record: Optional[dict] = Depends(require_api_key),
+):
+    """List unique metadata keys among visible documents."""
+    from document_visibility import visibility_clause_for_key_record
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
-        keys = repo.get_metadata_keys(pattern=pattern)
+        keys = repo.get_metadata_keys(
+            pattern=pattern,
+            visibility=visibility_clause_for_key_record(key_record),
+        )
         return keys
     except Exception as e:
         logger.error(f"Failed to get metadata keys: {e}")
@@ -680,20 +745,26 @@ async def get_metadata_keys(pattern: Optional[str] = Query(default=None)):
         )
 
 
-@search_router.get("/metadata/values", response_model=List[str], tags=["Metadata"], dependencies=[Depends(require_api_key)])
+@search_router.get("/metadata/values", response_model=List[str], tags=["Metadata"])
 async def get_metadata_values(
     key: str = Query(..., description="Metadata key to get values for"),
-    limit: int = Query(default=100, ge=1, le=1000, description="Maximum values to return")
+    limit: int = Query(default=100, ge=1, le=1000, description="Maximum values to return"),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
     """
-    Get all unique values for a specific metadata key.
+    Get unique values for a specific metadata key among visible documents.
 
     Useful for building filter dropdowns in UI.
     """
+    from document_visibility import visibility_clause_for_key_record
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
-        values = repo.get_metadata_values(key=key, limit=limit)
+        values = repo.get_metadata_values(
+            key=key,
+            limit=limit,
+            visibility=visibility_clause_for_key_record(key_record),
+        )
         return values
     except Exception as e:
         logger.error(f"Failed to get metadata values for key '{key}': {e}")

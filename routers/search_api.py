@@ -16,7 +16,7 @@ from api_models import (
 )
 from services import get_indexer, get_retriever
 from retriever_v2 import LanceDBNotReadyError
-from auth import require_api_key, require_admin
+from auth import require_api_key, require_admin, require_permission
 from database import get_db_manager, DocumentRepository
 from embeddings import get_embedding_service
 
@@ -568,9 +568,9 @@ async def get_document(document_id: str):
         )
 
 
-@search_router.delete("/documents/{document_id}", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@search_router.delete("/documents/{document_id}", tags=["Documents"], dependencies=[Depends(require_permission("documents.delete"))])
 async def delete_document(document_id: str):
-    """Delete a document by ID."""
+    """Delete a document by ID. Requires the documents.delete permission."""
     try:
         idx = get_indexer()
         if not idx.delete_document(document_id):
@@ -703,9 +703,9 @@ async def get_metadata_values(
         )
 
 
-@search_router.post("/documents/bulk-delete", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@search_router.post("/documents/bulk-delete", tags=["Documents"], dependencies=[Depends(require_permission("documents.delete"))])
 async def bulk_delete_documents(request: BulkDeleteRequest):
-    """Bulk delete documents matching filter criteria."""
+    """Bulk delete documents matching filter criteria. Requires documents.delete."""
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)

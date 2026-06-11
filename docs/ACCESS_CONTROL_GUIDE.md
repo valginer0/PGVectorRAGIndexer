@@ -121,6 +121,12 @@ Notes:
   (a visibility-filtered export would silently produce incomplete backups);
   restore can overwrite any document — including private ones — with
   caller-supplied content. Backup and restore are admin operations.
+- **Permission-gated writes:** deleting documents requires the
+  `documents.delete` permission (the built-in `user` and `researcher` roles
+  cannot delete; `admin` and `sre` can). Changing a document's visibility
+  requires `documents.visibility` and, unless the role has
+  `documents.visibility.all`, only works on documents the caller owns —
+  so nobody can flip your private document to shared.
 - **Not yet enforced:** document *listing* and tree views still show names
   and metadata of all documents (not their content). Treat lists as visible
   to all authenticated users for now; this is planned before the visible

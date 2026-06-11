@@ -28,6 +28,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (export bypasses visibility by design; restore can overwrite any document)
 - fix(access): visibility writers raise on DB errors instead of returning a
   misleading "document not found"
+- fix(access): changing a document's visibility now requires the
+  `documents.visibility` permission and ownership of the document
+  (`documents.visibility.all` for others' documents) — previously any
+  authenticated key could flip another user's private document to shared
+- fix(access): document deletion (single and bulk) now enforces the
+  `documents.delete` permission; the built-in `user`/`researcher` roles can
+  no longer delete documents on Team-edition servers
 
 ## [2.15.0] - 2026-05-19
 

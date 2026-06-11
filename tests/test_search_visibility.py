@@ -243,3 +243,67 @@ def test_visibility_writers_reraise_on_db_error():
             set_document_owner("doc-1", "u-1")
         with pytest.raises(RuntimeError):
             set_document_visibility("doc-1", "private")
+
+
+# ---------------------------------------------------------------------------
+# Visibility-change ownership check (enforcement audit 2026-06-11)
+# ---------------------------------------------------------------------------
+
+
+def test_may_change_visibility_local_mode_allows():
+    from routers.visibility_api import _may_change_visibility
+    assert _may_change_visibility(None, "doc-1") is True
+
+
+def test_may_change_visibility_owner_allowed():
+    from routers.visibility_api import _may_change_visibility
+    with patch("users.get_user_by_api_key", return_value={"id": "u-1", "role": "user"}), \
+         patch("role_permissions.has_permission", return_value=False), \
+         patch("document_visibility.get_document_visibility",
+               return_value={"owner_id": "u-1"}):
+        assert _may_change_visibility({"id": 1}, "doc-1") is True
+
+
+def test_may_change_visibility_non_owner_denied():
+    """The bypass the audit closed: flipping someone else's private doc."""
+    from routers.visibility_api import _may_change_visibility
+    with patch("users.get_user_by_api_key", return_value={"id": "u-2", "role": "user"}), \
+         patch("role_permissions.has_permission", return_value=False), \
+         patch("document_visibility.get_document_visibility",
+               return_value={"owner_id": "u-1"}):
+        assert _may_change_visibility({"id": 2}, "doc-1") is False
+
+
+def test_may_change_visibility_unowned_requires_all():
+    from routers.visibility_api import _may_change_visibility
+    with patch("users.get_user_by_api_key", return_value={"id": "u-2", "role": "user"}), \
+         patch("role_permissions.has_permission", return_value=False), \
+         patch("document_visibility.get_document_visibility",
+               return_value={"owner_id": None}):
+        assert _may_change_visibility({"id": 2}, "doc-1") is False
+
+
+def test_may_change_visibility_all_permission_allows_any():
+    from routers.visibility_api import _may_change_visibility
+    with patch("users.get_user_by_api_key", return_value={"id": "u-2", "role": "sre"}), \
+         patch("role_permissions.has_permission", return_value=True):
+        assert _may_change_visibility({"id": 2}, "doc-1") is True
+
+
+def test_delete_endpoints_require_delete_permission():
+    """Route-level guard: deletes must carry the documents.delete dependency."""
+    import os
+    os.environ.setdefault('DB_HOST', 'localhost')
+    from api import app
+
+    found = {}
+    for route in app.routes:
+        if getattr(route, "path", "") in ("/documents/{document_id}", "/documents/bulk-delete"):
+            methods = getattr(route, "methods", set())
+            if "DELETE" in methods or route.path.endswith("bulk-delete"):
+                dep_names = {getattr(d.call, "__name__", "") for d in route.dependant.dependencies}
+                found[f"{sorted(methods)} {route.path}"] = dep_names
+
+    assert found, "delete routes not found"
+    for key, deps in found.items():
+        assert "_check_permission" in deps, f"{key} missing permission dependency: {deps}"

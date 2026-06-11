@@ -5,7 +5,7 @@ Document Visibility and Ownership management routes for PGVectorRAGIndexer.
 import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from auth import require_api_key, require_admin, is_auth_required
+from auth import require_api_key, require_admin, require_permission, is_auth_required
 
 logger = logging.getLogger(__name__)
 
@@ -31,20 +31,58 @@ async def get_document_visibility_endpoint(document_id: str):
         )
 
 
-@visibility_router.put("/documents/{document_id}/visibility", dependencies=[Depends(require_api_key)])
-async def set_document_visibility_endpoint(document_id: str, request: Request):
+def _may_change_visibility(key_record, document_id: str) -> bool:
+    """Ownership check for visibility changes.
+
+    - Local mode / bootstrap (no key context): allowed.
+    - documents.visibility.all (admins, sre): any document.
+    - documents.visibility: only documents the caller owns. Unowned
+      documents require .all — flipping someone else's (or nobody's) doc
+      must not be possible, or a private doc could be flipped to shared
+      and read via search.
+    """
+    if not isinstance(key_record, dict):
+        return True
+    from users import get_user_by_api_key, count_admins
+    from role_permissions import has_permission
+    from document_visibility import get_document_visibility
+
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        # Unlinked key: allow only during bootstrap (no admins exist yet)
+        return count_admins() == 0
+    role = user.get("role", "")
+    if has_permission(role, "documents.visibility.all"):
+        return True
+    info = get_document_visibility(document_id) or {}
+    return info.get("owner_id") == user["id"]
+
+
+@visibility_router.put("/documents/{document_id}/visibility")
+async def set_document_visibility_endpoint(
+    document_id: str,
+    request: Request,
+    key_record: Optional[dict] = Depends(require_permission("documents.visibility")),
+):
     """Set visibility for a document.
 
-    ``visibility`` can be changed by any authenticated key holder.
+    Requires the ``documents.visibility`` permission, and callers without
+    ``documents.visibility.all`` may only change documents they own.
     Changing ``owner_id`` requires admin privileges — use
     ``POST /documents/{id}/transfer`` instead.
     """
     from document_visibility import (
         set_document_visibility,
-        set_document_owner_and_visibility, 
+        set_document_owner_and_visibility,
         set_document_owner,
     )
     try:
+        if not _may_change_visibility(key_record, document_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only change visibility of documents you own "
+                       "(documents.visibility.all required for others' documents).",
+            )
         body = await request.json()
         visibility = body.get("visibility")
         owner_id = body.get("owner_id")

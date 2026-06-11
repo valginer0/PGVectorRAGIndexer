@@ -206,3 +206,65 @@ def test_assign_owner_noop_without_document_id():
     with patch("document_visibility.resolve_user_id_for_key_record") as resolve:
         _assign_owner_if_authenticated({"id": 1}, None)
     resolve.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Upload overwrite guard + write permission (self-review 2026-06-11)
+# ---------------------------------------------------------------------------
+
+
+def test_may_replace_local_mode_allows():
+    from routers.indexing_api import _may_replace_document
+    assert _may_replace_document(None, "doc-1") is True
+
+
+def test_may_replace_unowned_allows():
+    from routers.indexing_api import _may_replace_document
+    with patch("document_visibility.get_document_visibility", return_value={"owner_id": None}):
+        assert _may_replace_document({"id": 1}, "doc-1") is True
+
+
+def test_may_replace_other_owner_denied():
+    """The takeover the review closed: overwriting someone else's doc by name."""
+    from routers.indexing_api import _may_replace_document
+    with patch("document_visibility.get_document_visibility", return_value={"owner_id": "u-1"}), \
+         patch("users.get_user_by_api_key", return_value={"id": "u-2", "role": "user"}), \
+         patch("role_permissions.has_permission", return_value=False):
+        assert _may_replace_document({"id": 2}, "doc-1") is False
+
+
+def test_may_replace_owner_allows():
+    from routers.indexing_api import _may_replace_document
+    with patch("document_visibility.get_document_visibility", return_value={"owner_id": "u-1"}), \
+         patch("users.get_user_by_api_key", return_value={"id": "u-1", "role": "user"}):
+        assert _may_replace_document({"id": 1}, "doc-1") is True
+
+
+def test_may_replace_admin_allows():
+    from routers.indexing_api import _may_replace_document
+    with patch("document_visibility.get_document_visibility", return_value={"owner_id": "u-1"}), \
+         patch("users.get_user_by_api_key", return_value={"id": "u-9", "role": "admin"}), \
+         patch("role_permissions.has_permission", return_value=True):
+        assert _may_replace_document({"id": 9}, "doc-1") is True
+
+
+def test_may_replace_unlinked_key_denied_for_owned_doc():
+    from routers.indexing_api import _may_replace_document
+    with patch("document_visibility.get_document_visibility", return_value={"owner_id": "u-1"}), \
+         patch("users.get_user_by_api_key", return_value=None):
+        assert _may_replace_document({"id": 3}, "doc-1") is False
+
+
+def test_indexing_endpoints_require_write_permission():
+    """Route-level guard: both indexing endpoints carry documents.write."""
+    import os
+    os.environ.setdefault('DB_HOST', 'localhost')
+    from api import app
+
+    checked = 0
+    for route in app.routes:
+        if getattr(route, "path", "") in ("/index", "/upload-and-index"):
+            dep_names = {getattr(d.call, "__name__", "") for d in route.dependant.dependencies}
+            assert "_check_permission" in dep_names, f"{route.path} missing permission dep: {dep_names}"
+            checked += 1
+    assert checked >= 2

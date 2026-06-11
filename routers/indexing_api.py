@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, s
 
 from api_models import IndexRequest, IndexResponse
 from services import get_indexer, encrypted_pdfs_encountered
-from auth import require_api_key
+from auth import require_api_key, require_permission
 from document_processor import (
     UnsupportedFormatError,
     DocumentProcessingError,
@@ -24,6 +24,32 @@ from document_processor import (
 logger = logging.getLogger(__name__)
 
 indexing_router = APIRouter(tags=["Indexing"])
+
+
+def _may_replace_document(key_record: Optional[dict], document_id: str) -> bool:
+    """Overwrite guard: may this caller replace an existing document?
+
+    Without this, any user could overwrite (and take ownership of) another
+    user's document — including a private one — by uploading a file with the
+    same name, since document_id derives from the display name.
+
+    - Local mode / no auth context: allowed.
+    - Unowned documents: allowed (shared corpus behavior).
+    - Owned documents: only the owner or an admin (system.admin).
+    """
+    if not isinstance(key_record, dict):
+        return True
+    from document_visibility import get_document_visibility
+    info = get_document_visibility(document_id) or {}
+    existing_owner = info.get("owner_id")
+    if not existing_owner:
+        return True
+    from users import get_user_by_api_key
+    from role_permissions import has_permission
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        return False
+    return user["id"] == existing_owner or has_permission(user.get("role", ""), "system.admin")
 
 
 def _assign_owner_if_authenticated(key_record: Optional[dict], document_id: Optional[str]) -> None:
@@ -48,9 +74,9 @@ def _assign_owner_if_authenticated(key_record: Optional[dict], document_id: Opti
 @indexing_router.post("/index", response_model=IndexResponse)
 async def index_document(
     request: IndexRequest,
-    key_record: Optional[dict] = Depends(require_api_key),
+    key_record: Optional[dict] = Depends(require_permission("documents.write")),
 ):
-    """Index a document from URI."""
+    """Index a document from URI. Requires the documents.write permission."""
     from indexing_runs import start_run, complete_run
     run_id = start_run(trigger="api", source_uri=request.source_uri)
     try:
@@ -96,7 +122,7 @@ async def upload_and_index(
     document_type: Optional[str] = Form(default=None),
     metadata_json: Optional[str] = Form(default=None, alias="metadata"),
     ocr_mode: Optional[str] = Form(default=None),
-    key_record: Optional[dict] = Depends(require_api_key),
+    key_record: Optional[dict] = Depends(require_permission("documents.write")),
 ):
     """
     Upload a file and index it immediately.
@@ -188,6 +214,15 @@ async def upload_and_index(
             logger.info(
                 "Existing upload %s will be reindexed because file hash changed or is missing",
                 document_id,
+            )
+
+        # Past this point an existing document would be deleted and replaced —
+        # identical-hash re-uploads skipped above and never hit this guard.
+        if existing_doc and not _may_replace_document(key_record, document_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="A document with this name belongs to another user; "
+                       "only its owner or an admin can replace it.",
             )
 
         # Process document from temp file

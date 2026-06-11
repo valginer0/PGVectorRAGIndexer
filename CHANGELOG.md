@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - fix(access): document deletion (single and bulk) now enforces the
   `documents.delete` permission; the built-in `user`/`researcher` roles can
   no longer delete documents on Team-edition servers
+- fix(access): indexing endpoints (`/index`, `/upload-and-index`) now
+  enforce the `documents.write` permission, and uploading a file whose name
+  collides with a document owned by another user is rejected — previously
+  any authenticated key could overwrite (and take ownership of) another
+  user's document, including private ones
 
 ## [2.15.0] - 2026-05-19
 

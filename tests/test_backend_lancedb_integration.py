@@ -1,5 +1,6 @@
 import pytest
 from types import SimpleNamespace
+from unittest.mock import MagicMock
 from fastapi import HTTPException
 
 from api_models import SearchRequest, BulkDeleteRequest, RestoreRequest
@@ -365,6 +366,47 @@ def test_failed_lancedb_sync_guard_does_not_relaunch_same_drift(monkeypatch):
     assert sync_calls == [(1, 2, 0, 0)]
 
 
+def test_failed_readiness_check_guard_does_not_relaunch_sync(monkeypatch):
+    """An erroring readiness check whose repair sync failed must not relaunch syncs forever."""
+    import retriever_v2
+    from retriever_v2 import DocumentRetriever, LanceDBNotReadyError
+
+    _reset_lancedb_readiness_state()
+
+    class BrokenAdapter:
+        def get_statistics(self):
+            raise OSError("permission denied on lancedb storage")
+
+    sync_calls = []
+
+    def fake_run_background_sync(self, drift_signature=None):
+        sync_calls.append(drift_signature)
+        retriever_v2._lancedb_failed_sync_signature = drift_signature
+        retriever_v2._lancedb_sync_failure_message = "storage still broken"
+        retriever_v2.invalidate_lancedb_cache()
+
+    monkeypatch.setattr("services.get_lancedb_adapter", lambda: BrokenAdapter())
+    monkeypatch.setattr(DocumentRetriever, "_run_background_sync", fake_run_background_sync)
+
+    retriever = DocumentRetriever.__new__(DocumentRetriever)
+    retriever.config = SimpleNamespace(retrieval=SimpleNamespace(lancedb_enabled=True))
+    retriever.repository = MagicMock()
+
+    with pytest.raises(LanceDBNotReadyError, match="not ready / syncing"):
+        retriever._should_use_lancedb()
+
+    retriever_v2._sync_thread.join(timeout=5.0)
+    assert sync_calls == [retriever_v2._UNKNOWN_READINESS_SIGNATURE]
+
+    # Readiness still erroring + sync already failed for this state -> FAILED, no relaunch.
+    with pytest.raises(LanceDBNotReadyError, match="sync failed"):
+        retriever._should_use_lancedb()
+
+    assert sync_calls == [retriever_v2._UNKNOWN_READINESS_SIGNATURE]
+
+    _reset_lancedb_readiness_state()
+
+
 def test_lancedb_mutation_guard_blocks_without_repair_sync(monkeypatch):
     """Expected in-flight dual-write drift should block without starting repair sync."""
     import retriever_v2
@@ -649,6 +691,67 @@ def test_fail_closed_dual_writes(tmp_path, monkeypatch, db_manager):
     # Verify rollback: document should NOT exist in PostgreSQL repository
     pg_stats = indexer.repository.get_statistics()
     assert pg_stats.get("total_documents", 0) == 0
+
+
+@pytest.mark.integration
+@pytest.mark.database
+def test_replacement_failure_preserves_old_document(tmp_path, monkeypatch, db_manager):
+    """A failed replacement must restore the previous version, not lose it (review P1)."""
+    from indexer_v2 import DocumentIndexer
+    from services import get_lancedb_adapter
+    from config import get_config
+    import services
+
+    orig_config = get_config()
+    fake_config = SimpleNamespace(
+        retrieval=SimpleNamespace(
+            lancedb_enabled=True,
+            lancedb_storage_path=str(tmp_path / "lancedb"),
+            lancedb_child_parent_spill_ratio=0.7,
+            top_k=5,
+            similarity_threshold=0.5,
+            distance_metric="cosine"
+        ),
+        database=orig_config.database,
+        chunking=orig_config.chunking,
+        embedding=SimpleNamespace(
+            dimension=384,
+            model_name="all-MiniLM-L6-v2"
+        )
+    )
+
+    monkeypatch.setattr("config.get_config", lambda: fake_config)
+    monkeypatch.setattr("retriever_v2.get_config", lambda: fake_config)
+    monkeypatch.setattr("indexer_v2.get_config", lambda: fake_config)
+    services.reset_services()
+
+    indexer = DocumentIndexer()
+    test_file = tmp_path / "replace_survival_test.txt"
+    test_file.write_text("Original version of the replacement survival document.")
+
+    res1 = indexer.index_document(str(test_file))
+    assert res1['status'] == 'success'
+    doc_id = res1['document_id']
+
+    # Break LanceDB writes, then attempt a replacement of the same document
+    adapter = get_lancedb_adapter()
+
+    def mock_upsert_document(*args, **kwargs):
+        raise Exception("LanceDB disk full error")
+
+    monkeypatch.setattr(adapter, "upsert_document", mock_upsert_document)
+
+    test_file.write_text("Replacement version that must not survive the failure.")
+    res2 = indexer.index_document(str(test_file), force_reindex=True)
+    assert res2['status'] == 'error'
+
+    # The OLD version must still be in PostgreSQL (source of truth)
+    doc = indexer.repository.get_document_by_id(doc_id)
+    assert doc is not None, "old document was lost by the failed replacement"
+    chunks = indexer.repository.get_document_chunks_for_reinsert(doc_id)
+    texts = " ".join(c[2] for c in chunks)
+    assert "Original version" in texts
+    assert "Replacement version" not in texts
 
 
 @pytest.mark.integration

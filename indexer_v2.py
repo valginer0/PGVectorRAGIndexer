@@ -7,7 +7,7 @@ This is the v2 indexer that uses the new modular architecture.
 import argparse
 import logging
 import sys
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Callable
 from datetime import datetime, timezone
 
 from config import get_config
@@ -21,6 +21,13 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+class ReplacementNotAuthorizedError(Exception):
+    """Raised when a caller is not allowed to replace an existing document.
+
+    Propagated (not converted to a status dict) so API routes can map it to 403.
+    """
 
 
 class DocumentIndexer:
@@ -57,7 +64,8 @@ class DocumentIndexer:
         force_reindex: bool = False,
         custom_metadata: Optional[Dict[str, Any]] = None,
         ocr_mode: Optional[str] = None,
-        rebuild_fts: bool = True
+        rebuild_fts: bool = True,
+        may_replace: Optional[Callable[[str], bool]] = None
     ) -> Dict[str, Any]:
         """
         Index a single document.
@@ -67,9 +75,17 @@ class DocumentIndexer:
             force_reindex: If True, reindex even if document exists
             custom_metadata: Optional custom metadata
             ocr_mode: OCR mode ('skip', 'only', 'auto', or None for config default)
+            may_replace: Optional authorization callback called with the
+                document_id before an existing document is replaced. Returning
+                False raises ReplacementNotAuthorizedError. Identical-hash
+                skips never invoke it.
 
         Returns:
             Dictionary with indexing results
+
+        Raises:
+            ReplacementNotAuthorizedError: If may_replace denies replacing an
+                existing document.
         """
         try:
             # Process document
@@ -78,6 +94,7 @@ class DocumentIndexer:
 
             # Check if document already exists
             existing_doc = self.repository.get_document_by_id(processed_doc.document_id)
+            replace_existing = False
             if existing_doc:
                 if not force_reindex:
                     # Check for file hash match
@@ -101,8 +118,13 @@ class DocumentIndexer:
                         logger.info(f"Document exists but hash missing. Reindexing.")
 
                 # If we are here, we are reindexing (either forced or changed)
-                logger.info(f"Removing existing document: {processed_doc.document_id}")
-                self.repository.delete_document(processed_doc.document_id)
+                if may_replace is not None and not may_replace(processed_doc.document_id):
+                    raise ReplacementNotAuthorizedError(
+                        f"Not authorized to replace existing document {processed_doc.document_id}"
+                    )
+                # Defer the delete until the replacement chunks are ready to
+                # insert so a failure mid-replacement can restore the old version.
+                replace_existing = True
 
             # Generate embeddings
             logger.info(f"Generating embeddings for {len(processed_doc.chunks)} chunks...")
@@ -133,7 +155,17 @@ class DocumentIndexer:
                 from retriever_v2 import begin_lancedb_mutation
                 begin_lancedb_mutation()
             postgres_inserted = False
+            old_deleted = False
+            old_chunks_backup: List[Any] = []
             try:
+                if replace_existing:
+                    logger.info(f"Removing existing document: {processed_doc.document_id}")
+                    old_chunks_backup = self.repository.get_document_chunks_for_reinsert(
+                        processed_doc.document_id
+                    )
+                    self.repository.delete_document(processed_doc.document_id)
+                    old_deleted = True
+
                 logger.info(f"Storing {len(chunks_data)} chunks in database...")
                 self.repository.insert_chunks(chunks_data)
                 postgres_inserted = True
@@ -165,11 +197,28 @@ class DocumentIndexer:
                 invalidate_lancedb_cache()
             except Exception as e:
                 logger.error(f"Failed to index document into LanceDB-backed stores: {e}. Rolling back PostgreSQL if needed...", exc_info=True)
-                if postgres_inserted:
+                if postgres_inserted or old_deleted:
                     try:
                         self.repository.delete_document(processed_doc.document_id)
+                        if old_chunks_backup:
+                            self.repository.insert_chunks(old_chunks_backup)
+                            logger.info(
+                                f"Restored previous version of document {processed_doc.document_id} "
+                                f"({len(old_chunks_backup)} chunks) after failed replacement"
+                            )
                     except Exception as rollback_err:
-                        logger.critical(f"PostgreSQL rollback delete failed for document {processed_doc.document_id}: {rollback_err}", exc_info=True)
+                        logger.critical(f"PostgreSQL rollback failed for document {processed_doc.document_id}: {rollback_err}", exc_info=True)
+                    if old_chunks_backup and self.config.retrieval.lancedb_enabled:
+                        # Best-effort: drop any partial replacement from LanceDB so the
+                        # count drift is detected and the repair sync restores the old
+                        # version from PostgreSQL.
+                        try:
+                            from services import get_lancedb_adapter
+                            get_lancedb_adapter().delete_document(processed_doc.document_id)
+                        except Exception as lancedb_err:
+                            logger.warning(
+                                f"Could not remove partial LanceDB replacement for {processed_doc.document_id}: {lancedb_err}"
+                            )
                 from retriever_v2 import invalidate_lancedb_cache
                 invalidate_lancedb_cache()
                 raise
@@ -189,6 +238,9 @@ class DocumentIndexer:
                 'indexed_at': processed_doc.processed_at.isoformat()
             }
 
+        except ReplacementNotAuthorizedError:
+            # Authorization outcome, not an indexing failure — let API routes map it to 403.
+            raise
         except EncryptedPDFError as e:
             # Log encrypted PDFs to a separate file for headless tracking
             logger.warning(f"🔒 Encrypted PDF skipped: {source_uri}")

@@ -78,13 +78,19 @@ async def index_document(
 ):
     """Index a document from URI. Requires the documents.write permission."""
     from indexing_runs import start_run, complete_run
+    from indexer_v2 import ReplacementNotAuthorizedError
     run_id = start_run(trigger="api", source_uri=request.source_uri)
     try:
         idx = get_indexer()
+        # Same overwrite guard as /upload-and-index: replacing an existing
+        # owned document (and taking ownership afterwards) is restricted to
+        # its owner or an admin. Checked via callback so identical-hash
+        # re-index requests still skip cleanly for everyone.
         result = idx.index_document(
             source_uri=request.source_uri,
             force_reindex=request.force_reindex,
-            custom_metadata=request.metadata
+            custom_metadata=request.metadata,
+            may_replace=lambda doc_id: _may_replace_document(key_record, doc_id)
         )
 
         if result['status'] == 'error':
@@ -104,6 +110,14 @@ async def index_document(
         return IndexResponse(**result)
     except HTTPException:
         raise
+    except ReplacementNotAuthorizedError:
+        complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
+                     errors=[{"source_uri": request.source_uri, "error": "replacement_not_authorized"}])
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="A document with this source belongs to another user; "
+                   "only its owner or an admin can replace it.",
+        )
     except Exception as e:
         complete_run(run_id, status="failed", files_scanned=1, files_failed=1,
                      errors=[{"source_uri": request.source_uri, "error": str(e)}])
@@ -240,12 +254,6 @@ async def upload_and_index(
         if custom_source_uri:
             processed_doc.metadata['custom_source_uri'] = custom_source_uri
 
-        # Delete existing document before replacing it when force reindexing or
-        # when the uploaded file hash differs from the indexed metadata.
-        if existing_doc:
-            logger.info(f"Removing existing document: {processed_doc.document_id}")
-            idx.repository.delete_document(processed_doc.document_id)
-
         # Generate embeddings
         logger.info(f"Generating embeddings for {len(processed_doc.chunks)} chunks...")
         chunk_texts = processed_doc.get_chunk_texts()
@@ -270,7 +278,20 @@ async def upload_and_index(
             from retriever_v2 import begin_lancedb_mutation
             begin_lancedb_mutation()
         postgres_inserted = False
+        old_deleted = False
+        old_chunks_backup: list = []
         try:
+            # Delete existing document just before inserting its replacement
+            # (force reindex or changed file hash), backing it up first so a
+            # failure can restore the old version instead of losing it.
+            if existing_doc:
+                logger.info(f"Removing existing document: {processed_doc.document_id}")
+                old_chunks_backup = idx.repository.get_document_chunks_for_reinsert(
+                    processed_doc.document_id
+                )
+                idx.repository.delete_document(processed_doc.document_id)
+                old_deleted = True
+
             # Insert into database
             logger.info(f"Storing {len(chunks_data)} chunks in database...")
             idx.repository.insert_chunks(chunks_data)
@@ -303,11 +324,28 @@ async def upload_and_index(
             invalidate_lancedb_cache()
         except Exception as e:
             logger.error(f"Failed to index uploaded document into LanceDB-backed stores: {e}. Rolling back PostgreSQL if needed...", exc_info=True)
-            if postgres_inserted:
+            if postgres_inserted or old_deleted:
                 try:
                     idx.repository.delete_document(processed_doc.document_id)
+                    if old_chunks_backup:
+                        idx.repository.insert_chunks(old_chunks_backup)
+                        logger.info(
+                            f"Restored previous version of document {processed_doc.document_id} "
+                            f"({len(old_chunks_backup)} chunks) after failed replacement"
+                        )
                 except Exception as rollback_err:
-                    logger.critical(f"PostgreSQL rollback delete failed for document {processed_doc.document_id}: {rollback_err}", exc_info=True)
+                    logger.critical(f"PostgreSQL rollback failed for document {processed_doc.document_id}: {rollback_err}", exc_info=True)
+                if old_chunks_backup and mutation_active:
+                    # Best-effort: drop any partial replacement from LanceDB so the
+                    # count drift is detected and the repair sync restores the old
+                    # version from PostgreSQL.
+                    try:
+                        from services import get_lancedb_adapter
+                        get_lancedb_adapter().delete_document(processed_doc.document_id)
+                    except Exception as lancedb_err:
+                        logger.warning(
+                            f"Could not remove partial LanceDB replacement for {processed_doc.document_id}: {lancedb_err}"
+                        )
             from retriever_v2 import invalidate_lancedb_cache
             invalidate_lancedb_cache()
             raise

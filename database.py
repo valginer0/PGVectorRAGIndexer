@@ -469,13 +469,40 @@ class DocumentRepository:
         result = self.db.execute_query(query, (document_id,), fetch=True)
         return result[0][0] if result else False
     
+    def get_document_chunks_for_reinsert(
+        self,
+        document_id: str
+    ) -> List[Tuple[str, int, str, str, Any, Optional[Dict[str, Any]]]]:
+        """
+        Fetch all chunks for a document in the insert_chunks() tuple format.
+
+        Used to back up an existing document before a replacement delete, so a
+        failed replacement can restore the previous version instead of losing it.
+
+        Args:
+            document_id: Document identifier
+
+        Returns:
+            List of (document_id, chunk_index, text, source_uri, embedding, metadata)
+        """
+        query = """
+        SELECT document_id, chunk_index, text_content, source_uri, embedding, metadata
+        FROM document_chunks
+        WHERE document_id = %s
+        ORDER BY chunk_index
+        """
+
+        with self.db.get_cursor() as cursor:
+            cursor.execute(query, (document_id,))
+            return [tuple(row) for row in cursor.fetchall()]
+
     def delete_document(self, document_id: str) -> int:
         """
         Delete all chunks for a document.
-        
+
         Args:
             document_id: Document identifier
-            
+
         Returns:
             Number of chunks deleted
         """

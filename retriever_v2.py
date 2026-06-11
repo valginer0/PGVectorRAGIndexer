@@ -204,6 +204,10 @@ _sync_thread: Optional[threading.Thread] = None
 _lancedb_current_drift_signature: Optional[Tuple[int, int, int, int]] = None
 _lancedb_failed_sync_signature: Optional[Tuple[int, int, int, int]] = None
 _lancedb_sync_failure_message: Optional[str] = None
+# Sentinel drift signature for readiness checks that fail with an exception
+# (storage/permission corruption etc.) — lets the failed-sync guard suppress
+# endless repair-sync relaunches for a persistently broken state.
+_UNKNOWN_READINESS_SIGNATURE: Tuple[int, int, int, int] = (-1, -1, -1, -1)
 _lancedb_mutation_lock = threading.Lock()
 _lancedb_mutation_count = 0
 
@@ -308,6 +312,15 @@ class DocumentRetriever:
             _lancedb_cache_dirty = False
             return "READY"
         except Exception as e:
+            # Record a sentinel drift signature so a repair sync that fails for
+            # this broken state is not relaunched on every readiness check.
+            _lancedb_current_drift_signature = _UNKNOWN_READINESS_SIGNATURE
+            if _lancedb_failed_sync_signature == _UNKNOWN_READINESS_SIGNATURE:
+                logger.error(
+                    "LanceDB readiness check keeps failing and a repair sync already "
+                    f"failed; manual intervention required: {e}"
+                )
+                return "FAILED"
             logger.warning(f"Error checking LanceDB status, treating as NOT_READY: {e}")
             return "NOT_READY"
 

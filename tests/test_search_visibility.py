@@ -173,3 +173,73 @@ def test_get_hidden_document_ids_reraises_on_db_error():
     with patch.object(document_visibility, "_get_db_connection", side_effect=RuntimeError("db down")):
         with pytest.raises(RuntimeError, match="db down"):
             get_hidden_document_ids(user_id="u-1", is_admin=False)
+
+
+# ---------------------------------------------------------------------------
+# /context endpoint access filtering (review fix 2026-06-10)
+# ---------------------------------------------------------------------------
+
+
+def test_context_endpoint_applies_access_filters():
+    """/context must inject the same visibility/grant filters as /search."""
+    import asyncio
+    from unittest.mock import MagicMock
+    import routers.search_api as search_api
+
+    fake_ret = MagicMock()
+    fake_ret.get_context.return_value = "ctx"
+
+    with patch.object(search_api, "get_retriever", return_value=fake_ret), \
+         patch("document_visibility.search_exclusions_for_key_record",
+               return_value=["doc-hidden"]), \
+         patch("collection_grants.search_allowed_namespaces_for_key_record",
+               return_value=["finance"]):
+        asyncio.get_event_loop().run_until_complete(
+            search_api.get_context(query="q", top_k=5, use_hybrid=False,
+                                   source="lancedb", key_record={"id": 1})
+        )
+
+    _, kwargs = fake_ret.get_context.call_args
+    assert kwargs["filters"] == {
+        "excluded_document_ids": ["doc-hidden"],
+        "allowed_namespaces": ["finance"],
+    }
+
+
+def test_context_endpoint_local_mode_unfiltered():
+    import asyncio
+    from unittest.mock import MagicMock
+    import routers.search_api as search_api
+
+    fake_ret = MagicMock()
+    fake_ret.get_context.return_value = "ctx"
+
+    with patch.object(search_api, "get_retriever", return_value=fake_ret):
+        asyncio.get_event_loop().run_until_complete(
+            search_api.get_context(query="q", top_k=5, use_hybrid=False,
+                                   source="lancedb", key_record=None)
+        )
+
+    _, kwargs = fake_ret.get_context.call_args
+    assert kwargs["filters"] is None
+
+
+def test_apply_access_filters_client_cannot_widen_namespaces():
+    """A client-supplied allowed_namespaces must never survive unrestricted."""
+    from routers.search_api import _apply_access_filters
+
+    with patch("document_visibility.search_exclusions_for_key_record", return_value=[]), \
+         patch("collection_grants.search_allowed_namespaces_for_key_record", return_value=None):
+        result = _apply_access_filters({"id": 1}, {"allowed_namespaces": ["anything"]})
+    assert result is None
+
+
+def test_visibility_writers_reraise_on_db_error():
+    """DB failure must surface as an error, not as 'document not found' (0)."""
+    from document_visibility import set_document_owner, set_document_visibility
+
+    with patch.object(document_visibility, "_get_db_connection", side_effect=RuntimeError("db down")):
+        with pytest.raises(RuntimeError):
+            set_document_owner("doc-1", "u-1")
+        with pytest.raises(RuntimeError):
+            set_document_visibility("doc-1", "private")

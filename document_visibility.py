@@ -187,8 +187,10 @@ def set_document_owner(document_id: str, owner_id: str) -> int:
             conn.commit()
             return cursor.rowcount
     except Exception as e:
+        # Re-raise: returning 0 here made a DB failure indistinguishable from
+        # "document not found" (the API maps 0 to 404). Endpoints return 500.
         logger.error("Failed to set document owner: %s", e)
-        return 0
+        raise
 
 
 def set_document_visibility(document_id: str, visibility: str) -> int:
@@ -215,8 +217,10 @@ def set_document_visibility(document_id: str, visibility: str) -> int:
             conn.commit()
             return cursor.rowcount
     except Exception as e:
+        # Re-raise: returning 0 here made a DB failure indistinguishable from
+        # "document not found" (the API maps 0 to 404). Endpoints return 500.
         logger.error("Failed to set document visibility: %s", e)
-        return 0
+        raise
 
 
 def set_document_owner_and_visibility(
@@ -241,8 +245,10 @@ def set_document_owner_and_visibility(
             conn.commit()
             return cursor.rowcount
     except Exception as e:
+        # Re-raise: returning 0 here made a DB failure indistinguishable from
+        # "document not found" (the API maps 0 to 404). Endpoints return 500.
         logger.error("Failed to set document owner and visibility: %s", e)
-        return 0
+        raise
 
 
 def get_document_visibility(document_id: str) -> Optional[Dict[str, Any]]:
@@ -365,8 +371,10 @@ def bulk_set_visibility(document_ids: List[str], visibility: str) -> int:
             conn.commit()
             return cursor.rowcount
     except Exception as e:
+        # Re-raise: returning 0 here made a DB failure indistinguishable from
+        # "document not found" (the API maps 0 to 404). Endpoints return 500.
         logger.error("Failed to bulk set visibility: %s", e)
-        return 0
+        raise
 
 
 def transfer_ownership(document_id: str, new_owner_id: str) -> int:

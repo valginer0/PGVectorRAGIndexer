@@ -16,7 +16,7 @@ from api_models import (
 )
 from services import get_indexer, get_retriever
 from retriever_v2 import LanceDBNotReadyError
-from auth import require_api_key
+from auth import require_api_key, require_admin
 from database import get_db_manager, DocumentRepository
 from embeddings import get_embedding_service
 
@@ -159,6 +159,32 @@ def _apply_identifier_tail_suppression(
     return kept, diagnostics
 
 
+def _apply_access_filters(key_record: Optional[dict], base_filters: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """Merge per-user access-control filters into request filters.
+
+    Injects the visibility exclusion list and collection-grant namespace
+    allowlist for the calling identity. Fails closed — a DB error aborts the
+    request rather than leaking. Client-supplied allowed_namespaces is
+    overwritten; it must never widen access.
+    """
+    from document_visibility import search_exclusions_for_key_record
+    from collection_grants import search_allowed_namespaces_for_key_record
+
+    effective_filters = dict(base_filters) if base_filters else {}
+
+    excluded_ids = search_exclusions_for_key_record(key_record)
+    if excluded_ids:
+        effective_filters["excluded_document_ids"] = excluded_ids
+
+    allowed_namespaces = search_allowed_namespaces_for_key_record(key_record)
+    if allowed_namespaces is not None:
+        effective_filters["allowed_namespaces"] = allowed_namespaces
+    elif "allowed_namespaces" in effective_filters:
+        del effective_filters["allowed_namespaces"]
+
+    return effective_filters or None
+
+
 @search_router.post("/search", response_model=SearchResponse, responses={401: {"model": APIErrorResponse}})
 async def search_documents(
     request: SearchRequest,
@@ -215,25 +241,7 @@ async def search_documents(
 
         ret = get_retriever()
 
-        # Per-user document visibility: exclude other users' private documents.
-        # Fails closed — a DB error here aborts the search rather than leaking.
-        from document_visibility import search_exclusions_for_key_record
-        excluded_ids = search_exclusions_for_key_record(key_record)
-        effective_filters = dict(request.filters) if request.filters else {}
-        if excluded_ids:
-            effective_filters["excluded_document_ids"] = excluded_ids
-
-        # Role collection grants: a role with grants is restricted to its
-        # granted namespaces (None = unrestricted). Client-supplied
-        # allowed_namespaces is overwritten — it must never widen access.
-        from collection_grants import search_allowed_namespaces_for_key_record
-        allowed_namespaces = search_allowed_namespaces_for_key_record(key_record)
-        if allowed_namespaces is not None:
-            effective_filters["allowed_namespaces"] = allowed_namespaces
-        elif "allowed_namespaces" in effective_filters:
-            del effective_filters["allowed_namespaces"]
-
-        effective_filters = effective_filters or None
+        effective_filters = _apply_access_filters(key_record, request.filters)
 
         start_time = time.time()
         search_top_k = request.top_k
@@ -607,17 +615,26 @@ async def get_statistics():
         )
 
 
-@search_router.get("/context", tags=["RAG"], dependencies=[Depends(require_api_key)])
+@search_router.get("/context", tags=["RAG"])
 async def get_context(
     query: str = Query(...),
     top_k: int = Query(default=5, ge=1, le=20),
     use_hybrid: bool = Query(default=False),
-    source: str = Query(default="lancedb")
+    source: str = Query(default="lancedb"),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
-    """Get concatenated context for RAG applications."""
+    """Get concatenated context for RAG applications.
+
+    Visibility-filtered like /search: other users' private documents and
+    namespaces outside the caller's collection grants are excluded.
+    """
     try:
         ret = get_retriever()
-        context = ret.get_context(query, top_k=top_k, use_hybrid=use_hybrid, source=source)
+        access_filters = _apply_access_filters(key_record, None)
+        context = ret.get_context(
+            query, top_k=top_k, use_hybrid=use_hybrid, source=source,
+            filters=access_filters,
+        )
         return {"query": query, "context": context, "chunks_used": top_k}
     except LanceDBNotReadyError as e:
         raise HTTPException(
@@ -749,9 +766,15 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
         )
 
 
-@search_router.post("/documents/export", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@search_router.post("/documents/export", tags=["Documents"], dependencies=[Depends(require_admin)])
 async def export_documents(request: ExportRequest):
-    """Export documents matching filter criteria as JSON backup."""
+    """Export documents matching filter criteria as JSON backup.
+
+    Admin only: the export contains full chunk text of ALL matching
+    documents regardless of visibility, so it must not be exposed to
+    regular users. (Filtering the export instead would silently produce
+    incomplete backups, which is worse.)
+    """
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
@@ -773,7 +796,13 @@ async def export_documents(request: ExportRequest):
 
 @search_router.post("/documents/restore", tags=["Documents"], dependencies=[Depends(require_api_key)])
 async def restore_documents(request: RestoreRequest):
-    """Restore documents from a backup."""
+    """Restore documents from a backup.
+
+    Note: if the LanceDB dual-write fails mid-restore, the compensating
+    rollback deletes the restored documents entirely (to keep the two stores
+    count-consistent) — including any pre-existing version a restore had
+    overwritten. Re-run the restore after fixing the failure.
+    """
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)

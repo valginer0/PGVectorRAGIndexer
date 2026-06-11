@@ -114,8 +114,11 @@ Notes:
 
 ## Current enforcement scope (read this)
 
-- **Enforced today:** search results (`/search`) — both the LanceDB and
-  PostgreSQL search engines.
+- **Enforced today:** search results (`/search`) and RAG context
+  (`/context`) — both the LanceDB and PostgreSQL search engines.
+- **Admin-only:** `/documents/export` returns full text of all matching
+  documents regardless of visibility, so it requires an admin key
+  (a visibility-filtered export would silently produce incomplete backups).
 - **Not yet enforced:** document *listing* and tree views still show names
   and metadata of all documents (not their content). Treat lists as visible
   to all authenticated users for now; this is planned before the visible

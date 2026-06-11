@@ -325,7 +325,6 @@ class BackendLanceDBAdapter:
                 f"starts_with(source_uri, '{safe_prefix_forward}') OR starts_with(source_uri, '{safe_prefix_backward}')"
             )
 
-            
         rows = query.to_arrow().to_pylist()
         
         results = []
@@ -483,7 +482,8 @@ class BackendLanceDBAdapter:
             chunk_search = chunks.search(query_vector, vector_column_name="embedding").metric("cosine")
             
             # Formulate the filter: document_id must match doc_id AND any additional chunk-level filters
-            filter_clauses = [f"document_id = '{doc_id}'"]
+            safe_doc_id = str(doc_id).replace("'", "''")
+            filter_clauses = [f"document_id = '{safe_doc_id}'"]
             if filters:
                 chunk_filter = self._build_lancedb_filter_clause(filters)
                 if chunk_filter:
@@ -537,8 +537,12 @@ class BackendLanceDBAdapter:
                 ext_clauses = []
                 for ext in value:
                     normalized = ext if ext.startswith('.') else f'.{ext}'
-                    # Defensive comparison using lower() to prevent ILIKE variations
-                    ext_clauses.append(f"lower(source_uri) LIKE '%{normalized.lower()}'")
+                    # Defensive comparison using lower() to prevent ILIKE variations.
+                    # Note: LIKE wildcards (%/_) in the value are not escaped —
+                    # extensions come from the indexed-extensions dropdown, not
+                    # free text, so only quotes need escaping here.
+                    safe_ext = normalized.lower().replace("'", "''")
+                    ext_clauses.append(f"lower(source_uri) LIKE '%{safe_ext}'")
                 clauses.append(f"({' OR '.join(ext_clauses)})")
             elif key in ['type', 'namespace', 'category']:
                 col_name = "document_type" if key == "type" else key
@@ -553,6 +557,10 @@ class BackendLanceDBAdapter:
                 else:
                     # Fallback to wildcard search inside JSON metadata string
                     safe_key = meta_key.replace("'", "''")
+                    # Substring match over serialized JSON — can false-positive
+                    # when the key/value pair appears inside a nested value.
+                    # Acceptable for this fallback; exact filtering belongs on
+                    # real columns (type/namespace/category) handled above.
                     clauses.append(
                         f"(metadata LIKE '%\"{safe_key}\": \"{safe_val}\"%' OR "
                         f"metadata LIKE '%\"{safe_key}\":\"{safe_val}\"%')"
@@ -626,8 +634,6 @@ class BackendLanceDBAdapter:
             except Exception as e:
                 logger.warning(f"Chunk table optimization failed: {e}")
 
-
-        
         # Explicitly rebuild FTS indexes to restore query freshness
         self.rebuild_fts_index()
 

@@ -1246,7 +1246,8 @@ class DocumentRetriever:
         query: str,
         top_k: Optional[int] = None,
         use_hybrid: bool = False,
-        source: str = "lancedb"
+        source: str = "lancedb",
+        filters: Optional[Dict[str, Any]] = None
     ) -> str:
         """
         Get concatenated context from search results for RAG.
@@ -1256,14 +1257,17 @@ class DocumentRetriever:
             top_k: Number of results
             use_hybrid: Use hybrid search
             source: Search backend override ('lancedb' or 'postgres')
+            filters: Optional filters, including the access-control keys
+                (excluded_document_ids / allowed_namespaces) the API layer
+                injects for visibility and collection grants
 
         Returns:
             Concatenated context string
         """
         if use_hybrid and self.config.retrieval.enable_hybrid_search:
-            results = self.search_hybrid(query, top_k, source=source)
+            results = self.search_hybrid(query, top_k, filters=filters, source=source)
         else:
-            results = self.search(query, top_k, source=source)
+            results = self.search(query, top_k, filters=filters, source=source)
 
         if not results:
             return ""

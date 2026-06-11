@@ -21,6 +21,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - docs: new public Access Control Guide (users, roles, visibility,
   collections)
 
+### Security
+- fix(access): `/context` now applies the same visibility and collection
+  filters as `/search` (previously returned unfiltered chunk text)
+- fix(access): `/documents/export` and `/documents/restore` are admin-only
+  (export bypasses visibility by design; restore can overwrite any document)
+- fix(access): visibility writers raise on DB errors instead of returning a
+  misleading "document not found"
+
 ## [2.15.0] - 2026-05-19
 
 ### Added

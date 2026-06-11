@@ -794,9 +794,14 @@ async def export_documents(request: ExportRequest):
         )
 
 
-@search_router.post("/documents/restore", tags=["Documents"], dependencies=[Depends(require_api_key)])
+@search_router.post("/documents/restore", tags=["Documents"], dependencies=[Depends(require_admin)])
 async def restore_documents(request: RestoreRequest):
     """Restore documents from a backup.
+
+    Admin only (symmetric with /documents/export): restore overwrites
+    existing documents by document_id with caller-supplied content and
+    embeddings — including other users' private documents — so it must not
+    be exposed to regular users.
 
     Note: if the LanceDB dual-write fails mid-restore, the compensating
     rollback deletes the restored documents entirely (to keep the two stores

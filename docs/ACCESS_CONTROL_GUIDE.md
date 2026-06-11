@@ -116,9 +116,11 @@ Notes:
 
 - **Enforced today:** search results (`/search`) and RAG context
   (`/context`) — both the LanceDB and PostgreSQL search engines.
-- **Admin-only:** `/documents/export` returns full text of all matching
-  documents regardless of visibility, so it requires an admin key
-  (a visibility-filtered export would silently produce incomplete backups).
+- **Admin-only:** `/documents/export` and `/documents/restore`. Export
+  returns full text of all matching documents regardless of visibility
+  (a visibility-filtered export would silently produce incomplete backups);
+  restore can overwrite any document — including private ones — with
+  caller-supplied content. Backup and restore are admin operations.
 - **Not yet enforced:** document *listing* and tree views still show names
   and metadata of all documents (not their content). Treat lists as visible
   to all authenticated users for now; this is planned before the visible

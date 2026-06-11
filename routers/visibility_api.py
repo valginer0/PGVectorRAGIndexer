@@ -12,13 +12,16 @@ logger = logging.getLogger(__name__)
 visibility_router = APIRouter(tags=["Document Visibility"])
 
 
-@visibility_router.get("/documents/{document_id}/visibility", dependencies=[Depends(require_api_key)])
-async def get_document_visibility_endpoint(document_id: str):
-    """Get visibility info for a document."""
-    from document_visibility import get_document_visibility
+@visibility_router.get("/documents/{document_id}/visibility")
+async def get_document_visibility_endpoint(
+    document_id: str,
+    key_record: Optional[dict] = Depends(require_api_key),
+):
+    """Get visibility info for a visible document. Hidden documents return 404."""
+    from document_visibility import get_document_visibility, document_visible_for_key_record
     try:
         info = get_document_visibility(document_id)
-        if not info:
+        if not info or not document_visible_for_key_record(document_id, key_record):
             raise HTTPException(status_code=404, detail="Document not found")
         return info
     except HTTPException:
@@ -153,18 +156,36 @@ async def transfer_document_ownership_endpoint(document_id: str, request: Reques
         )
 
 
-@visibility_router.get("/users/{user_id}/documents", dependencies=[Depends(require_api_key)])
+@visibility_router.get("/users/{user_id}/documents")
 async def list_user_documents_endpoint(
     user_id: str,
     visibility: Optional[str] = Query(default=None, description="Filter: 'shared' or 'private'"),
     limit: int = Query(default=100, ge=1, le=1000),
     offset: int = Query(default=0, ge=0),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
-    """List documents owned by a specific user."""
-    from document_visibility import list_user_documents
+    """List documents owned by a user.
+
+    Local mode may list any user. In team mode, only admins can list another
+    user's documents; regular users can list their own documents only.
+    """
+    from document_visibility import (
+        is_admin_key_record,
+        list_user_documents,
+        resolve_user_id_for_key_record,
+    )
     try:
+        if isinstance(key_record, dict):
+            caller_user_id = resolve_user_id_for_key_record(key_record)
+            if not is_admin_key_record(key_record) and caller_user_id != user_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="You can only list your own documents.",
+                )
         docs = list_user_documents(user_id, visibility=visibility, limit=limit, offset=offset)
         return {"documents": docs, "count": len(docs)}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to list user documents: {e}")
         raise HTTPException(

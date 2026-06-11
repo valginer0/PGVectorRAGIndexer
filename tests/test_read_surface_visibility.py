@@ -257,6 +257,64 @@ async def test_tree_routes_pass_filters(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# Visibility-management read surfaces
+# ---------------------------------------------------------------------------
+
+
+async def test_document_visibility_detail_hidden_doc_returns_404(monkeypatch):
+    from fastapi import HTTPException
+    from routers import visibility_api
+
+    monkeypatch.setattr(
+        "document_visibility.get_document_visibility",
+        lambda doc_id: {
+            "document_id": doc_id,
+            "owner_id": "u-secret",
+            "visibility": "private",
+            "chunk_count": 1,
+        },
+    )
+    monkeypatch.setattr(
+        "document_visibility.document_visible_for_key_record",
+        lambda doc_id, key_record: False,
+    )
+
+    with pytest.raises(HTTPException) as exc:
+        await visibility_api.get_document_visibility_endpoint("doc-secret", key_record={"id": 1})
+    assert exc.value.status_code == 404
+
+
+async def test_user_documents_regular_user_cannot_list_other_user(monkeypatch):
+    from fastapi import HTTPException
+    from routers import visibility_api
+
+    monkeypatch.setattr("document_visibility.resolve_user_id_for_key_record", lambda kr: "u-1")
+    monkeypatch.setattr("document_visibility.is_admin_key_record", lambda kr: False)
+
+    with pytest.raises(HTTPException) as exc:
+        await visibility_api.list_user_documents_endpoint(
+            "u-2", visibility=None, limit=100, offset=0, key_record={"id": 1}
+        )
+    assert exc.value.status_code == 403
+
+
+async def test_user_documents_self_allowed(monkeypatch):
+    from routers import visibility_api
+
+    monkeypatch.setattr("document_visibility.resolve_user_id_for_key_record", lambda kr: "u-1")
+    monkeypatch.setattr("document_visibility.is_admin_key_record", lambda kr: False)
+    monkeypatch.setattr(
+        "document_visibility.list_user_documents",
+        lambda user_id, visibility=None, limit=100, offset=0: [{"document_id": "doc-1"}],
+    )
+
+    res = await visibility_api.list_user_documents_endpoint(
+        "u-1", visibility=None, limit=100, offset=0, key_record={"id": 1}
+    )
+    assert res["count"] == 1
+
+
+# ---------------------------------------------------------------------------
 # Encrypted-PDF listing scoped to uploader
 # ---------------------------------------------------------------------------
 
@@ -350,6 +408,37 @@ async def test_indexing_run_detail_hidden_doc_404(monkeypatch):
     with pytest.raises(HTTPException) as exc:
         await monitoring_api.get_indexing_run("r1", key_record={"id": 1})
     assert exc.value.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Quarantine read surfaces
+# ---------------------------------------------------------------------------
+
+
+async def test_quarantine_routes_pass_visibility(monkeypatch):
+    from routers import maintenance_api
+
+    captured = {}
+    monkeypatch.setattr(
+        "document_visibility.visibility_clause_for_key_record", lambda kr: VIS_SENTINEL
+    )
+
+    def fake_list_quarantined(**kwargs):
+        captured["list"] = kwargs
+        return []
+
+    def fake_quarantine_stats(**kwargs):
+        captured["stats"] = kwargs
+        return {"total_documents": 0, "total_chunks": 0, "oldest_quarantine_at": None}
+
+    monkeypatch.setattr("quarantine.list_quarantined", fake_list_quarantined)
+    monkeypatch.setattr("quarantine.get_quarantine_stats", fake_quarantine_stats)
+
+    await maintenance_api.list_quarantined_docs(limit=50, offset=0, key_record={"id": 1})
+    await maintenance_api.quarantine_stats(key_record={"id": 1})
+
+    assert captured["list"]["visibility"] == VIS_SENTINEL
+    assert captured["stats"]["visibility"] == VIS_SENTINEL
 
 
 # ---------------------------------------------------------------------------

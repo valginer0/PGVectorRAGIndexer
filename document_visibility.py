@@ -159,6 +159,34 @@ def visibility_clause_for_key_record(key_record: Optional[Dict[str, Any]]) -> Tu
     return visibility_where_clause(user["id"], is_admin)
 
 
+def document_visible_for_key_record(document_id: str, key_record: Optional[Dict[str, Any]]) -> bool:
+    """Return True if document_id is visible to the caller represented by key_record."""
+    if not isinstance(key_record, dict):
+        return True
+    from users import get_user_by_api_key
+    from role_permissions import has_permission
+
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        sql, params = visibility_where_clause_for_document(document_id, None, False)
+    else:
+        is_admin = has_permission(user.get("role", ""), "system.admin")
+        sql, params = visibility_where_clause_for_document(document_id, user["id"], is_admin)
+
+    try:
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT EXISTS(SELECT 1 FROM document_chunks WHERE {sql})",
+                params,
+            )
+            row = cursor.fetchone()
+            return bool(row and row[0])
+    except Exception as e:
+        logger.error("Failed to check document visibility for caller: %s", e)
+        raise
+
+
 def is_admin_key_record(key_record: Optional[Dict[str, Any]]) -> bool:
     """True if the caller is local mode (no auth context) or an admin user.
 

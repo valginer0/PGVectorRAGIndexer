@@ -136,10 +136,14 @@ Notes:
 - **Visibility-filtered reads:** document listing (`/documents`,
   `/documents/{id}`), the document tree (children, stats, path search, for
   both the PostgreSQL and LanceDB sources), `/statistics` counts,
-  `/extensions`, and metadata discovery (`/metadata/keys`,
-  `/metadata/values`) only reflect documents the caller can see: shared
-  documents plus their own. Hidden documents return 404 from
-  `/documents/{id}` — their existence is not revealed.
+  `/extensions`, metadata discovery (`/metadata/keys`, `/metadata/values`),
+  quarantine list/stats, and document visibility reads only reflect
+  documents the caller can see: shared documents plus their own. Hidden
+  documents return 404 from `/documents/{id}` and
+  `/documents/{id}/visibility` — their existence is not revealed.
+- **User document listings:** `/users/{id}/documents` is limited to the
+  target user or an admin. A regular user cannot enumerate another user's
+  document names.
 - **Filtered auxiliary listings:** document lock listings and indexing-run
   history omit entries whose source path maps to a document hidden from the
   caller; the encrypted-PDF report only shows (and clears) the caller's own

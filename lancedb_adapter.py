@@ -568,6 +568,21 @@ class BackendLanceDBAdapter:
             elif key in ['document_id', 'source_uri']:
                 safe_val = str(value).replace("'", "''")
                 clauses.append(f"{key} = '{safe_val}'")
+            elif key == 'source_uri_like':
+                normalized = (
+                    str(value)
+                    .replace('\\', '/')
+                    .replace('\t', '/')
+                    .replace('\n', '/')
+                    .replace('\r', '/')
+                )
+                while '//' in normalized:
+                    normalized = normalized.replace('//', '/')
+                normalized = normalized.replace('*', '%').replace('?', '_')
+                if '%' not in normalized and '_' not in normalized:
+                    normalized = f"%{normalized}%"
+                safe_pattern = normalized.lower().replace("'", "''")
+                clauses.append(f"lower(source_uri) LIKE '{safe_pattern}'")
             elif key == 'excluded_document_ids':
                 if isinstance(value, list) and value:
                     safe_ids = ", ".join(
@@ -585,6 +600,8 @@ class BackendLanceDBAdapter:
                         # Empty allowlist = access to nothing (fail closed);
                         # document_id is non-nullable so this matches no rows.
                         clauses.append("document_id IS NULL")
+            else:
+                raise ValueError(f"Unsupported filter key: {key}")
 
         return " AND ".join(clauses) if clauses else None
 

@@ -179,6 +179,65 @@ def test_backend_lancedb_lifecycle(tmp_path):
     assert stats_post_delete["total_chunks"] == 0
 
 
+def test_bulk_delete_combines_source_uri_like_with_excluded_ids(tmp_path):
+    """Path-filtered deletes must not collapse to only the visibility exclusion."""
+    db_dir = tmp_path / "test_lancedb_delete_scope"
+    adapter = BackendLanceDBAdapter(db_path=str(db_dir), embedding_dimension=4)
+
+    docs = [
+        ("target-doc", "/docs/target.txt"),
+        ("hidden-doc", "/docs/hidden.txt"),
+        ("other-doc", "/other/keep.txt"),
+    ]
+    for doc_id, source_uri in docs:
+        adapter.upsert_document(
+            document_id=doc_id,
+            source_uri=source_uri,
+            chunks=[(0, f"{doc_id} content", [0.1, 0.2, 0.3, 0.4], {})],
+            aggregated_text=f"{doc_id} content",
+            doc_metadata={"type": "story"},
+        )
+
+    deleted_count = adapter.bulk_delete(
+        filters={
+            "source_uri_like": "/docs/%",
+            "excluded_document_ids": ["hidden-doc"],
+        }
+    )
+
+    assert deleted_count == 1
+    remaining = {doc["document_id"] for doc in adapter.list_documents()}
+    assert remaining == {"hidden-doc", "other-doc"}
+
+
+def test_bulk_delete_rejects_unknown_filter_even_with_excluded_ids(tmp_path):
+    """Unsupported keys must not be ignored when visibility exclusions are present."""
+    db_dir = tmp_path / "test_lancedb_reject_unknown_filter"
+    adapter = BackendLanceDBAdapter(db_path=str(db_dir), embedding_dimension=4)
+
+    for doc_id in ("target-doc", "hidden-doc"):
+        adapter.upsert_document(
+            document_id=doc_id,
+            source_uri=f"/docs/{doc_id}.txt",
+            chunks=[(0, f"{doc_id} content", [0.1, 0.2, 0.3, 0.4], {})],
+            aggregated_text=f"{doc_id} content",
+            doc_metadata={"type": "story"},
+        )
+
+    with pytest.raises(ValueError, match="Unsupported filter key"):
+        adapter.bulk_delete(
+            filters={
+                "bad_filter_key": "ignored-before-fix",
+                "excluded_document_ids": ["hidden-doc"],
+            }
+        )
+
+    assert {doc["document_id"] for doc in adapter.list_documents()} == {
+        "target-doc",
+        "hidden-doc",
+    }
+
+
 def test_ensure_tables_exist_opens_unlisted_existing_tables(tmp_path):
     """Existing .lance directories should be opened before creating empty tables."""
     db_dir = tmp_path / "test_lancedb_unlisted"

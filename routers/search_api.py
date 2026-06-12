@@ -251,8 +251,14 @@ async def search_documents(
         from config import get_config
         config = get_config()
 
+        # Resolve the backend once: this runs the readiness gate (which may
+        # raise LanceDBNotReadyError) a single time, before search. Re-calling
+        # it after results are computed risks turning a successful search into a
+        # 503 if a concurrent mutation flips readiness mid-request.
+        using_lancedb = ret._should_use_lancedb(source=request.source)
+
         retrieval_diagnostics = None
-        if ret._should_use_lancedb(source=request.source):
+        if using_lancedb:
             results, retrieval_diagnostics = ret.search_lancedb_parent_child(
                 query=request.query,
                 top_k=search_top_k,
@@ -301,6 +307,18 @@ async def search_documents(
             )
 
         diagnostics = dict(retrieval_diagnostics) if retrieval_diagnostics else None
+
+        # If the caller asked for hybrid search but the LanceDB engine served
+        # the request (the default backend), surface that the hybrid parameters
+        # were not applied instead of silently ignoring them.
+        if using_lancedb and (request.use_hybrid or request.hybrid_mode):
+            diagnostics = diagnostics or {}
+            diagnostics["engine_override"] = {
+                "requested": request.hybrid_mode or "hybrid",
+                "served_by": "lancedb_parent_child",
+                "note": "hybrid parameters were not applied; pass source=postgres to use hybrid search",
+            }
+
         if request.group_by_document:
             raw_result_count = len(results)
             grouped_results = _group_results_by_source_uri(results)
@@ -325,27 +343,31 @@ async def search_documents(
             results = grouped_results[:request.top_k] if request.top_k else grouped_results
         search_time = (time.time() - start_time) * 1000  # Convert to ms
 
-        # Check active index document count for state-aware search messages
-        total_documents = 0
-        if ret._should_use_lancedb(source=request.source):
-            try:
-                from services import get_lancedb_adapter
-                total_documents = get_lancedb_adapter().get_statistics().get("total_documents", 0)
-            except Exception:
-                pass
-        else:
-            try:
-                from document_tree import get_tree_stats
-                total_documents = get_tree_stats(source="postgres").get("total_documents", 0)
-            except Exception:
-                pass
-
+        # Only when the search returned nothing do we pay for a document count
+        # to distinguish "empty index" from "no matches". Non-empty results
+        # already prove the index is populated, so the hot path skips the scan.
         message = None
-        if total_documents == 0:
-            if ret._should_use_lancedb(source=request.source):
-                message = "The search index is empty. See the Documents tab → switch to the LanceDB view."
+        if not results:
+            total_documents = 0
+            if using_lancedb:
+                try:
+                    from services import get_lancedb_adapter
+                    total_documents = get_lancedb_adapter().get_statistics().get("total_documents", 0)
+                except Exception:
+                    pass
             else:
-                message = "The search index is empty. See the Documents tab."
+                try:
+                    from document_tree import get_tree_stats
+                    total_documents = get_tree_stats(source="postgres").get("total_documents", 0)
+                except Exception:
+                    pass
+
+            if total_documents == 0:
+                message = (
+                    "The search index is empty. See the Documents tab → switch to the LanceDB view."
+                    if using_lancedb
+                    else "The search index is empty. See the Documents tab."
+                )
 
         result_models = [
             SearchResultModel(

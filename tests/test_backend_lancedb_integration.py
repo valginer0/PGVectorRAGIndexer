@@ -84,6 +84,7 @@ def _reset_lancedb_readiness_state():
 
     retriever_v2._lancedb_cache_dirty = True
     retriever_v2._lancedb_cached_ready = False
+    retriever_v2._lancedb_cached_status = None
     retriever_v2._lancedb_current_drift_signature = None
     retriever_v2._lancedb_failed_sync_signature = None
     retriever_v2._lancedb_sync_failure_message = None
@@ -364,6 +365,40 @@ def test_failed_lancedb_sync_guard_does_not_relaunch_same_drift(monkeypatch):
         retriever._should_use_lancedb()
 
     assert sync_calls == [(1, 2, 0, 0)]
+
+
+def test_failed_readiness_persists_across_cached_calls(monkeypatch):
+    """A drift-FAILED status must keep returning FAILED on later cached calls,
+    not decay to a generic NOT_READY (which hides 'manual repair required')."""
+    import retriever_v2
+    from retriever_v2 import DocumentRetriever
+
+    _reset_lancedb_readiness_state()
+
+    class FakeRepository:
+        def get_statistics(self):
+            return {"total_documents": 1, "total_chunks": 2}
+
+    class FakeAdapter:
+        def get_statistics(self):
+            return {"total_documents": 0, "total_chunks": 0}
+
+    monkeypatch.setattr("services.get_lancedb_adapter", lambda: FakeAdapter())
+
+    retriever = DocumentRetriever.__new__(DocumentRetriever)
+    retriever.config = SimpleNamespace(retrieval=SimpleNamespace(lancedb_enabled=True))
+    retriever.repository = FakeRepository()
+
+    # Pre-set the failed-sync signature so the drift is classified FAILED.
+    retriever_v2._lancedb_failed_sync_signature = (1, 2, 0, 0)
+    retriever_v2._lancedb_sync_failure_message = "manual repair required"
+
+    # First check evaluates the drift and caches FAILED (dirty -> clean).
+    assert retriever.check_readiness() == "FAILED"
+    assert retriever_v2._lancedb_cache_dirty is False
+    # Subsequent cached calls must still report FAILED, not NOT_READY.
+    assert retriever.check_readiness() == "FAILED"
+    assert retriever.check_readiness() == "FAILED"
 
 
 def test_failed_readiness_check_guard_does_not_relaunch_sync(monkeypatch):

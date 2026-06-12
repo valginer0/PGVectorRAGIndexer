@@ -199,6 +199,10 @@ class LanceDBNotReadyError(Exception):
 
 _lancedb_cache_dirty = True
 _lancedb_cached_ready = False
+# Last computed readiness status string ("READY"/"NOT_READY"/"FAILED"). Cached
+# alongside _lancedb_cached_ready so a drift-FAILED state keeps surfacing across
+# subsequent cached calls instead of decaying to a generic NOT_READY.
+_lancedb_cached_status: Optional[str] = None
 _sync_lock = threading.Lock()
 _sync_thread: Optional[threading.Thread] = None
 _lancedb_current_drift_signature: Optional[Tuple[int, int, int, int]] = None
@@ -213,8 +217,9 @@ _lancedb_mutation_count = 0
 
 def invalidate_lancedb_cache():
     """Invalidate the cached LanceDB readiness/drift status."""
-    global _lancedb_cache_dirty
+    global _lancedb_cache_dirty, _lancedb_cached_status
     _lancedb_cache_dirty = True
+    _lancedb_cached_status = None
     logger.info("LanceDB readiness cache invalidated.")
 
 
@@ -260,7 +265,7 @@ class DocumentRetriever:
         Returns:
             "READY" if in sync, or "NOT_READY" if there is drift or empty with PG data.
         """
-        global _lancedb_cache_dirty, _lancedb_cached_ready
+        global _lancedb_cache_dirty, _lancedb_cached_ready, _lancedb_cached_status
         global _lancedb_current_drift_signature, _lancedb_failed_sync_signature
         global _lancedb_sync_failure_message
 
@@ -273,6 +278,10 @@ class DocumentRetriever:
             return "MUTATING"
 
         if not _lancedb_cache_dirty:
+            # Return the exact cached status so a FAILED state persists instead of
+            # decaying to NOT_READY (which would hide "manual repair required").
+            if _lancedb_cached_status is not None:
+                return _lancedb_cached_status
             return "READY" if _lancedb_cached_ready else "NOT_READY"
 
         try:
@@ -301,7 +310,9 @@ class DocumentRetriever:
                         "LanceDB sync previously failed for the current drift signature: %s",
                         _lancedb_sync_failure_message or "unknown error",
                     )
+                    _lancedb_cached_status = "FAILED"
                     return "FAILED"
+                _lancedb_cached_status = "NOT_READY"
                 return "NOT_READY"
 
             # Both empty, or counts equal and populated
@@ -310,6 +321,7 @@ class DocumentRetriever:
             _lancedb_sync_failure_message = None
             _lancedb_cached_ready = True
             _lancedb_cache_dirty = False
+            _lancedb_cached_status = "READY"
             return "READY"
         except Exception as e:
             # Record a sentinel drift signature so a repair sync that fails for

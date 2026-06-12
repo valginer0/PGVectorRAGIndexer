@@ -9,6 +9,7 @@ import time
 import sys
 import jwt
 from datetime import datetime, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
@@ -343,12 +344,13 @@ async def health_check():
         )
 
 
-@system_v1_router.get("/stats", response_model=StatsResponse, dependencies=[Depends(require_api_key)])
-async def get_statistics():
-    """Get system statistics."""
+@system_v1_router.get("/stats", response_model=StatsResponse)
+async def get_statistics(key_record: Optional[dict] = Depends(require_api_key)):
+    """Get system statistics. Document/chunk counts cover visible documents only."""
+    from document_visibility import visibility_clause_for_key_record
     try:
         idx = get_indexer()
-        stats = idx.get_statistics()
+        stats = idx.get_statistics(visibility=visibility_clause_for_key_record(key_record))
         
         return StatsResponse(
             total_documents=stats['database']['total_documents'],

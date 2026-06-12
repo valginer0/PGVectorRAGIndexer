@@ -775,8 +775,20 @@ async def get_metadata_values(
 
 
 @search_router.post("/documents/bulk-delete", tags=["Documents"], dependencies=[Depends(require_permission("documents.delete"))])
-async def bulk_delete_documents(request: BulkDeleteRequest):
-    """Bulk delete documents matching filter criteria. Requires documents.delete."""
+async def bulk_delete_documents(
+    request: BulkDeleteRequest,
+    key_record: Optional[dict] = Depends(require_api_key),
+):
+    """Bulk delete documents matching filter criteria. Requires documents.delete.
+
+    Visibility-scoped: a non-admin delete-capable role can only preview and
+    delete documents it can see (shared + its own); admins are unrestricted.
+    Both stores are scoped to the same visible set so they cannot drift.
+    """
+    from document_visibility import (
+        visibility_clause_for_key_record,
+        search_exclusions_for_key_record,
+    )
     try:
         db_manager = get_db_manager()
         repo = DocumentRepository(db_manager)
@@ -786,9 +798,11 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
                 detail="At least one filter must be provided"
             )
 
+        visibility = visibility_clause_for_key_record(key_record)
+
         if request.preview:
-            # Preview mode - show what would be deleted
-            preview = repo.preview_delete(request.filters)
+            # Preview mode - show what would be deleted (visibility-scoped)
+            preview = repo.preview_delete(request.filters, visibility=visibility)
             from api_models import BulkDeletePreview as BDP
             return BDP(**preview)
         else:
@@ -800,18 +814,27 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
                 from retriever_v2 import begin_lancedb_mutation
                 begin_lancedb_mutation()
             try:
-                # Dual-delete from LanceDB first if enabled to prevent split-brain if LanceDB fails
+                # Dual-delete from LanceDB first if enabled to prevent split-brain if LanceDB fails.
+                # Scope the LanceDB delete to the same visible set as the Postgres delete via the
+                # caller's hidden-document exclusion list, so the two stores can't drift.
                 if getattr(config.retrieval, "lancedb_enabled", False):
                     try:
+                        lancedb_filters = dict(request.filters)
+                        hidden_ids = search_exclusions_for_key_record(key_record)
+                        if hidden_ids:
+                            existing = lancedb_filters.get("excluded_document_ids") or []
+                            lancedb_filters["excluded_document_ids"] = list(
+                                set(existing) | set(hidden_ids)
+                            )
                         from services import get_lancedb_adapter
-                        get_lancedb_adapter().bulk_delete(request.filters)
+                        get_lancedb_adapter().bulk_delete(lancedb_filters)
                     except Exception as e:
                         logger.error(f"Failed to bulk delete from LanceDB: {e}", exc_info=True)
                         from retriever_v2 import invalidate_lancedb_cache
                         invalidate_lancedb_cache()
                         raise
 
-                chunks_deleted = repo.bulk_delete(request.filters)
+                chunks_deleted = repo.bulk_delete(request.filters, visibility=visibility)
 
                 # Invalidate readiness cache on successful delete
                 from retriever_v2 import invalidate_lancedb_cache
@@ -829,6 +852,9 @@ async def bulk_delete_documents(request: BulkDeleteRequest):
             )
     except HTTPException:
         raise
+    except ValueError as e:
+        # Unsupported/injected filter key or empty-filter safety trip.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except Exception as e:
         logger.error(f"Failed to bulk delete documents: {e}")
         raise HTTPException(

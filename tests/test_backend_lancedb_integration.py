@@ -166,7 +166,7 @@ async def test_bulk_delete_api_syncs_with_lancedb(monkeypatch):
 
     # Mock database repository
     class FakeRepo:
-        def bulk_delete(self, filters):
+        def bulk_delete(self, filters, visibility=None):
             return 5
 
     monkeypatch.setattr(search_api, "DocumentRepository", lambda _db: FakeRepo())

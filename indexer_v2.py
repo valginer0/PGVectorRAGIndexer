@@ -364,14 +364,19 @@ class DocumentIndexer:
         logger.info(f"Deleted document {document_id} ({deleted_count} chunks)")
         return True
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self, visibility=None) -> Dict[str, Any]:
         """
         Get indexing statistics.
+
+        Args:
+            visibility: Optional (sql_fragment, params) visibility filter; when
+                set, document/chunk counts cover only documents visible to the
+                caller (database size stays global — it's an infra metric).
 
         Returns:
             Dictionary with statistics
         """
-        stats = self.repository.get_statistics()
+        stats = self.repository.get_statistics(visibility=visibility)
         db_health = self.db_manager.health_check()
         model_info = self.embedding_service.get_model_info()
 

@@ -214,9 +214,14 @@ async def list_quarantined_docs(
     return {"quarantined": items, "count": len(items)}
 
 
-@maintenance_router.post("/quarantine/{source_uri:path}/restore", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
+@maintenance_router.post("/quarantine/{source_uri:path}/restore", tags=["Quarantine"], dependencies=[Depends(require_admin)])
 async def restore_quarantined(source_uri: str):
-    """Remove quarantine status from a document's chunks."""
+    """Remove quarantine status from a document's chunks (admin only).
+
+    Admin-gated so a non-admin cannot un-quarantine another user's document,
+    nor use the 200/404 response as an existence oracle for documents the
+    visibility-filtered listing hides.
+    """
     from quarantine import restore_chunks
     count = restore_chunks(source_uri)
     if count == 0:
@@ -227,7 +232,7 @@ async def restore_quarantined(source_uri: str):
     return {"restored": count, "source_uri": source_uri}
 
 
-@maintenance_router.post("/quarantine/purge", tags=["Quarantine"], dependencies=[Depends(require_api_key)],
+@maintenance_router.post("/quarantine/purge", tags=["Quarantine"], dependencies=[Depends(require_admin)],
                          deprecated=True)
 async def purge_quarantine(response: Response, retention_days: Optional[int] = Query(default=None)):
     """Permanently delete chunks quarantined longer than the retention window.

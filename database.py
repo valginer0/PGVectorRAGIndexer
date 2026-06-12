@@ -319,7 +319,21 @@ ANALYZE_INTERVAL_SECONDS = int(os.getenv("DB_ANALYZE_INTERVAL_SECONDS", "300"))
 
 class DocumentRepository:
     """Repository for document-related database operations."""
-    
+
+    # Filter keys that map directly to a SQL column name. Only these may be
+    # interpolated into a WHERE clause as a bare identifier; every other key is
+    # handled by an explicit branch (metadata.*, type/namespace/category,
+    # extensions, excluded_document_ids, allowed_namespaces, source_uri_like).
+    # An unknown key is rejected rather than interpolated — otherwise a
+    # caller-supplied filter key becomes SQL injection and can void the
+    # AND-joined visibility/exclusion clauses.
+    ALLOWED_FILTER_COLUMNS = frozenset({
+        "document_id",
+        "source_uri",
+        "chunk_index",
+        "chunk_id",
+    })
+
     def __init__(self, db_manager: DatabaseManager):
         """Initialize repository with database manager."""
         self.db = db_manager
@@ -714,14 +728,18 @@ class DocumentRepository:
                             # Empty allowlist = access to nothing (fail closed)
                             where_clauses.append("FALSE")
                 else:
-                    # Direct column match (e.g., document_id, source_uri)
+                    # Direct column match (e.g., document_id, source_uri).
+                    # Reject unknown keys — interpolating an arbitrary key is
+                    # SQL injection and could OR past the visibility clauses.
+                    if key not in self.ALLOWED_FILTER_COLUMNS:
+                        raise ValueError(f"Unsupported filter key: {key}")
                     where_clauses.append(f"{key} = %s")
                     params.append(value)
-        
+
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-        
+
         query = f"""
-        SELECT 
+        SELECT
             chunk_id,
             document_id,
             chunk_index,
@@ -909,19 +927,26 @@ class DocumentRepository:
             results = cursor.fetchall()
             return [row['value'] for row in results if row['value']]
     
-    def preview_delete(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+    def preview_delete(
+        self,
+        filters: Dict[str, Any],
+        visibility: Optional[Tuple[str, list]] = None
+    ) -> Dict[str, Any]:
         """
         Preview what would be deleted with given filters (dry-run).
-        
+
         Args:
             filters: Filter criteria (same format as search_similar)
-            
+            visibility: Optional (sql_fragment, params) visibility filter; the
+                preview then only counts/samples documents visible to the
+                caller, so it cannot enumerate hidden documents.
+
         Returns:
             Dictionary with preview information
         """
         where_clauses = []
         params = []
-        
+
         for key, value in filters.items():
             if key.startswith('metadata.'):
                 metadata_key = key[9:]
@@ -941,11 +966,17 @@ class DocumentRepository:
                 where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
             else:
+                if key not in self.ALLOWED_FILTER_COLUMNS:
+                    raise ValueError(f"Unsupported filter key: {key}")
                 where_clauses.append(f"{key} = %s")
                 params.append(value)
-        
+
+        if visibility and visibility[0]:
+            where_clauses.append(visibility[0])
+            params.extend(visibility[1])
+
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-        
+
         # Get count and sample documents
         count_query = f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {where_sql}"
         sample_query = f"""
@@ -971,19 +1002,26 @@ class DocumentRepository:
                 "filters_applied": filters
             }
     
-    def bulk_delete(self, filters: Dict[str, Any]) -> int:
+    def bulk_delete(
+        self,
+        filters: Dict[str, Any],
+        visibility: Optional[Tuple[str, list]] = None
+    ) -> int:
         """
         Delete documents matching the given filters.
-        
+
         Args:
             filters: Filter criteria (same format as search_similar)
-            
+            visibility: Optional (sql_fragment, params) visibility filter; the
+                delete then only removes documents visible to the caller, so a
+                non-admin delete-capable role cannot delete hidden documents.
+
         Returns:
             Number of chunks deleted
         """
         where_clauses = []
         params = []
-        
+
         for key, value in filters.items():
             if key.startswith('metadata.'):
                 metadata_key = key[9:]
@@ -1002,12 +1040,20 @@ class DocumentRepository:
                 where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
             else:
+                if key not in self.ALLOWED_FILTER_COLUMNS:
+                    raise ValueError(f"Unsupported filter key: {key}")
                 where_clauses.append(f"{key} = %s")
                 params.append(value)
-        
+
         if not where_clauses:
             raise ValueError("Filters are required for bulk delete (safety check)")
-        
+
+        # Append the caller's visibility scope AFTER the user-filter safety check
+        # so visibility alone never satisfies "filters required".
+        if visibility and visibility[0]:
+            where_clauses.append(visibility[0])
+            params.extend(visibility[1])
+
         where_sql = f"WHERE {' AND '.join(where_clauses)}"
         
         # Delete chunks matching the filters

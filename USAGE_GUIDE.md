@@ -41,6 +41,17 @@ All three tabs (Upload, Search, Manage) support comprehensive filtering with met
 - `GET /metadata/keys` - List all metadata keys
 - `GET /metadata/values?key=type` - Get values for a specific key
 
+> **Filter precision tip:** the built-in keys `type`, `namespace`, and
+> `category` match **exactly** on dedicated columns in both search backends.
+> Arbitrary `metadata.<key>` filters match exactly on the PostgreSQL backend
+> but fall back to a substring match over the serialized metadata on the
+> LanceDB backend, which can occasionally over-match (e.g. a value nested in
+> another field). For any metadata key you filter or bulk-delete on frequently
+> and need exact-match guarantees, store it as `type`, `namespace`, or
+> `category` rather than an arbitrary `metadata.<key>`. (This affects match
+> precision only — it never widens document visibility, which is enforced
+> separately.)
+
 ---
 
 ## Database Operations

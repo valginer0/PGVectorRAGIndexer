@@ -425,7 +425,7 @@ class TestLicenseUsageEndpoint:
         from routers.system_api import get_license_usage
         with patch("license.get_current_license", return_value=agg), \
              patch("users.count_active_users", return_value=8):
-            result = asyncio.get_event_loop().run_until_complete(get_license_usage())
+            result = asyncio.run(get_license_usage())
         assert result["licensed_seats"] == 5
         assert result["active_seats"] == 8
         assert result["overage"] == 3
@@ -436,7 +436,7 @@ class TestLicenseUsageEndpoint:
         from routers.system_api import get_license_usage
         with patch("license.get_current_license", return_value=agg), \
              patch("users.count_active_users", return_value=20):
-            result = asyncio.get_event_loop().run_until_complete(get_license_usage())
+            result = asyncio.run(get_license_usage())
         assert result["overage"] == 0
 
     def test_community_edition_always_zero_overage(self):
@@ -445,7 +445,7 @@ class TestLicenseUsageEndpoint:
         from routers.system_api import get_license_usage
         with patch("license.get_current_license", return_value=agg), \
              patch("users.count_active_users", return_value=999):
-            result = asyncio.get_event_loop().run_until_complete(get_license_usage())
+            result = asyncio.run(get_license_usage())
         assert result["overage"] == 0
         assert result["licensed_seats"] == 0
         assert result["active_seats"] == 0

@@ -194,7 +194,7 @@ def test_context_endpoint_applies_access_filters():
                return_value=["doc-hidden"]), \
          patch("collection_grants.search_allowed_namespaces_for_key_record",
                return_value=["finance"]):
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             search_api.get_context(query="q", top_k=5, use_hybrid=False,
                                    source="lancedb", key_record={"id": 1})
         )
@@ -215,7 +215,7 @@ def test_context_endpoint_local_mode_unfiltered():
     fake_ret.get_context.return_value = "ctx"
 
     with patch.object(search_api, "get_retriever", return_value=fake_ret):
-        asyncio.get_event_loop().run_until_complete(
+        asyncio.run(
             search_api.get_context(query="q", top_k=5, use_hybrid=False,
                                    source="lancedb", key_record=None)
         )

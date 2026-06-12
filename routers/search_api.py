@@ -308,15 +308,21 @@ async def search_documents(
 
         diagnostics = dict(retrieval_diagnostics) if retrieval_diagnostics else None
 
-        # If the caller asked for hybrid search but the LanceDB engine served
-        # the request (the default backend), surface that the hybrid parameters
-        # were not applied instead of silently ignoring them.
+        # The legacy use_hybrid/hybrid_mode parameters select the older
+        # PostgreSQL hybrid implementations. The LanceDB engine does its own
+        # hybrid (lexical + vector) retrieval and ignores those knobs, so if it
+        # served a request that set them, surface that rather than silently
+        # dropping the parameters.
         if using_lancedb and (request.use_hybrid or request.hybrid_mode):
             diagnostics = diagnostics or {}
             diagnostics["engine_override"] = {
                 "requested": request.hybrid_mode or "hybrid",
                 "served_by": "lancedb_parent_child",
-                "note": "hybrid parameters were not applied; pass source=postgres to use hybrid search",
+                "note": (
+                    "the legacy PostgreSQL hybrid_mode parameter does not apply to the "
+                    "LanceDB engine, which performs its own hybrid (lexical + vector) "
+                    "retrieval; pass source=postgres to run the legacy hybrid modes"
+                ),
             }
 
         if request.group_by_document:

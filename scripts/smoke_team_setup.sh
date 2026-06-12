@@ -107,25 +107,55 @@ done
 curl -fsS "${BASE_URL}/license" >/dev/null 2>&1 || die "API did not come up at ${BASE_URL}"
 
 # --- 3. create admin + regular user accounts (direct DB, no auth gating) --
-log "Creating admin and regular-user accounts..."
+log "Creating or refreshing admin and regular-user accounts..."
 RESULT="$("${COMPOSE[@]}" run --rm -T app python - <<'PY'
 import json
 import auth
 import users
+from database import get_db_manager
 
 admin_key = auth.create_api_key_record("smoke-admin")
 alice_key = auth.create_api_key_record("smoke-alice")
 
-admin_user = users.create_user(
-    email="admin@smoke.local", role="admin", api_key_id=admin_key["id"]
-)
+def _role_or_user(role: str) -> str:
+    return role if role in users._get_valid_roles() else "user"
+
+def _upsert_smoke_user(email: str, role: str, api_key_id: int):
+    """Create or relink a smoke user so rerunning this script prints usable keys."""
+    with get_db_manager().get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            INSERT INTO users (email, display_name, role, auth_provider, api_key_id, is_active)
+            VALUES (%s, %s, %s, 'api_key', %s, true)
+            ON CONFLICT (email) DO UPDATE SET
+                display_name = COALESCE(users.display_name, EXCLUDED.display_name),
+                role = EXCLUDED.role,
+                auth_provider = 'api_key',
+                api_key_id = EXCLUDED.api_key_id,
+                is_active = true,
+                updated_at = now()
+            RETURNING id, email, role, api_key_id, is_active
+            """,
+            (email, email.split("@", 1)[0], _role_or_user(role), api_key_id),
+        )
+        row = cursor.fetchone()
+        conn.commit()
+        if not row:
+            return None
+        return {
+            "id": row[0],
+            "email": row[1],
+            "role": row[2],
+            "api_key_id": row[3],
+            "is_active": row[4],
+        }
+
+
+admin_user = _upsert_smoke_user("admin@smoke.local", "admin", admin_key["id"])
 # researcher: read + write + visibility, no admin. Fall back to the always-present
 # system "user" role if a custom role isn't seeded in this environment.
-alice_user = users.create_user(
-    email="alice@smoke.local", role="researcher", api_key_id=alice_key["id"]
-) or users.create_user(
-    email="alice@smoke.local", role="user", api_key_id=alice_key["id"]
-)
+alice_user = _upsert_smoke_user("alice@smoke.local", "researcher", alice_key["id"])
 
 print("SMOKE_RESULT " + json.dumps({
     "admin_key": admin_key["key"],

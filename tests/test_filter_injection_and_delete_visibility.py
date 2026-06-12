@@ -162,7 +162,10 @@ async def test_stats_route_scopes_counts_to_caller(monkeypatch):
             "total_documents": 1,
             "total_chunks": 2,
             "avg_chunks_per_document": 2,
-            "database_size": "1 MB",
+            # Match what repository.get_statistics actually returns (bytes), so
+            # this test exercises the route's formatting instead of feeding it a
+            # key the real repo never produces.
+            "database_size_bytes": 1048576,
         },
         "embedding_model": {"model_name": "m", "dimension": 384},
     }
@@ -171,8 +174,10 @@ async def test_stats_route_scopes_counts_to_caller(monkeypatch):
         "document_visibility.visibility_clause_for_key_record", lambda kr: VIS
     )
 
-    await system_api.get_statistics(key_record={"id": 1})
+    resp = await system_api.get_statistics(key_record={"id": 1})
     assert captured["visibility"] == VIS
+    # Route must produce a formatted size string, not crash on the missing key.
+    assert resp.database_size == "1.0 MB"
 
 
 async def test_bulk_delete_route_threads_visibility_to_both_stores(monkeypatch):

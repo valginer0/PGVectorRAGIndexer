@@ -285,6 +285,51 @@ class TestScimFilterParser:
 
 
 # ===========================================================================
+# Test: SCIM list/query DB access
+# ===========================================================================
+
+
+class TestScimListUsers:
+    def test_list_users_uses_db_connection_context_manager(self):
+        from scim import list_scim_users
+
+        class ConnContext:
+            entered = False
+            exited = False
+
+            def __init__(self, conn):
+                self._conn = conn
+
+            def __enter__(self):
+                self.entered = True
+                return self._conn
+
+            def __exit__(self, exc_type, exc, tb):
+                self.exited = True
+                return False
+
+        cursor = MagicMock()
+        cursor.fetchone.return_value = (1,)
+        cursor.fetchall.return_value = [
+            (
+                "u1", "alice@example.com", "Alice", "user", "api_key",
+                None, None, "2026-01-01", "2026-01-02", None, True,
+            )
+        ]
+        conn = MagicMock()
+        conn.cursor.return_value = cursor
+        ctx = ConnContext(conn)
+
+        with patch("users._get_db_connection", return_value=ctx):
+            result = list_scim_users(start_index=1, count=10, base_url="https://app.example.com")
+
+        assert ctx.entered is True
+        assert ctx.exited is True
+        assert result["totalResults"] == 1
+        assert result["Resources"][0]["id"] == "u1"
+
+
+# ===========================================================================
 # Test: SCIM PATCH operations
 # ===========================================================================
 

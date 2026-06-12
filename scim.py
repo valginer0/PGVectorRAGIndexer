@@ -396,26 +396,26 @@ def list_scim_users(
             if parsed:
                 where_sql, params = parsed
 
-        conn = users._get_db_connection()
-        cursor = conn.cursor()
+        with users._get_db_connection() as conn:
+            cursor = conn.cursor()
 
-        # Count total
-        count_sql = "SELECT COUNT(*) FROM users"
-        if where_sql:
-            count_sql += f" WHERE {where_sql}"
-        cursor.execute(count_sql, params)
-        total = cursor.fetchone()[0]
+            # Count total
+            count_sql = "SELECT COUNT(*) FROM users"
+            if where_sql:
+                count_sql += f" WHERE {where_sql}"
+            cursor.execute(count_sql, params)
+            total = cursor.fetchone()[0]
 
-        # Fetch page (SCIM startIndex is 1-based)
-        offset = max(0, start_index - 1)
-        select_sql = "SELECT * FROM users"
-        if where_sql:
-            select_sql += f" WHERE {where_sql}"
-        select_sql += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
-        cursor.execute(select_sql, params + [count, offset])
+            # Fetch page (SCIM startIndex is 1-based)
+            offset = max(0, start_index - 1)
+            select_sql = "SELECT * FROM users"
+            if where_sql:
+                select_sql += f" WHERE {where_sql}"
+            select_sql += " ORDER BY created_at DESC LIMIT %s OFFSET %s"
+            cursor.execute(select_sql, params + [count, offset])
 
-        rows = cursor.fetchall()
-        user_list = [users._row_to_dict(row) for row in rows]
+            rows = cursor.fetchall()
+            user_list = [users._row_to_dict(row) for row in rows]
 
         return {
             "schemas": [SCIM_SCHEMA_LIST],

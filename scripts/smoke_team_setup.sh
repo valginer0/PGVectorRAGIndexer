@@ -94,6 +94,25 @@ log "Starting backend (auth enforced for all connections)..."
 log "Running database migrations..."
 "${COMPOSE[@]}" run --rm app alembic upgrade head
 
+# Install the license into the DB (server_settings) rather than relying on the
+# file mount. On Rancher Desktop + WSL, bind-mounting a file from the Linux home
+# into the container is unreliable, so the file-based license often doesn't load
+# and the edition silently falls back to Community. Storing it in the DB is
+# mount-independent and is how the in-app "Install license" flow persists it.
+log "Installing Team license into the DB (mount-independent)..."
+LICENSE_TOKEN="$(cat "${LICENSE_DIR}/license.key")"
+"${COMPOSE[@]}" run --rm -T app python - "$LICENSE_TOKEN" <<'PY' || warn "License DB install failed; edition may be Community."
+import sys
+from license import validate_license_key, resolve_verification_context, load_all_licenses, reset_license, set_current_license
+from server_settings_store import set_server_license_key
+token = sys.argv[1]
+secret, algs = resolve_verification_context()
+validate_license_key(token, secret, algs)  # raises if invalid
+set_server_license_key(token)
+reset_license()
+set_current_license(load_all_licenses())
+PY
+
 # Restart so the app loads the license + migrated schema cleanly.
 log "Restarting app to load license + schema..."
 "${COMPOSE[@]}" restart app

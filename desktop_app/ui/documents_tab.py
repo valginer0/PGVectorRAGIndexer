@@ -369,11 +369,16 @@ class DocumentsTab(QWidget):
             source_item = self._create_source_item(doc.get('source_uri', ''))
             source_item.setData(Qt.UserRole + 1, doc.get('document_id'))
             visibility = doc.get('visibility')
+            owner_id = doc.get('owner_id')
             source_item.setData(Qt.UserRole + 2, visibility)
-            # Lock icon marks private documents at a glance (shared is the default).
-            if visibility == 'private':
+            source_item.setData(Qt.UserRole + 3, owner_id)
+            # Lock icon marks documents that are truly owner-private. A NULL
+            # owner is treated as shared by the visibility rules.
+            if visibility == 'private' and owner_id:
                 source_item.setIcon(qta.icon('fa5s.lock', color='#f59e0b'))
                 source_item.setToolTip("Private — visible only to its owner and admins")
+            elif visibility == 'private':
+                source_item.setToolTip("Private flag set, but no owner is assigned; visible like shared")
             else:
                 source_item.setToolTip("Shared — visible to everyone")
             self.documents_table.setItem(i, 0, source_item)
@@ -592,10 +597,12 @@ class DocumentsTab(QWidget):
                     "automatically; for existing documents an admin can assign "
                     "one via the ownership transfer API.",
                 )
+                self._refresh_current_view()
                 return
 
         self.status_label.setText(f"Document set to {visibility}")
         self.status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+        self._refresh_current_view()
 
     def open_source_path(self, path: str) -> None:
         """Open the given path with the OS default application."""

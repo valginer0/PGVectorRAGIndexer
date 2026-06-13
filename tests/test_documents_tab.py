@@ -400,12 +400,14 @@ def test_set_visibility_shared_updates_status(documents_tab):
     """Successful 'Make Shared' shows confirmation in the status label."""
     documents_tab.api_client.set_document_visibility = MagicMock()
 
-    documents_tab.set_document_visibility("doc-1", "shared")
+    with patch.object(documents_tab, "_refresh_current_view") as refresh:
+        documents_tab.set_document_visibility("doc-1", "shared")
 
     documents_tab.api_client.set_document_visibility.assert_called_once_with(
         "doc-1", visibility="shared"
     )
     assert "shared" in documents_tab.status_label.text()
+    refresh.assert_called_once()
 
 
 def test_set_visibility_private_with_owner_updates_status(documents_tab):
@@ -414,9 +416,11 @@ def test_set_visibility_private_with_owner_updates_status(documents_tab):
         return_value={"owner_id": "u-1", "visibility": "private"}
     )
 
-    documents_tab.set_document_visibility("doc-1", "private")
+    with patch.object(documents_tab, "_refresh_current_view") as refresh:
+        documents_tab.set_document_visibility("doc-1", "private")
 
     assert "private" in documents_tab.status_label.text()
+    refresh.assert_called_once()
 
 
 def test_set_visibility_private_without_owner_warns(documents_tab):
@@ -426,11 +430,13 @@ def test_set_visibility_private_without_owner_warns(documents_tab):
         return_value={"owner_id": None, "visibility": "private"}
     )
 
-    with patch.object(QMessageBox, "information") as info_box:
+    with patch.object(QMessageBox, "information") as info_box, \
+         patch.object(documents_tab, "_refresh_current_view") as refresh:
         documents_tab.set_document_visibility("doc-1", "private")
 
     info_box.assert_called_once()
     assert "no owner" in info_box.call_args[0][2]
+    refresh.assert_called_once()
 
 
 def test_set_visibility_api_failure_shows_error(documents_tab):
@@ -456,3 +462,37 @@ def test_display_documents_stores_document_id_for_menu(documents_tab):
 
     item = documents_tab.documents_table.item(0, 0)
     assert item.data(Qt.UserRole + 1) == "doc-abc"
+
+
+def test_display_documents_marks_owned_private_rows_with_lock(documents_tab):
+    docs = [{
+        "source_uri": "/tmp/private.txt",
+        "document_id": "doc-private",
+        "visibility": "private",
+        "owner_id": "user-1",
+        "chunk_count": 1,
+        "metadata": {},
+    }]
+
+    documents_tab.display_documents(docs)
+
+    item = documents_tab.documents_table.item(0, 0)
+    assert not item.icon().isNull()
+    assert "owner and admins" in item.toolTip()
+
+
+def test_display_documents_does_not_lock_ownerless_private_rows(documents_tab):
+    docs = [{
+        "source_uri": "/tmp/ownerless.txt",
+        "document_id": "doc-ownerless",
+        "visibility": "private",
+        "owner_id": None,
+        "chunk_count": 1,
+        "metadata": {},
+    }]
+
+    documents_tab.display_documents(docs)
+
+    item = documents_tab.documents_table.item(0, 0)
+    assert item.icon().isNull()
+    assert "no owner" in item.toolTip()

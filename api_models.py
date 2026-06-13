@@ -96,6 +96,8 @@ class DocumentInfo(BaseModel):
     last_updated: Optional[datetime] = None
     document_type: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
+    visibility: Optional[str] = None
+    owner_id: Optional[str] = None
 
 
 class DocumentListResponse(BaseModel):

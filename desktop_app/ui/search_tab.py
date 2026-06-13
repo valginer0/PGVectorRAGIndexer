@@ -141,6 +141,14 @@ class SearchTab(QWidget):
         self._display_result_limit = 10
         self._active_engine = "lancedb"
         self.setup_ui()
+
+    def clear_results(self) -> None:
+        """Drop any displayed search results — called when the connected
+        account/key changes so one user's results don't linger for the next."""
+        try:
+            self.results_table.setRowCount(0)
+        except Exception:
+            pass
     
     def setup_ui(self):
         """Setup the user interface."""

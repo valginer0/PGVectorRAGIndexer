@@ -634,7 +634,9 @@ class DocumentRepository:
             COUNT(*) as chunk_count,
             MIN(indexed_at) as indexed_at,
             MAX(updated_at) as last_updated,
-            (array_agg(metadata->>'type' ORDER BY indexed_at ASC))[1] as document_type
+            (array_agg(metadata->>'type' ORDER BY indexed_at ASC))[1] as document_type,
+            (array_agg(visibility ORDER BY indexed_at ASC))[1] as visibility,
+            (array_agg(owner_id ORDER BY indexed_at ASC))[1] as owner_id
         FROM document_chunks
         {where_sql}
         GROUP BY document_id, source_uri

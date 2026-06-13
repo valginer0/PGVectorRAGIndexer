@@ -106,19 +106,28 @@ def _run_startup():
         sys.stdout.flush()
 
         # Run a startup backup (Docker mode only) so there's always a
-        # recent pg_dump available for auto-recovery.
+        # recent pg_dump available for auto-recovery — but ONLY when there is
+        # data to back up. Backing up an empty database would create a backup
+        # file that later makes auto-recovery's "backup exists + empty table"
+        # heuristic fire a false "DATA LOSS DETECTED" on a still-empty install.
         if os.environ.get("DB_HOST") == "db":
             try:
                 from auto_backup import run_pg_dump_backup, rotate_backups
                 from config import get_config
-                logger.info("[init] Running startup backup...")
-                bk = run_pg_dump_backup(
-                    get_config().database.connection_string,
-                    prefix="startup_backup",
-                )
-                if bk:
-                    rotate_backups(prefix="startup_backup", keep=3)
-                logger.info("[init] Startup backup complete")
+                from database import DocumentRepository
+
+                doc_count = DocumentRepository(get_db_manager()).get_statistics().get("total_documents", 0)
+                if doc_count > 0:
+                    logger.info("[init] Running startup backup...")
+                    bk = run_pg_dump_backup(
+                        get_config().database.connection_string,
+                        prefix="startup_backup",
+                    )
+                    if bk:
+                        rotate_backups(prefix="startup_backup", keep=3)
+                    logger.info("[init] Startup backup complete")
+                else:
+                    logger.info("[init] Skipping startup backup — database is empty (nothing to back up)")
             except Exception as e:
                 logger.warning("[init] Startup backup failed (non-fatal): %s", e)
 

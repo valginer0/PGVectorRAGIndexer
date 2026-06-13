@@ -365,9 +365,17 @@ class DocumentsTab(QWidget):
         self.documents_table.setRowCount(len(documents))
         
         for i, doc in enumerate(documents):
-            # Source URI (document_id stored for context-menu actions)
+            # Source URI (document_id + visibility stored for context-menu actions)
             source_item = self._create_source_item(doc.get('source_uri', ''))
             source_item.setData(Qt.UserRole + 1, doc.get('document_id'))
+            visibility = doc.get('visibility')
+            source_item.setData(Qt.UserRole + 2, visibility)
+            # Lock icon marks private documents at a glance (shared is the default).
+            if visibility == 'private':
+                source_item.setIcon(qta.icon('fa5s.lock', color='#f59e0b'))
+                source_item.setToolTip("Private — visible only to its owner and admins")
+            else:
+                source_item.setToolTip("Shared — visible to everyone")
             self.documents_table.setItem(i, 0, source_item)
             
             # Document Type: prefer metadata.type, fallback to document_type
@@ -495,10 +503,13 @@ class DocumentsTab(QWidget):
             return
 
         index = self.documents_table.indexAt(pos)
-        if not index.isValid() or index.column() != 0:
+        if not index.isValid():
             return
 
-        item = self.documents_table.item(index.row(), index.column())
+        # Document data (source_uri, document_id, visibility) lives on the
+        # column-0 cell, so resolve from there no matter which column was
+        # right-clicked — the whole row should offer the same actions.
+        item = self.documents_table.item(index.row(), 0)
         if item is None:
             return
 
@@ -729,6 +740,20 @@ class DocumentsTab(QWidget):
         else:
             self.load_documents()
 
+    def on_account_changed(self) -> None:
+        """Clear cached document data and reload after the connected account or
+        API key changes, so a switched identity never sees the previous user's
+        documents (e.g. their private ones) until a manual Refresh."""
+        try:
+            self.documents_table.setSortingEnabled(False)
+            self.documents_table.setRowCount(0)
+            self.documents_table.setSortingEnabled(True)
+        except Exception:
+            pass
+        self.current_documents = []
+        # Re-fetch the active view under the new identity.
+        self._refresh_current_view()
+
     def _on_db_source_changed(self, index: int) -> None:
         """Handle database source change."""
         source = self.db_source_combo.itemData(index)
@@ -881,8 +906,23 @@ class DocumentsTab(QWidget):
             reindex_action = menu.addAction("Reindex Now")
             remove_action = menu.addAction("Remove from Recent")
 
+        # Visibility actions for files (same as List view) — available from the
+        # default Tree view so users aren't forced to switch views to manage privacy.
+        make_private_action = make_shared_action = None
+        document_id = getattr(node, "document_id", "") if node.node_type == "file" else ""
+        if document_id:
+            menu.addSeparator()
+            make_private_action = menu.addAction("Make Private")
+            make_shared_action = menu.addAction("Make Shared")
+
         action = menu.exec(self._doc_tree.viewport().mapToGlobal(pos))
         if action is None:
+            return
+        if document_id and action == make_private_action:
+            self.set_document_visibility(document_id, "private")
+            return
+        if document_id and action == make_shared_action:
+            self.set_document_visibility(document_id, "shared")
             return
         if action == copy_path_action:
             if node.node_type == "file" and self.source_manager:

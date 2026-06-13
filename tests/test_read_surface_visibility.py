@@ -489,6 +489,13 @@ def test_postgres_read_surfaces_filter_hidden_documents(db_manager):
         docs, total = repo.list_documents(with_total=True, visibility=owner)
         assert {d["document_id"] for d in docs} == {"vis-doc-a", "vis-doc-b"}
         assert total == 2
+        # list_documents exposes per-document visibility + owner (for the UI
+        # private/shared indicator). vis-doc-a is the private, owner-set one.
+        by_id = {d["document_id"]: d for d in docs}
+        assert "visibility" in by_id["vis-doc-a"] and "owner_id" in by_id["vis-doc-a"]
+        assert by_id["vis-doc-a"]["visibility"] == "private"
+        assert by_id["vis-doc-a"]["owner_id"] == "test-vis-u1"
+        assert by_id["vis-doc-b"]["visibility"] in ("shared", None)
 
         # GET /documents/{id}
         assert repo.get_document_by_id("vis-doc-a", visibility=stranger) is None

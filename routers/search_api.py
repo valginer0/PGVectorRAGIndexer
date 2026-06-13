@@ -452,7 +452,9 @@ async def list_documents(
                 indexed_at=doc['indexed_at'],
                 last_updated=doc.get('last_updated'),
                 document_type=doc.get('document_type'),
-                metadata={"type": doc.get('document_type')} if doc.get('document_type') is not None else {}
+                metadata={"type": doc.get('document_type')} if doc.get('document_type') is not None else {},
+                visibility=doc.get('visibility'),
+                owner_id=doc.get('owner_id'),
             )
             for doc in documents
         ]

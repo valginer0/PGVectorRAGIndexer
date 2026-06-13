@@ -172,6 +172,21 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready")
 
+        # Persistent, always-visible current-user indicator (#6) and app version
+        # (#7). Permanent widgets sit on the right of the status bar and survive
+        # transient showMessage() updates.
+        self._current_user_label = QLabel("")
+        self._current_user_label.setStyleSheet("color: #94a3b8; padding: 0 8px;")
+        self.status_bar.addPermanentWidget(self._current_user_label)
+        try:
+            from version import __version__ as _app_ver
+        except Exception:
+            _app_ver = ""
+        self._version_label = QLabel(f"v{_app_ver}" if _app_ver else "")
+        self._version_label.setStyleSheet("color: #64748b; padding: 0 8px;")
+        self.status_bar.addPermanentWidget(self._version_label)
+        self._refresh_current_user_label()
+
         # Invalidate Organization tab cache when backend settings change
         self.settings_tab.backend_settings_changed.connect(self._on_backend_settings_changed)
 
@@ -777,6 +792,32 @@ class MainWindow(QMainWindow):
         self._update_remote_banner()
         if hasattr(self, 'org_tab'):
             self.org_tab.on_settings_changed()
+        # Clear/reload per-account data so a switched identity never sees the
+        # previous user's cached documents or search results.
+        if hasattr(self, 'documents_tab'):
+            self.documents_tab.on_account_changed()
+        if hasattr(self, 'search_tab'):
+            self.search_tab.clear_results()
+        # Refresh the current-user indicator for the new identity.
+        self._refresh_current_user_label()
+
+    def _refresh_current_user_label(self) -> None:
+        """Update the status-bar current-user indicator from /me."""
+        if not hasattr(self, "_current_user_label"):
+            return
+        text = ""
+        try:
+            identity = self.api_client.get_me()
+            if identity:
+                user = identity.get("user")
+                if user:
+                    name = user.get("display_name") or user.get("email") or "user"
+                    text = f"\U0001F464 {name} ({user.get('role', '—')})"
+                else:
+                    text = f"\U0001F464 no linked user (effective: {identity.get('role', '—')})"
+        except Exception:
+            text = ""
+        self._current_user_label.setText(text)
 
     # ------------------------------------------------------------------
     # Onboarding Wizard (#18)

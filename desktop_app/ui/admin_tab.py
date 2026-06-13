@@ -2016,6 +2016,16 @@ class OrganizationTab(QWidget):
         if self._auto_retry_scheduled:
             return
 
+        # Cooldown: the health worker calls this every ~3s. _begin_transient_retry_window()
+        # below re-arms _awaiting_backend_healthy_reprobe, so without this guard a probe
+        # that keeps failing (e.g. rate-limited) would re-fire a multi-request org probe
+        # every 3s and flood the backend. Re-probe at most once per 30s while stuck.
+        import time as _time
+        now = _time.monotonic()
+        if now - getattr(self, "_last_reprobe_ts", 0.0) < 30.0:
+            return
+        self._last_reprobe_ts = now
+
         self._awaiting_backend_healthy_reprobe = False
         self._begin_transient_retry_window()
         self._caps.invalidate()

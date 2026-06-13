@@ -98,6 +98,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if (
             request.method.upper() == "OPTIONS"
             or self._limiter.limit <= 0
+            or _is_health_probe_path(request)
             or _is_trusted_bulk_indexing_request(request)
         ):
             return await call_next(request)
@@ -162,6 +163,20 @@ def _is_trusted_bulk_indexing_request(request: Request) -> bool:
         return True
 
     return False
+
+
+# Liveness/readiness probes: polled continuously by the desktop client and
+# infra healthchecks, so they must never consume a caller's rate-limit budget
+# (otherwise normal health polling exhausts the limit and the app reads the
+# resulting 429s as "server unreachable").
+_HEALTH_PROBE_PATHS = frozenset({
+    "/health", "/healthz", "/ready", "/readiness", "/live", "/liveness",
+})
+
+
+def _is_health_probe_path(request: Request) -> bool:
+    path = request.url.path.rstrip("/")
+    return path in _HEALTH_PROBE_PATHS or _without_api_prefix(path) in _HEALTH_PROBE_PATHS
 
 
 def _without_api_prefix(path: str) -> str:

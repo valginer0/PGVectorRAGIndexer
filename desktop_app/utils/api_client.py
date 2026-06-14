@@ -107,6 +107,16 @@ class APIClient:
         self._base.api_base = value.rstrip('/') if value else value # type: ignore
         
     @property
+    def api_key(self) -> Optional[str]:
+        return self._base.api_key
+
+    @api_key.setter
+    def api_key(self, value: Optional[str]):
+        # BaseAPIClient.api_key enforces synchronization invariant:
+        # immediately patches X-API-Key into self._base._session.headers.
+        self._base.api_key = value
+
+    @property
     def _api_key(self) -> Optional[str]:
         return self._base.api_key
         

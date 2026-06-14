@@ -178,10 +178,10 @@ def test_save_backend_settings_updates_live_session_header(mock_key, mock_url, m
     (uploads/changes go out as the wrong user). Uses a REAL client because a
     MagicMock accepts any attribute assignment and hides this bug.
     """
-    from desktop_app.utils.api_client_core.base_client import BaseAPIClient
+    from desktop_app.utils.api_client import APIClient
 
-    client = BaseAPIClient(base_url="http://localhost:8001", api_key="alice-key")
-    assert client._session.headers.get("X-API-Key") == "alice-key"
+    client = APIClient(base_url="http://localhost:8001", api_key="alice-key")
+    assert client._base._session.headers.get("X-API-Key") == "alice-key"
 
     controller = SettingsController(api_client=client)
     result = controller.save_backend_settings(
@@ -189,8 +189,8 @@ def test_save_backend_settings_updates_live_session_header(mock_key, mock_url, m
     )
     assert result.success is True
     # The session must now send the NEW key on every request.
-    assert client._session.headers.get("X-API-Key") == "admin-key"
+    assert client._base._session.headers.get("X-API-Key") == "admin-key"
 
     # Switching to local mode clears the key from the session header.
     controller.save_backend_settings(app_config.BACKEND_MODE_LOCAL, "http://ignored", "")
-    assert "X-API-Key" not in client._session.headers
+    assert "X-API-Key" not in client._base._session.headers

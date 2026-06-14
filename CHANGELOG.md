@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.2] - 2026-06-14
+
+### Fixed
+- fix(lancedb): create FTS indexes with `with_position=True` so double-quoted
+  phrase queries (e.g. `"banana bread recipe"`) execute without position errors
+- fix(desktop): handle HTTP 429 (rate limited) in `probe_endpoint` instead of
+  crashing with a NoneType status error
+- fix(deps): cap `starlette<0.49` / `fastapi<0.120` — Starlette 0.49's
+  `_IncludedRouter` (no `.path`) broke route-registration test helpers under
+  unpinned CI
+
 ## [2.15.1] - 2026-06-14
 
 ### Added

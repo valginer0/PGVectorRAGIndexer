@@ -123,6 +123,21 @@ class Installer:
         return repo.lower(), tag
 
     @classmethod
+    def _is_project_image(cls, image: str) -> bool:
+        repo, _ = cls._split_project_image(image)
+        return repo == cls._IMAGE_REPO
+
+    def _should_prefer_user_app_image(self, process_image: str, user_image: str) -> bool:
+        if not process_image or not user_image or process_image == user_image:
+            return False
+        if not self._is_project_image(process_image) or not self._is_project_image(user_image):
+            return False
+
+        process_ref = os.environ.get("PGVECTOR_REPO_REF", "").strip()
+        user_ref = self._read_windows_user_env("PGVECTOR_REPO_REF")
+        return not process_ref and bool(user_ref)
+
+    @classmethod
     def _is_stale_release_image_override(cls, override: str, default: str) -> bool:
         override_repo, override_tag = cls._split_project_image(override)
         default_repo, default_tag = cls._split_project_image(default)
@@ -147,6 +162,8 @@ class Installer:
             return override
         return default
 
+
+
     def _default_app_image(self) -> str:
         """Return the Docker image tag that matches the selected backend ref."""
         repo_version = self._version_from_ref(getattr(self, "repo_ref", ""))
@@ -167,13 +184,16 @@ class Installer:
         env_val = os.environ.get("APP_IMAGE", "").strip()
         reg_val = self._read_windows_user_env("APP_IMAGE")
         default = self._default_app_image()
+
+        if self._should_prefer_user_app_image(env_val, reg_val):
+            env_val = ""
         
         override = env_val if env_val else reg_val
         if override:
-            if self.DEFAULT_REPO_REF != "main" and override == reg_val:
+            if self._version_from_ref(self.DEFAULT_REPO_REF) and override == reg_val:
                 # Persistent registry override (or propagated) -> ignore in pinned releases
                 return default
-            if self.DEFAULT_REPO_REF != "main" and self._is_stale_release_image_override(override, default):
+            if self._version_from_ref(self.DEFAULT_REPO_REF) and self._is_stale_release_image_override(override, default):
                 # Stale user, machine, or inherited APP_IMAGE should not move a release installer
                 # back to a previous project release image. Non-version debug/custom tags still work.
                 return default
@@ -635,7 +655,7 @@ class Installer:
     # State Management & Reboot Handling
     # =========================================================================
 
-    def _save_state(self, stage: str):
+    def _save_state(self, stage: str, resume_from_step: Optional[int] = None):
         """Save installation state to JSON with version and timestamp."""
         state = {
             "Stage": stage,
@@ -643,10 +663,13 @@ class Installer:
             "Timestamp": time.time(),
             "InstallerVersion": self.INSTALLER_VERSION
         }
+        if resume_from_step is not None:
+            state["ResumeFromStep"] = resume_from_step
         try:
             with open(self.state_file, 'w') as f:
                 json.dump(state, f, indent=2)
-            self._log(f"[State] Saved state: Stage={stage}, Version={self.INSTALLER_VERSION}", "info")
+            resume_msg = f", ResumeFromStep={resume_from_step}" if resume_from_step is not None else ""
+            self._log(f"[State] Saved state: Stage={stage}, Version={self.INSTALLER_VERSION}{resume_msg}", "info")
             self._log(f"[State] State file: {self.state_file}", "info")
         except Exception as e:
             self._log(f"[State] Failed to save state: {e}", "warning")
@@ -718,12 +741,12 @@ class Installer:
             capture_output=True
         )
 
-    def request_reboot(self):
+    def request_reboot(self, resume_from_step: int = 5):
         """Register resume task and signal reboot requirement."""
         self._log("Scheduling resume after reboot...", "info")
         
         # 1. Save state
-        self._save_state("PostReboot")
+        self._save_state("PostReboot", resume_from_step=resume_from_step)
         
         # 2. Register Scheduled Task (Legacy Parity)
         # We need to find where the current python/installer is running from
@@ -1141,7 +1164,7 @@ class Installer:
         if not self._check_wsl2_enabled():
             self._log("Installing WSL2 (required for Docker)...", "info")
             self._run_command("wsl --install --no-launch")
-            self.request_reboot()
+            self.request_reboot(resume_from_step=4)
             return True  # State machine resumes after reboot
 
         # 7. Install Rancher Desktop via winget
@@ -1332,12 +1355,14 @@ class Installer:
         self._update_progress(step, "Installing Python dependencies...")
         pip_path = os.path.join(venv_dir, "Scripts", "pip.exe")
         success, _ = self._run_command(f'"{pip_path}" install -q -r requirements-desktop.txt')
-        
+
         if not success:
             self._log("Warning: Some dependencies may have failed", "warning")
         else:
             self._log("Dependencies installed", "success")
-        
+
+
+
         return True
 
     # =========================================================================
@@ -1558,11 +1583,16 @@ class Installer:
             self._log("RESUMING INSTALLATION AFTER RESTART", "success")
             self._log("=" * 50, "info")
             self._log(f"Previous install dir: {state.get('InstallDir')}", "info")
-            self._log("Skipping Steps 1-4 (prerequisites already installed)", "info")
-            self._log("Starting from Step 5: Starting Container Runtime", "info")
-            # Resume from Step 5 (Start Runtime) because that's what we rebooted for
-            # Prereqs (1-4) are assumed done.
-            start_index = 4 
+            resume_from_step = state.get("ResumeFromStep", 5)
+            try:
+                resume_from_step = int(resume_from_step)
+            except (TypeError, ValueError):
+                resume_from_step = 5
+            resume_from_step = max(1, min(resume_from_step, len(steps_functions)))
+            start_index = resume_from_step - 1
+            if start_index > 0:
+                self._log(f"Skipping Steps 1-{start_index}", "info")
+            self._log(f"Starting from Step {resume_from_step}: {self.steps[start_index].name}", "info")
             # We'll clear state at end after success
         
         try:

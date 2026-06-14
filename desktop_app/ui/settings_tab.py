@@ -3,6 +3,7 @@ Settings tab for Docker management and configuration.
 """
 
 import logging
+from datetime import datetime, timezone
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -13,7 +14,9 @@ from PySide6.QtWidgets import (
 import qtawesome as qta
 from PySide6.QtCore import QThread, Signal, QSize, Qt
 from desktop_app.ui.styles.theme import Theme
-from desktop_app.ui.workers import StatsWorker
+from desktop_app.ui.workers import (
+    StatsWorker,
+)
 from desktop_app.controllers.settings_controller import SettingsController
 from desktop_app.utils.controller_result import ControllerResult, UiAction, BackendSaveData, MessageSeverity
 
@@ -36,6 +39,7 @@ class SettingsTab(QWidget):
         self.controller = SettingsController(api_client=self.api_client)
 
         self.stats_worker = None
+
         self.setup_ui()
 
     def showEvent(self, event):
@@ -128,6 +132,9 @@ class SettingsTab(QWidget):
 
         # Usage analytics (#14)
         self._build_analytics_panel(layout)
+
+        # Search experiments
+        self._build_search_panel(layout)
 
         # Setup wizard (#18)
         self._build_wizard_panel(layout)
@@ -319,6 +326,14 @@ class SettingsTab(QWidget):
         vbox.addWidget(self._analytics_log_text)
 
         parent_layout.addWidget(group)
+
+    # ------------------------------------------------------------------
+    # Search panel
+    # ------------------------------------------------------------------
+
+    def _build_search_panel(self, parent_layout):
+        """Build search behavior settings."""
+        return
 
     # ------------------------------------------------------------------
     # Setup wizard panel (#18)

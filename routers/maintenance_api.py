@@ -197,20 +197,31 @@ async def compliance_export():
         )
 
 
-@maintenance_router.get("/quarantine", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
+@maintenance_router.get("/quarantine", tags=["Quarantine"])
 async def list_quarantined_docs(
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    key_record: Optional[dict] = Depends(require_api_key),
 ):
-    """List quarantined documents with pagination."""
+    """List visible quarantined documents with pagination."""
     from quarantine import list_quarantined
-    items = list_quarantined(limit=limit, offset=offset)
+    from document_visibility import visibility_clause_for_key_record
+    items = list_quarantined(
+        limit=limit,
+        offset=offset,
+        visibility=visibility_clause_for_key_record(key_record),
+    )
     return {"quarantined": items, "count": len(items)}
 
 
-@maintenance_router.post("/quarantine/{source_uri:path}/restore", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
+@maintenance_router.post("/quarantine/{source_uri:path}/restore", tags=["Quarantine"], dependencies=[Depends(require_admin)])
 async def restore_quarantined(source_uri: str):
-    """Remove quarantine status from a document's chunks."""
+    """Remove quarantine status from a document's chunks (admin only).
+
+    Admin-gated so a non-admin cannot un-quarantine another user's document,
+    nor use the 200/404 response as an existence oracle for documents the
+    visibility-filtered listing hides.
+    """
     from quarantine import restore_chunks
     count = restore_chunks(source_uri)
     if count == 0:
@@ -221,7 +232,7 @@ async def restore_quarantined(source_uri: str):
     return {"restored": count, "source_uri": source_uri}
 
 
-@maintenance_router.post("/quarantine/purge", tags=["Quarantine"], dependencies=[Depends(require_api_key)],
+@maintenance_router.post("/quarantine/purge", tags=["Quarantine"], dependencies=[Depends(require_admin)],
                          deprecated=True)
 async def purge_quarantine(response: Response, retention_days: Optional[int] = Query(default=None)):
     """Permanently delete chunks quarantined longer than the retention window.
@@ -236,8 +247,11 @@ async def purge_quarantine(response: Response, retention_days: Optional[int] = Q
     return {"purged": count}
 
 
-@maintenance_router.get("/quarantine/stats", tags=["Quarantine"], dependencies=[Depends(require_api_key)])
-async def quarantine_stats():
-    """Get quarantine summary statistics."""
+@maintenance_router.get("/quarantine/stats", tags=["Quarantine"])
+async def quarantine_stats(
+    key_record: Optional[dict] = Depends(require_api_key),
+):
+    """Get quarantine summary statistics for visible documents."""
     from quarantine import get_quarantine_stats
-    return get_quarantine_stats()
+    from document_visibility import visibility_clause_for_key_record
+    return get_quarantine_stats(visibility=visibility_clause_for_key_record(key_record))

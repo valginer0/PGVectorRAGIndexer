@@ -5,6 +5,7 @@ import sys
 import json
 import tempfile
 import shutil
+import time
 from pathlib import Path
 
 # Add parent dir to path to import installer_logic
@@ -26,7 +27,7 @@ class TestInstallerLogic(unittest.TestCase):
         self.installer._update_progress = MagicMock()
 
     def tearDown(self):
-        shutil.rmtree(self.test_dir)
+        shutil.rmtree(self.test_dir, ignore_errors=True)
 
     @patch('subprocess.Popen')
     @patch('os.path.exists')
@@ -78,7 +79,7 @@ class TestInstallerLogic(unittest.TestCase):
         mock_helper.return_value = True
         
         # Control time loop
-        mock_time.side_effect = [0, 0, 301] # Start, Loop check (ok), Loop check (timeout)
+        mock_time.side_effect = [0, 0, 0, 301] # Start, loop check, progress check, timeout
         
         result = self.installer._step_start_runtime()
         
@@ -99,24 +100,44 @@ class TestInstallerLogic(unittest.TestCase):
             state = json.load(f)
             self.assertEqual(state['Stage'], "PostReboot")
             self.assertEqual(state['InstallDir'], self.test_dir)
+            self.assertEqual(state['ResumeFromStep'], 5)
             
         # 2. Check Scheduled Task Command
         mock_subprocess.assert_called()
         cmd_arg = mock_subprocess.call_args[0][0]
-        self.assertIn('schtasks /create', cmd_arg)
+        self.assertIn('/create', cmd_arg)
         self.assertIn('PGVectorRAGIndexer_Resume', cmd_arg)
         self.assertIn('/sc onlogon', cmd_arg)
+
+    @patch('subprocess.run')
+    def test_request_reboot_can_resume_from_step_4(self, mock_subprocess):
+        """Test request_reboot can save a Step 4 resume point."""
+        self.installer.request_reboot(resume_from_step=4)
+
+        with open(self.installer.state_file, 'r') as f:
+            state = json.load(f)
+            self.assertEqual(state['Stage'], "PostReboot")
+            self.assertEqual(state['ResumeFromStep'], 4)
 
     def test_resume_logic_skips_steps(self):
         """Test that run() skips steps if state file exists."""
         # Manually create state file
         with open(self.installer.state_file, 'w') as f:
-            json.dump({"Stage": "PostReboot"}, f)
+            json.dump({
+                "Stage": "PostReboot",
+                "Timestamp": time.time(),
+                "InstallerVersion": self.installer.INSTALLER_VERSION,
+                "ResumeFromStep": 5,
+            }, f)
             
         # Mock step functions
         self.installer._step_check_system = MagicMock()
+        self.installer._step_install_python = MagicMock()
+        self.installer._step_install_git = MagicMock()
         self.installer._step_install_docker = MagicMock() # Step 4
         self.installer._step_start_runtime = MagicMock(return_value=True) # Step 5
+        self.installer._step_setup_application = MagicMock(return_value=True)
+        self.installer._step_pull_images = MagicMock(return_value=True)
         self.installer._step_finalize = MagicMock(return_value=True)
         
         # Don't actually run real logic
@@ -131,6 +152,51 @@ class TestInstallerLogic(unittest.TestCase):
             
             # State should be cleared
             self.assertFalse(os.path.exists(self.installer.state_file))
+
+    def test_resume_logic_can_resume_from_step_4(self):
+        """Test that WSL2-triggered reboot can resume container setup."""
+        with open(self.installer.state_file, 'w') as f:
+            json.dump({
+                "Stage": "PostReboot",
+                "Timestamp": time.time(),
+                "InstallerVersion": self.installer.INSTALLER_VERSION,
+                "ResumeFromStep": 4,
+            }, f)
+
+        self.installer._step_check_system = MagicMock()
+        self.installer._step_install_python = MagicMock()
+        self.installer._step_install_git = MagicMock()
+        self.installer._step_install_docker = MagicMock(return_value=True)
+        self.installer._step_start_runtime = MagicMock(return_value=True)
+        self.installer._step_setup_application = MagicMock(return_value=True)
+        self.installer._step_pull_images = MagicMock(return_value=True)
+        self.installer._step_finalize = MagicMock(return_value=True)
+
+        self.installer.run()
+
+        self.installer._step_check_system.assert_not_called()
+        self.installer._step_install_python.assert_not_called()
+        self.installer._step_install_git.assert_not_called()
+        self.installer._step_install_docker.assert_called_once()
+        self.installer._step_start_runtime.assert_called_once()
+
+    @patch('installer_logic.os.path.exists')
+    def test_step_install_docker_wsl2_reboot_resumes_step_4(self, mock_exists):
+        """Test WSL2 installation reboots back into container setup."""
+        mock_exists.return_value = False
+        self.installer._run_command = MagicMock(return_value=(False, ""))
+        self.installer._check_docker_desktop_installed = MagicMock(return_value=False)
+        self.installer._check_command = MagicMock(return_value=False)
+        self.installer._check_podman_installed = MagicMock(return_value=False)
+        self.installer._check_architecture = MagicMock(return_value="x64")
+        self.installer._check_virtualization_enabled = MagicMock(return_value=True)
+        self.installer._check_wsl2_enabled = MagicMock(return_value=False)
+        self.installer.request_reboot = MagicMock()
+
+        result = self.installer._step_install_docker()
+
+        self.assertTrue(result)
+        self.installer.request_reboot.assert_called_once_with(resume_from_step=4)
 
     @patch('installer_logic.Installer._run_command_stream')
     @patch('installer_logic.Installer._run_command')
@@ -379,6 +445,42 @@ def test_resolve_app_image_uses_override(monkeypatch, tmp_path):
     assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:debug-windows-license-org-tab"
 
 
+def test_resolve_app_image_prefers_user_dev_image_over_stale_inherited_process_image(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:feat-admin-console-write-ops")
+    monkeypatch.delenv("PGVECTOR_REPO_REF", raising=False)
+
+    def read_user_env(self, name):
+        values = {
+            "APP_IMAGE": "ghcr.io/valginer0/pgvectorragindexer:dev",
+            "PGVECTOR_REPO_REF": "dev/v2",
+        }
+        return values.get(name, "")
+
+    with patch.object(Installer, "_read_windows_user_env", read_user_env):
+        installer = Installer(install_dir=str(tmp_path / "install-image-user-dev-wins"))
+
+    installer._log = MagicMock()
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:dev"
+
+
+def test_resolve_app_image_keeps_explicit_process_image_when_process_ref_is_set(monkeypatch, tmp_path):
+    monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:feature-image")
+    monkeypatch.setenv("PGVECTOR_REPO_REF", "feature/ref")
+
+    def read_user_env(self, name):
+        values = {
+            "APP_IMAGE": "ghcr.io/valginer0/pgvectorragindexer:dev",
+            "PGVECTOR_REPO_REF": "dev/v2",
+        }
+        return values.get(name, "")
+
+    with patch.object(Installer, "_read_windows_user_env", read_user_env):
+        installer = Installer(install_dir=str(tmp_path / "install-image-process-ref-wins"))
+
+    installer._log = MagicMock()
+    assert installer.app_image == "ghcr.io/valginer0/pgvectorragindexer:feature-image"
+
+
 def test_resolve_app_image_ignores_stale_project_release_override_for_pinned_release(monkeypatch, tmp_path):
     monkeypatch.setattr(Installer, "DEFAULT_REPO_REF", "v2.14.5")
     monkeypatch.setenv("APP_IMAGE", "ghcr.io/valginer0/pgvectorragindexer:2.14.4")
@@ -536,7 +638,9 @@ def test_manage_ps1_honors_app_image_override_textually():
     content = (PROJECT_ROOT / "manage.ps1").read_text()
     assert "APP_IMAGE" in content
     assert "function Get-EffectiveOverride" in content
-    assert '$image = Get-EffectiveOverride -Name "APP_IMAGE" -DefaultValue $defaultImage' in content
+    assert "function Resolve-AppImageOverride" in content
+    assert "function Assert-ComposeWorkdirSupported" in content
+    assert '$image = Resolve-AppImageOverride -DefaultValue $defaultImage' in content
     assert 'Write-Host "Backend image: $image" -ForegroundColor Cyan' in content
     assert 'docker compose --file "docker-compose.yml" --env-file $envFile pull' in content
 

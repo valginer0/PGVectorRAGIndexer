@@ -21,6 +21,7 @@ os.environ['POSTGRES_PASSWORD'] = 'rag_password'
 os.environ.pop('API_AUTH_FORCE_ALL', None)
 os.environ['API_REQUIRE_AUTH'] = 'false'
 os.environ['API_RATE_LIMIT_PER_MINUTE'] = '0'
+os.environ['RETRIEVAL_LANCEDB_ENABLED'] = 'false'
 
 
 @pytest.fixture(scope='session')

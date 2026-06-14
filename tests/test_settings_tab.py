@@ -1,9 +1,24 @@
+import os
 import pytest
 from unittest.mock import MagicMock, call, patch
+from pathlib import Path
+
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication, QLabel
 
 from desktop_app.ui.settings_tab import SettingsTab
 from desktop_app.utils.controller_result import ControllerResult, MessageSeverity, UiAction, BackendSaveData
 from desktop_app.utils.controller_result import MessageSeverity
+
+
+@pytest.fixture(scope="session")
+def qapp():
+    app = QApplication.instance()
+    if app is None:
+        app = QApplication([])
+    yield app
+
 
 @pytest.fixture
 def mock_tab():
@@ -85,3 +100,6 @@ def test_dispatcher_none_action_must_be_alone(mock_tab):
     
     with pytest.raises(ValueError, match="UiAction.NONE must be the only action"):
         mock_tab._handle_controller_result(result, title="Mix")
+
+
+

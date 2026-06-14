@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.2] - 2026-06-14
+
+### Fixed
+- fix(lancedb): create FTS indexes with `with_position=True` so double-quoted
+  phrase queries (e.g. `"banana bread recipe"`) execute without position errors
+- fix(desktop): handle HTTP 429 (rate limited) in `probe_endpoint` instead of
+  crashing with a NoneType status error
+- fix(deps): cap `starlette<0.49` / `fastapi<0.120` — Starlette 0.49's
+  `_IncludedRouter` (no `.path`) broke route-registration test helpers under
+  unpinned CI
+
+## [2.15.1] - 2026-06-14
+
+### Added
+- feat(search): per-user document visibility enforced in search results on
+  both engines (LanceDB and PostgreSQL) — other users' private documents are
+  excluded; admins and local mode unaffected
+- feat(access): documents uploaded while authenticated are automatically
+  owned by the uploading user, making private visibility effective
+- feat(desktop): Make Private / Make Shared context-menu actions in the
+  Documents tab
+- feat(access): role-based collection grants — restrict a role to document
+  collections (`namespace`); admin endpoints under `/roles/.../collections`;
+  enforced in search on both engines. See `docs/ACCESS_CONTROL_GUIDE.md`
+- docs: new public Access Control Guide (users, roles, visibility,
+  collections)
+
+### Security
+- fix(access): `/context` now applies the same visibility and collection
+  filters as `/search` (previously returned unfiltered chunk text)
+- fix(access): `/documents/export` and `/documents/restore` are admin-only
+  (export bypasses visibility by design; restore can overwrite any document)
+- fix(access): visibility writers raise on DB errors instead of returning a
+  misleading "document not found"
+- fix(access): changing a document's visibility now requires the
+  `documents.visibility` permission and ownership of the document
+  (`documents.visibility.all` for others' documents) — previously any
+  authenticated key could flip another user's private document to shared
+- fix(access): document deletion (single and bulk) now enforces the
+  `documents.delete` permission; the built-in `user`/`researcher` roles can
+  no longer delete documents on Team-edition servers
+- fix(access): indexing endpoints (`/index`, `/upload-and-index`) now
+  enforce the `documents.write` permission, and uploading a file whose name
+  collides with a document owned by another user is rejected — previously
+  any authenticated key could overwrite (and take ownership of) another
+  user's document, including private ones
+
 ## [2.15.0] - 2026-05-19
 
 ### Added

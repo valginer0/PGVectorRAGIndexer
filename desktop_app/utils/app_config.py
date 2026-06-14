@@ -123,3 +123,5 @@ def set_api_key(key: Optional[str]) -> None:
 
 def is_remote_mode() -> bool:
     return get_backend_mode() == BACKEND_MODE_REMOTE
+
+

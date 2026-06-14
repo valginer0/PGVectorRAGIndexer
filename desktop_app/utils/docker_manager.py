@@ -93,6 +93,21 @@ class DockerManager:
         return repo.lower(), tag
 
     @classmethod
+    def _is_project_image(cls, image: str) -> bool:
+        repo, _ = cls._split_project_image(image)
+        return repo == cls._IMAGE_REPO
+
+    def _should_prefer_user_app_image(self, process_image: str, user_image: str) -> bool:
+        if not process_image or not user_image or process_image == user_image:
+            return False
+        if not self._is_project_image(process_image) or not self._is_project_image(user_image):
+            return False
+
+        process_ref = os.environ.get("PGVECTOR_REPO_REF", "").strip()
+        user_ref = self._read_windows_user_env("PGVECTOR_REPO_REF")
+        return not process_ref and bool(user_ref)
+
+    @classmethod
     def _is_stale_release_image_override(cls, override: str, default: str) -> bool:
         override_repo, override_tag = cls._split_project_image(override)
         default_repo, default_tag = cls._split_project_image(default)
@@ -108,6 +123,14 @@ class DockerManager:
         default = self._default_app_image()
         env_val = os.environ.get("APP_IMAGE", "").strip()
         reg_val = self._read_windows_user_env("APP_IMAGE")
+
+        if self._should_prefer_user_app_image(env_val, reg_val):
+            logger.warning(
+                "Ignoring inherited APP_IMAGE process value %s; using Windows user APP_IMAGE %s",
+                env_val,
+                reg_val,
+            )
+            env_val = ""
 
         if env_val:
             if self._is_stale_release_image_override(env_val, default):

@@ -13,7 +13,7 @@ Environment:
 import logging
 import os
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -113,6 +113,7 @@ def restore_chunks(source_uri: str) -> int:
 def list_quarantined(
     limit: int = 50,
     offset: int = 0,
+    visibility: Optional[Tuple[str, list]] = None,
 ) -> List[Dict[str, Any]]:
     """List quarantined documents (grouped by source_uri).
 
@@ -120,21 +121,29 @@ def list_quarantined(
     quarantined_at (earliest), and quarantine_reason.
     """
     try:
+        where_clauses = ["quarantined_at IS NOT NULL"]
+        params: list = []
+        if visibility and visibility[0]:
+            where_clauses.append(visibility[0])
+            params.extend(visibility[1])
+        where_sql = " AND ".join(where_clauses)
+        params.extend([limit, offset])
+
         with _get_db_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                """
+                f"""
                 SELECT source_uri,
                        COUNT(*) AS chunk_count,
                        MIN(quarantined_at) AS quarantined_at,
                        MIN(quarantine_reason) AS quarantine_reason
                 FROM document_chunks
-                WHERE quarantined_at IS NOT NULL
+                WHERE {where_sql}
                 GROUP BY source_uri
                 ORDER BY MIN(quarantined_at) ASC
                 LIMIT %s OFFSET %s
                 """,
-                (limit, offset),
+                params,
             )
             rows = cur.fetchall()
             return [
@@ -184,23 +193,33 @@ def purge_expired(retention_days: Optional[int] = None) -> int:
         return 0
 
 
-def get_quarantine_stats() -> Dict[str, Any]:
+def get_quarantine_stats(
+    visibility: Optional[Tuple[str, list]] = None,
+) -> Dict[str, Any]:
     """Return summary statistics for quarantined chunks.
 
     Returns:
         Dict with total_documents, total_chunks, oldest_quarantine_at.
     """
     try:
+        where_clauses = ["quarantined_at IS NOT NULL"]
+        params: list = []
+        if visibility and visibility[0]:
+            where_clauses.append(visibility[0])
+            params.extend(visibility[1])
+        where_sql = " AND ".join(where_clauses)
+
         with _get_db_connection() as conn:
             cur = conn.cursor()
             cur.execute(
-                """
+                f"""
                 SELECT COUNT(DISTINCT source_uri) AS documents,
                        COUNT(*) AS chunks,
                        MIN(quarantined_at) AS oldest
                 FROM document_chunks
-                WHERE quarantined_at IS NOT NULL
-                """
+                WHERE {where_sql}
+                """,
+                params if params else None,
             )
             row = cur.fetchone()
             if row:

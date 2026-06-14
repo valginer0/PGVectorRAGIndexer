@@ -1,0 +1,12 @@
+Invoice #4421
+
+Invoice #4421 covers a professional services renewal for the March billing
+cycle. The customer reported that the payment receipt arrived before the invoice
+PDF was visible in the portal.
+
+Finance should verify the payment processor reference, mark invoice #4421 as
+paid if the settlement record is present, and resend the invoice PDF from the
+billing system.
+
+This file is the direct target for searches containing the exact identifier
+invoice #4421.

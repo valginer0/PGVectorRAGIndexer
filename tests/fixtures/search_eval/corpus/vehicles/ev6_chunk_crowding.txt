@@ -1,0 +1,25 @@
+EV6 Repeated Field Notes
+
+Field note 1: EV6 charging started normally after the driver warmed the battery
+with a short highway segment.
+
+Field note 2: EV6 range estimates were lower during freezing rain and improved
+after tire pressure was corrected.
+
+Field note 3: EV6 cabin preconditioning reduced windshield fogging during the
+morning commute.
+
+Field note 4: EV6 route planning should include chargers with reliable recent
+check-ins rather than only the highest advertised power.
+
+Field note 5: EV6 driver feedback mentioned that charging stops felt shorter
+when the navigation system preconditioned the battery.
+
+Field note 6: EV6 service staff should distinguish ordinary winter range loss
+from a battery warranty claim.
+
+Field note 7: EV6 charging logs showed no fault codes even though the driver
+reported a slower-than-expected session.
+
+Field note 8: EV6 notes in this file are intentionally repetitive so that a
+chunk-level search can return many strong chunks from one source file.

@@ -136,3 +136,30 @@ def test_trusted_bulk_header_does_not_bypass_unrelated_endpoints():
 
     assert client.get("/ping", headers=headers).status_code == 200
     assert client.get("/ping", headers=headers).status_code == 429
+
+
+def test_health_probe_paths_bypass_rate_limit():
+    """Liveness/readiness probes (polled continuously by the desktop client and
+    infra healthchecks) must never consume the rate-limit budget — otherwise
+    health polling exhausts the limit and the app reads 429s as 'unreachable'."""
+    app = FastAPI()
+    app.add_middleware(RateLimitMiddleware, limit_per_minute=1)
+
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+
+    @app.get("/api/v1/health")
+    async def health_v1():
+        return {"status": "ok"}
+
+    client = TestClient(app)
+    # Far more than the limit (1/min); none should be throttled.
+    for _ in range(5):
+        r = client.get("/health")
+        assert r.status_code == 200
+        assert "X-RateLimit-Limit" not in r.headers
+    for _ in range(5):
+        r = client.get("/api/v1/health")
+        assert r.status_code == 200
+        assert "X-RateLimit-Limit" not in r.headers

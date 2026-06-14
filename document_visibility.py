@@ -88,6 +88,171 @@ def visibility_where_clause_for_document(
         return "document_id = %s", [document_id]
 
 
+def get_hidden_document_ids(user_id: Optional[str] = None, is_admin: bool = False) -> List[str]:
+    """Return document_ids the given user must NOT see in search results.
+
+    These are private documents owned by someone else. Admins see everything
+    (empty list). A caller with no user context (user_id=None but auth
+    enforced) is hidden from ALL private documents.
+    """
+    if is_admin:
+        return []
+    try:
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            if user_id:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT document_id FROM document_chunks
+                    WHERE visibility = 'private' AND owner_id IS NOT NULL AND owner_id != %s
+                    """,
+                    (user_id,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT DISTINCT document_id FROM document_chunks
+                    WHERE visibility = 'private' AND owner_id IS NOT NULL
+                    """
+                )
+            return [row[0] for row in cursor.fetchall()]
+    except Exception as e:
+        # Silently failing open would leak private docs into search results.
+        # Re-raise so the search endpoint errors instead of leaking.
+        logger.error("Failed to compute hidden document ids: %s", e)
+        raise
+
+
+def resolve_user_id_for_key_record(key_record: Optional[Dict[str, Any]]) -> Optional[str]:
+    """Return the user id linked to an API key record, or None.
+
+    None means no user context: auth disabled (local mode), an unresolved
+    dependency sentinel, or a key not linked to any user.
+    """
+    if not isinstance(key_record, dict):
+        return None
+    from users import get_user_by_api_key
+
+    user = get_user_by_api_key(key_record["id"])
+    return user["id"] if user else None
+
+
+def visibility_clause_for_key_record(key_record: Optional[Dict[str, Any]]) -> Tuple[str, list]:
+    """Resolve the caller behind an API key record into a SQL visibility filter.
+
+    Returns (sql_fragment, params) to AND into a document_chunks query.
+
+    - key_record not a dict (auth disabled / local mode / test sentinel): no filter.
+    - Key linked to an admin user: no filter.
+    - Key linked to a regular user: shared docs + own docs.
+    - Key not linked to any user: shared docs only.
+    """
+    if not isinstance(key_record, dict):
+        return "", []
+    from users import get_user_by_api_key
+    from role_permissions import has_permission
+
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        return visibility_where_clause(None, False)
+    is_admin = has_permission(user.get("role", ""), "system.admin")
+    return visibility_where_clause(user["id"], is_admin)
+
+
+def document_visible_for_key_record(document_id: str, key_record: Optional[Dict[str, Any]]) -> bool:
+    """Return True if document_id is visible to the caller represented by key_record."""
+    if not isinstance(key_record, dict):
+        return True
+    from users import get_user_by_api_key
+    from role_permissions import has_permission
+
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        sql, params = visibility_where_clause_for_document(document_id, None, False)
+    else:
+        is_admin = has_permission(user.get("role", ""), "system.admin")
+        sql, params = visibility_where_clause_for_document(document_id, user["id"], is_admin)
+
+    try:
+        with _get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"SELECT EXISTS(SELECT 1 FROM document_chunks WHERE {sql})",
+                params,
+            )
+            row = cursor.fetchone()
+            return bool(row and row[0])
+    except Exception as e:
+        logger.error("Failed to check document visibility for caller: %s", e)
+        raise
+
+
+def is_admin_key_record(key_record: Optional[Dict[str, Any]]) -> bool:
+    """True if the caller is local mode (no auth context) or an admin user.
+
+    Used by read surfaces that show all entries to admins but only a
+    caller's own entries otherwise.
+    """
+    if not isinstance(key_record, dict):
+        return True
+    from users import get_user_by_api_key
+    from role_permissions import has_permission
+
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        return False
+    return has_permission(user.get("role", ""), "system.admin")
+
+
+def search_exclusions_for_key_record(key_record: Optional[Dict[str, Any]]) -> List[str]:
+    """Resolve the searching identity from an API key record and return the
+    document_ids that must be excluded from their search results.
+
+    - key_record None (auth disabled / local single-user mode): no filtering.
+    - Key linked to an admin user: no filtering.
+    - Key linked to a regular user: hide other users' private docs.
+    - Key not linked to any user: hide all private docs.
+
+    Anything that is not a dict (e.g. an unresolved FastAPI ``Depends``
+    sentinel when the endpoint is invoked directly in tests) is treated as
+    no auth context.
+    """
+    if not isinstance(key_record, dict):
+        return []
+    from users import get_user_by_api_key
+    from role_permissions import has_permission
+
+    user = get_user_by_api_key(key_record["id"])
+    if user is None:
+        return get_hidden_document_ids(user_id=None, is_admin=False)
+    is_admin = has_permission(user.get("role", ""), "system.admin")
+    return get_hidden_document_ids(user_id=user["id"], is_admin=is_admin)
+
+
+def filter_entries_by_hidden_source(
+    entries: List[Dict[str, Any]],
+    key_record: Optional[Dict[str, Any]],
+    uri_key: str = "source_uri",
+) -> List[Dict[str, Any]]:
+    """Drop entries whose source path maps to a document hidden from the caller.
+
+    Document ids derive from sha256(source_uri / display name)[:16], so
+    auxiliary records keyed by path (locks, indexing runs) can be matched
+    against the caller's hidden-document list. Best-effort: entries whose
+    path doesn't map to any indexed document pass through.
+    """
+    hidden = search_exclusions_for_key_record(key_record)
+    if not hidden:
+        return list(entries)
+    import hashlib
+
+    hidden_set = set(hidden)
+    return [
+        entry for entry in entries
+        if hashlib.sha256(str(entry.get(uri_key, "")).encode()).hexdigest()[:16] not in hidden_set
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Ownership management
 # ---------------------------------------------------------------------------
@@ -113,8 +278,10 @@ def set_document_owner(document_id: str, owner_id: str) -> int:
             conn.commit()
             return cursor.rowcount
     except Exception as e:
+        # Re-raise: returning 0 here made a DB failure indistinguishable from
+        # "document not found" (the API maps 0 to 404). Endpoints return 500.
         logger.error("Failed to set document owner: %s", e)
-        return 0
+        raise
 
 
 def set_document_visibility(document_id: str, visibility: str) -> int:
@@ -141,8 +308,10 @@ def set_document_visibility(document_id: str, visibility: str) -> int:
             conn.commit()
             return cursor.rowcount
     except Exception as e:
+        # Re-raise: returning 0 here made a DB failure indistinguishable from
+        # "document not found" (the API maps 0 to 404). Endpoints return 500.
         logger.error("Failed to set document visibility: %s", e)
-        return 0
+        raise
 
 
 def set_document_owner_and_visibility(
@@ -167,8 +336,10 @@ def set_document_owner_and_visibility(
             conn.commit()
             return cursor.rowcount
     except Exception as e:
+        # Re-raise: returning 0 here made a DB failure indistinguishable from
+        # "document not found" (the API maps 0 to 404). Endpoints return 500.
         logger.error("Failed to set document owner and visibility: %s", e)
-        return 0
+        raise
 
 
 def get_document_visibility(document_id: str) -> Optional[Dict[str, Any]]:
@@ -291,8 +462,10 @@ def bulk_set_visibility(document_ids: List[str], visibility: str) -> int:
             conn.commit()
             return cursor.rowcount
     except Exception as e:
+        # Re-raise: returning 0 here made a DB failure indistinguishable from
+        # "document not found" (the API maps 0 to 404). Endpoints return 500.
         logger.error("Failed to bulk set visibility: %s", e)
-        return 0
+        raise
 
 
 def transfer_ownership(document_id: str, new_owner_id: str) -> int:

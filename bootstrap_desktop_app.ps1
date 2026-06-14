@@ -31,6 +31,8 @@ function Get-EffectiveOverride {
 
 $RepoRef = Get-EffectiveOverride -Name "PGVECTOR_REPO_REF" -DefaultValue $Branch
 
+
+
 function Update-RepoRef {
     param(
         [string]$Ref
@@ -159,6 +161,8 @@ if (-not (Test-Path "venv-windows")) {
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
 & ".\venv-windows\Scripts\pip.exe" install -q -r requirements-desktop.txt
 
+
+
 Write-Host ""
 
 # Update Docker containers if manage.ps1 exists (skip in remote mode)
@@ -209,6 +213,7 @@ Write-Host "Or use the shortcut:" -ForegroundColor Cyan
 Write-Host "  cd $InstallDir" -ForegroundColor White
 Write-Host "  .\run_desktop_app.ps1" -ForegroundColor White
 Write-Host ""
+
 
 # Auto-start the desktop app
 Write-Host "Starting desktop app..." -ForegroundColor Green

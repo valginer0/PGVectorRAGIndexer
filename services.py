@@ -11,6 +11,7 @@ from fastapi import Response
 if TYPE_CHECKING:
     from indexer_v2 import DocumentIndexer
     from retriever_v2 import DocumentRetriever
+    from lancedb_adapter import BackendLanceDBAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ def _add_deprecation_headers(response: Response) -> None:
 # Singletons for services
 indexer: Optional["DocumentIndexer"] = None
 retriever: Optional["DocumentRetriever"] = None
+lancedb_adapter: Optional["BackendLanceDBAdapter"] = None
 
 # Track encrypted PDFs encountered (in-memory, cleared on restart)
 encrypted_pdfs_encountered: List[Dict[str, Any]] = []
@@ -51,11 +53,26 @@ def get_retriever() -> "DocumentRetriever":
     return retriever
 
 
+def get_lancedb_adapter() -> "BackendLanceDBAdapter":
+    """Get or create singleton LanceDB adapter instance."""
+    global lancedb_adapter
+    if lancedb_adapter is None:
+        from lancedb_adapter import BackendLanceDBAdapter
+        from config import get_config
+        config = get_config()
+        lancedb_adapter = BackendLanceDBAdapter(
+            db_path=config.retrieval.lancedb_storage_path,
+            embedding_dimension=config.embedding.dimension
+        )
+    return lancedb_adapter
+
+
 def reset_services():
     """Reset service singletons (primarily for testing)."""
-    global indexer, retriever
+    global indexer, retriever, lancedb_adapter
     indexer = None
     retriever = None
+    lancedb_adapter = None
 
 
 def set_init_failed(error_msg: str):

@@ -193,33 +193,36 @@ class DocumentClient:
         parent_path: str = "",
         limit: int = 200,
         offset: int = 0,
+        source: str = "postgres",
     ) -> Dict[str, Any]:
         """Get one level of the document tree under parent_path."""
         response = self._base.request(
             "GET",
             f"{self._base.api_base}/documents/tree",
-            params={"parent_path": parent_path, "limit": limit, "offset": offset}
+            params={"parent_path": parent_path, "limit": limit, "offset": offset, "source": source}
         )
         return response.json()
 
-    def get_document_tree_stats(self) -> Dict[str, Any]:
+    def get_document_tree_stats(self, source: str = "postgres") -> Dict[str, Any]:
         """Get overall document tree statistics."""
         response = self._base.request(
             "GET",
-            f"{self._base.api_base}/documents/tree/stats"
+            f"{self._base.api_base}/documents/tree/stats",
+            params={"source": source}
         )
         return response.json()
 
     def search_document_tree(
-        self, query: str, limit: int = 50
+        self, query: str, limit: int = 50, source: str = "postgres"
     ) -> Dict[str, Any]:
         """Search for documents matching a path pattern."""
         response = self._base.request(
             "GET",
             f"{self._base.api_base}/documents/tree/search",
-            params={"q": query, "limit": limit}
+            params={"q": query, "limit": limit, "source": source}
         )
         return response.json()
+
 
     # ------------------------------------------------------------------
     # Document Locks (#3 Multi-User, Phase 1)

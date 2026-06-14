@@ -127,20 +127,26 @@ class TestVisibilityWhereClauseForDocument:
 
 
 class TestVisibilityDBResilience:
+    # Writers RAISE on DB failure (2026-06-10): returning 0 made "DB down"
+    # indistinguishable from "document not found" (the API maps 0 to 404).
+
     @patch("document_visibility._get_db_connection", side_effect=Exception("DB down"))
-    def test_set_document_owner_returns_zero(self, _mock):
+    def test_set_document_owner_raises(self, _mock):
         from document_visibility import set_document_owner
-        assert set_document_owner("doc1", "u1") == 0
+        with pytest.raises(Exception, match="DB down"):
+            set_document_owner("doc1", "u1")
 
     @patch("document_visibility._get_db_connection", side_effect=Exception("DB down"))
-    def test_set_document_visibility_returns_zero(self, _mock):
+    def test_set_document_visibility_raises(self, _mock):
         from document_visibility import set_document_visibility
-        assert set_document_visibility("doc1", "shared") == 0
+        with pytest.raises(Exception, match="DB down"):
+            set_document_visibility("doc1", "shared")
 
     @patch("document_visibility._get_db_connection", side_effect=Exception("DB down"))
-    def test_set_owner_and_visibility_returns_zero(self, _mock):
+    def test_set_owner_and_visibility_raises(self, _mock):
         from document_visibility import set_document_owner_and_visibility
-        assert set_document_owner_and_visibility("doc1", "u1", "shared") == 0
+        with pytest.raises(Exception, match="DB down"):
+            set_document_owner_and_visibility("doc1", "u1", "shared")
 
     @patch("document_visibility._get_db_connection", side_effect=Exception("DB down"))
     def test_get_document_visibility_returns_none(self, _mock):
@@ -153,9 +159,10 @@ class TestVisibilityDBResilience:
         assert list_user_documents("u1") == []
 
     @patch("document_visibility._get_db_connection", side_effect=Exception("DB down"))
-    def test_bulk_set_visibility_returns_zero(self, _mock):
+    def test_bulk_set_visibility_raises(self, _mock):
         from document_visibility import bulk_set_visibility
-        assert bulk_set_visibility(["doc1"], "shared") == 0
+        with pytest.raises(Exception, match="DB down"):
+            bulk_set_visibility(["doc1"], "shared")
 
     @patch("document_visibility._get_db_connection", side_effect=Exception("DB down"))
     def test_transfer_ownership_returns_zero(self, _mock):

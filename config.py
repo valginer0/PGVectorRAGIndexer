@@ -145,7 +145,35 @@ class RetrievalConfig(BaseSettings):
         default=0.5,
         description='Weight for vector search in hybrid mode (0=full-text only, 1=vector only)'
     )
-    
+    lancedb_enabled: bool = Field(
+        default=True,
+        description='Enable LanceDB backend search'
+    )
+    lancedb_storage_path: str = Field(
+        default='data/lancedb',
+        description='Path to LanceDB data directory'
+    )
+    lancedb_child_parent_spill_ratio: float = Field(
+        default=0.7,
+        description='Ratio of parent FTS score to allow child chunk spill'
+    )
+    lancedb_semantic_candidate_pool: Optional[int] = Field(
+        default=None,
+        description="Override for how many global nearest chunks to scan for semantic "
+                    "parent rescue in parent-child search. None (default) = auto-size "
+                    "as sqrt(chunk_count) clamped to [pool_floor, pool_cap], so recall "
+                    "keeps pace as the corpus grows without manual tuning. Set an "
+                    "explicit positive int to pin a fixed pool."
+    )
+    lancedb_semantic_pool_floor: int = Field(
+        default=100,
+        description='Lower bound for the auto-sized semantic candidate pool.'
+    )
+    lancedb_semantic_pool_cap: int = Field(
+        default=1000,
+        description='Upper bound (latency ceiling) for the auto-sized semantic candidate pool.'
+    )
+
     @field_validator('top_k')
     @classmethod
     def validate_top_k(cls, v: int) -> int:
@@ -160,6 +188,30 @@ class RetrievalConfig(BaseSettings):
         """Validate values are in [0, 1] range."""
         if not 0 <= v <= 1:
             raise ValueError('Value must be between 0 and 1')
+        return v
+
+    @field_validator('lancedb_child_parent_spill_ratio')
+    @classmethod
+    def validate_spill_ratio(cls, v: float) -> float:
+        """Validate lancedb_child_parent_spill_ratio is non-negative."""
+        if v < 0:
+            raise ValueError('lancedb_child_parent_spill_ratio must be non-negative')
+        return v
+
+    @field_validator('lancedb_semantic_candidate_pool')
+    @classmethod
+    def validate_pool_size(cls, v: Optional[int]) -> Optional[int]:
+        """Validate the candidate pool override is positive when set (None = auto)."""
+        if v is not None and v <= 0:
+            raise ValueError('lancedb_semantic_candidate_pool must be positive when set')
+        return v
+
+    @field_validator('lancedb_semantic_pool_floor', 'lancedb_semantic_pool_cap')
+    @classmethod
+    def validate_pool_bounds(cls, v: int) -> int:
+        """Validate the auto-pool floor/cap are positive."""
+        if v <= 0:
+            raise ValueError('semantic pool bounds must be positive')
         return v
 
 

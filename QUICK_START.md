@@ -1,4 +1,4 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.15.0
+# Quick Start Guide - PGVectorRAGIndexer v2.15.2
 
 Get up and running in 5 minutes!
 > 🔒 **Network safety tip**
@@ -6,7 +6,7 @@ Get up and running in 5 minutes!
 > This helps prevent other users on the same network from accessing local services.
 > For home or private networks, this is not a concern.
 
-## 🆕 What's New in v2.15.0
+## 🆕 What's New in v2.15.2
 
 - **PowerPoint Indexing Robustness**: `.pptx` files no longer fail when unstructured's optional PPTX extras are missing; supported decks use native extraction with a built-in OpenXML fallback.
 - **Image OCR Format Normalization**: Phone/camera images that open as special Pillow formats are normalized before OCR so valid `.jpg` files are not rejected by Tesseract's helper.

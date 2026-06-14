@@ -84,6 +84,117 @@ def test_search_success(api_client):
         assert payload["metric"] == "cosine"
         assert payload["use_hybrid"] is True
 
+
+def test_search_source_parameter(api_client):
+    """Test that source parameter is conditionally included in payload."""
+    with patch.object(api_client._base, "request") as mock_request:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"results": []}
+        mock_request.return_value = mock_response
+
+        # Scenario A: source=None (default) -> no source key in payload
+        api_client.search(query="test", source=None)
+        payload = mock_request.call_args[1]["json"]
+        assert "source" not in payload
+
+        # Scenario B: source="postgres" -> source key in payload
+        mock_request.reset_mock()
+        api_client.search(query="test", source="postgres")
+        payload = mock_request.call_args[1]["json"]
+        assert payload["source"] == "postgres"
+
+
+def test_search_can_request_document_level_options(api_client):
+    """Search can opt into backend document grouping without changing defaults."""
+    with patch.object(api_client._base, "request") as mock_request:
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {
+            "diagnostics": {"group_by_document": {"active": True}},
+            "results": [{"id": "1"}],
+        }
+        mock_request.return_value = mock_response
+
+        api_client.search(
+            query="EV6",
+            top_k=5,
+            group_by_document=True,
+            literal_tail_suppression="identifier-token",
+        )
+
+        payload = mock_request.call_args[1]["json"]
+        assert payload["top_k"] == 5
+        assert payload["group_by_document"] is True
+        assert payload["literal_tail_suppression"] == "identifier-token"
+        assert "literal_anchor_threshold" not in payload
+        assert "literal_tail_threshold" not in payload
+        mock_request.assert_called_once()
+
+
+def test_search_document_level_options_fallback_when_backend_does_not_confirm(api_client):
+    """Older backends may ignore new flags; retry with legacy over-fetch."""
+    with patch.object(api_client._base, "request") as mock_request:
+        unsupported_response = MagicMock()
+        unsupported_response.status_code = 200
+        unsupported_response.json.return_value = {
+            "results": [{"id": "chunk-only"}],
+        }
+        fallback_response = MagicMock()
+        fallback_response.status_code = 200
+        fallback_response.json.return_value = {
+            "results": [{"id": "fallback"}],
+        }
+        mock_request.side_effect = [unsupported_response, fallback_response]
+
+        results = api_client.search(
+            query="EV6",
+            top_k=5,
+            group_by_document=True,
+            literal_tail_suppression="identifier-token",
+        )
+
+        assert results == [{"id": "fallback"}]
+        assert mock_request.call_count == 2
+
+        first_payload = mock_request.call_args_list[0].kwargs["json"]
+        assert first_payload["top_k"] == 5
+        assert first_payload["group_by_document"] is True
+        assert first_payload["literal_tail_suppression"] == "identifier-token"
+
+        fallback_payload = mock_request.call_args_list[1].kwargs["json"]
+        assert fallback_payload["top_k"] == 100
+        assert "group_by_document" not in fallback_payload
+        assert "literal_tail_suppression" not in fallback_payload
+
+
+def test_search_document_level_fallback_preserves_unlimited_top_k(api_client):
+    """A top_k=None caller should not hit legacy fallback arithmetic."""
+    with patch.object(api_client._base, "request") as mock_request:
+        unsupported_response = MagicMock()
+        unsupported_response.status_code = 200
+        unsupported_response.json.return_value = {
+            "results": [{"id": "chunk-only"}],
+        }
+        fallback_response = MagicMock()
+        fallback_response.status_code = 200
+        fallback_response.json.return_value = {
+            "results": [{"id": "fallback"}],
+        }
+        mock_request.side_effect = [unsupported_response, fallback_response]
+
+        results = api_client.search(
+            query="EV6",
+            top_k=None,
+            group_by_document=True,
+            literal_tail_suppression="identifier-token",
+        )
+
+        assert results == [{"id": "fallback"}]
+        fallback_payload = mock_request.call_args_list[1].kwargs["json"]
+        assert fallback_payload["top_k"] is None
+        assert "group_by_document" not in fallback_payload
+
 def test_list_documents_pagination(api_client):
     """Test list documents with pagination."""
     with patch.object(api_client._base, "request") as mock_request:

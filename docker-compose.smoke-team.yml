@@ -1,0 +1,33 @@
+# Local Team-mode validation override (NOT for CI or production).
+#
+# Used by scripts/smoke_team_setup.sh to bring up an ISOLATED stack for the
+# two-account visibility smoke test, so it does not collide with a dev stack
+# you may already be running:
+#   - distinct container names and host ports (8001 / 5433), and
+#   - enforced auth including loopback (so the on-box desktop client must
+#     present a key and gets its role applied — the point of the test), and
+#   - a LICENSE_SIGNING_SECRET so the throwaway HS256 test license verifies.
+#
+# Do NOT use this on a real server: API_AUTH_FORCE_ALL removes the loopback
+# exemption, and LICENSE_SIGNING_SECRET here is a disposable test secret, not
+# your production RS256 signing key.
+#
+# Driven for you by scripts/smoke_team_setup.sh (which sets the env vars and
+# uses an isolated compose project name).
+services:
+  app:
+    container_name: vector_rag_app_smoke
+    restart: "no"
+    environment:
+      API_REQUIRE_AUTH: "true"
+      API_AUTH_FORCE_ALL: "true"
+      LICENSE_SIGNING_SECRET: "${LICENSE_SIGNING_SECRET:?run via scripts/smoke_team_setup.sh}"
+    # !override REPLACES the base port list (compose merges/append by default),
+    # so the smoke stack publishes only 8001 and never fights the dev stack's 8000.
+    ports: !override
+      - "${SMOKE_API_PORT:-8001}:8000"
+  db:
+    container_name: vector_rag_db_smoke
+    restart: "no"
+    ports: !override
+      - "${SMOKE_DB_PORT:-5433}:5432"

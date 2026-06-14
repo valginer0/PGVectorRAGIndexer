@@ -2,6 +2,7 @@
 
 This folder contains various guides, policies, and reference materials for the PGVectorRAGIndexer project.
 
+
 ## `docs/internal/` Structure Diagram
 
 > **⚠️ IMPORTANT CONTRIBUTOR NOTE regarding `docs/internal/`**

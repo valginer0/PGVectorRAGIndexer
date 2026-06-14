@@ -6,7 +6,11 @@ from unittest.mock import MagicMock, call
 from pathlib import Path
 from PySide6.QtWidgets import QApplication
 
-from desktop_app.ui.workers import SearchWorker, DocumentsWorker, UploadWorker
+from desktop_app.ui.workers import (
+    DocumentsWorker,
+    SearchWorker,
+    UploadWorker,
+)
 
 @pytest.fixture(scope="session")
 def qapp():
@@ -44,6 +48,50 @@ def test_search_worker_success(qapp, mock_api_client):
     assert success is True
     assert data == [{"id": "1"}]
     mock_api_client.search.assert_called_once()
+    assert mock_api_client.search.call_args.kwargs["group_by_document"] is False
+    assert mock_api_client.search.call_args.kwargs["literal_tail_suppression"] is None
+
+
+def test_search_worker_passes_document_level_options(qapp, mock_api_client):
+    """SearchWorker passes backend document-grouping options when enabled."""
+    mock_api_client.search.return_value = [{"id": "1"}]
+
+    worker = SearchWorker(
+        mock_api_client,
+        query="EV6",
+        top_k=5,
+        min_score=0.3,
+        metric="cosine",
+        group_by_document=True,
+        literal_tail_suppression="identifier-token",
+    )
+
+    results = []
+    worker.finished.connect(lambda success, data: results.append((success, data)))
+
+    worker.run()
+
+    assert results == [(True, [{"id": "1"}])]
+    assert mock_api_client.search.call_args.kwargs["group_by_document"] is True
+    assert mock_api_client.search.call_args.kwargs["literal_tail_suppression"] == "identifier-token"
+
+
+def test_search_worker_passes_source(qapp, mock_api_client):
+    """SearchWorker passes source parameter to search client."""
+    mock_api_client.search.return_value = []
+    
+    worker = SearchWorker(
+        mock_api_client,
+        query="test",
+        top_k=5,
+        min_score=0.5,
+        metric="cosine",
+        source="postgres"
+    )
+    worker.run()
+    
+    assert mock_api_client.search.call_args.kwargs["source"] == "postgres"
+
 
 def test_search_worker_failure(qapp, mock_api_client):
     """Test SearchWorker emits error on failure."""

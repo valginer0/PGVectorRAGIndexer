@@ -319,7 +319,21 @@ ANALYZE_INTERVAL_SECONDS = int(os.getenv("DB_ANALYZE_INTERVAL_SECONDS", "300"))
 
 class DocumentRepository:
     """Repository for document-related database operations."""
-    
+
+    # Filter keys that map directly to a SQL column name. Only these may be
+    # interpolated into a WHERE clause as a bare identifier; every other key is
+    # handled by an explicit branch (metadata.*, type/namespace/category,
+    # extensions, excluded_document_ids, allowed_namespaces, source_uri_like).
+    # An unknown key is rejected rather than interpolated — otherwise a
+    # caller-supplied filter key becomes SQL injection and can void the
+    # AND-joined visibility/exclusion clauses.
+    ALLOWED_FILTER_COLUMNS = frozenset({
+        "document_id",
+        "source_uri",
+        "chunk_index",
+        "chunk_id",
+    })
+
     def __init__(self, db_manager: DatabaseManager):
         """Initialize repository with database manager."""
         self.db = db_manager
@@ -428,30 +442,42 @@ class DocumentRepository:
 
         return len(chunks)
     
-    def get_document_by_id(self, document_id: str) -> Optional[Dict[str, Any]]:
+    def get_document_by_id(
+        self,
+        document_id: str,
+        visibility: Optional[Tuple[str, list]] = None
+    ) -> Optional[Dict[str, Any]]:
         """
         Get document metadata by ID.
-        
+
         Args:
             document_id: Document identifier
-            
+            visibility: Optional (sql_fragment, params) visibility filter; a
+                document hidden from the caller is reported as not found.
+
         Returns:
-            Document metadata or None if not found
+            Document metadata or None if not found (or not visible)
         """
-        query = """
-        SELECT 
+        vis_sql = ""
+        vis_params: list = []
+        if visibility and visibility[0]:
+            vis_sql = f"AND {visibility[0]}"
+            vis_params = list(visibility[1])
+
+        query = f"""
+        SELECT
             document_id,
             source_uri,
             COUNT(*) as chunk_count,
             MIN(indexed_at) as indexed_at,
             (array_agg(metadata ORDER BY indexed_at ASC))[1] as metadata
         FROM document_chunks
-        WHERE document_id = %s
+        WHERE document_id = %s {vis_sql}
         GROUP BY document_id, source_uri
         """
-        
+
         with self.db.get_cursor(dict_cursor=True) as cursor:
-            cursor.execute(query, (document_id,))
+            cursor.execute(query, (document_id, *vis_params))
             result = cursor.fetchone()
             return dict(result) if result else None
     
@@ -469,13 +495,40 @@ class DocumentRepository:
         result = self.db.execute_query(query, (document_id,), fetch=True)
         return result[0][0] if result else False
     
+    def get_document_chunks_for_reinsert(
+        self,
+        document_id: str
+    ) -> List[Tuple[str, int, str, str, Any, Optional[Dict[str, Any]]]]:
+        """
+        Fetch all chunks for a document in the insert_chunks() tuple format.
+
+        Used to back up an existing document before a replacement delete, so a
+        failed replacement can restore the previous version instead of losing it.
+
+        Args:
+            document_id: Document identifier
+
+        Returns:
+            List of (document_id, chunk_index, text, source_uri, embedding, metadata)
+        """
+        query = """
+        SELECT document_id, chunk_index, text_content, source_uri, embedding, metadata
+        FROM document_chunks
+        WHERE document_id = %s
+        ORDER BY chunk_index
+        """
+
+        with self.db.get_cursor() as cursor:
+            cursor.execute(query, (document_id,))
+            return [tuple(row) for row in cursor.fetchall()]
+
     def delete_document(self, document_id: str) -> int:
         """
         Delete all chunks for a document.
-        
+
         Args:
             document_id: Document identifier
-            
+
         Returns:
             Number of chunks deleted
         """
@@ -495,7 +548,8 @@ class DocumentRepository:
         sort_dir: Union[str, Sequence[str]] = "desc",
         *,
         source_prefix: Optional[str] = None,
-        with_total: bool = False
+        with_total: bool = False,
+        visibility: Optional[Tuple[str, list]] = None
     ) -> Union[List[Dict[str, Any]], Tuple[List[Dict[str, Any]], int]]:
         """
         List indexed documents with optional pagination metadata.
@@ -510,6 +564,8 @@ class DocumentRepository:
                 semantics (``/docs`` matches ``/docs/file.txt`` but NOT
                 ``/docs2/file.txt``).  ``None`` or ``"/"`` means no filter.
             with_total: If True, also return total document count
+            visibility: Optional (sql_fragment, params) visibility filter from
+                document_visibility, ANDed into the query.
 
         Returns:
             List of document metadata dictionaries or tuple(items, total)
@@ -558,40 +614,46 @@ class DocumentRepository:
 
         order_by_sql = ", ".join(order_clauses)
 
-        # ---- source_prefix filter --------------------------------
-        # None or "/" → no filter (returns all documents)
-        prefix_clause = ""
-        prefix_params: list = []
+        # ---- WHERE filters (source_prefix + visibility) ----------
+        # source_prefix None or "/" → no prefix filter (returns all documents)
+        where_clauses: List[str] = []
+        where_params: list = []
         if source_prefix and source_prefix.rstrip("/") != "":
             norm = _normalize_prefix(source_prefix).rstrip("/")
-            prefix_clause = f"WHERE {NORMALIZED_URI_SQL} LIKE %s"
-            prefix_params = [norm + "/%"]
+            where_clauses.append(f"{NORMALIZED_URI_SQL} LIKE %s")
+            where_params.append(norm + "/%")
+        if visibility and visibility[0]:
+            where_clauses.append(visibility[0])
+            where_params.extend(visibility[1])
+        where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
 
         query = f"""
-        SELECT 
+        SELECT
             document_id,
             source_uri,
             COUNT(*) as chunk_count,
             MIN(indexed_at) as indexed_at,
             MAX(updated_at) as last_updated,
-            (array_agg(metadata->>'type' ORDER BY indexed_at ASC))[1] as document_type
+            (array_agg(metadata->>'type' ORDER BY indexed_at ASC))[1] as document_type,
+            (array_agg(visibility ORDER BY indexed_at ASC))[1] as visibility,
+            (array_agg(owner_id ORDER BY indexed_at ASC))[1] as owner_id
         FROM document_chunks
-        {prefix_clause}
+        {where_sql}
         GROUP BY document_id, source_uri
         ORDER BY {order_by_sql}
         LIMIT %s OFFSET %s
         """
 
         with self.db.get_cursor(dict_cursor=True) as cursor:
-            cursor.execute(query, (*prefix_params, limit, offset))
+            cursor.execute(query, (*where_params, limit, offset))
             results = [dict(row) for row in cursor.fetchall()]
 
         if not with_total:
             return results
 
-        total_query = f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {prefix_clause}"
+        total_query = f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {where_sql}"
         with self.db.get_cursor() as cursor:
-            cursor.execute(total_query, tuple(prefix_params))
+            cursor.execute(total_query, tuple(where_params))
             total = cursor.fetchone()[0]
 
         return results, total
@@ -655,15 +717,31 @@ class DocumentRepository:
                         ext_clauses.append("source_uri ILIKE %s")
                         params.append(f'%{normalized}')
                     where_clauses.append(f"({' OR '.join(ext_clauses)})")
+                elif key == 'excluded_document_ids':
+                    if isinstance(value, list) and value:
+                        where_clauses.append("document_id != ALL(%s)")
+                        params.append(list(value))
+                elif key == 'allowed_namespaces':
+                    if isinstance(value, list):
+                        if value:
+                            where_clauses.append("metadata->>'namespace' = ANY(%s)")
+                            params.append(list(value))
+                        else:
+                            # Empty allowlist = access to nothing (fail closed)
+                            where_clauses.append("FALSE")
                 else:
-                    # Direct column match (e.g., document_id, source_uri)
+                    # Direct column match (e.g., document_id, source_uri).
+                    # Reject unknown keys — interpolating an arbitrary key is
+                    # SQL injection and could OR past the visibility clauses.
+                    if key not in self.ALLOWED_FILTER_COLUMNS:
+                        raise ValueError(f"Unsupported filter key: {key}")
                     where_clauses.append(f"{key} = %s")
                     params.append(value)
-        
+
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-        
+
         query = f"""
-        SELECT 
+        SELECT
             chunk_id,
             document_id,
             chunk_index,
@@ -686,45 +764,72 @@ class DocumentRepository:
             results = cursor.fetchall()
             return [dict(row) for row in results]
 
-    def get_indexed_extensions(self) -> List[str]:
+    def get_indexed_extensions(
+        self,
+        visibility: Optional[Tuple[str, list]] = None
+    ) -> List[str]:
         """Return sorted list of distinct file extensions present in the index."""
-        query = """
+        vis_sql = ""
+        vis_params: list = []
+        if visibility and visibility[0]:
+            vis_sql = f"AND {visibility[0]}"
+            vis_params = list(visibility[1])
+
+        query = f"""
         SELECT DISTINCT
-            LOWER(CONCAT('.', (REGEXP_MATCH(source_uri, '\\.([a-zA-Z0-9]{1,10})$'))[1])) AS ext
+            LOWER(CONCAT('.', (REGEXP_MATCH(source_uri, '\\.([a-zA-Z0-9]{{1,10}})$'))[1])) AS ext
         FROM document_chunks
-        WHERE source_uri ~ '\\.([a-zA-Z0-9]{1,10})$'
+        WHERE source_uri ~ '\\.([a-zA-Z0-9]{{1,10}})$' {vis_sql}
         ORDER BY ext
         """
         with self.db.get_cursor() as cursor:
-            cursor.execute(query)
+            cursor.execute(query, tuple(vis_params) if vis_params else None)
             rows = cursor.fetchall()
         return [row[0] for row in rows if row[0] and row[0] != '.']
     
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(
+        self,
+        visibility: Optional[Tuple[str, list]] = None
+    ) -> Dict[str, Any]:
         """
         Get database statistics.
-        
+
+        Args:
+            visibility: Optional (sql_fragment, params) visibility filter;
+                document/chunk counts then only cover visible documents.
+                Database size stays global (infrastructure metric).
+
         Returns:
             Dictionary with various statistics
         """
+        vis_where = ""
+        vis_params: tuple = ()
+        if visibility and visibility[0]:
+            vis_where = f"WHERE {visibility[0]}"
+            vis_params = tuple(visibility[1])
+
         with self.db.get_cursor() as cursor:
             # Total chunks
-            cursor.execute("SELECT COUNT(*) FROM document_chunks")
+            cursor.execute(f"SELECT COUNT(*) FROM document_chunks {vis_where}", vis_params or None)
             total_chunks = cursor.fetchone()[0]
-            
+
             # Total documents
-            cursor.execute("SELECT COUNT(DISTINCT document_id) FROM document_chunks")
+            cursor.execute(
+                f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {vis_where}",
+                vis_params or None,
+            )
             total_documents = cursor.fetchone()[0]
-            
+
             # Average chunks per document
-            cursor.execute("""
+            cursor.execute(f"""
                 SELECT AVG(chunk_count)::INTEGER
                 FROM (
                     SELECT COUNT(*) as chunk_count
                     FROM document_chunks
+                    {vis_where}
                     GROUP BY document_id
                 ) subq
-            """)
+            """, vis_params or None)
             avg_chunks = cursor.fetchone()[0] or 0
             
             # Database size in bytes
@@ -740,80 +845,110 @@ class DocumentRepository:
                 "database_size_bytes": db_size_bytes
             }
     
-    def get_metadata_keys(self, pattern: Optional[str] = None) -> List[str]:
+    def get_metadata_keys(
+        self,
+        pattern: Optional[str] = None,
+        visibility: Optional[Tuple[str, list]] = None
+    ) -> List[str]:
         """
         Get all unique metadata keys across all documents.
-        
+
         Args:
             pattern: Optional SQL LIKE pattern to filter keys (e.g., 't%' for keys starting with 't')
-            
+            visibility: Optional (sql_fragment, params) visibility filter
+
         Returns:
             List of unique metadata keys
         """
+        vis_sql = ""
+        vis_params: list = []
+        if visibility and visibility[0]:
+            vis_sql = f"AND {visibility[0]}"
+            vis_params = list(visibility[1])
+
         # Use subquery to work around set-returning function limitation
         if pattern:
-            query = """
+            query = f"""
             SELECT DISTINCT key
             FROM (
                 SELECT jsonb_object_keys(metadata) as key
                 FROM document_chunks
-                WHERE metadata IS NOT NULL AND metadata != '{}'::jsonb
+                WHERE metadata IS NOT NULL AND metadata != '{{}}'::jsonb {vis_sql}
             ) subq
             WHERE key LIKE %s
             ORDER BY key
             """
-            params = [pattern]
+            params = vis_params + [pattern]
         else:
-            query = """
+            query = f"""
             SELECT DISTINCT jsonb_object_keys(metadata) as key
             FROM document_chunks
-            WHERE metadata IS NOT NULL AND metadata != '{}'::jsonb
+            WHERE metadata IS NOT NULL AND metadata != '{{}}'::jsonb {vis_sql}
             ORDER BY key
             """
-            params = []
-        
+            params = vis_params
+
         with self.db.get_cursor(dict_cursor=True) as cursor:
             cursor.execute(query, params if params else None)
             results = cursor.fetchall()
             return [row['key'] for row in results]
-    
-    def get_metadata_values(self, key: str, limit: int = 100) -> List[str]:
+
+    def get_metadata_values(
+        self,
+        key: str,
+        limit: int = 100,
+        visibility: Optional[Tuple[str, list]] = None
+    ) -> List[str]:
         """
         Get all unique values for a specific metadata key.
-        
+
         Args:
             key: The metadata key to get values for
             limit: Maximum number of values to return
-            
+            visibility: Optional (sql_fragment, params) visibility filter
+
         Returns:
             List of unique values for the key
         """
-        query = """
+        vis_sql = ""
+        vis_params: list = []
+        if visibility and visibility[0]:
+            vis_sql = f"AND {visibility[0]}"
+            vis_params = list(visibility[1])
+
+        query = f"""
         SELECT DISTINCT metadata->>%s as value
         FROM document_chunks
-        WHERE metadata->>%s IS NOT NULL
+        WHERE metadata->>%s IS NOT NULL {vis_sql}
         ORDER BY value
         LIMIT %s
         """
-        
+
         with self.db.get_cursor(dict_cursor=True) as cursor:
-            cursor.execute(query, (key, key, limit))
+            cursor.execute(query, (key, key, *vis_params, limit))
             results = cursor.fetchall()
             return [row['value'] for row in results if row['value']]
     
-    def preview_delete(self, filters: Dict[str, Any]) -> Dict[str, Any]:
+    def preview_delete(
+        self,
+        filters: Dict[str, Any],
+        visibility: Optional[Tuple[str, list]] = None
+    ) -> Dict[str, Any]:
         """
         Preview what would be deleted with given filters (dry-run).
-        
+
         Args:
             filters: Filter criteria (same format as search_similar)
-            
+            visibility: Optional (sql_fragment, params) visibility filter; the
+                preview then only counts/samples documents visible to the
+                caller, so it cannot enumerate hidden documents.
+
         Returns:
             Dictionary with preview information
         """
         where_clauses = []
         params = []
-        
+
         for key, value in filters.items():
             if key.startswith('metadata.'):
                 metadata_key = key[9:]
@@ -833,11 +968,17 @@ class DocumentRepository:
                 where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
             else:
+                if key not in self.ALLOWED_FILTER_COLUMNS:
+                    raise ValueError(f"Unsupported filter key: {key}")
                 where_clauses.append(f"{key} = %s")
                 params.append(value)
-        
+
+        if visibility and visibility[0]:
+            where_clauses.append(visibility[0])
+            params.extend(visibility[1])
+
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-        
+
         # Get count and sample documents
         count_query = f"SELECT COUNT(DISTINCT document_id) FROM document_chunks {where_sql}"
         sample_query = f"""
@@ -863,19 +1004,26 @@ class DocumentRepository:
                 "filters_applied": filters
             }
     
-    def bulk_delete(self, filters: Dict[str, Any]) -> int:
+    def bulk_delete(
+        self,
+        filters: Dict[str, Any],
+        visibility: Optional[Tuple[str, list]] = None
+    ) -> int:
         """
         Delete documents matching the given filters.
-        
+
         Args:
             filters: Filter criteria (same format as search_similar)
-            
+            visibility: Optional (sql_fragment, params) visibility filter; the
+                delete then only removes documents visible to the caller, so a
+                non-admin delete-capable role cannot delete hidden documents.
+
         Returns:
             Number of chunks deleted
         """
         where_clauses = []
         params = []
-        
+
         for key, value in filters.items():
             if key.startswith('metadata.'):
                 metadata_key = key[9:]
@@ -894,12 +1042,20 @@ class DocumentRepository:
                 where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
             else:
+                if key not in self.ALLOWED_FILTER_COLUMNS:
+                    raise ValueError(f"Unsupported filter key: {key}")
                 where_clauses.append(f"{key} = %s")
                 params.append(value)
-        
+
         if not where_clauses:
             raise ValueError("Filters are required for bulk delete (safety check)")
-        
+
+        # Append the caller's visibility scope AFTER the user-filter safety check
+        # so visibility alone never satisfies "filters required".
+        if visibility and visibility[0]:
+            where_clauses.append(visibility[0])
+            params.extend(visibility[1])
+
         where_sql = f"WHERE {' AND '.join(where_clauses)}"
         
         # Delete chunks matching the filters

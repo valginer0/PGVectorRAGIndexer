@@ -1,0 +1,121 @@
+name: Fresh-Image Deployment Smoke
+
+# The deployment-artifact gate (LANCEDB_SEARCH_BACKEND_DESIGN_V1 §6, private
+# docs): build the Docker image from this commit, start the compose stack on
+# clean volumes with ENFORCED auth, run migrations, and prove
+# index → serve (via LanceDB) → persist across restart → recover from drift.
+# This validates exactly what an enterprise installs on its internal Linux
+# server — no external hosting involved.
+
+on:
+  push:
+    branches: [ main, dev/v2 ]
+  workflow_dispatch:
+
+env:
+  APP_IMAGE: local/pgvectorragindexer:smoke
+  COMPOSE: docker compose -f docker-compose.yml -f docker-compose.smoke.yml
+
+jobs:
+  fresh-image-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build app image from this commit
+      run: docker build -t "$APP_IMAGE" .
+
+    - name: Start database on clean volumes
+      run: |
+        $COMPOSE up -d db
+        for i in $(seq 1 30); do
+          if $COMPOSE ps db | grep -q healthy; then echo "db healthy"; break; fi
+          [ "$i" = 30 ] && { echo "db never became healthy"; exit 1; }
+          sleep 2
+        done
+
+    - name: Run migrations (pgvector extension + schema incl. 020)
+      run: $COMPOSE run --rm app alembic upgrade head
+
+    - name: Bootstrap admin API key
+      id: bootstrap
+      run: |
+        API_KEY=$($COMPOSE run --rm app python -c \
+          "from auth import create_api_key_record; print(create_api_key_record('ci-smoke')['key'])" | tail -1)
+        [ -n "$API_KEY" ] || { echo "no key produced"; exit 1; }
+        echo "::add-mask::$API_KEY"
+        echo "key=$API_KEY" >> "$GITHUB_OUTPUT"
+
+    - name: Start app with enforced auth
+      run: |
+        $COMPOSE up -d app
+        for i in $(seq 1 60); do
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health || true)
+          if [ "$code" = "200" ]; then echo "app healthy"; break; fi
+          [ "$i" = 60 ] && { echo "app never became healthy (last: $code)"; exit 1; }
+          sleep 3
+        done
+
+    - name: Auth is enforced — search without a key is rejected
+      run: |
+        code=$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:8000/search \
+          -H 'Content-Type: application/json' -d '{"query":"x"}')
+        [ "$code" = "401" ] || { echo "expected 401 without key, got $code"; exit 1; }
+
+    - name: Index a document (authenticated; first call downloads the embedding model)
+      env:
+        API_KEY: ${{ steps.bootstrap.outputs.key }}
+      run: |
+        printf 'ZX9-SMOKE-7 widget calibration manual.\nThe flux capacitor requires weekly calibration.\n' > smoke.txt
+        resp=$(curl -s --max-time 600 -X POST http://localhost:8000/upload-and-index \
+          -H "X-API-Key: $API_KEY" -F "file=@smoke.txt")
+        echo "$resp"
+        echo "$resp" | grep -q '"status":"success"' || { echo "indexing failed"; exit 1; }
+
+    - name: Search serves the document (LanceDB path)
+      env:
+        API_KEY: ${{ steps.bootstrap.outputs.key }}
+      run: |
+        for i in $(seq 1 20); do
+          resp=$(curl -s -X POST http://localhost:8000/search \
+            -H "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
+            -d '{"query":"ZX9-SMOKE-7 calibration","top_k":5,"min_score":0}')
+          if echo "$resp" | grep -q 'smoke.txt'; then echo "search OK"; exit 0; fi
+          sleep 3
+        done
+        echo "search never returned the document; last response: $resp"; exit 1
+
+    - name: Restart container — index persists
+      env:
+        API_KEY: ${{ steps.bootstrap.outputs.key }}
+      run: |
+        $COMPOSE restart app
+        for i in $(seq 1 40); do
+          resp=$(curl -s -X POST http://localhost:8000/search \
+            -H "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
+            -d '{"query":"ZX9-SMOKE-7 calibration","top_k":5,"min_score":0}' || true)
+          if echo "$resp" | grep -q 'smoke.txt'; then echo "persistence OK"; exit 0; fi
+          sleep 3
+        done
+        echo "search did not recover after restart; last response: $resp"; exit 1
+
+    - name: Induced LanceDB drift self-heals from Postgres
+      env:
+        API_KEY: ${{ steps.bootstrap.outputs.key }}
+      run: |
+        $COMPOSE exec -T app sh -c 'rm -rf /app/data/lancedb/*'
+        $COMPOSE restart app
+        for i in $(seq 1 60); do
+          resp=$(curl -s -X POST http://localhost:8000/search \
+            -H "X-API-Key: $API_KEY" -H 'Content-Type: application/json' \
+            -d '{"query":"ZX9-SMOKE-7 calibration","top_k":5,"min_score":0}' || true)
+          if echo "$resp" | grep -q 'smoke.txt'; then echo "drift recovery OK"; exit 0; fi
+          sleep 3
+        done
+        echo "search did not recover from induced drift; last response: $resp"; exit 1
+
+    - name: Dump logs on failure
+      if: failure()
+      run: $COMPOSE logs --tail 200

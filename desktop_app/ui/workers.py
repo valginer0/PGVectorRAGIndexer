@@ -1,15 +1,32 @@
 import logging
+import threading
 import time
+from contextlib import contextmanager
 from PySide6.QtCore import QThread, Signal
 from desktop_app.utils.hashing import calculate_file_hash
 
 logger = logging.getLogger(__name__)
 
+
+
+
 class SearchWorker(QThread):
     """Worker thread for performing searches."""
     finished = Signal(bool, object)
 
-    def __init__(self, api_client, query, top_k, min_score, metric, document_type=None, extensions=None):
+    def __init__(
+        self,
+        api_client,
+        query,
+        top_k,
+        min_score,
+        metric,
+        document_type=None,
+        extensions=None,
+        group_by_document=False,
+        literal_tail_suppression=None,
+        source=None,
+    ):
         super().__init__()
         self.api_client = api_client
         self.query = query
@@ -18,6 +35,9 @@ class SearchWorker(QThread):
         self.metric = metric
         self.document_type = document_type
         self.extensions = extensions
+        self.group_by_document = group_by_document
+        self.literal_tail_suppression = literal_tail_suppression
+        self.source = source
 
     def run(self):
         try:
@@ -28,11 +48,18 @@ class SearchWorker(QThread):
                 metric=self.metric,
                 document_type=self.document_type,
                 extensions=self.extensions,
+                group_by_document=self.group_by_document,
+                literal_tail_suppression=self.literal_tail_suppression,
+                source=self.source,
             )
             self.finished.emit(True, results)
         except Exception as e:
             logger.error(f"Search failed: {e}")
-            self.finished.emit(False, str(e))
+            self.finished.emit(False, e)
+
+
+
+
 
 class DocumentsWorker(QThread):
     """Worker thread for loading documents."""
@@ -55,12 +82,13 @@ class TreeWorker(QThread):
     """Worker thread for loading one level of the document tree."""
     finished = Signal(bool, object, str)  # success, data, parent_path
 
-    def __init__(self, api_client, parent_path="", limit=200, offset=0):
+    def __init__(self, api_client, parent_path="", limit=200, offset=0, source="postgres"):
         super().__init__()
         self.api_client = api_client
         self.parent_path = parent_path
         self.limit = limit
         self.offset = offset
+        self.source = source
 
     def run(self):
         try:
@@ -68,11 +96,13 @@ class TreeWorker(QThread):
                 parent_path=self.parent_path,
                 limit=self.limit,
                 offset=self.offset,
+                source=self.source,
             )
             self.finished.emit(True, results, self.parent_path)
         except Exception as e:
             logger.error(f"Load tree level failed: {e}")
             self.finished.emit(False, str(e), self.parent_path)
+
 
 
 class DeleteWorker(QThread):
@@ -257,3 +287,31 @@ class StatsWorker(QThread):
 
     def cancel(self):
         self.is_cancelled = True
+
+
+class TreeStatsWorker(QThread):
+    """Worker thread for loading tree statistics for comparison."""
+    finished = Signal(bool, object)
+
+    def __init__(self, api_client):
+        super().__init__()
+        self.api_client = api_client
+
+    def run(self):
+        try:
+            postgres_stats = self.api_client.get_document_tree_stats(source="postgres")
+        except Exception as e:
+            logger.error(f"Load Postgres tree stats failed: {e}")
+            postgres_stats = {"total_documents": 0, "total_chunks": 0}
+
+        try:
+            lancedb_stats = self.api_client.get_document_tree_stats(source="lancedb")
+        except Exception as e:
+            logger.error(f"Load LanceDB tree stats failed: {e}")
+            lancedb_stats = None
+
+        self.finished.emit(True, {
+            "postgres": postgres_stats,
+            "lancedb": lancedb_stats,
+        })
+

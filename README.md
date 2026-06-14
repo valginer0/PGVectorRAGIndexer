@@ -1,9 +1,10 @@
-# PGVectorRAGIndexer v2.15.0
+# PGVectorRAGIndexer v2.15.2
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
 > - 🟢 **Most Users (Desktop App)**: [INSTALL_DESKTOP_APP.md](INSTALL_DESKTOP_APP.md)
 > - 🏢 **Teams & Organizations**: [DEPLOYMENT.md](docs/DEPLOYMENT.md) — one shared server, many desktop clients
+> - 🔐 **Access Control**: [ACCESS_CONTROL_GUIDE.md](docs/ACCESS_CONTROL_GUIDE.md) — roles, private documents & collections
 > - ⚡ **Quick 5-Minute Setup (Docker)**: [QUICK_START.md](QUICK_START.md)
 > - 🔵 **Usage & API Reference**: [USAGE_GUIDE.md](USAGE_GUIDE.md)
 
@@ -87,9 +88,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ---
 
-## 🋹 What's New in v2.15.0
+## 🋹 What's New in v2.15.2
 
-### 🆕 Latest Fixes (v2.15.0)
+### 🆕 Latest Fixes (v2.15.2)
 
 - **✅ Accurate `.doc` Error Reporting**: Legacy `.doc` upload failures now show the real error from the loader chain instead of a generic "not supported" message that masked actual issues.
 - **✅ Stale Docker Backend Detection**: The desktop app now detects when its Docker backend is running an older version and offers a one-click update at startup.
@@ -770,6 +771,26 @@ DB_POOL_SIZE=20
 DB_MAX_OVERFLOW=40
 DB_POOL_TIMEOUT=30
 ```
+
+### Search Retrieval Tuning
+
+LanceDB parent-child search uses a "semantic rescue" pool — a global vector
+scan that surfaces relevant documents keyword search would miss. By default the
+pool **auto-sizes from the live corpus** as `sqrt(chunk_count)`, clamped to a
+floor/cap, so recall keeps pace as the index grows without manual tuning. You
+normally don't need to touch this; the knobs exist for large-corpus tuning:
+
+```bash
+# Pin a fixed pool (disables auto-sizing); leave unset for auto.
+RETRIEVAL_LANCEDB_SEMANTIC_CANDIDATE_POOL=500
+# Bounds for the auto-sized pool (defaults shown).
+RETRIEVAL_LANCEDB_SEMANTIC_POOL_FLOOR=100   # never scan shallower than this
+RETRIEVAL_LANCEDB_SEMANTIC_POOL_CAP=1000    # latency ceiling on huge corpora
+```
+
+Raising the cap improves recall on very large (10M+ chunk) indexes at the cost
+of higher search latency. See `experiments/semantic_pool_sizing/` for the
+measurements behind these defaults.
 
 ##  Monitoring
 

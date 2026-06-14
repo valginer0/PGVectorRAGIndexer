@@ -73,9 +73,10 @@ class DocumentTreeModel(QAbstractItemModel):
     loaded = Signal(str, int)   # parent_path, child_count
     load_failed = Signal(str)   # error message
 
-    def __init__(self, api_client, parent=None):
+    def __init__(self, api_client, parent=None, source="postgres"):
         super().__init__(parent)
         self._api = api_client
+        self.source = source
         self._root = TreeNode(name="", path="", node_type="root")
         self._root.is_fetched = False
         self._workers: list[TreeWorker] = []
@@ -83,6 +84,14 @@ class DocumentTreeModel(QAbstractItemModel):
         # Cache icons to avoid re-creating per call
         self._folder_icon: Optional[QIcon] = None
         self._file_icon: Optional[QIcon] = None
+
+    def set_source(self, source: str) -> None:
+        """Change the data source and reload tree."""
+        if self.source == source:
+            return
+        self.source = source
+        self.refresh()
+
 
     # ------------------------------------------------------------------
     # Public helpers
@@ -252,12 +261,13 @@ class DocumentTreeModel(QAbstractItemModel):
         node.is_fetching = True
         self.loading.emit(node.path)
 
-        worker = TreeWorker(self._api, parent_path=node.path)
+        worker = TreeWorker(self._api, parent_path=node.path, source=self.source)
         worker.finished.connect(
             lambda ok, data, pp: self._on_children_loaded(ok, data, node)
         )
         self._workers.append(worker)
         worker.start()
+
 
     def _on_children_loaded(self, success: bool, data, node: TreeNode) -> None:
         node.is_fetching = False

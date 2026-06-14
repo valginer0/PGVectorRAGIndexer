@@ -215,6 +215,14 @@ backups/
 # Runtime data: files a user uploads to the desktop app locally for indexing
 documents/
 
+# Local retrieval spike data
+lancedb_spike_data/
+lancedb_prototype_data/
+
+# Local agent/tooling state
+.claude/
+.antigravitycli/
+
 # Private project strategy docs (should not be in version control)
 docs/internal/
 
@@ -222,3 +230,12 @@ docs/internal/
 activity_log.csv
 Pivaro_LLC_Single_Member_Operating_Agreement.docx
 venv-windows/
+
+# Local database runtime storage
+/data/
+
+# Local WSL convenience shims (e.g. scripts/bin/gh -> Windows gh.exe); machine-specific
+scripts/bin/
+
+# Local agent scratch + large LanceDB smoke corpora (1+ GB, machine-specific)
+.codex/

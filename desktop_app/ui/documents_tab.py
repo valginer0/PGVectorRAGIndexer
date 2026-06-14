@@ -20,8 +20,9 @@ from PySide6.QtWidgets import (
 import qtawesome as qta
 from PySide6.QtGui import QColor
 from PySide6.QtCore import Qt, QThread, Signal, QPoint, QSignalBlocker, QSize
-from .workers import DocumentsWorker, DeleteWorker
+from .workers import DocumentsWorker, DeleteWorker, TreeStatsWorker
 from .document_tree_model import DocumentTreeModel
+
 
 # ... imports ...
 
@@ -31,6 +32,7 @@ class DocumentsTab(QWidget):
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
         self.api_client = api_client
+        self._lancedb_available = True
         self.source_manager: Optional[object] = None
         self.documents_worker = None
         self.delete_worker = None
@@ -45,6 +47,7 @@ class DocumentsTab(QWidget):
         self.sort_directions: List[str] = ["desc"]
         self.is_loading = False
         self._view_mode = "tree"  # "list" or "tree"
+        self._polling_timer = None
         self.sort_column_mapping = {
             0: "source_uri",
             1: "document_type",
@@ -80,12 +83,49 @@ class DocumentsTab(QWidget):
         self._list_btn.clicked.connect(lambda: self._set_view_mode("list"))
         header_layout.addWidget(self._list_btn)
 
+        # Database source selector (Postgres View vs LanceDB View)
+        from PySide6.QtWidgets import QListView
+        self.db_source_combo = QComboBox()
+        self.db_source_combo.setView(QListView())
+        self.db_source_combo.addItem("LanceDB View", "lancedb")
+        self.db_source_combo.addItem("Postgres View", "postgres")
+        self.db_source_combo.currentIndexChanged.connect(self._on_db_source_changed)
+        self.db_source_combo.setStyleSheet(
+            "padding: 6px; font-weight: bold; border: 1px solid #374151; "
+            "color: #f9fafb; background-color: #1f2937;"
+        )
+        header_layout.addWidget(self.db_source_combo)
+
+        # Index comparison panel
+        from PySide6.QtWidgets import QGroupBox
+        self.comparison_group = QGroupBox("Index comparison")
+        self.comparison_group.setObjectName("indexComparisonGroup")
+        self.comparison_group.setStyleSheet(
+            "QGroupBox { border: 1px solid #374151; border-radius: 6px; "
+            "margin-top: 0px; padding: 5px; font-weight: bold; color: #6366f1; }"
+            "QLabel { font-size: 12px; font-weight: bold; color: #9ca3af; }"
+        )
+        comp_layout = QVBoxLayout(self.comparison_group)
+        comp_layout.setSpacing(2)
+        comp_layout.setContentsMargins(5, 5, 5, 5)
+
+        self.pg_stats_label = QLabel("Postgres : -")
+        self.ldb_stats_label = QLabel("LanceDB  : -")
+        self.status_stats_label = QLabel("Status   : -")
+
+        comp_layout.addWidget(self.pg_stats_label)
+        comp_layout.addWidget(self.ldb_stats_label)
+        comp_layout.addWidget(self.status_stats_label)
+
+        header_layout.addWidget(self.comparison_group)
+
         self.refresh_btn = QPushButton("Refresh")
         self.refresh_btn.setIcon(qta.icon('fa5s.sync-alt', color='white'))
         self.refresh_btn.clicked.connect(self._refresh_current_view)
         header_layout.addWidget(self.refresh_btn)
 
         layout.addLayout(header_layout)
+
         
         # Stacked widget to switch between list and tree views
         self._view_stack = QStackedWidget()
@@ -122,6 +162,7 @@ class DocumentsTab(QWidget):
         pagination_layout.addWidget(page_size_label)
         
         self.page_size_combo = QComboBox()
+        self.page_size_combo.setView(QListView())
         for size in self.page_size_options:
             self.page_size_combo.addItem(str(size))
         with QSignalBlocker(self.page_size_combo):
@@ -324,8 +365,22 @@ class DocumentsTab(QWidget):
         self.documents_table.setRowCount(len(documents))
         
         for i, doc in enumerate(documents):
-            # Source URI
+            # Source URI (document_id + visibility stored for context-menu actions)
             source_item = self._create_source_item(doc.get('source_uri', ''))
+            source_item.setData(Qt.UserRole + 1, doc.get('document_id'))
+            visibility = doc.get('visibility')
+            owner_id = doc.get('owner_id')
+            source_item.setData(Qt.UserRole + 2, visibility)
+            source_item.setData(Qt.UserRole + 3, owner_id)
+            # Lock icon marks documents that are truly owner-private. A NULL
+            # owner is treated as shared by the visibility rules.
+            if visibility == 'private' and owner_id:
+                source_item.setIcon(qta.icon('fa5s.lock', color='#f59e0b'))
+                source_item.setToolTip("Private — visible only to its owner and admins")
+            elif visibility == 'private':
+                source_item.setToolTip("Private flag set, but no owner is assigned; visible like shared")
+            else:
+                source_item.setToolTip("Shared — visible to everyone")
             self.documents_table.setItem(i, 0, source_item)
             
             # Document Type: prefer metadata.type, fallback to document_type
@@ -453,10 +508,13 @@ class DocumentsTab(QWidget):
             return
 
         index = self.documents_table.indexAt(pos)
-        if not index.isValid() or index.column() != 0:
+        if not index.isValid():
             return
 
-        item = self.documents_table.item(index.row(), index.column())
+        # Document data (source_uri, document_id, visibility) lives on the
+        # column-0 cell, so resolve from there no matter which column was
+        # right-clicked — the whole row should offer the same actions.
+        item = self.documents_table.item(index.row(), 0)
         if item is None:
             return
 
@@ -476,8 +534,23 @@ class DocumentsTab(QWidget):
         reindex_action = menu.addAction("Reindex Now")
         remove_action = menu.addAction("Remove from Recent")
 
+        document_id = item.data(Qt.UserRole + 1)
+        make_private_action = None
+        make_shared_action = None
+        if document_id:
+            menu.addSeparator()
+            make_private_action = menu.addAction("Make Private")
+            make_shared_action = menu.addAction("Make Shared")
+
         action = menu.exec(self.documents_table.viewport().mapToGlobal(pos))
         if action is None:
+            return
+
+        if document_id and action == make_private_action:
+            self.set_document_visibility(document_id, "private")
+            return
+        if document_id and action == make_shared_action:
+            self.set_document_visibility(document_id, "shared")
             return
 
         if action == open_action:
@@ -494,6 +567,42 @@ class DocumentsTab(QWidget):
             self.source_manager.trigger_reindex_path(source_uri)
         elif action == remove_action:
             self.source_manager.remove_entry(source_uri)
+
+    def set_document_visibility(self, document_id: str, visibility: str) -> None:
+        """Set a document's visibility via the backend (shared/private)."""
+        try:
+            self.api_client.set_document_visibility(document_id, visibility=visibility)
+        except Exception as exc:
+            QMessageBox.critical(
+                self,
+                "Visibility Change Failed",
+                f"Could not set the document to {visibility}:\n{exc}",
+            )
+            return
+
+        if visibility == "private":
+            owner_id = None
+            try:
+                info = self.api_client.get_document_visibility(document_id) or {}
+                owner_id = info.get("owner_id")
+            except Exception:
+                pass
+            if not owner_id:
+                QMessageBox.information(
+                    self,
+                    "Private — Owner Needed",
+                    "The document is marked private, but it has no owner yet, "
+                    "so it remains visible to everyone.\n\n"
+                    "Documents uploaded while signed in get an owner "
+                    "automatically; for existing documents an admin can assign "
+                    "one via the ownership transfer API.",
+                )
+                self._refresh_current_view()
+                return
+
+        self.status_label.setText(f"Document set to {visibility}")
+        self.status_label.setStyleSheet("color: #22c55e; font-style: italic;")
+        self._refresh_current_view()
 
     def open_source_path(self, path: str) -> None:
         """Open the given path with the OS default application."""
@@ -615,21 +724,127 @@ class DocumentsTab(QWidget):
             self._list_btn.setIcon(qta.icon('fa5s.list', color='#6366f1'))
             self._tree_btn.setStyleSheet(_inactive)
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='white'))
+            self.db_source_combo.setVisible(False)
+            self.comparison_group.setVisible(False)
+            self._stop_polling_timer()
         else:
             self._view_stack.setCurrentIndex(0)
             self._tree_btn.setStyleSheet(_active)
             self._tree_btn.setIcon(qta.icon('fa5s.sitemap', color='#6366f1'))
             self._list_btn.setStyleSheet(_inactive)
             self._list_btn.setIcon(qta.icon('fa5s.list', color='white'))
+            self.db_source_combo.setVisible(self._lancedb_available)
+            self.comparison_group.setVisible(True)
             if not self._tree_model.is_initialized():
                 self._tree_model.load_root()
+            self._load_tree_stats()
 
     def _refresh_current_view(self) -> None:
         """Refresh whichever view is currently active."""
         if self._view_mode == "tree":
             self._tree_model.refresh()
+            self._load_tree_stats()
         else:
             self.load_documents()
+
+    def on_account_changed(self) -> None:
+        """Clear cached document data and reload after the connected account or
+        API key changes, so a switched identity never sees the previous user's
+        documents (e.g. their private ones) until a manual Refresh."""
+        try:
+            self.documents_table.setSortingEnabled(False)
+            self.documents_table.setRowCount(0)
+            self.documents_table.setSortingEnabled(True)
+        except Exception:
+            pass
+        self.current_documents = []
+        # Re-fetch the active view under the new identity.
+        self._refresh_current_view()
+
+    def _on_db_source_changed(self, index: int) -> None:
+        """Handle database source change."""
+        source = self.db_source_combo.itemData(index)
+        self._tree_model.set_source(source)
+        self._load_tree_stats()
+
+    def _load_tree_stats(self) -> None:
+        """Load tree statistics for comparison."""
+        self.status_stats_label.setText("Status   : comparing...")
+        self.status_stats_label.setStyleSheet("color: #9ca3af; font-weight: bold;")
+        self.tree_stats_worker = TreeStatsWorker(self.api_client)
+        self.tree_stats_worker.finished.connect(self._on_tree_stats_loaded)
+        self.tree_stats_worker.start()
+
+    def _on_tree_stats_loaded(self, success: bool, data: Any) -> None:
+        """Handle tree stats loaded."""
+        if success and data:
+            pg = data.get("postgres", {})
+            ldb = data.get("lancedb", {})
+            pg_docs = pg.get("total_documents", 0)
+            pg_chunks = pg.get("total_chunks", 0)
+            
+            self.pg_stats_label.setText(f"Postgres : {pg_docs} docs / {pg_chunks} chunks")
+            
+            if ldb is None:
+                self._lancedb_available = False
+                self.db_source_combo.setVisible(False)
+                postgres_index = self.db_source_combo.findData("postgres")
+                if postgres_index >= 0:
+                    self.db_source_combo.setCurrentIndex(postgres_index)
+                self._tree_model.set_source("postgres")
+                self.ldb_stats_label.setVisible(False)
+                self.status_stats_label.setVisible(False)
+                self._stop_polling_timer()
+            else:
+                if not self._lancedb_available:
+                    self._lancedb_available = True
+                    self.db_source_combo.setVisible(self._view_mode == "tree")
+                    lancedb_index = self.db_source_combo.findData("lancedb")
+                    if lancedb_index >= 0:
+                        self.db_source_combo.setCurrentIndex(lancedb_index)
+                        self._tree_model.set_source("lancedb")
+                else:
+                    self.db_source_combo.setVisible(self._view_mode == "tree")
+                ldb_docs = ldb.get("total_documents", 0)
+                ldb_chunks = ldb.get("total_chunks", 0)
+                self.ldb_stats_label.setText(f"LanceDB  : {ldb_docs} docs / {ldb_chunks} chunks")
+                self.ldb_stats_label.setVisible(True)
+                self.status_stats_label.setVisible(True)
+                
+                # Determine sync status
+                if pg_docs == ldb_docs and pg_chunks == ldb_chunks:
+                    self.status_stats_label.setText("Status   : ✓ in sync")
+                    self.status_stats_label.setStyleSheet("color: #10b981; font-weight: bold;")
+                    self._stop_polling_timer()
+                elif ldb_docs < pg_docs or (pg_docs == ldb_docs and ldb_chunks < pg_chunks):
+                    self.status_stats_label.setText("Status   : ⟳ syncing — LanceDB behind")
+                    self.status_stats_label.setStyleSheet("color: #f59e0b; font-weight: bold;")
+                    if self._view_mode == "tree":
+                        self._start_polling_timer()
+                else:
+                    self.status_stats_label.setText("Status   : counts differ")
+                    self.status_stats_label.setStyleSheet("color: #9ca3af; font-weight: bold;")
+                    self._stop_polling_timer()
+
+    def _start_polling_timer(self) -> None:
+        """Start polling stats every ~4s if active and not already running."""
+        from PySide6.QtCore import QTimer
+        if self._polling_timer is None:
+            self._polling_timer = QTimer(self)
+            self._polling_timer.setInterval(4000)
+            self._polling_timer.timeout.connect(self._load_tree_stats)
+        if not self._polling_timer.isActive():
+            self._polling_timer.start()
+
+    def _stop_polling_timer(self) -> None:
+        """Stop the stats polling timer."""
+        if self._polling_timer and self._polling_timer.isActive():
+            self._polling_timer.stop()
+
+    def hideEvent(self, event) -> None:
+        self._stop_polling_timer()
+        super().hideEvent(event)
+
 
     # ------------------------------------------------------------------
     # Tree view signals
@@ -698,8 +913,23 @@ class DocumentsTab(QWidget):
             reindex_action = menu.addAction("Reindex Now")
             remove_action = menu.addAction("Remove from Recent")
 
+        # Visibility actions for files (same as List view) — available from the
+        # default Tree view so users aren't forced to switch views to manage privacy.
+        make_private_action = make_shared_action = None
+        document_id = getattr(node, "document_id", "") if node.node_type == "file" else ""
+        if document_id:
+            menu.addSeparator()
+            make_private_action = menu.addAction("Make Private")
+            make_shared_action = menu.addAction("Make Shared")
+
         action = menu.exec(self._doc_tree.viewport().mapToGlobal(pos))
         if action is None:
+            return
+        if document_id and action == make_private_action:
+            self.set_document_visibility(document_id, "private")
+            return
+        if document_id and action == make_shared_action:
+            self.set_document_visibility(document_id, "shared")
             return
         if action == copy_path_action:
             if node.node_type == "file" and self.source_manager:

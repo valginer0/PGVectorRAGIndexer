@@ -134,18 +134,21 @@ class SettingsController:
             app_config.set_backend_url(url)
             app_config.set_api_key(api_key)
             
-            # Update live client
+            # Update live client. Use the api_key PROPERTY (not the private
+            # _api_key field) so the change is written onto the shared
+            # requests.Session header — otherwise the session keeps sending the
+            # previous user's key and the account switch silently doesn't apply.
             if self.api_client:
                 self.api_client.base_url = url
-                self.api_client._api_key = api_key
-                
+                self.api_client.api_key = api_key
+
         else:
             app_config.set_backend_mode(app_config.BACKEND_MODE_LOCAL)
             app_config.set_api_key(None)
-            
+
             if self.api_client:
                 self.api_client.base_url = app_config.DEFAULT_LOCAL_URL
-                self.api_client._api_key = None
+                self.api_client.api_key = None
 
         msg = (
             f"Mode: {mode.title()}\n"

@@ -8,6 +8,8 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QTableWidgetItem
 from PySide6.QtCore import Qt, QPoint
 
 from desktop_app.ui.search_tab import SearchTab
+from desktop_app.ui.styles.theme import Theme
+
 
 @pytest.fixture(scope="session")
 def qapp():
@@ -79,12 +81,33 @@ def test_perform_search_success(search_tab):
         # Verify args
         args = MockWorker.call_args
         assert args[0][1] == "test query"
-        assert args[0][2] == 100
+        assert args[0][2] == 5  # candidate_limit = top_k spin value
         assert args[0][3] == 0.5
         assert args[0][4] == "cosine"
         
         mock_worker_instance.start.assert_called_once()
         assert not search_tab.search_btn.isEnabled()
+
+
+def test_perform_search_always_sends_document_level_grouping(search_tab):
+    """Document-level grouping is now always-on: every search sends the
+    group_by_document + literal_tail_suppression options to the API."""
+    search_tab.query_input.setText("EV6")
+    search_tab.top_k_spin.setValue(5)
+    search_tab.min_score_spin.setValue(0.3)
+    search_tab.metric_combo.setCurrentText("cosine")
+
+    with patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
+        search_tab.perform_search()
+
+        args = MockWorker.call_args
+        assert args[0][1] == "EV6"
+        assert args[0][2] == 5
+        assert args.kwargs["group_by_document"] is True
+        assert args.kwargs["literal_tail_suppression"] == "identifier-token"
+
+
+
 
 def test_load_extensions_defaults_to_select_all(search_tab, mock_api_client):
     """Loading extensions should show '*' (all) selected, with no active filter."""
@@ -178,6 +201,17 @@ def test_search_finished_success(search_tab):
     assert search_tab.results_table.rowCount() == 2
     assert search_tab.results_table.item(0, 0).text() == "0.9000"  # Score
     assert search_tab.results_table.item(0, 2).text() == "/path/1"  # Source (column 2 now)
+    assert search_tab.status_label.text() == "Found 2 results (1 per file)"
+
+
+def test_search_finished_marks_local_results_one_per_file(search_tab):
+    # Document-level grouping is always-on, so the status always carries the suffix.
+    search_tab.search_finished(
+        True,
+        [{"score": 0.9, "source_uri": "/path/1", "text_content": "content 1", "chunk_index": 1}],
+    )
+
+    assert search_tab.status_label.text() == "Found 1 result (1 per file)"
 
 def test_search_finished_failure(search_tab):
     """Test handling of search failure."""
@@ -261,3 +295,57 @@ def test_context_menu(search_tab, mock_source_manager):
         mock_menu_instance.exec.assert_called_once()
 
 # NOTE: open_source_path method was moved to source_manager, these tests are obsolete
+
+
+def test_search_finished_503_not_ready(search_tab):
+    """Test handling of 503 (LanceDB index not ready / syncing) error."""
+    from desktop_app.utils.errors import APIError
+    error = APIError("LanceDB index is not ready / syncing — please wait", status_code=503)
+    
+    with patch("PySide6.QtWidgets.QMessageBox.critical") as mock_crit:
+        search_tab.search_finished(False, error)
+        
+        mock_crit.assert_not_called()
+        assert search_tab.search_btn.isEnabled()
+        assert search_tab.results_table.rowCount() == 0
+        assert "LanceDB index is not ready / syncing — please wait" in search_tab.status_label.text()
+        assert "Open the Documents tab (tree) and refresh to check sync status" in search_tab.status_label.text()
+        assert "color: #f59e0b" in search_tab.status_label.styleSheet()
+
+
+def test_perform_search_sends_source_parameter(search_tab):
+    """SearchWorker is constructed with source=None for LanceDB and source='postgres' for Postgres."""
+    search_tab.query_input.setText("test query")
+    
+    # 1. LanceDB (default, index 0)
+    search_tab.engine_combo.setCurrentIndex(0)
+    with patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
+        search_tab.perform_search()
+        MockWorker.assert_called_once()
+        args, kwargs = MockWorker.call_args
+        assert kwargs.get("source") is None
+        assert search_tab._active_engine == "lancedb"
+
+    # 2. Postgres (debug, index 1)
+    search_tab.engine_combo.setCurrentIndex(1)
+    with patch("desktop_app.ui.search_tab.SearchWorker") as MockWorker:
+        search_tab.perform_search()
+        MockWorker.assert_called_once()
+        args, kwargs = MockWorker.call_args
+        assert kwargs.get("source") == "postgres"
+        assert search_tab._active_engine == "postgres"
+
+
+def test_search_finished_postgres_amber_warning(search_tab):
+    """Postgres search success shows amber styling and custom warning suffix."""
+    search_tab._active_engine = "postgres"
+    
+    with patch.object(search_tab, "display_results") as mock_display:
+        search_tab.results_table.setRowCount(3) # Mock that display_results sets 3 rows
+        search_tab.search_finished(True, [{"id": "1"}, {"id": "2"}, {"id": "3"}])
+        
+        mock_display.assert_called_once()
+        assert "Postgres (debug) engine — not the product engine" in search_tab.status_label.text()
+        assert "Found 3 results" in search_tab.status_label.text()
+        assert "color: #f59e0b" in search_tab.status_label.styleSheet()
+

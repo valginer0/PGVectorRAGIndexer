@@ -9,11 +9,19 @@ FROM ghcr.io/valginer0/pgvectorragindexer:base
 # Working directory is already set in base image
 WORKDIR /app
 
+# Reconcile Python dependencies with the current branch. The base image carries
+# the heavy common stack, but this layer makes requirements.txt changes effective
+# even when the base image has not been rebuilt yet.
+COPY requirements.txt ./
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install -r requirements.txt
+
 # Copy application code
 COPY *.py ./
 COPY VERSION ./
 COPY init-db.sql ./
 COPY routers/ ./routers/
+COPY scripts/ ./scripts/
 
 # Copy migration infrastructure
 COPY alembic.ini ./

@@ -321,3 +321,178 @@ def test_page_size_changed_no_op(documents_tab):
         index = documents_tab.page_size_combo.findText("25")
         documents_tab.on_page_size_changed(index)
         mock_load.assert_not_called()
+
+
+def test_tree_stats_loaded_lancedb_unavailable(documents_tab):
+    """Test when LanceDB stats loading fails (returns None)."""
+    documents_tab._view_mode = "tree"
+    documents_tab.db_source_combo.setVisible(True)
+    
+    data = {
+        "postgres": {"total_documents": 10, "total_chunks": 50},
+        "lancedb": None
+    }
+    
+    documents_tab._on_tree_stats_loaded(True, data)
+    
+    assert documents_tab._lancedb_available is False
+    assert documents_tab.db_source_combo.isVisible() is False
+    assert documents_tab.db_source_combo.currentIndex() == 1
+    assert documents_tab.pg_stats_label.text() == "Postgres : 10 docs / 50 chunks"
+    assert documents_tab.ldb_stats_label.isVisible() is False
+    assert documents_tab.status_stats_label.isVisible() is False
+    assert documents_tab._polling_timer is None or not documents_tab._polling_timer.isActive()
+
+
+def test_tree_stats_loaded_lancedb_available_in_sync(documents_tab):
+    """Test when LanceDB stats match Postgres (in sync)."""
+    documents_tab._view_mode = "tree"
+    documents_tab.db_source_combo.setVisible(True)
+    
+    data = {
+        "postgres": {"total_documents": 10, "total_chunks": 50},
+        "lancedb": {"total_documents": 10, "total_chunks": 50}
+    }
+    
+    documents_tab._on_tree_stats_loaded(True, data)
+    
+    assert documents_tab._lancedb_available is True
+    assert documents_tab.db_source_combo.isVisible() is True
+    assert documents_tab.pg_stats_label.text() == "Postgres : 10 docs / 50 chunks"
+    assert documents_tab.ldb_stats_label.text() == "LanceDB  : 10 docs / 50 chunks"
+    assert documents_tab.ldb_stats_label.isVisible() is True
+    assert documents_tab.status_stats_label.isVisible() is True
+    assert documents_tab.status_stats_label.text() == "Status   : ✓ in sync"
+    assert "color: #10b981" in documents_tab.status_stats_label.styleSheet()
+    assert documents_tab._polling_timer is None or not documents_tab._polling_timer.isActive()
+
+
+def test_tree_stats_loaded_lancedb_available_behind(documents_tab):
+    """Test when LanceDB is behind Postgres (syncing)."""
+    documents_tab._view_mode = "tree"
+    documents_tab.db_source_combo.setVisible(True)
+    
+    data = {
+        "postgres": {"total_documents": 10, "total_chunks": 50},
+        "lancedb": {"total_documents": 8, "total_chunks": 40}
+    }
+    
+    documents_tab._on_tree_stats_loaded(True, data)
+    
+    assert documents_tab._lancedb_available is True
+    assert documents_tab.db_source_combo.isVisible() is True
+    assert documents_tab.pg_stats_label.text() == "Postgres : 10 docs / 50 chunks"
+    assert documents_tab.ldb_stats_label.text() == "LanceDB  : 8 docs / 40 chunks"
+    assert documents_tab.ldb_stats_label.isVisible() is True
+    assert documents_tab.status_stats_label.isVisible() is True
+    assert documents_tab.status_stats_label.text() == "Status   : ⟳ syncing — LanceDB behind"
+    assert "color: #f59e0b" in documents_tab.status_stats_label.styleSheet()
+    assert documents_tab._polling_timer is not None and documents_tab._polling_timer.isActive()
+
+
+
+# ---------------------------------------------------------------------------
+# Document visibility context-menu actions
+# ---------------------------------------------------------------------------
+
+
+def test_set_visibility_shared_updates_status(documents_tab):
+    """Successful 'Make Shared' shows confirmation in the status label."""
+    documents_tab.api_client.set_document_visibility = MagicMock()
+
+    with patch.object(documents_tab, "_refresh_current_view") as refresh:
+        documents_tab.set_document_visibility("doc-1", "shared")
+
+    documents_tab.api_client.set_document_visibility.assert_called_once_with(
+        "doc-1", visibility="shared"
+    )
+    assert "shared" in documents_tab.status_label.text()
+    refresh.assert_called_once()
+
+
+def test_set_visibility_private_with_owner_updates_status(documents_tab):
+    documents_tab.api_client.set_document_visibility = MagicMock()
+    documents_tab.api_client.get_document_visibility = MagicMock(
+        return_value={"owner_id": "u-1", "visibility": "private"}
+    )
+
+    with patch.object(documents_tab, "_refresh_current_view") as refresh:
+        documents_tab.set_document_visibility("doc-1", "private")
+
+    assert "private" in documents_tab.status_label.text()
+    refresh.assert_called_once()
+
+
+def test_set_visibility_private_without_owner_warns(documents_tab):
+    """Private without an owner is ineffective — the user must be told."""
+    documents_tab.api_client.set_document_visibility = MagicMock()
+    documents_tab.api_client.get_document_visibility = MagicMock(
+        return_value={"owner_id": None, "visibility": "private"}
+    )
+
+    with patch.object(QMessageBox, "information") as info_box, \
+         patch.object(documents_tab, "_refresh_current_view") as refresh:
+        documents_tab.set_document_visibility("doc-1", "private")
+
+    info_box.assert_called_once()
+    assert "no owner" in info_box.call_args[0][2]
+    refresh.assert_called_once()
+
+
+def test_set_visibility_api_failure_shows_error(documents_tab):
+    documents_tab.api_client.set_document_visibility = MagicMock(
+        side_effect=RuntimeError("backend down")
+    )
+
+    with patch.object(QMessageBox, "critical") as critical_box:
+        documents_tab.set_document_visibility("doc-1", "private")
+
+    critical_box.assert_called_once()
+
+
+def test_display_documents_stores_document_id_for_menu(documents_tab):
+    """Rows must carry document_id so the context menu can act on them."""
+    docs = [{
+        "source_uri": "/tmp/a.txt",
+        "document_id": "doc-abc",
+        "chunk_count": 1,
+        "metadata": {},
+    }]
+    documents_tab.display_documents(docs)
+
+    item = documents_tab.documents_table.item(0, 0)
+    assert item.data(Qt.UserRole + 1) == "doc-abc"
+
+
+def test_display_documents_marks_owned_private_rows_with_lock(documents_tab):
+    docs = [{
+        "source_uri": "/tmp/private.txt",
+        "document_id": "doc-private",
+        "visibility": "private",
+        "owner_id": "user-1",
+        "chunk_count": 1,
+        "metadata": {},
+    }]
+
+    documents_tab.display_documents(docs)
+
+    item = documents_tab.documents_table.item(0, 0)
+    assert not item.icon().isNull()
+    assert "owner and admins" in item.toolTip()
+
+
+def test_display_documents_does_not_lock_ownerless_private_rows(documents_tab):
+    docs = [{
+        "source_uri": "/tmp/ownerless.txt",
+        "document_id": "doc-ownerless",
+        "visibility": "private",
+        "owner_id": None,
+        "chunk_count": 1,
+        "metadata": {},
+    }]
+
+    documents_tab.display_documents(docs)
+
+    item = documents_tab.documents_table.item(0, 0)
+    assert item.icon().isNull()
+    assert "no owner" in item.toolTip()

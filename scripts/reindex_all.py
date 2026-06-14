@@ -74,7 +74,7 @@ def reindex_all(dry_run: bool = False, batch_size: int = 10) -> dict:
     
     for i, source_uri in enumerate(source_uris, 1):
         try:
-            result = indexer.index_document(source_uri, force_reindex=True)
+            result = indexer.index_document(source_uri, force_reindex=True, rebuild_fts=False)
             
             if result.get('status') == 'success':
                 success += 1
@@ -95,6 +95,16 @@ def reindex_all(dry_run: bool = False, batch_size: int = 10) -> dict:
         if i % batch_size == 0:
             logger.info(f"Progress: {i}/{total} ({success} success, {failed} failed, {skipped} skipped)")
     
+    # Amortize FTS index rebuild to the end of the reindexing process
+    if getattr(indexer.config.retrieval, "lancedb_enabled", False):
+        try:
+            logger.info("Rebuilding LanceDB FTS index...")
+            from services import get_lancedb_adapter
+            get_lancedb_adapter().rebuild_fts_index(parent_only=True)
+            logger.info("LanceDB FTS index rebuild complete.")
+        except Exception as e:
+            logger.error(f"Failed to rebuild LanceDB FTS index: {e}", exc_info=True)
+
     # Final summary
     summary = {
         "total": total,

@@ -107,6 +107,16 @@ class APIClient:
         self._base.api_base = value.rstrip('/') if value else value # type: ignore
         
     @property
+    def api_key(self) -> Optional[str]:
+        return self._base.api_key
+
+    @api_key.setter
+    def api_key(self, value: Optional[str]):
+        # BaseAPIClient.api_key enforces synchronization invariant:
+        # immediately patches X-API-Key into self._base._session.headers.
+        self._base.api_key = value
+
+    @property
     def _api_key(self) -> Optional[str]:
         return self._base.api_key
         
@@ -170,12 +180,17 @@ class APIClient:
     def search(
         self,
         query: str,
-        top_k: int = 10,
+        top_k: Optional[int] = 10,
         min_score: float = 0.5,
         metric: str = "cosine",
         document_type: Optional[str] = None,
         filters: Optional[Dict[str, Any]] = None,
         extensions: Optional[List[str]] = None,
+        group_by_document: bool = False,
+        literal_tail_suppression: Optional[str] = None,
+        literal_anchor_threshold: Optional[float] = None,
+        literal_tail_threshold: Optional[float] = None,
+        source: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Search for documents."""
         return self._search.search(
@@ -186,6 +201,11 @@ class APIClient:
             document_type=document_type,
             filters=filters,
             extensions=extensions,
+            group_by_document=group_by_document,
+            literal_tail_suppression=literal_tail_suppression,
+            literal_anchor_threshold=literal_anchor_threshold,
+            literal_tail_threshold=literal_tail_threshold,
+            source=source,
         )
 
     def get_extensions(self) -> List[str]:
@@ -432,19 +452,26 @@ class APIClient:
         parent_path: str = "",
         limit: int = 200,
         offset: int = 0,
+        source: str = "postgres",
     ) -> Dict[str, Any]:
         """Get one level of the document tree under parent_path."""
-        return self._document.get_document_tree(parent_path, limit, offset)
+        return self._document.get_document_tree(parent_path, limit, offset, source)
 
-    def get_document_tree_stats(self) -> Dict[str, Any]:
+    def get_document_tree_stats(self, source: str = "postgres") -> Dict[str, Any]:
         """Get overall document tree statistics."""
-        return self._document.get_document_tree_stats()
+        return self._document.get_document_tree_stats(source)
 
     def search_document_tree(
-        self, query: str, limit: int = 50
+        self, query: str, limit: int = 50, source: str = "postgres"
     ) -> Dict[str, Any]:
         """Search for documents matching a path pattern."""
-        return self._document.search_document_tree(query, limit)
+        return self._document.search_document_tree(query, limit, source)
+
+    @property
+    def last_search_message(self) -> Optional[str]:
+        """Return the last search warning message (e.g. empty index warning)."""
+        return self._search.last_message
+
 
     # ------------------------------------------------------------------
     # Document Locks (#3 Multi-User, Phase 1)
@@ -642,7 +669,7 @@ class APIClient:
                     body=body,
                     status_code=code,
                 )
-            elif code in (401, 403, 404, 405) or code >= 500:
+            elif code in (401, 403, 404, 405) or code == 429 or code >= 500:
                 err_msg = None
                 err_code = None
                 try:
@@ -675,6 +702,13 @@ class APIClient:
                 elif code in (404, 405):
                     return ProbeResult(
                         status=CapabilityStatus.NOT_SUPPORTED,
+                        status_code=code,
+                        error_message=err_msg,
+                        error_code=err_code,
+                    )
+                elif code == 429:
+                    return ProbeResult(
+                        status=CapabilityStatus.UNREACHABLE,
                         status_code=code,
                         error_message=err_msg,
                         error_code=err_code,

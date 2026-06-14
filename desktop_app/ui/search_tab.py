@@ -119,8 +119,11 @@ class CheckableComboBox(QComboBox):
             return []
         return [t for t in raw if t != self.SELECT_ALL]
 from .shared import populate_document_type_combo
+from .styles.theme import Theme
 from .workers import SearchWorker
 from ..utils.snippet_utils import extract_snippet
+from ..utils import app_config
+from ..utils.search_limits import candidate_limit_for_unique_files
 
 # ... imports ...
 
@@ -136,7 +139,16 @@ class SearchTab(QWidget):
         self.source_manager = source_manager
         self.current_query = ""  # Store for snippet extraction
         self._display_result_limit = 10
+        self._active_engine = "lancedb"
         self.setup_ui()
+
+    def clear_results(self) -> None:
+        """Drop any displayed search results — called when the connected
+        account/key changes so one user's results don't linger for the next."""
+        try:
+            self.results_table.setRowCount(0)
+        except Exception:
+            pass
     
     def setup_ui(self):
         """Setup the user interface."""
@@ -189,24 +201,35 @@ class SearchTab(QWidget):
         self.min_score_spin.setSingleStep(0.05)
         self.min_score_spin.setValue(0.3)
         self.min_score_spin.setMinimumWidth(80)
-        options_layout.addWidget(self.min_score_spin)
-        
-        # Metric
+        options_layout.addWidget(self.min_score_spin)        # Metric
+        from PySide6.QtWidgets import QListView
         options_layout.addWidget(QLabel("Metric:"))
         self.metric_combo = QComboBox()
+        self.metric_combo.setView(QListView())
         self.metric_combo.addItems(["cosine", "euclidean", "dot_product"])
         self.metric_combo.setMinimumWidth(120)
         self.metric_combo.setMinimumHeight(35)  # Prevent crushing at min window height
         options_layout.addWidget(self.metric_combo)
         
+        # Engine
+        options_layout.addWidget(QLabel("Engine:"))
+        self.engine_combo = QComboBox()
+        self.engine_combo.setView(QListView())
+        self.engine_combo.addItem("LanceDB", "lancedb")          # index 0 = default
+        self.engine_combo.addItem("Postgres (debug)", "postgres")
+        self.engine_combo.setMinimumHeight(35)
+        self.engine_combo.currentIndexChanged.connect(self._on_engine_changed)
+        options_layout.addWidget(self.engine_combo)
+        
         options_layout.addStretch()
         layout.addWidget(options_group)
-
+ 
         # Document type filter
         type_group = QGroupBox("Document Type Filter (Optional)")
         type_layout = QHBoxLayout(type_group)
         type_layout.addWidget(QLabel("Document Type:"))
         self.type_filter = QComboBox()
+        self.type_filter.setView(QListView())
         self.type_filter.setEditable(True)
         # We will populate this dynamically, but default is *
         self.type_filter.addItem("*")
@@ -286,6 +309,19 @@ class SearchTab(QWidget):
         # Store query for snippet extraction
         self.current_query = query
         
+        selected_type = self.type_filter.currentText().strip() if hasattr(self, "type_filter") else ""
+
+        # Handle wildcard and empty type
+        if selected_type == "*":
+            document_type = None  # No filter (all types)
+        else:
+            document_type = selected_type  # Specific type or empty string (for "No Type")
+
+        extensions = self.ext_filter.checked_items() if hasattr(self, "ext_filter") else []
+
+        self._display_result_limit = self.top_k_spin.value()
+
+
         health = self.api_client.get_health()
         if health.get("status") == "initializing":
             QMessageBox.information(
@@ -303,26 +339,19 @@ class SearchTab(QWidget):
                 "The API is not reachable. Please make sure Docker containers are running."
             )
             return
-        
+
         # Disable UI during search
         self.search_btn.setEnabled(False)
         self.query_input.setEnabled(False)
         self.status_label.setText(f"Searching for: {query}...")
         self.status_label.setStyleSheet("color: #2563eb; font-style: italic;")
-        
+
         # Start search worker
-        selected_type = self.type_filter.currentText().strip() if hasattr(self, "type_filter") else ""
+        candidate_limit = self._display_result_limit
 
-        # Handle wildcard and empty type
-        if selected_type == "*":
-            document_type = None  # No filter (all types)
-        else:
-            document_type = selected_type  # Specific type or empty string (for "No Type")
-
-        extensions = self.ext_filter.checked_items() if hasattr(self, "ext_filter") else []
-
-        self._display_result_limit = self.top_k_spin.value()
-        candidate_limit = self._candidate_limit_for_unique_files(self._display_result_limit)
+        engine = self.engine_combo.currentData()          # "lancedb" | "postgres"
+        self._active_engine = engine
+        source = "postgres" if engine == "postgres" else None
 
         self.search_worker = SearchWorker(
             self.api_client,
@@ -332,9 +361,14 @@ class SearchTab(QWidget):
             self.metric_combo.currentText(),
             document_type=document_type,
             extensions=extensions or None,
+            group_by_document=True,
+            literal_tail_suppression="identifier-token",
+            source=source,
         )
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()
+
+
     
     def search_finished(self, success: bool, data):
         """Handle search completion."""
@@ -346,13 +380,37 @@ class SearchTab(QWidget):
             results = data
             self.display_results(results)
             n = self.results_table.rowCount()
-            self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''} (1 per file)")
-            self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
+            
+            # Check for empty-state message from backend
+            backend_msg = getattr(self.api_client, "last_search_message", None)
+            if backend_msg and isinstance(backend_msg, str):
+                self.status_label.setText(backend_msg)
+                self.status_label.setStyleSheet("color: #f59e0b; font-style: italic; font-weight: bold;")
+
+            else:
+                suffix = " (1 per file)"
+                if self._active_engine == "postgres":
+                    self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix} · ⚠ Postgres (debug) engine — not the product engine")
+                    self.status_label.setStyleSheet("color: #f59e0b; font-style: italic; font-weight: bold;")
+                else:
+                    self.status_label.setText(f"Found {n} result{'s' if n != 1 else ''}{suffix}")
+                    self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
         else:
-            error_msg = data
-            QMessageBox.critical(self, "Search Failed", f"Search failed: {error_msg}")
-            self.status_label.setText("Search failed")
-            self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+            error_msg = str(data)
+            is_503 = False
+            if hasattr(data, 'status_code') and data.status_code == 503:
+                is_503 = True
+
+            if is_503:
+                self.results_table.setRowCount(0)
+                friendly_msg = f"{error_msg} — Open the Documents tab (tree) and refresh to check sync status."
+                self.status_label.setText(friendly_msg)
+                self.status_label.setStyleSheet("color: #f59e0b; font-style: italic; font-weight: bold;")
+            else:
+                QMessageBox.critical(self, "Search Failed", f"Search failed: {error_msg}")
+                self.status_label.setText("Search failed")
+                self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+
     
     def display_results(self, results: List[Dict[str, Any]]):
         """Display search results in the table."""
@@ -571,4 +629,14 @@ class SearchTab(QWidget):
 
     def _candidate_limit_for_unique_files(self, visible_limit: int) -> int:
         """Fetch extra chunk-level matches so file-level dedupe does not hide files."""
-        return min(max(visible_limit * 20, visible_limit + 50), 500)
+        return candidate_limit_for_unique_files(visible_limit)
+
+    def _on_engine_changed(self) -> None:
+        """Visual feedback when Postgres engine is selected."""
+        if self.engine_combo.currentData() == "postgres":
+            self.engine_combo.setStyleSheet(
+                "background-color: #374151; border: 1px solid #f59e0b; "
+                "border-radius: 6px; color: #f9fafb; padding: 8px;"
+            )
+        else:
+            self.engine_combo.setStyleSheet("")

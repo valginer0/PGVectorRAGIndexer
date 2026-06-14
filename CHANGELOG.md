@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.15.1] - 2026-06-14
+
 ### Added
 - feat(search): per-user document visibility enforced in search results on
   both engines (LanceDB and PostgreSQL) — other users' private documents are

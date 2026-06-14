@@ -102,12 +102,12 @@ class BackendLanceDBAdapter:
             if not self._table_exists(PARENT_TABLE):
                 logger.info(f"Creating LanceDB table: {PARENT_TABLE}")
                 parent_table = self.db.create_table(PARENT_TABLE, schema=self.parent_schema)
-                parent_table.create_fts_index("aggregated_text")
+                parent_table.create_fts_index("aggregated_text", with_position=True)
                 
             if not self._table_exists(CHUNK_TABLE):
                 logger.info(f"Creating LanceDB table: {CHUNK_TABLE}")
                 chunk_table = self.db.create_table(CHUNK_TABLE, schema=self.chunk_schema)
-                chunk_table.create_fts_index("text_content")
+                chunk_table.create_fts_index("text_content", with_position=True)
 
             # Create scalar indexes to speed up pre-filtered queries
             try:
@@ -618,14 +618,14 @@ class BackendLanceDBAdapter:
         with self.write_lock:
             logger.info("Rebuilding FTS index on LanceDB parent table...")
             try:
-                self.db.open_table(PARENT_TABLE).create_fts_index("aggregated_text", replace=True)
+                self.db.open_table(PARENT_TABLE).create_fts_index("aggregated_text", replace=True, with_position=True)
             except Exception as e:
                 logger.warning(f"Failed to rebuild FTS index on parent table: {e}")
 
             if not parent_only:
                 logger.info("Rebuilding FTS index on LanceDB chunk table...")
                 try:
-                    self.db.open_table(CHUNK_TABLE).create_fts_index("text_content", replace=True)
+                    self.db.open_table(CHUNK_TABLE).create_fts_index("text_content", replace=True, with_position=True)
                 except Exception as e:
                     logger.warning(f"Failed to rebuild FTS index on chunk table: {e}")
 

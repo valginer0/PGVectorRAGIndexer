@@ -41,10 +41,16 @@ torch>=2.1.0
 numpy>=1.24.0
 
 # API
-fastapi>=0.108.0
+# Cap below FastAPI 0.120 / Starlette 0.49: Starlette 0.49 wraps include_router()
+# entries in an `_IncludedRouter` object inside app.routes, which has no `.path`.
+# Our route-registration test helpers iterate `<router>.routes` and read `.path`,
+# so unpinned CI runners that pulled Starlette >=0.49 broke ~14 endpoint tests.
+# Validated against fastapi 0.119.0 / starlette 0.48.0. Make the helpers
+# recurse into _IncludedRouter.routes post-merge, then this cap can be relaxed.
+fastapi>=0.108.0,<0.120
 uvicorn[standard]>=0.25.0
 python-multipart>=0.0.6
-starlette>=0.27.0
+starlette>=0.27.0,<0.49
 
 # Backend LanceDB search index
 lancedb==0.30.2

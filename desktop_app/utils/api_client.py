@@ -669,7 +669,7 @@ class APIClient:
                     body=body,
                     status_code=code,
                 )
-            elif code in (401, 403, 404, 405) or code >= 500:
+            elif code in (401, 403, 404, 405) or code == 429 or code >= 500:
                 err_msg = None
                 err_code = None
                 try:
@@ -702,6 +702,13 @@ class APIClient:
                 elif code in (404, 405):
                     return ProbeResult(
                         status=CapabilityStatus.NOT_SUPPORTED,
+                        status_code=code,
+                        error_message=err_msg,
+                        error_code=err_code,
+                    )
+                elif code == 429:
+                    return ProbeResult(
+                        status=CapabilityStatus.UNREACHABLE,
                         status_code=code,
                         error_message=err_msg,
                         error_code=err_code,

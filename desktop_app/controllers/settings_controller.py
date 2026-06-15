@@ -121,15 +121,7 @@ class SettingsController:
                     ui_actions=[UiAction.MESSAGE_BOX_WARNING],
                     data=BackendSaveData()
                 )
-            if not api_key:
-                return ControllerResult(
-                    success=False,
-                    message="An API key is required for remote connections.",
-                    severity=MessageSeverity.WARNING,
-                    ui_actions=[UiAction.MESSAGE_BOX_WARNING],
-                    data=BackendSaveData()
-                )
-                
+            
             app_config.set_backend_mode(mode)
             app_config.set_backend_url(url)
             app_config.set_api_key(api_key)

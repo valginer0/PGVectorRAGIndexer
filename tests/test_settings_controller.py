@@ -131,8 +131,8 @@ def test_save_backend_settings_missing_api_key():
     controller = SettingsController()
     result = controller.save_backend_settings(app_config.BACKEND_MODE_REMOTE, "http://foo.com", "")
     
-    assert result.success is False
-    assert result.ui_actions == [UiAction.MESSAGE_BOX_WARNING]
+    assert result.success is True
+    assert result.severity == "success"
 
 @patch('desktop_app.utils.app_config.set_backend_mode')
 @patch('desktop_app.utils.app_config.set_backend_url')

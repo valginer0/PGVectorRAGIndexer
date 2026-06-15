@@ -431,6 +431,11 @@ class SettingsTab(QWidget):
         self._api_key_input.setEnabled(is_remote)
         self._test_conn_btn.setEnabled(is_remote)
 
+        if not is_remote:
+            from desktop_app.utils.app_config import DEFAULT_LOCAL_URL
+            self._url_input.setText(DEFAULT_LOCAL_URL)
+            self._api_key_input.clear()
+
         # Hide Docker controls in remote mode
         if hasattr(self, '_docker_group'):
             self._docker_group.setVisible(not is_remote)

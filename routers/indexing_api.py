@@ -273,86 +273,18 @@ async def upload_and_index(
 
         from config import get_config
         config = get_config()
-        mutation_active = bool(getattr(config.retrieval, "lancedb_enabled", False))
-        if mutation_active:
-            from retriever_v2 import begin_lancedb_mutation
-            begin_lancedb_mutation()
-        postgres_inserted = False
-        old_deleted = False
-        old_chunks_backup: list = []
-        try:
-            # Delete existing document just before inserting its replacement
-            # (force reindex or changed file hash), backing it up first so a
-            # failure can restore the old version instead of losing it.
-            if existing_doc:
-                logger.info(f"Removing existing document: {processed_doc.document_id}")
-                old_chunks_backup = idx.repository.get_document_chunks_for_reinsert(
-                    processed_doc.document_id
-                )
-                idx.repository.delete_document(processed_doc.document_id)
-                old_deleted = True
-
-            # Insert into database
-            logger.info(f"Storing {len(chunks_data)} chunks in database...")
-            idx.repository.insert_chunks(chunks_data)
-            postgres_inserted = True
-
-            # Dual-write to LanceDB if enabled
-            if getattr(config.retrieval, "lancedb_enabled", False):
-                from services import get_lancedb_adapter
-                lancedb_adapter = get_lancedb_adapter()
-
-                lancedb_chunks = []
-                for item in chunks_data:
-                    # item format: (doc_id, chunk_index, text_content, source_uri, embedding, chunk_metadata)
-                    lancedb_chunks.append((item[1], item[2], item[4], item[5]))
-
-                aggregated_text = "\n\n".join(item[2] for item in chunks_data)
-
-                lancedb_adapter.upsert_document(
-                    document_id=processed_doc.document_id,
-                    source_uri=processed_doc.source_uri,
-                    chunks=lancedb_chunks,
-                    aggregated_text=aggregated_text,
-                    doc_metadata=processed_doc.metadata
-                )
-                # Rebuild FTS index on parent table for freshness
-                lancedb_adapter.rebuild_fts_index(parent_only=True)
-
-            # Invalidate readiness cache on successful write
-            from retriever_v2 import invalidate_lancedb_cache
-            invalidate_lancedb_cache()
-        except Exception as e:
-            logger.error(f"Failed to index uploaded document into LanceDB-backed stores: {e}. Rolling back PostgreSQL if needed...", exc_info=True)
-            if postgres_inserted or old_deleted:
-                try:
-                    idx.repository.delete_document(processed_doc.document_id)
-                    if old_chunks_backup:
-                        idx.repository.insert_chunks(old_chunks_backup)
-                        logger.info(
-                            f"Restored previous version of document {processed_doc.document_id} "
-                            f"({len(old_chunks_backup)} chunks) after failed replacement"
-                        )
-                except Exception as rollback_err:
-                    logger.critical(f"PostgreSQL rollback failed for document {processed_doc.document_id}: {rollback_err}", exc_info=True)
-                if old_chunks_backup and mutation_active:
-                    # Best-effort: drop any partial replacement from LanceDB so the
-                    # count drift is detected and the repair sync restores the old
-                    # version from PostgreSQL.
-                    try:
-                        from services import get_lancedb_adapter
-                        get_lancedb_adapter().delete_document(processed_doc.document_id)
-                    except Exception as lancedb_err:
-                        logger.warning(
-                            f"Could not remove partial LanceDB replacement for {processed_doc.document_id}: {lancedb_err}"
-                        )
-            from retriever_v2 import invalidate_lancedb_cache
-            invalidate_lancedb_cache()
-            raise
-        finally:
-            if mutation_active:
-                from retriever_v2 import end_lancedb_mutation
-                end_lancedb_mutation()
+        from indexing_write_transaction import write_indexed_document
+        write_indexed_document(
+            repository=idx.repository,
+            document_id=processed_doc.document_id,
+            source_uri=processed_doc.source_uri,
+            chunks_data=chunks_data,
+            doc_metadata=processed_doc.metadata,
+            replace_existing=bool(existing_doc),
+            lancedb_enabled=bool(getattr(config.retrieval, "lancedb_enabled", False)),
+            rebuild_fts=True,
+            operation_label="uploaded document",
+        )
 
         logger.info(f"✓ Successfully indexed document: {processed_doc.document_id}")
 

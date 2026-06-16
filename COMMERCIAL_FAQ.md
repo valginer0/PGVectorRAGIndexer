@@ -1,6 +1,7 @@
 # Commercial Licensing FAQ — PGVectorRAGIndexer
 
 This FAQ is intended to clarify common questions about commercial licensing.
+Commercial licenses are issued by PIVARO LLC.
 
 If you are unsure about your specific use case, email: hello@ragvault.net
 

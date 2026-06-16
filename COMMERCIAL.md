@@ -1,6 +1,7 @@
 # Commercial Licensing — PGVectorRAGIndexer
 
 This page explains when a commercial license is required and how to obtain one.
+Commercial licenses are issued by PIVARO LLC.
 
 PGVectorRAGIndexer is free to use for personal projects, education, research, and
 non-commercial evaluation. Ongoing commercial use requires a commercial license.

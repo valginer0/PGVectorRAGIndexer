@@ -4,7 +4,7 @@ Thank you for your interest in PGVectorRAGIndexer! 🎉
 
 ## 📜 Development Policy
 
-**Important**: This project is developed and maintained exclusively by Valery Giner. 
+**Important**: This project is developed and maintained exclusively by PIVARO LLC.
 
 **We do NOT accept**:
 - ❌ Pull requests
@@ -18,7 +18,7 @@ Thank you for your interest in PGVectorRAGIndexer! 🎉
 - ✅ Use case discussions
 - ✅ Documentation feedback
 
-All development decisions and implementation remain with the copyright holder to maintain code quality, consistency, and full ownership.
+All development decisions and implementation remain with PIVARO LLC to maintain code quality, consistency, and full ownership.
 
 ## 🚀 How to Contribute
 

@@ -2,15 +2,15 @@
 
 This Commercial License Agreement (“Agreement”) is entered into between:
 
-**Licensor:**  
-Valery Giner  
-Email: hello@ragvault.net  
+**Licensor:**
+PIVARO LLC
+Email: hello@ragvault.net
 
 and
 
-**Licensee:**  
-<Company Legal Name>  
-<Company Address>  
+**Licensee:**
+<Company Legal Name>
+<Company Address>
 
 Effective Date: <Date>
 
@@ -113,11 +113,13 @@ regarding the Software and supersedes all prior discussions or agreements.
 
 ## Signatures
 
-Licensor: ___________________________  
-Name: Valery Giner  
-Date: ___________________________  
+Licensor: ___________________________
+Name: PIVARO LLC
+By: ___________________________
+Title: ___________________________
+Date: ___________________________
 
-Licensee: ___________________________  
-Name: ___________________________  
-Title: ___________________________  
-Date: ___________________________  
+Licensee: ___________________________
+Name: ___________________________
+Title: ___________________________
+Date: ___________________________

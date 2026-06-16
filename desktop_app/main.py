@@ -38,7 +38,7 @@ def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
     app.setApplicationName("PGVectorRAGIndexer")
-    app.setOrganizationName("ValginerSoft")
+    app.setOrganizationName("PIVARO LLC")
     app.setApplicationVersion(__version__)
     
     # Force application-wide dark palette so native item delegates render text in white

@@ -972,7 +972,7 @@ We welcome:
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for details on how to provide feedback.
 
-All development is maintained exclusively by the copyright holder to ensure code quality and full ownership.
+All development is maintained exclusively by PIVARO LLC to ensure code quality and full ownership.
 
 ## 🙏 Acknowledgments
 
@@ -1000,6 +1000,7 @@ All development is maintained exclusively by the copyright holder to ensure code
 ## License
 
 PGVectorRAGIndexer is **dual-licensed**.
+Commercial licenses are issued by PIVARO LLC.
 
 ### Community License
 Free for personal use, education, research, and non-commercial evaluation.  

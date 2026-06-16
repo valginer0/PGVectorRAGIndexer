@@ -1,5 +1,6 @@
 PGVectorRAGIndexer Community License v1.1
 Copyright (c) 2025 Valery Giner
+Copyright (c) 2026 PIVARO LLC
 
 Permission is hereby granted, free of charge, to any individual or organization to use
 this software and its associated documentation (the "Software") for personal,
@@ -20,7 +21,7 @@ systems, or continuous integration workflows.
 
 Redistribution of the Software or modified versions, sublicensing, or Commercial Use
 (as defined below) is not permitted under this license and requires an explicit
-Commercial License from the copyright holder.
+Commercial License from PIVARO LLC.
 
 3. Commercial Use Definition
 
@@ -41,7 +42,7 @@ Commercial License.
 
 You may share feedback, bug reports, and feature suggestions. However, this project
 does not accept code contributions or pull requests. All development is maintained
-exclusively by the copyright holder.
+exclusively by PIVARO LLC.
 
 Voluntary sponsorships are welcome but do not grant any additional usage rights.
 

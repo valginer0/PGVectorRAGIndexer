@@ -1,7 +1,7 @@
 blank_issues_enabled: true
 contact_links:
   - name: 📧 Direct Contact
-    url: mailto:valginer0@gmail.com
+    url: mailto:hello@ragvault.net
     about: For commercial licensing, custom development, or private inquiries
   - name: 📚 Documentation
     url: https://github.com/valginer0/PGVectorRAGIndexer/blob/main/README.md

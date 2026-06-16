@@ -3,7 +3,7 @@
     <!-- Define Product Version from file or environment variable (passed via candle arguments) -->
     <!-- We will rely on CI passing -dProductVersion=x.y.z -->
     
-    <Product Id="*" Name="PGVector RAG Indexer Setup Wizard" Language="1033" Version="$(var.ProductVersion)" Manufacturer="Valginer0" UpgradeCode="55D500EB-296B-4412-A3D9-87383921B2F6">
+    <Product Id="*" Name="PGVector RAG Indexer Setup Wizard" Language="1033" Version="$(var.ProductVersion)" Manufacturer="PIVARO LLC" UpgradeCode="55D500EB-296B-4412-A3D9-87383921B2F6">
         <Package InstallerVersion="200" Compressed="yes" InstallScope="perMachine" />
 
         <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." AllowSameVersionUpgrades="yes" />
@@ -53,7 +53,7 @@
         <DirectoryRef Id="ApplicationProgramsFolder">
             <Component Id="ApplicationShortcut" Guid="*">
                 <RemoveFolder Id="CleanUpShortCut" Directory="ApplicationProgramsFolder" On="uninstall" />
-                <RegistryValue Root="HKCU" Key="Software\Valginer0\PGVectorRAGIndexer" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+                <RegistryValue Root="HKCU" Key="Software\PIVARO LLC\PGVectorRAGIndexer" Name="installed" Type="integer" Value="1" KeyPath="yes" />
             </Component>
         </DirectoryRef>
     </Fragment>

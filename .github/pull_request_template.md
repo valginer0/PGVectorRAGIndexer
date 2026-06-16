@@ -12,7 +12,7 @@ Thank you for your interest in PGVectorRAGIndexer!
 
 ## Why?
 
-This project is developed and maintained exclusively by Valery Giner to maintain:
+This project is developed and maintained exclusively by PIVARO LLC to maintain:
 - Full copyright ownership
 - Code quality and consistency
 - Clear licensing terms
@@ -22,7 +22,7 @@ This project is developed and maintained exclusively by Valery Giner to maintain
 
 - Report bugs via Issues
 - Suggest features via Issues
-- Share feedback via Issues or email: valginer0@gmail.com
+- Share feedback via Issues or email: hello@ragvault.net
 - Star the repository ⭐
 - Sponsor development 💖
 

@@ -1,7 +1,6 @@
 PGVectorRAGIndexer Commercial Licensing Overview
 Document Revision: 1.1
-Copyright (c) 2025 Valery Giner
-Copyright (c) 2026 PIVARO LLC
+Copyright (c) 2024-2026 PIVARO LLC
 
 This document describes the commercial licensing model for PGVectorRAGIndexer and
 applies to organizations or individuals engaging in Commercial Use of the Software,

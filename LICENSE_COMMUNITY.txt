@@ -1,6 +1,5 @@
 PGVectorRAGIndexer Community License v1.1
-Copyright (c) 2025 Valery Giner
-Copyright (c) 2026 PIVARO LLC
+Copyright (c) 2024-2026 PIVARO LLC
 
 Permission is hereby granted, free of charge, to any individual or organization to use
 this software and its associated documentation (the "Software") for personal,

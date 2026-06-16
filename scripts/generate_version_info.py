@@ -64,7 +64,7 @@ VSVersionInfo(
             StringStruct(u'FileDescription', u'PGVectorRAGIndexer Desktop App Installer'),
             StringStruct(u'FileVersion', u'{version_str_full}'),
             StringStruct(u'InternalName', u'PGVectorRAGIndexer-Setup'),
-            StringStruct(u'LegalCopyright', u'© 2024-2025 Valery Giner; © 2026 PIVARO LLC. All rights reserved.'),
+            StringStruct(u'LegalCopyright', u'© 2024-2026 PIVARO LLC. All rights reserved.'),
             StringStruct(u'OriginalFilename', u'PGVectorRAGIndexer-Setup.exe'),
             StringStruct(u'ProductName', u'PGVectorRAGIndexer'),
             StringStruct(u'ProductVersion', u'{version_str_full}'),

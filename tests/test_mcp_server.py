@@ -1,211 +1,254 @@
 """
-Tests for the MCP Server (mcp_server.py).
+Tests for the REST-backed MCP Server (mcp_server.py).
 
-These tests verify the *_impl functions (the actual tool logic) without
-needing the MCP library or a running database.
+These tests verify the tool implementation functions without needing the MCP
+library or a running backend.
 """
 
-import pytest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
-from datetime import datetime
+
+import pytest
 
 
-class MockSearchResult:
-    """Mock search result object."""
-    def __init__(self, text: str, score: float = 0.9, source: str = "/path/to/doc.txt"):
-        self.text_content = text
-        self.relevance_score = score
-        self.distance = 1 - score
-        self.metadata = {"source_uri": source}
-
-
-class TestSearchDocumentsImpl:
-    """Tests for search_documents_impl function."""
-
-    @patch('mcp_server._get_retriever')
-    def test_search_returns_results(self, mock_get_retriever):
-        """Test that search returns formatted results."""
-        from mcp_server import search_documents_impl
-        
-        # Setup mock retriever
-        mock_retriever = MagicMock()
-        mock_retriever.search.return_value = [
-            MockSearchResult("This is test content", 0.95, "/docs/test.txt"),
-            MockSearchResult("Another result", 0.85, "/docs/other.md"),
-        ]
-        mock_get_retriever.return_value = mock_retriever
-        
-        # Call the function
-        result = search_documents_impl("test query", top_k=5, use_hybrid=False)
-        
-        # Verify
-        assert "Found 2 relevant results" in result
-        assert "test query" in result
-        assert "This is test content" in result
-        assert "/docs/test.txt" in result
-        mock_retriever.search.assert_called_once_with(query="test query", top_k=5)
-
-    @patch('mcp_server._get_retriever')
-    def test_search_no_results(self, mock_get_retriever):
-        """Test that search handles empty results gracefully."""
-        from mcp_server import search_documents_impl
-        
-        mock_retriever = MagicMock()
-        mock_retriever.search.return_value = []
-        mock_get_retriever.return_value = mock_retriever
-        
-        result = search_documents_impl("nonexistent query")
-        
-        assert "No matching documents found" in result
-
-    @patch('mcp_server._get_retriever')
-    def test_search_hybrid(self, mock_get_retriever):
-        """Test hybrid search is called when requested."""
-        from mcp_server import search_documents_impl
-        
-        mock_retriever = MagicMock()
-        mock_retriever.search_hybrid.return_value = [MockSearchResult("Hybrid result")]
-        mock_get_retriever.return_value = mock_retriever
-        
-        result = search_documents_impl("query", top_k=3, use_hybrid=True)
-        
-        mock_retriever.search_hybrid.assert_called_once_with(query="query", top_k=3)
-        assert "Hybrid result" in result
-
-    @patch('mcp_server._get_retriever')
-    def test_search_error_handling(self, mock_get_retriever):
-        """Test that search handles errors gracefully."""
-        from mcp_server import search_documents_impl
-        
-        mock_get_retriever.side_effect = Exception("Database connection failed")
-        
-        result = search_documents_impl("test")
-        
-        assert "Error performing search" in result
-        assert "Database connection failed" in result
-
-
-class TestIndexDocumentImpl:
-    """Tests for index_document_impl function."""
-
-    @patch('mcp_server._get_indexer')
-    @patch('mcp_server.os.path.exists')
-    def test_index_success(self, mock_exists, mock_get_indexer):
-        """Test successful document indexing."""
-        from mcp_server import index_document_impl
-        
-        mock_exists.return_value = True
-        mock_indexer = MagicMock()
-        mock_indexer.index_document.return_value = {
-            'status': 'success',
-            'document_id': 'abc123',
-            'chunks_indexed': 10
-        }
-        mock_get_indexer.return_value = mock_indexer
-        
-        result = index_document_impl("/path/to/file.pdf", force=False)
-        
-        assert "Successfully indexed" in result
-        assert "abc123" in result
-        assert "10" in result
-        mock_indexer.index_document.assert_called_once_with(
-            source_uri="/path/to/file.pdf",
-            force_reindex=False
-        )
-
-    @patch('mcp_server._get_indexer')
-    @patch('mcp_server.os.path.exists')
-    def test_index_file_not_found(self, mock_exists, mock_get_indexer):
-        """Test indexing a non-existent file."""
-        from mcp_server import index_document_impl
-        
-        mock_exists.return_value = False
-        
-        result = index_document_impl("/nonexistent/file.txt")
-        
-        assert "Error: File not found" in result
-
-    @patch('mcp_server._get_indexer')
-    @patch('mcp_server.os.path.exists')
-    def test_index_error(self, mock_exists, mock_get_indexer):
-        """Test indexing error handling."""
-        from mcp_server import index_document_impl
-        
-        mock_exists.return_value = True
-        mock_indexer = MagicMock()
-        mock_indexer.index_document.return_value = {
-            'status': 'error',
-            'message': 'Unsupported file type'
-        }
-        mock_get_indexer.return_value = mock_indexer
-        
-        result = index_document_impl("/path/to/file.xyz")
-        
-        assert "Failed to index" in result
-        assert "Unsupported file type" in result
-
-
-class TestListDocumentsImpl:
-    """Tests for list_documents_impl function."""
-
-    @patch('mcp_server._get_document_repository')
-    @patch('mcp_server._get_db_manager')
-    def test_list_success(self, mock_get_db, mock_get_repo_class):
-        """Test listing documents."""
-        from mcp_server import list_documents_impl
-        
-        mock_repo = MagicMock()
-        mock_repo.list_documents.return_value = (
-            [
+class FakeMCPAPIClient:
+    def __init__(self):
+        self.calls = []
+        self.search_response = {
+            "query": "test query",
+            "total_results": 2,
+            "search_time_ms": 12.5,
+            "diagnostics": {"engine": "lancedb_parent_child"},
+            "results": [
                 {
-                    'document_id': 'doc1',
-                    'source_uri': '/path/to/doc1.pdf',
-                    'document_type': 'report',
-                    'chunk_count': 5,
-                    'indexed_at': datetime(2024, 1, 15, 10, 30)
+                    "chunk_id": 101,
+                    "document_id": "doc1",
+                    "chunk_index": 0,
+                    "source_uri": "/docs/test.txt",
+                    "text_content": "This is test content",
+                    "rank_score": 0.95,
+                    "relevance_score": 0.91,
+                    "distance": 0.09,
+                    "document_type": "note",
+                    "metadata": {"visibility": "shared"},
                 },
                 {
-                    'document_id': 'doc2',
-                    'source_uri': '/path/to/doc2.txt',
-                    'document_type': None,
-                    'chunk_count': 2,
-                    'indexed_at': "2024-01-16T14:00:00"
+                    "chunk_id": 102,
+                    "document_id": "doc2",
+                    "chunk_index": 1,
+                    "source_uri": "/docs/other.md",
+                    "text_content": "Another result",
+                    "relevance_score": 0.85,
+                    "distance": 0.15,
+                    "metadata": {},
+                },
+            ],
+        }
+        self.index_response = {
+            "status": "success",
+            "document_id": "abc123",
+            "source_uri": "/docs/test.pdf",
+            "chunks_indexed": 10,
+            "message": "indexed",
+            "indexed_at": "2026-06-16T12:00:00Z",
+        }
+        self.list_response = {
+            "items": [
+                {
+                    "document_id": "doc1",
+                    "source_uri": "/docs/test.txt",
+                    "document_type": "note",
+                    "chunk_count": 5,
+                    "indexed_at": "2026-06-16T12:00:00Z",
+                    "visibility": "private",
+                    "owner_id": "user-1",
                 }
             ],
-            2  # total
+            "total": 1,
+            "limit": 20,
+            "offset": 0,
+        }
+
+    def search(self, **kwargs):
+        self.calls.append(("search", kwargs))
+        return self.search_response
+
+    def upload_and_index(self, **kwargs):
+        self.calls.append(("upload_and_index", kwargs))
+        return self.index_response
+
+    def list_documents(self, **kwargs):
+        self.calls.append(("list_documents", kwargs))
+        return self.list_response
+
+
+def test_load_config_uses_rest_env(monkeypatch):
+    from mcp_server import load_config
+
+    monkeypatch.setenv("PGVECTOR_MCP_BASE_URL", "https://example.test")
+    monkeypatch.setenv("PGVECTOR_MCP_API_KEY", "pgv_sk_test")
+    monkeypatch.setenv("PGVECTOR_MCP_TIMEOUT", "42")
+
+    cfg = load_config()
+
+    assert cfg.api_base == "https://example.test/api/v1"
+    assert cfg.api_key == "pgv_sk_test"
+    assert cfg.timeout == 42
+
+
+def test_load_config_accepts_api_base(monkeypatch):
+    from mcp_server import load_config
+
+    monkeypatch.setenv("PGVECTOR_MCP_BASE_URL", "https://example.test/api/v1")
+
+    assert load_config().api_base == "https://example.test/api/v1"
+
+
+def test_search_returns_structured_results():
+    from mcp_server import search_documents_impl
+
+    fake = FakeMCPAPIClient()
+    with patch("mcp_server._get_api_client", return_value=fake):
+        result = search_documents_impl("test query", top_k=5, use_hybrid=True, source="postgres")
+
+    assert result["ok"] is True
+    assert result["query"] == "test query"
+    assert result["total_results"] == 2
+    assert result["diagnostics"] == {"engine": "lancedb_parent_child"}
+    assert result["results"][0] == {
+        "rank": 1,
+        "document_id": "doc1",
+        "chunk_id": 101,
+        "chunk_index": 0,
+        "source_uri": "/docs/test.txt",
+        "document_type": "note",
+        "score": 0.95,
+        "rank_score": 0.95,
+        "relevance_score": 0.91,
+        "distance": 0.09,
+        "metadata": {"visibility": "shared"},
+        "text": "This is test content",
+    }
+    assert fake.calls == [
+        (
+            "search",
+            {
+                "query": "test query",
+                "top_k": 5,
+                "use_hybrid": True,
+                "source": "postgres",
+            },
         )
-        mock_get_repo_class.return_value.return_value = mock_repo
-        
-        result = list_documents_impl(limit=10)
-        
-        assert "Total Documents: 2" in result
-        assert "/path/to/doc1.pdf" in result
-        assert "doc1" in result
-        assert "report" in result
+    ]
 
-    @patch('mcp_server._get_document_repository')
-    @patch('mcp_server._get_db_manager')
-    def test_list_empty(self, mock_get_db, mock_get_repo_class):
-        """Test listing when no documents exist."""
-        from mcp_server import list_documents_impl
-        
-        mock_repo = MagicMock()
-        mock_repo.list_documents.return_value = ([], 0)
-        mock_get_repo_class.return_value.return_value = mock_repo
-        
-        result = list_documents_impl()
-        
-        assert "No documents found" in result
 
-    @patch('mcp_server._get_document_repository')
-    @patch('mcp_server._get_db_manager')
-    def test_list_error(self, mock_get_db, mock_get_repo_class):
-        """Test list error handling."""
-        from mcp_server import list_documents_impl
-        
-        mock_get_repo_class.side_effect = Exception("Connection timeout")
-        
-        result = list_documents_impl()
-        
-        assert "Error listing documents" in result
-        assert "Connection timeout" in result
+def test_search_error_returns_structured_failure():
+    from mcp_server import search_documents_impl
+
+    fake = FakeMCPAPIClient()
+    fake.search = MagicMock(side_effect=RuntimeError("backend down"))
+
+    with patch("mcp_server._get_api_client", return_value=fake):
+        result = search_documents_impl("test")
+
+    assert result == {
+        "ok": False,
+        "operation": "search",
+        "error": "backend down",
+    }
+
+
+def test_index_uploads_local_file(tmp_path: Path):
+    from mcp_server import index_document_impl
+
+    file_path = tmp_path / "doc.md"
+    file_path.write_text("# Test\n", encoding="utf-8")
+    fake = FakeMCPAPIClient()
+
+    with patch("mcp_server._get_api_client", return_value=fake):
+        result = index_document_impl(str(file_path), force=True, document_type="note")
+
+    assert result["ok"] is True
+    assert result["document_id"] == "abc123"
+    assert result["chunks_indexed"] == 10
+    assert fake.calls == [
+        (
+            "upload_and_index",
+            {"path": file_path, "force": True, "document_type": "note"},
+        )
+    ]
+
+
+def test_index_missing_file_does_not_call_api(tmp_path: Path):
+    from mcp_server import index_document_impl
+
+    fake = FakeMCPAPIClient()
+
+    with patch("mcp_server._get_api_client", return_value=fake):
+        result = index_document_impl(str(tmp_path / "missing.pdf"))
+
+    assert result["ok"] is False
+    assert "File not found" in result["error"]
+    assert fake.calls == []
+
+
+def test_list_documents_returns_visibility_fields():
+    from mcp_server import list_documents_impl
+
+    fake = FakeMCPAPIClient()
+    with patch("mcp_server._get_api_client", return_value=fake):
+        result = list_documents_impl(limit=20)
+
+    assert result == {
+        "ok": True,
+        "total": 1,
+        "limit": 20,
+        "offset": 0,
+        "documents": [
+            {
+                "document_id": "doc1",
+                "source_uri": "/docs/test.txt",
+                "document_type": "note",
+                "chunk_count": 5,
+                "indexed_at": "2026-06-16T12:00:00Z",
+                "last_updated": None,
+                "visibility": "private",
+                "owner_id": "user-1",
+                "metadata": {},
+            }
+        ],
+    }
+    assert fake.calls == [("list_documents", {"limit": 20})]
+
+
+def test_api_client_sends_auth_header_and_search_payload():
+    from mcp_server import MCPAPIClient, MCPConfig
+
+    cfg = MCPConfig(api_base="https://example.test/api/v1", api_key="pgv_sk_test", timeout=99)
+    client = MCPAPIClient(cfg)
+    response = MagicMock(status_code=200)
+    response.json.return_value = {"results": []}
+    client.session.request = MagicMock(return_value=response)
+
+    assert client.search(query="abc", top_k=3, use_hybrid=False, source="lancedb") == {"results": []}
+    assert client.session.headers["X-API-Key"] == "pgv_sk_test"
+    client.session.request.assert_called_once_with(
+        "POST",
+        "https://example.test/api/v1/search",
+        json={"query": "abc", "top_k": 3, "use_hybrid": False, "source": "lancedb"},
+        timeout=99,
+    )
+
+
+def test_api_client_maps_http_errors():
+    from mcp_server import MCPAPIClient, MCPAPIError, MCPConfig
+
+    client = MCPAPIClient(MCPConfig(api_base="http://localhost:8000/api/v1"))
+    response = MagicMock(status_code=403, text="")
+    response.json.return_value = {"detail": "not allowed"}
+    client.session.request = MagicMock(return_value=response)
+
+    with pytest.raises(MCPAPIError, match="not allowed") as err:
+        client.list_documents(limit=5)
+
+    assert err.value.status_code == 403

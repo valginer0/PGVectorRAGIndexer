@@ -285,9 +285,15 @@ but exposes your indexed documents as searchable tools to compatible AI agents.
 - Custom MCP-compatible agents
 
 **Exposed MCP tools**
-- `search_documents` — semantic / hybrid search over indexed files
-- `index_document` — add or re-index documents
-- `list_documents` — enumerate indexed sources
+- `search_documents` — search visible indexed files through the public API
+- `index_document` — upload and index a local file through the public API
+- `list_documents` — enumerate visible indexed sources
+
+The MCP server uses the same REST API as the desktop app. Start the backend
+first, then configure:
+
+- `PGVECTOR_MCP_BASE_URL` — backend URL, default `http://localhost:8000`
+- `PGVECTOR_MCP_API_KEY` — API key for Team/remote/authenticated deployments
 
 **Setup for Claude Desktop:**
 1.  Add this to your `claude_desktop_config.json`:
@@ -296,7 +302,11 @@ but exposes your indexed documents as searchable tools to compatible AI agents.
       "mcpServers": {
         "local-rag": {
           "command": "/path/to/your/venv/bin/python",
-          "args": ["/path/to/PGVectorRAGIndexer/mcp_server.py"]
+          "args": ["/path/to/PGVectorRAGIndexer/mcp_server.py"],
+          "env": {
+            "PGVECTOR_MCP_BASE_URL": "http://localhost:8000",
+            "PGVECTOR_MCP_API_KEY": "pgv_sk_your_key_here"
+          }
         }
       }
     }

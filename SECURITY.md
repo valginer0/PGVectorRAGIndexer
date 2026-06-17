@@ -38,4 +38,8 @@ export API_HOST=127.0.0.1
 ```
 
 ## Model Context Protocol (MCP)
-If you use the MCP server (`mcp_server.py`) for AI agents, it uses `stdio` (standard input/output) communication. This is inherently secure and does not open any network ports, regardless of the API configuration.
+If you use the MCP server (`mcp_server.py`) for AI agents, it uses `stdio`
+(standard input/output) communication and does not open any MCP network port.
+The MCP server connects to the PGVectorRAGIndexer REST API configured by
+`PGVECTOR_MCP_BASE_URL` and `PGVECTOR_MCP_API_KEY`, so normal API
+authentication, permissions, and document visibility rules still apply.

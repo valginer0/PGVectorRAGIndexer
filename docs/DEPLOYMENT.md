@@ -123,8 +123,15 @@ docker exec -it vector_rag_app python retriever_v2.py "your query"
 docker exec -it vector_rag_app python scripts/reindex_all.py
 
 # MCP server for AI agent integration
-docker exec -it vector_rag_app python mcp_server.py
+docker exec -it \
+  -e PGVECTOR_MCP_BASE_URL=http://localhost:8000 \
+  -e PGVECTOR_MCP_API_KEY=pgv_sk_your_key_here \
+  vector_rag_app python mcp_server.py
 ```
+
+The MCP server talks to the public REST API, so it follows the same
+authentication, permissions, visibility filtering, and LanceDB readiness checks
+as the desktop app.
 
 ---
 

@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Folder-scoped search: `path_prefixes` / `excluded_path_prefixes` filters
+  (folder-boundary matching, excludes win on overlap) supported on LanceDB,
+  Postgres hybrid, and non-hybrid search paths
+- Desktop: "Search in This Folder" / "Exclude Folder from Search" in the
+  Documents tree, scope chips in the Search tab, and a tri-state folder
+  Scope dialog with include/exclude modes
+- `source_uri_prefix` filter for delete/preview/export: matches a folder
+  literally (SQL wildcards in folder names are escaped)
+- `/health` now reports `search_backend` ("lancedb" | "postgres") so clients
+  can tell which backend a default search uses
+
+### Fixed
+- Folder delete could over-match folder names containing `_` or `%`
+  (deleting `report_2024` could also delete a `reportX2024` sibling)
+- Upload-tab file pickers failed silently when the app ran from a
+  `\\wsl.localhost` UNC checkout (PermissionError in the start-dir probe)
+- Document tree fetch threads: closing the Scope dialog mid-load no longer
+  risks dead-object callbacks, GUI freezes, or thread-teardown aborts
+
 ## [2.15.2] - 2026-06-14
 
 ### Fixed

@@ -13,6 +13,11 @@ from fastapi.testclient import TestClient
 
 from api import app
 
+# Requires live Postgres: excluded from the no-database CI runs (macOS uses
+# -m "not database ..."). The fixture chain below also rides on
+# setup_test_database, which skips gracefully when Postgres is unreachable.
+pytestmark = pytest.mark.database
+
 
 @pytest.fixture(scope="module")
 def run_id():
@@ -25,7 +30,7 @@ def client():
 
 
 @pytest.fixture(scope="module")
-def corpus(client, run_id):
+def corpus(client, run_id, setup_test_database):
     """Upload documents under a unique folder structure for this run.
 
     Teardown deletes everything under the run's unique root so later tests

@@ -26,7 +26,12 @@ def client():
 
 @pytest.fixture(scope="module")
 def corpus(client, run_id):
-    """Upload documents under a unique folder structure for this run."""
+    """Upload documents under a unique folder structure for this run.
+
+    Teardown deletes everything under the run's unique root so later tests
+    that assert exact document counts are not polluted (the per-test
+    db_manager TRUNCATE does not apply to this module-scoped fixture).
+    """
     root = f"scope_e2e_{run_id}"
     docs = {
         f"{root}/ProjectA/contracts/supply.txt":
@@ -47,7 +52,14 @@ def corpus(client, run_id):
             data={"custom_source_uri": uri, "force_reindex": "true"},
         )
         assert resp.status_code == 200, resp.text
-    return root
+
+    yield root
+
+    resp = client.post("/documents/bulk-delete", json={
+        "filters": {"source_uri_prefix": root},
+        "preview": False,
+    })
+    assert resp.status_code == 200, resp.text
 
 
 def _search(client, corpus_root, use_hybrid, **filter_overrides):

@@ -589,6 +589,28 @@ class BackendLanceDBAdapter:
                         "'{}'".format(str(doc_id).replace("'", "''")) for doc_id in value
                     )
                     clauses.append(f"document_id NOT IN ({safe_ids})")
+            elif key in ('path_prefixes', 'excluded_path_prefixes'):
+                if isinstance(value, list) and value:
+                    # source_uri is stored raw (may use either slash style), so
+                    # match both directions with a folder-boundary separator —
+                    # same convention as list_documents(prefix=...).
+                    prefix_clauses = []
+                    for prefix in value:
+                        norm = str(prefix).replace('\\', '/').rstrip('/')
+                        if not norm:
+                            continue
+                        safe_fwd = (norm + '/').replace("'", "''")
+                        safe_bwd = (norm + '/').replace('/', '\\').replace("'", "''")
+                        prefix_clauses.append(
+                            f"(starts_with(source_uri, '{safe_fwd}') OR "
+                            f"starts_with(source_uri, '{safe_bwd}'))"
+                        )
+                    if prefix_clauses:
+                        joined = " OR ".join(prefix_clauses)
+                        if key == 'path_prefixes':
+                            clauses.append(f"({joined})")
+                        else:
+                            clauses.append(f"NOT ({joined})")
             elif key == 'allowed_namespaces':
                 if isinstance(value, list):
                     if value:

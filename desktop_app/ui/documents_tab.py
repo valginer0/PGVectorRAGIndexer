@@ -966,8 +966,10 @@ class DocumentsTab(QWidget):
 
     def delete_folder_documents(self, folder_path: str, folder_name: Optional[str] = None) -> None:
         """Delete all documents below a tree folder path."""
-        pattern = self._folder_source_uri_like_pattern(folder_path)
-        filters = {"source_uri_like": pattern}
+        # source_uri_prefix matches the folder literally (the server escapes
+        # LIKE metacharacters), so a folder named 'report_2024' can never
+        # also delete documents under a sibling like 'reportX2024'.
+        filters = {"source_uri_prefix": folder_path}
         display_name = folder_name or folder_path
 
         try:
@@ -1019,19 +1021,3 @@ class DocumentsTab(QWidget):
         )
         self._refresh_current_view()
 
-    @staticmethod
-    def _folder_source_uri_like_pattern(folder_path: str) -> str:
-        """Build a normalized LIKE pattern for all documents below a folder."""
-        normalized = (
-            folder_path
-            .replace('\\', '/')
-            .replace('\t', '/')
-            .replace('\n', '/')
-            .replace('\r', '/')
-        )
-        while '//' in normalized:
-            normalized = normalized.replace('//', '/')
-        normalized = normalized.rstrip("/")
-        if not normalized:
-            return "%"
-        return f"{normalized}/%"

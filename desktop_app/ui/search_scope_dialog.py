@@ -6,10 +6,8 @@ Because excluded_path_prefixes always win server-side, re-including a folder
 inside an excluded one is not expressible — ScopeSelection.toggle blocks it.
 """
 
-import logging
 from typing import Dict, List, Optional, Tuple
 
-import qtawesome as qta
 from PySide6.QtCore import Qt, QModelIndex, Signal
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
@@ -17,13 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from .document_tree_model import DocumentTreeModel, COL_NAME
-
-logger = logging.getLogger(__name__)
-
-
-def _is_under(path: str, ancestor: str) -> bool:
-    """True when path lies strictly below ancestor (folder-boundary aware)."""
-    return path.startswith(ancestor + "/")
+from ..utils.path_scope import is_path_under as _is_under
 
 
 class ScopeSelection:

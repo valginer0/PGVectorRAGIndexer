@@ -529,6 +529,34 @@ class BackendLanceDBAdapter:
             
         return formatted_results
 
+    @staticmethod
+    def _path_prefix_clause(prefix: Any) -> Optional[str]:
+        """DataFusion clause matching documents under a literal folder prefix.
+
+        source_uri is stored raw (may use either slash style), so match both
+        directions with a folder-boundary separator — same convention as
+        list_documents(prefix=...). Uses starts_with, so no LIKE-wildcard
+        escaping is needed. Returns None for empty/root prefixes.
+        """
+        # '//' runs preserved on purpose: a UNC prefix '\\server\share'
+        # normalizes to '//server/share', and the backward variant below then
+        # reproduces the raw stored form '\\server\share\' exactly.
+        norm = (
+            str(prefix)
+            .replace('\\', '/')
+            .replace('\t', '/')
+            .replace('\n', '/')
+            .replace('\r', '/')
+        ).rstrip('/')
+        if not norm:
+            return None
+        safe_fwd = (norm + '/').replace("'", "''")
+        safe_bwd = (norm + '/').replace('/', '\\').replace("'", "''")
+        return (
+            f"(starts_with(source_uri, '{safe_fwd}') OR "
+            f"starts_with(source_uri, '{safe_bwd}'))"
+        )
+
     def _build_lancedb_filter_clause(self, filters: Dict[str, Any]) -> Optional[str]:
         """Convert standard filters to a SQL-like string compatible with LanceDB/DataFusion."""
         clauses = []
@@ -591,26 +619,21 @@ class BackendLanceDBAdapter:
                     clauses.append(f"document_id NOT IN ({safe_ids})")
             elif key in ('path_prefixes', 'excluded_path_prefixes'):
                 if isinstance(value, list) and value:
-                    # source_uri is stored raw (may use either slash style), so
-                    # match both directions with a folder-boundary separator —
-                    # same convention as list_documents(prefix=...).
-                    prefix_clauses = []
-                    for prefix in value:
-                        norm = str(prefix).replace('\\', '/').rstrip('/')
-                        if not norm:
-                            continue
-                        safe_fwd = (norm + '/').replace("'", "''")
-                        safe_bwd = (norm + '/').replace('/', '\\').replace("'", "''")
-                        prefix_clauses.append(
-                            f"(starts_with(source_uri, '{safe_fwd}') OR "
-                            f"starts_with(source_uri, '{safe_bwd}'))"
-                        )
+                    prefix_clauses = [
+                        c for c in (
+                            self._path_prefix_clause(prefix) for prefix in value
+                        ) if c is not None
+                    ]
                     if prefix_clauses:
                         joined = " OR ".join(prefix_clauses)
                         if key == 'path_prefixes':
                             clauses.append(f"({joined})")
                         else:
                             clauses.append(f"NOT ({joined})")
+            elif key == 'source_uri_prefix':
+                prefix_clause = self._path_prefix_clause(value)
+                if prefix_clause is not None:
+                    clauses.append(prefix_clause)
             elif key == 'allowed_namespaces':
                 if isinstance(value, list):
                     if value:

@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 from config import get_config
 from database import get_db_manager, DocumentRepository
 from embeddings import get_embedding_service
-from path_utils import normalize_path, NORMALIZED_URI_SQL
+from path_utils import folder_prefix_like_pattern, NORMALIZED_URI_SQL
 
 # Configure logging
 logging.basicConfig(
@@ -174,18 +174,17 @@ def coerce_rerank_scores(raw_scores: Any, expected_count: int) -> List[float]:
 def path_prefix_like_patterns(prefixes: List[Any]) -> List[str]:
     """Convert folder prefixes to normalized LIKE patterns at a folder boundary.
 
-    Each prefix is normalized to forward slashes, stripped of trailing
-    slashes, LIKE-escaped (``%``/``_``), and suffixed with ``/%`` so that
-    ``ProjectA`` matches ``ProjectA/doc.pdf`` but never ``ProjectAB/doc.pdf``.
-    Empty or root (``/``) prefixes are dropped — they would match everything.
+    Delegates to :func:`path_utils.folder_prefix_like_pattern` (the single
+    source of truth shared with DocumentRepository and the document tree) so
+    that ``ProjectA`` matches ``ProjectA/doc.pdf`` but never
+    ``ProjectAB/doc.pdf``. Empty or root (``/``) prefixes are dropped — they
+    would match everything.
     """
     patterns = []
     for prefix in prefixes:
-        norm = normalize_path(str(prefix)).rstrip("/")
-        if not norm:
-            continue
-        escaped = norm.replace("%", r"\%").replace("_", r"\_")
-        patterns.append(escaped + "/%")
+        pattern = folder_prefix_like_pattern(prefix)
+        if pattern is not None:
+            patterns.append(pattern)
     return patterns
 
 
@@ -564,14 +563,14 @@ class DocumentRetriever:
                     if isinstance(value, list) and value:
                         patterns = path_prefix_like_patterns(value)
                         if patterns:
-                            like_sql = " OR ".join(
-                                [f"{NORMALIZED_URI_SQL} LIKE %s"] * len(patterns)
-                            )
+                            # LIKE ANY evaluates the REPLACE chain once per row
+                            # regardless of how many prefixes are selected.
+                            like_sql = f"{NORMALIZED_URI_SQL} LIKE ANY(%s)"
                             if key == 'path_prefixes':
                                 filter_clauses.append(f"({like_sql})")
                             else:
                                 filter_clauses.append(f"NOT ({like_sql})")
-                            filter_params.extend(patterns)
+                            filter_params.append(patterns)
                 else:
                     raise ValueError(
                         f"Unsupported filter key '{key}' for hybrid search. "

@@ -46,6 +46,13 @@ class TestPathPrefixLikePatterns:
         assert path_prefix_like_patterns(["my_folder"]) == [r"my\_folder/%"]
         assert path_prefix_like_patterns(["100% done"]) == [r"100\% done/%"]
 
+    def test_unc_double_slashes_preserved(self):
+        # NORMALIZED_URI_SQL keeps '//' (UNC paths), so patterns must too.
+        from retriever_v2 import path_prefix_like_patterns
+        assert path_prefix_like_patterns([r"\\server\share\docs"]) == [
+            "//server/share/docs/%"
+        ]
+
     def test_root_and_empty_prefixes_dropped(self):
         from retriever_v2 import path_prefix_like_patterns
         assert path_prefix_like_patterns(["/", "", "//"]) == []
@@ -71,19 +78,20 @@ class TestPostgresPathPrefixFilters:
         from path_utils import NORMALIZED_URI_SQL
         cte, source, params = _cte({"path_prefixes": ["ProjectA"]})
         assert source == "filtered_docs"
-        assert f"{NORMALIZED_URI_SQL} LIKE %s" in cte
-        assert params == ["ProjectA/%"]
+        assert f"{NORMALIZED_URI_SQL} LIKE ANY(%s)" in cte
+        assert params == [["ProjectA/%"]]
 
-    def test_include_multiple_prefixes_ord(self):
+    def test_include_multiple_prefixes_single_any_param(self):
+        # LIKE ANY evaluates the normalization expression once per row
+        # regardless of prefix count.
         cte, source, params = _cte({"path_prefixes": ["A", "B"]})
-        assert cte.count("LIKE %s") == 2
-        assert " OR " in cte
-        assert params == ["A/%", "B/%"]
+        assert cte.count("LIKE ANY(%s)") == 1
+        assert params == [["A/%", "B/%"]]
 
     def test_exclude_prefix_negated(self):
         cte, source, params = _cte({"excluded_path_prefixes": ["Archive"]})
         assert "NOT (" in cte
-        assert params == ["Archive/%"]
+        assert params == [["Archive/%"]]
 
     def test_include_and_exclude_combined(self):
         cte, source, params = _cte({
@@ -92,7 +100,7 @@ class TestPostgresPathPrefixFilters:
         })
         assert "NOT (" in cte
         assert " AND " in cte
-        assert params == ["Docs/%", "Docs/old/%"]
+        assert params == [["Docs/%"], ["Docs/old/%"]]
 
     def test_empty_lists_are_noop(self):
         cte, source, params = _cte({
@@ -114,9 +122,9 @@ class TestPostgresPathPrefixFilters:
             "extensions": [".pdf"],
         })
         assert "source_uri ILIKE %s" in cte
-        assert "LIKE %s" in cte
+        assert "LIKE ANY(%s)" in cte
         assert "%.pdf" in params
-        assert "Docs/%" in params
+        assert ["Docs/%"] in params
 
     def test_unsupported_key_error_lists_new_keys(self):
         with pytest.raises(ValueError) as exc_info:
@@ -133,7 +141,7 @@ class TestPostgresPathPrefixFilters:
             {"path_prefixes": ["Docs"]}
         )
         assert len(clauses) == 1
-        assert params == ["Docs/%"]
+        assert params == [["Docs/%"]]
 
 
 # ===========================================================================
@@ -179,3 +187,126 @@ class TestLanceDBPathPrefixFilters:
         })
         assert "document_id = 'abc'" in clause
         assert " AND " in clause
+
+    def test_source_uri_prefix_single_folder(self):
+        clause = _lancedb_clause({"source_uri_prefix": "C:\\Docs"})
+        assert "starts_with(source_uri, 'C:/Docs/')" in clause
+        assert "starts_with(source_uri, 'C:\\Docs\\')" in clause
+
+
+# ===========================================================================
+# Non-hybrid Postgres path (DocumentRepository.search_similar) — the default
+# use_hybrid=false API route must accept the scope keys, not 400.
+# ===========================================================================
+
+
+class TestSearchSimilarScopeFilters:
+    def test_path_prefixes_accepted(self, db_manager):
+        from database import DocumentRepository
+        repo = DocumentRepository(db_manager)
+        # Must not raise "Unsupported filter key"; empty result is fine.
+        results = repo.search_similar(
+            [0.0] * 384, top_k=1,
+            filters={"path_prefixes": ["no/such/folder"]},
+        )
+        assert results == []
+
+    def test_excluded_path_prefixes_accepted(self, db_manager):
+        from database import DocumentRepository
+        repo = DocumentRepository(db_manager)
+        results = repo.search_similar(
+            [0.0] * 384, top_k=1,
+            filters={"excluded_path_prefixes": ["no/such/folder"]},
+        )
+        assert isinstance(results, list)
+
+    def test_unknown_key_still_rejected(self, db_manager):
+        from database import DocumentRepository
+        repo = DocumentRepository(db_manager)
+        with pytest.raises(ValueError):
+            repo.search_similar([0.0] * 384, filters={"bogus": "x"})
+
+
+# ===========================================================================
+# Literal folder prefix for delete/preview/export (source_uri_prefix)
+# ===========================================================================
+
+
+class TestSourceUriPrefixFilter:
+    def test_prefix_filter_escapes_wildcards(self, db_manager):
+        from database import DocumentRepository
+        repo = DocumentRepository(db_manager)
+        clause, params = repo._source_uri_prefix_filter("report_2024")
+        assert params == [r"report\_2024/%"] * 3
+        assert "ILIKE" in clause
+
+    def test_root_prefix_means_no_restriction(self, db_manager):
+        from database import DocumentRepository
+        repo = DocumentRepository(db_manager)
+        assert repo._source_uri_prefix_filter("/") is None
+        assert repo._source_uri_prefix_filter("") is None
+
+    def test_preview_delete_accepts_prefix_key(self, db_manager):
+        from database import DocumentRepository
+        repo = DocumentRepository(db_manager)
+        preview = repo.preview_delete({"source_uri_prefix": "no/such/folder"})
+        assert preview["document_count"] == 0
+
+    def test_bulk_delete_root_prefix_alone_is_blocked(self, db_manager):
+        from database import DocumentRepository
+        repo = DocumentRepository(db_manager)
+        # A root prefix compiles to no clause; the delete-everything safety
+        # check must then reject the request.
+        with pytest.raises(ValueError):
+            repo.bulk_delete({"source_uri_prefix": "/"})
+
+
+# ===========================================================================
+# Executed LanceDB round-trips — pins DataFusion's parsing of the
+# trailing-backslash string literal the prefix clause produces.
+# ===========================================================================
+
+
+def _lancedb_with_mixed_slash_docs(tmp_path):
+    from lancedb_adapter import BackendLanceDBAdapter
+    adapter = BackendLanceDBAdapter(
+        db_path=str(tmp_path / "scope_lancedb"), embedding_dimension=4
+    )
+    docs = [
+        ("win-doc", "C:\\Docs\\Legal\\case1.pdf"),
+        ("fwd-doc", "C:/Docs/Legal/case2.pdf"),
+        ("sibling-doc", "C:\\DocsX\\other.pdf"),
+    ]
+    for doc_id, source_uri in docs:
+        adapter.upsert_document(
+            document_id=doc_id,
+            source_uri=source_uri,
+            chunks=[(0, f"{doc_id} content", [0.1, 0.2, 0.3, 0.4], {})],
+            aggregated_text=f"{doc_id} content",
+            doc_metadata={"type": "story"},
+        )
+    return adapter
+
+
+class TestLanceDBScopeRoundTrip:
+    def test_include_matches_both_slash_styles_not_siblings(self, tmp_path):
+        adapter = _lancedb_with_mixed_slash_docs(tmp_path)
+        deleted = adapter.bulk_delete({"path_prefixes": ["C:/Docs"]})
+        assert deleted == 2
+        remaining = {d["document_id"] for d in adapter.list_documents()}
+        assert remaining == {"sibling-doc"}
+
+    def test_exclude_clause_parses_and_negates(self, tmp_path):
+        adapter = _lancedb_with_mixed_slash_docs(tmp_path)
+        deleted = adapter.bulk_delete({
+            "source_uri_like": "%",
+            "excluded_path_prefixes": ["C:/Docs"],
+        })
+        assert deleted == 1
+        remaining = {d["document_id"] for d in adapter.list_documents()}
+        assert remaining == {"win-doc", "fwd-doc"}
+
+    def test_source_uri_prefix_round_trip(self, tmp_path):
+        adapter = _lancedb_with_mixed_slash_docs(tmp_path)
+        deleted = adapter.bulk_delete({"source_uri_prefix": "C:\\Docs"})
+        assert deleted == 2

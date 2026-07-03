@@ -102,6 +102,33 @@ class TestScopeState:
         search_tab.add_scope_include("/")
         assert search_tab.scope_filters() is None
 
+    def test_include_under_excluded_ancestor_drops_the_exclude(self, search_tab):
+        # Excludes win server-side, so keeping both would silently match
+        # nothing; the newest intent (search this folder) wins.
+        search_tab.add_scope_exclude("C:/Docs")
+        search_tab.add_scope_include("C:/Docs/Legal")
+        assert search_tab.scope_filters() == {
+            "path_prefixes": ["C:/Docs/Legal"]
+        }
+
+    def test_exclude_ancestor_drops_dead_includes(self, search_tab):
+        search_tab.add_scope_include("C:/Docs/Legal")
+        search_tab.add_scope_include("C:/Other")
+        search_tab.add_scope_exclude("C:/Docs")
+        assert search_tab.scope_filters() == {
+            "path_prefixes": ["C:/Other"],
+            "excluded_path_prefixes": ["C:/Docs"],
+        }
+
+    def test_exclude_within_include_still_allowed(self, search_tab):
+        # Exclude-inside-include is expressible server-side and must survive.
+        search_tab.add_scope_include("C:/Docs")
+        search_tab.add_scope_exclude("C:/Docs/old")
+        assert search_tab.scope_filters() == {
+            "path_prefixes": ["C:/Docs"],
+            "excluded_path_prefixes": ["C:/Docs/old"],
+        }
+
 
 class TestScopeChips:
     def _chips(self, search_tab):

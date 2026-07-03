@@ -158,22 +158,36 @@ class SearchTab(QWidget):
 
     def add_scope_include(self, folder_path: str) -> None:
         """Restrict the next searches to this folder (additive with other includes)."""
+        from ..utils.path_scope import is_path_under
+
         path = folder_path.rstrip("/")
         if not path:
             return
-        if path in self._scope_excludes:
-            self._scope_excludes.remove(path)
+        # Server-side excludes always win, so an include under an excluded
+        # ancestor would silently match nothing — drop the conflicting
+        # excludes (the user's newest intent is to search this folder).
+        self._scope_excludes = [
+            e for e in self._scope_excludes
+            if e != path and not is_path_under(path, e)
+        ]
         if path not in self._scope_includes:
             self._scope_includes.append(path)
         self._refresh_scope_chips()
 
     def add_scope_exclude(self, folder_path: str) -> None:
         """Exclude this folder from the next searches."""
+        from ..utils.path_scope import is_path_under
+
         path = folder_path.rstrip("/")
         if not path:
             return
-        if path in self._scope_includes:
-            self._scope_includes.remove(path)
+        # Includes at or below the new exclude would be dead (excludes win
+        # server-side) — remove them so the chips never show a scope that
+        # silently matches nothing.
+        self._scope_includes = [
+            i for i in self._scope_includes
+            if i != path and not is_path_under(i, path)
+        ]
         if path not in self._scope_excludes:
             self._scope_excludes.append(path)
         self._refresh_scope_chips()

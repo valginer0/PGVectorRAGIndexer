@@ -46,10 +46,10 @@ def folder_prefix_like_pattern(prefix: str) -> str | None:
 
     Single source of truth for matching "documents under this folder" with
     SQL LIKE against :data:`NORMALIZED_URI_SQL`. The prefix is normalized to
-    forward slashes, ``//`` runs collapsed, trailing slashes stripped, and
-    LIKE metacharacters (``%``, ``_``) escaped so folder names are matched
-    literally. Matching is case-sensitive on purpose: folders differing only
-    by case are distinct on case-sensitive filesystems.
+    forward slashes, trailing slashes stripped, and LIKE metacharacters
+    (``%``, ``_``) escaped so folder names are matched literally. Matching is
+    case-sensitive on purpose: folders differing only by case are distinct on
+    case-sensitive filesystems.
 
     Returns None for empty or root prefixes — they would match everything,
     so callers should treat None as "no restriction".

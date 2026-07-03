@@ -1020,4 +1020,3 @@ class DocumentsTab(QWidget):
             f"Deleted {chunks_deleted} indexed chunk(s) under:\n\n{folder_path}",
         )
         self._refresh_current_view()
-

@@ -204,7 +204,18 @@ class SearchTab(QWidget):
         from .search_scope_dialog import SearchScopeDialog
 
         engine = self.engine_combo.currentData() if hasattr(self, "engine_combo") else None
-        source = "postgres" if engine == "postgres" else "lancedb"
+        if engine == "postgres":
+            source = "postgres"
+        else:
+            # Match what search actually queries: perform_search sends
+            # source=None and the backend falls back to Postgres when LanceDB
+            # is disabled, so the picker must not show an empty LanceDB tree
+            # in that state.
+            try:
+                self.api_client.get_document_tree_stats(source="lancedb")
+                source = "lancedb"
+            except Exception:
+                source = "postgres"
         dialog = SearchScopeDialog(
             self.api_client,
             source=source,

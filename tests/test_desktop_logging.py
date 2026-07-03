@@ -5,7 +5,7 @@ Covers:
 - Rotation configuration (maxBytes / backupCount / encoding)
 - Idempotency: repeated setup never stacks duplicate handlers
 - sys.excepthook and threading.excepthook write tracebacks to the file
-- Unwritable directory falls back to console-only (returns None, no raise)
+- Log-directory creation failure falls back to console-only (returns None, no raise)
 """
 
 import logging
@@ -65,15 +65,15 @@ class TestLogFile:
         setup_desktop_logging(log_dir=tmp_path)
         assert len(logging.getLogger().handlers) == before
 
-    def test_unwritable_dir_falls_back_to_console_only(self, tmp_path, clean_logging_state):
+    def test_log_dir_creation_failure_falls_back_to_console_only(
+        self, tmp_path, clean_logging_state
+    ):
         blocked = tmp_path / "blocked"
-        blocked.mkdir()
-        blocked.chmod(0o400)  # not writable, not traversable for subdir creation
-        try:
-            result = setup_desktop_logging(log_dir=blocked / "logs")
-        finally:
-            blocked.chmod(0o700)
-        assert result is None  # no exception — startup must never block on logging
+        blocked.write_text("not a directory", encoding="utf-8")
+
+        result = setup_desktop_logging(log_dir=blocked / "logs")
+
+        assert result is None  # no exception; startup must never block on logging
 
 
 class TestExceptionHooks:

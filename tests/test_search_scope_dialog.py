@@ -260,6 +260,63 @@ class TestSearchScopeDialog:
 
 
 # ===========================================================================
+# Dialog closed while a tree fetch is still in flight (hung backend).
+# Automates the worker-lifecycle smoke: close must be instant (no blocking
+# wait), the in-flight worker must be parked in the orphan set (never GC'd
+# while running), and it must be reaped once the backend finally responds —
+# with no dead-object callback even if the dialog is destroyed meanwhile.
+# ===========================================================================
+
+
+class TestDialogCloseDuringFetch:
+    def test_close_is_instant_and_orphan_is_reaped(self, qapp, mock_api_client):
+        import gc
+        import threading
+        import time
+
+        from desktop_app.ui.document_tree_model import _ORPHANED_TREE_WORKERS
+
+        release = threading.Event()
+
+        def hung_backend(*args, **kwargs):
+            release.wait(10)
+            return {"children": [], "total_folders": 0, "total_files": 0}
+
+        mock_api_client.get_document_tree.side_effect = hung_backend
+
+        try:
+            # Opening the dialog starts the root fetch against the hung backend.
+            dialog = SearchScopeDialog(mock_api_client)
+            deadline = time.monotonic() + 2
+            while not dialog.model._workers and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert dialog.model._workers, "fetch never started"
+
+            start = time.monotonic()
+            dialog.reject()  # done() -> shutdown_workers()
+            elapsed = time.monotonic() - start
+
+            assert elapsed < 0.5, f"close blocked for {elapsed:.2f}s"
+            assert not dialog.model._workers
+            assert len(_ORPHANED_TREE_WORKERS) == 1
+
+            # Destroy the dialog (and model) entirely before the backend
+            # responds — the late result must not crash anything.
+            dialog.deleteLater()
+            del dialog
+            gc.collect()
+            qapp.processEvents()
+        finally:
+            release.set()
+
+        deadline = time.monotonic() + 5
+        while _ORPHANED_TREE_WORKERS and time.monotonic() < deadline:
+            qapp.processEvents()
+            time.sleep(0.01)
+        assert not _ORPHANED_TREE_WORKERS, "orphaned worker never reaped"
+
+
+# ===========================================================================
 # SearchTab integration
 # ===========================================================================
 

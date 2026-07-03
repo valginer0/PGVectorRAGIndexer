@@ -239,4 +239,6 @@ venv-windows/
 scripts/bin/
 
 # Local agent scratch + large LanceDB smoke corpora (1+ GB, machine-specific)
-.codex/
+# (but version shared agent skills, mirroring the .claude/ carve-out)
+.codex/*
+!.codex/skills/

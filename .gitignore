@@ -219,8 +219,9 @@ documents/
 lancedb_spike_data/
 lancedb_prototype_data/
 
-# Local agent/tooling state
-.claude/
+# Local agent/tooling state (but version shared agent skills)
+.claude/*
+!.claude/skills/
 .antigravitycli/
 
 # Private project strategy docs (should not be in version control)

@@ -187,36 +187,45 @@ class TestScopeInSearch:
 
 
 class TestScopeDialogSourceSelection:
-    def test_lancedb_engine_uses_lancedb_tree_when_available(self, search_tab, mock_api_client):
-        mock_api_client.get_document_tree_stats.return_value = {"total_documents": 1}
+    def _open(self, search_tab):
         with patch(
             "desktop_app.ui.search_scope_dialog.SearchScopeDialog"
         ) as MockDialog:
             MockDialog.return_value.exec.return_value = 0
             search_tab.open_scope_dialog()
-        assert MockDialog.call_args.kwargs["source"] == "lancedb"
+        return MockDialog.call_args.kwargs["source"]
 
-    def test_falls_back_to_postgres_tree_when_lancedb_unavailable(self, search_tab, mock_api_client):
-        # Search itself falls back to Postgres when LanceDB is disabled
-        # (perform_search sends source=None), so the picker must show the
-        # tree that is actually searchable.
+    def test_health_reports_lancedb_backend(self, search_tab, mock_api_client):
+        mock_api_client.get_health.return_value = {
+            "status": "healthy", "search_backend": "lancedb",
+        }
+        assert self._open(search_tab) == "lancedb"
+
+    def test_stats_succeeds_but_search_backend_is_postgres(self, search_tab, mock_api_client):
+        # LANCEDB_ENABLED=false: the tree-stats endpoint still succeeds
+        # (it builds the adapter unconditionally) but a default search runs
+        # against Postgres — the health signal must win over the stats probe.
+        mock_api_client.get_health.return_value = {
+            "status": "healthy", "search_backend": "postgres",
+        }
+        mock_api_client.get_document_tree_stats.return_value = {"total_documents": 1}
+        assert self._open(search_tab) == "postgres"
+        mock_api_client.get_document_tree_stats.assert_not_called()
+
+    def test_old_server_without_field_falls_back_to_probe(self, search_tab, mock_api_client):
+        mock_api_client.get_health.return_value = {"status": "healthy"}
+        mock_api_client.get_document_tree_stats.return_value = {"total_documents": 1}
+        assert self._open(search_tab) == "lancedb"
+
+    def test_old_server_probe_failure_means_postgres(self, search_tab, mock_api_client):
+        mock_api_client.get_health.return_value = {"status": "healthy"}
         mock_api_client.get_document_tree_stats.side_effect = RuntimeError("503")
-        with patch(
-            "desktop_app.ui.search_scope_dialog.SearchScopeDialog"
-        ) as MockDialog:
-            MockDialog.return_value.exec.return_value = 0
-            search_tab.open_scope_dialog()
-        assert MockDialog.call_args.kwargs["source"] == "postgres"
+        assert self._open(search_tab) == "postgres"
 
     def test_postgres_engine_uses_postgres_tree(self, search_tab, mock_api_client):
         idx = search_tab.engine_combo.findData("postgres")
         search_tab.engine_combo.setCurrentIndex(idx)
-        with patch(
-            "desktop_app.ui.search_scope_dialog.SearchScopeDialog"
-        ) as MockDialog:
-            MockDialog.return_value.exec.return_value = 0
-            search_tab.open_scope_dialog()
-        assert MockDialog.call_args.kwargs["source"] == "postgres"
+        assert self._open(search_tab) == "postgres"
         mock_api_client.get_document_tree_stats.assert_not_called()
 
 

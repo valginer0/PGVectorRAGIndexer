@@ -126,6 +126,7 @@ class HealthResponse(BaseModel):
     embedding_model: Dict[str, Any]
     system: Optional[Dict[str, Any]] = None
     recovery_message: Optional[str] = None
+    search_backend: Optional[str] = None  # "lancedb" | "postgres" — backend a default search uses
 
 
 class StatsResponse(BaseModel):

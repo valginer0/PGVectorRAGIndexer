@@ -262,6 +262,29 @@ class TestSourceUriPrefixFilter:
 
 
 # ===========================================================================
+# /health advertises the search backend so the desktop scope picker can show
+# the tree that a default (source=None) search actually queries.
+# ===========================================================================
+
+
+class TestHealthSearchBackend:
+    def test_health_reports_search_backend(self, db_manager):
+        from fastapi.testclient import TestClient
+        from api import app
+        from config import get_config
+
+        client = TestClient(app)
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        expected = (
+            "lancedb"
+            if getattr(get_config().retrieval, "lancedb_enabled", False)
+            else "postgres"
+        )
+        assert resp.json()["search_backend"] == expected
+
+
+# ===========================================================================
 # Executed LanceDB round-trips — pins DataFusion's parsing of the
 # trailing-backslash string literal the prefix clause produces.
 # ===========================================================================

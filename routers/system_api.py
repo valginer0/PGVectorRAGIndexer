@@ -281,9 +281,23 @@ async def reload_license():
     return {"status": "reloaded", "license": new_lic.to_dict()}
 
 
+def _search_backend_from_config() -> str:
+    """Which backend a default (source=None) search will use.
+
+    Mirrors DocumentRetriever._should_use_lancedb's enabled check so clients
+    (e.g. the desktop scope picker) can show the tree that search queries.
+    """
+    from config import get_config
+    try:
+        enabled = bool(getattr(get_config().retrieval, "lancedb_enabled", False))
+    except Exception:
+        enabled = False
+    return "lancedb" if enabled else "postgres"
+
+
 @system_app_router.get(
-    "/health", 
-    response_model=HealthResponse, 
+    "/health",
+    response_model=HealthResponse,
     responses={
         500: {
             "model": APIErrorResponse,
@@ -317,7 +331,8 @@ async def health_check():
             timestamp=datetime.now(timezone.utc).isoformat(),
             database={"status": "initializing"},
             embedding_model={"status": "loading"},
-            system=_get_system_metrics()
+            system=_get_system_metrics(),
+            search_backend=_search_backend_from_config(),
         )
     try:
         db_manager = get_db_manager()
@@ -332,6 +347,7 @@ async def health_check():
             database=db_health,
             embedding_model=model_info,
             system=_get_system_metrics(),
+            search_backend=_search_backend_from_config(),
         )
         if recovery_message:
             response.recovery_message = recovery_message

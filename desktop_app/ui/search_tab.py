@@ -208,14 +208,20 @@ class SearchTab(QWidget):
             source = "postgres"
         else:
             # Match what search actually queries: perform_search sends
-            # source=None and the backend falls back to Postgres when LanceDB
-            # is disabled, so the picker must not show an empty LanceDB tree
-            # in that state.
-            try:
-                self.api_client.get_document_tree_stats(source="lancedb")
-                source = "lancedb"
-            except Exception:
-                source = "postgres"
+            # source=None and the backend picks per its own config (Postgres
+            # when LanceDB is disabled). /health reports that decision as
+            # search_backend; the tree endpoints alone can't distinguish it
+            # because they build the LanceDB adapter unconditionally.
+            backend = self.api_client.get_health().get("search_backend")
+            if backend in ("lancedb", "postgres"):
+                source = backend
+            else:
+                # Older server without search_backend: probe the LanceDB tree.
+                try:
+                    self.api_client.get_document_tree_stats(source="lancedb")
+                    source = "lancedb"
+                except Exception:
+                    source = "postgres"
         dialog = SearchScopeDialog(
             self.api_client,
             source=source,

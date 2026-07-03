@@ -111,6 +111,46 @@ class TestScopedSearchE2E:
         assert backend in ("lancedb", "postgres")
 
 
+class TestPostgresFallbackWhenLanceDBDisabled:
+    """RETRIEVAL_LANCEDB_ENABLED=false: /health must advertise postgres and a
+    default (source omitted) scoped search must fall back to Postgres and
+    still scope correctly."""
+
+    def test_health_signal_and_scoped_search_fall_back(self, client, corpus):
+        from config import get_config
+        cfg = get_config()
+        original = cfg.retrieval.lancedb_enabled
+        cfg.retrieval.lancedb_enabled = False
+        try:
+            assert client.get("/health").json()["search_backend"] == "postgres"
+
+            resp = client.post("/search", json={
+                "query": "industrial widgets agreement",
+                "top_k": 20,
+                "min_score": 0.0,
+                "use_hybrid": True,
+                # no "source": the backend decides — disabled LanceDB must
+                # fall back to Postgres, not error.
+                "filters": {"path_prefixes": [f"{corpus}/ProjectA"]},
+            })
+            assert resp.status_code == 200, resp.text
+            uris = {r["source_uri"] for r in resp.json()["results"]}
+            assert uris, "fallback scoped search returned nothing"
+            assert all(f"{corpus}/ProjectA/" in u for u in uris)
+        finally:
+            cfg.retrieval.lancedb_enabled = original
+
+    def test_health_signal_restored_when_enabled(self, client):
+        from config import get_config
+        cfg = get_config()
+        original = cfg.retrieval.lancedb_enabled
+        cfg.retrieval.lancedb_enabled = True
+        try:
+            assert client.get("/health").json()["search_backend"] == "lancedb"
+        finally:
+            cfg.retrieval.lancedb_enabled = original
+
+
 class TestFolderDeletePreviewE2E:
     def test_preview_counts_literal_folder_only(self, client, corpus):
         resp = client.post("/documents/bulk-delete", json={

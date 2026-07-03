@@ -37,7 +37,16 @@ class SearchRequest(BaseModel):
     query: str = Field(..., description="Search query text")
     top_k: Optional[int] = Field(default=None, description="Number of results")
     min_score: Optional[float] = Field(default=None, description="Minimum relevance score")
-    filters: Optional[Dict[str, Any]] = Field(default=None, description="Search filters")
+    filters: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Search filters. Supported keys include extensions, type, "
+            "namespace, category, document_id, source_uri, metadata.<key>, "
+            "path_prefixes and excluded_path_prefixes (folder scope; "
+            "case-sensitive, matched at folder boundaries, excludes win on "
+            "overlap)."
+        ),
+    )
     use_hybrid: bool = Field(default=False, description="Use hybrid search")
     alpha: Optional[float] = Field(default=None, description="Hybrid search weight")
     hybrid_mode: Optional[str] = Field(default=None, description="Experimental hybrid strategy; supports legacy, lexical-fusion-v0, or rerank-v0")
@@ -117,6 +126,7 @@ class HealthResponse(BaseModel):
     embedding_model: Dict[str, Any]
     system: Optional[Dict[str, Any]] = None
     recovery_message: Optional[str] = None
+    search_backend: Optional[str] = None  # "lancedb" | "postgres" — backend a default search uses
 
 
 class StatsResponse(BaseModel):

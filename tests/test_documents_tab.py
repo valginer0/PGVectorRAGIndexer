@@ -268,11 +268,9 @@ def test_delete_finished_failure(documents_tab):
         mock_crit.assert_called_once()
         assert "failed" in documents_tab.status_label.text()
 
-def test_folder_source_uri_like_pattern_normalizes_windows_drive(documents_tab):
-    assert documents_tab._folder_source_uri_like_pattern(r"G:\My Drive") == "G:/My Drive/%"
-    assert documents_tab._folder_source_uri_like_pattern("G:") == "G:/%"
-
-def test_delete_folder_documents_uses_exact_tree_prefix(documents_tab, mock_api_client):
+def test_delete_folder_documents_uses_literal_prefix(documents_tab, mock_api_client):
+    # source_uri_prefix is escaped server-side, so 'report_2024' can never
+    # also delete a sibling like 'reportX2024' (LIKE '_' wildcard bug).
     mock_api_client.bulk_delete_preview.return_value = {"document_count": 2}
     mock_api_client.bulk_delete.return_value = {"chunks_deleted": 8}
 
@@ -282,7 +280,7 @@ def test_delete_folder_documents_uses_exact_tree_prefix(documents_tab, mock_api_
 
         documents_tab.delete_folder_documents(r"G:\My Drive", "My Drive")
 
-    expected_filters = {"source_uri_like": "G:/My Drive/%"}
+    expected_filters = {"source_uri_prefix": r"G:\My Drive"}
     mock_api_client.bulk_delete_preview.assert_called_once_with(expected_filters)
     mock_api_client.bulk_delete.assert_called_once_with(expected_filters)
     mock_info.assert_called_once()

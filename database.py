@@ -19,7 +19,7 @@ from psycopg2.extras import execute_values, RealDictCursor
 from pgvector.psycopg2 import register_vector
 
 from config import get_config
-from path_utils import normalize_path as _normalize_prefix, NORMALIZED_URI_SQL
+from path_utils import folder_prefix_like_pattern, NORMALIZED_URI_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -338,6 +338,18 @@ class DocumentRepository:
         """Initialize repository with database manager."""
         self.db = db_manager
 
+    def _source_uri_prefix_filter(self, value: str) -> Optional[Tuple[str, list]]:
+        """(clause, params) matching documents under a literal folder prefix.
+
+        Unlike source_uri_like, LIKE metacharacters in the folder name are
+        escaped, so 'report_2024' never matches 'reportX2024'. Returns None
+        for empty/root prefixes (no restriction).
+        """
+        pattern = folder_prefix_like_pattern(value)
+        if pattern is None:
+            return None
+        return self._source_uri_like_clause(), [pattern, pattern, pattern]
+
     def _normalize_source_uri_like(self, pattern: str) -> str:
         normalized = pattern.replace('\\', '/').replace('\t', '/').replace('\n', '/').replace('\r', '/')
         while '//' in normalized:
@@ -618,10 +630,10 @@ class DocumentRepository:
         # source_prefix None or "/" → no prefix filter (returns all documents)
         where_clauses: List[str] = []
         where_params: list = []
-        if source_prefix and source_prefix.rstrip("/") != "":
-            norm = _normalize_prefix(source_prefix).rstrip("/")
+        prefix_pattern = folder_prefix_like_pattern(source_prefix) if source_prefix else None
+        if prefix_pattern is not None:
             where_clauses.append(f"{NORMALIZED_URI_SQL} LIKE %s")
-            where_params.append(norm + "/%")
+            where_params.append(prefix_pattern)
         if visibility and visibility[0]:
             where_clauses.append(visibility[0])
             where_params.extend(visibility[1])
@@ -729,6 +741,21 @@ class DocumentRepository:
                         else:
                             # Empty allowlist = access to nothing (fail closed)
                             where_clauses.append("FALSE")
+                elif key in ('path_prefixes', 'excluded_path_prefixes'):
+                    # Folder scope, same semantics as the hybrid search path in
+                    # retriever_v2._build_chunk_filter_clauses.
+                    if isinstance(value, list) and value:
+                        patterns = [
+                            p for p in (folder_prefix_like_pattern(v) for v in value)
+                            if p is not None
+                        ]
+                        if patterns:
+                            like_sql = f"{NORMALIZED_URI_SQL} LIKE ANY(%s)"
+                            if key == 'path_prefixes':
+                                where_clauses.append(f"({like_sql})")
+                            else:
+                                where_clauses.append(f"NOT ({like_sql})")
+                            params.append(patterns)
                 else:
                     # Direct column match (e.g., document_id, source_uri).
                     # Reject unknown keys — interpolating an arbitrary key is
@@ -967,6 +994,12 @@ class DocumentRepository:
                 normalized = self._normalize_source_uri_like(value)
                 where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
+            elif key == 'source_uri_prefix':
+                prefix_filter = self._source_uri_prefix_filter(value)
+                if prefix_filter is None:
+                    continue
+                where_clauses.append(prefix_filter[0])
+                params.extend(prefix_filter[1])
             else:
                 if key not in self.ALLOWED_FILTER_COLUMNS:
                     raise ValueError(f"Unsupported filter key: {key}")
@@ -1041,6 +1074,12 @@ class DocumentRepository:
                 normalized = self._normalize_source_uri_like(value)
                 where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
+            elif key == 'source_uri_prefix':
+                prefix_filter = self._source_uri_prefix_filter(value)
+                if prefix_filter is None:
+                    continue
+                where_clauses.append(prefix_filter[0])
+                params.extend(prefix_filter[1])
             else:
                 if key not in self.ALLOWED_FILTER_COLUMNS:
                     raise ValueError(f"Unsupported filter key: {key}")
@@ -1097,6 +1136,12 @@ class DocumentRepository:
                 normalized = self._normalize_source_uri_like(value)
                 where_clauses.append(self._source_uri_like_clause())
                 params.extend([normalized, normalized, normalized])
+            elif key == 'source_uri_prefix':
+                prefix_filter = self._source_uri_prefix_filter(value)
+                if prefix_filter is None:
+                    continue
+                where_clauses.append(prefix_filter[0])
+                params.extend(prefix_filter[1])
             else:
                 where_clauses.append(f"{key} = %s")
                 params.append(value)

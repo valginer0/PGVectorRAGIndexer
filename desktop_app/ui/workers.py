@@ -26,6 +26,7 @@ class SearchWorker(QThread):
         group_by_document=False,
         literal_tail_suppression=None,
         source=None,
+        filters=None,
     ):
         super().__init__()
         self.api_client = api_client
@@ -38,6 +39,7 @@ class SearchWorker(QThread):
         self.group_by_document = group_by_document
         self.literal_tail_suppression = literal_tail_suppression
         self.source = source
+        self.filters = filters
 
     def run(self):
         try:
@@ -51,6 +53,7 @@ class SearchWorker(QThread):
                 group_by_document=self.group_by_document,
                 literal_tail_suppression=self.literal_tail_suppression,
                 source=self.source,
+                filters=self.filters,
             )
             self.finished.emit(True, results)
         except Exception as e:

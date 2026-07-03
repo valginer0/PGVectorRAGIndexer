@@ -17,6 +17,7 @@ from dataclasses import dataclass, replace
 from config import get_config
 from database import get_db_manager, DocumentRepository
 from embeddings import get_embedding_service
+from path_utils import folder_prefix_like_pattern, NORMALIZED_URI_SQL
 
 # Configure logging
 logging.basicConfig(
@@ -168,6 +169,23 @@ def coerce_rerank_scores(raw_scores: Any, expected_count: int) -> List[float]:
             f"rerank-v0 expected {expected_count} scores, received {len(scores)}"
         )
     return scores
+
+
+def path_prefix_like_patterns(prefixes: List[Any]) -> List[str]:
+    """Convert folder prefixes to normalized LIKE patterns at a folder boundary.
+
+    Delegates to :func:`path_utils.folder_prefix_like_pattern` (the single
+    source of truth shared with DocumentRepository and the document tree) so
+    that ``ProjectA`` matches ``ProjectA/doc.pdf`` but never
+    ``ProjectAB/doc.pdf``. Empty or root (``/``) prefixes are dropped — they
+    would match everything.
+    """
+    patterns = []
+    for prefix in prefixes:
+        pattern = folder_prefix_like_pattern(prefix)
+        if pattern is not None:
+            patterns.append(pattern)
+    return patterns
 
 
 @dataclass
@@ -500,12 +518,16 @@ class DocumentRetriever:
             # Default: assume lower distance is better
             return max(0.0, min(1.0, 1.0 / (1.0 + distance)))
 
-    def _build_filtered_docs_context(
+    def _build_chunk_filter_clauses(
         self,
         filters: Optional[Dict[str, Any]],
-    ) -> Tuple[str, str, List[Any]]:
-        """Build a filtered document_chunks CTE shared by hybrid search variants."""
-        filter_clauses = []
+    ) -> Tuple[List[str], List[Any]]:
+        """Build WHERE clauses + params for document_chunks from a filters dict.
+
+        Shared by all Postgres hybrid-search variants. Column names are plain
+        (no table alias) because they reference document_chunks directly.
+        """
+        filter_clauses: List[str] = []
         filter_params: List[Any] = []
         if filters:
             for key, value in filters.items():
@@ -537,12 +559,33 @@ class DocumentRetriever:
                         else:
                             # Empty allowlist = access to nothing (fail closed)
                             filter_clauses.append("FALSE")
+                elif key in ('path_prefixes', 'excluded_path_prefixes'):
+                    if isinstance(value, list) and value:
+                        patterns = path_prefix_like_patterns(value)
+                        if patterns:
+                            # LIKE ANY evaluates the REPLACE chain once per row
+                            # regardless of how many prefixes are selected.
+                            like_sql = f"{NORMALIZED_URI_SQL} LIKE ANY(%s)"
+                            if key == 'path_prefixes':
+                                filter_clauses.append(f"({like_sql})")
+                            else:
+                                filter_clauses.append(f"NOT ({like_sql})")
+                            filter_params.append(patterns)
                 else:
                     raise ValueError(
                         f"Unsupported filter key '{key}' for hybrid search. "
                         f"Supported keys: extensions, type, namespace, category, "
-                        f"document_id, source_uri, metadata.<key>"
+                        f"document_id, source_uri, path_prefixes, "
+                        f"excluded_path_prefixes, metadata.<key>"
                     )
+        return filter_clauses, filter_params
+
+    def _build_filtered_docs_context(
+        self,
+        filters: Optional[Dict[str, Any]],
+    ) -> Tuple[str, str, List[Any]]:
+        """Build a filtered document_chunks CTE shared by hybrid search variants."""
+        filter_clauses, filter_params = self._build_chunk_filter_clauses(filters)
 
         if not filter_clauses:
             return "", "document_chunks", filter_params
@@ -1040,45 +1083,7 @@ class DocumentRetriever:
 
         # Build a pre-filter CTE so both the vector and fulltext candidate branches
         # are constrained before the LIMIT, preventing missing results in large indexes.
-        # Column names are plain (no table alias) because they reference document_chunks directly.
-        filter_clauses = []
-        filter_params: List[Any] = []
-        if filters:
-            for key, value in filters.items():
-                if key == 'extensions' and isinstance(value, list) and value:
-                    ext_clauses = []
-                    for ext in value:
-                        normalized = ext if ext.startswith('.') else f'.{ext}'
-                        ext_clauses.append("source_uri ILIKE %s")
-                        filter_params.append(f'%{normalized}')
-                    filter_clauses.append(f"({' OR '.join(ext_clauses)})")
-                elif key in ['type', 'namespace', 'category']:
-                    filter_clauses.append(f"metadata->>'{key}' ILIKE %s")
-                    filter_params.append(value)
-                elif key.startswith('metadata.'):
-                    filter_clauses.append("metadata->>%s = %s")
-                    filter_params.extend([key[9:], value])
-                elif key in ['document_id', 'source_uri']:
-                    filter_clauses.append(f"{key} = %s")
-                    filter_params.append(value)
-                elif key == 'excluded_document_ids':
-                    if isinstance(value, list) and value:
-                        filter_clauses.append("document_id != ALL(%s)")
-                        filter_params.append(list(value))
-                elif key == 'allowed_namespaces':
-                    if isinstance(value, list):
-                        if value:
-                            filter_clauses.append("metadata->>'namespace' = ANY(%s)")
-                            filter_params.append(list(value))
-                        else:
-                            # Empty allowlist = access to nothing (fail closed)
-                            filter_clauses.append("FALSE")
-                else:
-                    raise ValueError(
-                        f"Unsupported filter key '{key}' for hybrid search. "
-                        f"Supported keys: extensions, type, namespace, category, "
-                        f"document_id, source_uri, metadata.<key>"
-                    )
+        filter_clauses, filter_params = self._build_chunk_filter_clauses(filters)
 
         if filter_clauses:
             filter_where_sql = f"WHERE {' AND '.join(filter_clauses)}"

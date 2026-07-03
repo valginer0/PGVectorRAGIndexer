@@ -10,7 +10,7 @@ import logging
 import posixpath
 from typing import Any, Dict, List, Optional, Tuple
 
-from path_utils import normalize_path, NORMALIZED_URI_SQL
+from path_utils import folder_prefix_like_pattern, normalize_path, NORMALIZED_URI_SQL
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +120,9 @@ def get_tree_children(
             with _get_db_connection() as conn:
                 cur = conn.cursor()
                 if parent:
-                    like_prefix = parent + "/%"
+                    # Escaped so folder names containing %/_ match literally;
+                    # the Python-side startswith() below stays the exact gate.
+                    like_prefix = folder_prefix_like_pattern(parent) or "%"
                 else:
                     like_prefix = "%"
 

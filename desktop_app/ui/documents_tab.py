@@ -28,7 +28,11 @@ from .document_tree_model import DocumentTreeModel
 
 class DocumentsTab(QWidget):
     """Tab for managing documents."""
-    
+
+    # Emitted from the tree context menu: (folder_path, "include" | "exclude").
+    # MainWindow routes it to the Search tab's folder scope.
+    search_scope_requested = Signal(str, str)
+
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
         self.api_client = api_client
@@ -895,8 +899,12 @@ class DocumentsTab(QWidget):
         menu = QMenu(self)
         copy_path_action = menu.addAction("Copy Path")
         delete_folder_action = None
+        scope_include_action = scope_exclude_action = None
 
         if node.node_type == "folder":
+            scope_include_action = menu.addAction("Search in This Folder")
+            scope_exclude_action = menu.addAction("Exclude Folder from Search")
+            menu.addSeparator()
             delete_folder_action = menu.addAction("Delete Folder Documents...")
 
         open_action = open_with_action = show_in_folder_action = None
@@ -937,6 +945,10 @@ class DocumentsTab(QWidget):
             else:
                 from PySide6.QtWidgets import QApplication
                 QApplication.clipboard().setText(source_uri)
+        elif scope_include_action is not None and action == scope_include_action:
+            self.search_scope_requested.emit(source_uri, "include")
+        elif scope_exclude_action is not None and action == scope_exclude_action:
+            self.search_scope_requested.emit(source_uri, "exclude")
         elif action == delete_folder_action:
             self.delete_folder_documents(source_uri, node.name)
         elif action == open_action:
@@ -954,8 +966,10 @@ class DocumentsTab(QWidget):
 
     def delete_folder_documents(self, folder_path: str, folder_name: Optional[str] = None) -> None:
         """Delete all documents below a tree folder path."""
-        pattern = self._folder_source_uri_like_pattern(folder_path)
-        filters = {"source_uri_like": pattern}
+        # source_uri_prefix matches the folder literally (the server escapes
+        # LIKE metacharacters), so a folder named 'report_2024' can never
+        # also delete documents under a sibling like 'reportX2024'.
+        filters = {"source_uri_prefix": folder_path}
         display_name = folder_name or folder_path
 
         try:
@@ -1006,20 +1020,3 @@ class DocumentsTab(QWidget):
             f"Deleted {chunks_deleted} indexed chunk(s) under:\n\n{folder_path}",
         )
         self._refresh_current_view()
-
-    @staticmethod
-    def _folder_source_uri_like_pattern(folder_path: str) -> str:
-        """Build a normalized LIKE pattern for all documents below a folder."""
-        normalized = (
-            folder_path
-            .replace('\\', '/')
-            .replace('\t', '/')
-            .replace('\n', '/')
-            .replace('\r', '/')
-        )
-        while '//' in normalized:
-            normalized = normalized.replace('//', '/')
-        normalized = normalized.rstrip("/")
-        if not normalized:
-            return "%"
-        return f"{normalized}/%"

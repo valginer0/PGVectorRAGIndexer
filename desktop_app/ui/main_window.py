@@ -156,6 +156,9 @@ class MainWindow(QMainWindow):
         self._folder_scheduler = FolderScheduler(self.api_client, parent=self)
         self.watched_folders_tab.set_scheduler(self._folder_scheduler)
 
+        # Documents tree "Search in This Folder" / "Exclude Folder from Search"
+        self.documents_tab.search_scope_requested.connect(self._on_search_scope_requested)
+
         # Add tabs with icons (ordered by typical workflow)
         self.tabs.addTab(self.upload_tab, qta.icon('fa5s.cloud-upload-alt', color='#9ca3af'), "Upload")
         self.tabs.addTab(self.search_tab, qta.icon('fa5s.search', color='#9ca3af'), "Search")
@@ -362,6 +365,14 @@ class MainWindow(QMainWindow):
         banner_layout.addWidget(dismiss_btn)
 
         parent_layout.addWidget(self._overage_banner)
+
+    def _on_search_scope_requested(self, folder_path: str, mode: str):
+        """Set a folder search scope from the Documents tree and jump to Search."""
+        if mode == "exclude":
+            self.search_tab.add_scope_exclude(folder_path)
+        else:
+            self.search_tab.add_scope_include(folder_path)
+        self.tabs.setCurrentWidget(self.search_tab)
 
     def _go_to_licenses(self):
         """Navigate to Admin Console -> Licenses tab."""

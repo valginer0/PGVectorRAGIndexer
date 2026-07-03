@@ -16,6 +16,16 @@ from .workers import TreeWorker
 
 logger = logging.getLogger(__name__)
 
+# Fetch threads whose owning model was destroyed before they finished.
+# Holding them here prevents GC of a running QThread (a hard abort);
+# they are discarded once the thread reports finished.
+_ORPHANED_TREE_WORKERS: set = set()
+
+
+def _reap_orphaned_worker(worker) -> None:
+    worker.wait(1000)
+    _ORPHANED_TREE_WORKERS.discard(worker)
+
 
 class TreeNode:
     """A single node in the document tree (folder or file)."""
@@ -262,11 +272,47 @@ class DocumentTreeModel(QAbstractItemModel):
         self.loading.emit(node.path)
 
         worker = TreeWorker(self._api, parent_path=node.path, source=self.source)
-        worker.finished.connect(
-            lambda ok, data, pp: self._on_children_loaded(ok, data, node)
-        )
+        worker._target_node = node
+        # Bound-method receiver (not a lambda) so Qt auto-disconnects when this
+        # model is destroyed — a short-lived owner (e.g. the scope dialog) can
+        # be closed before the fetch completes without a dead-object callback.
+        worker.finished.connect(self._on_worker_finished)
         self._workers.append(worker)
         worker.start()
+
+    def _on_worker_finished(self, success: bool, data, parent_path: str) -> None:
+        worker = self.sender()
+        node = getattr(worker, "_target_node", None)
+        # The custom finished signal is emitted inside run(), so the OS thread
+        # may not have fully terminated when this queued slot runs. wait()
+        # (near-instant here) guarantees it has before we drop the only Python
+        # reference — GC'ing a still-running QThread aborts the process.
+        if worker in self._workers and worker.wait(1000):
+            self._workers.remove(worker)
+        if node is not None:
+            self._on_children_loaded(success, data, node)
+
+    def shutdown_workers(self) -> None:
+        """Detach in-flight fetches — call before destroying a short-lived model.
+
+        Non-blocking: still-running workers are parked in a module-level set
+        (so they are never GC'd mid-run) and reaped once they emit finished.
+        Result delivery to this model is already safe either way — the
+        bound-method connection auto-disconnects when the model is destroyed.
+        """
+        for worker in list(_ORPHANED_TREE_WORKERS):
+            if worker.isFinished():
+                _ORPHANED_TREE_WORKERS.discard(worker)
+        for worker in list(self._workers):
+            self._workers.remove(worker)
+            if worker.isFinished():
+                continue
+            _ORPHANED_TREE_WORKERS.add(worker)
+            worker.finished.connect(
+                lambda *_args, w=worker: _reap_orphaned_worker(w)
+            )
+            if worker.isFinished():
+                _reap_orphaned_worker(worker)
 
 
     def _on_children_loaded(self, success: bool, data, node: TreeNode) -> None:

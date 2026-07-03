@@ -68,18 +68,28 @@ def default_start_dir() -> str:
 
     On WSL, returns the user's Windows home (e.g. /mnt/c/Users/john).
     Otherwise returns the user's home directory.
+
+    The /mnt/c probe must only run on WSL: on Windows the rootless path
+    resolves against the current drive, and with the app launched from a
+    \\\\wsl.localhost\\... checkout it lands back inside the WSL share where
+    stat() raises PermissionError — which pathlib's exists() propagates,
+    killing every file dialog before it opens.
     """
     start = Path.home()
-    wsl_win_home = Path("/mnt/c/Users")
-    if wsl_win_home.exists():
-        candidates = [
-            d for d in wsl_win_home.iterdir()
-            if d.is_dir() and not d.name.startswith(("Default", "Public", "All"))
-        ]
-        if len(candidates) == 1:
-            start = candidates[0]
-        else:
-            start = wsl_win_home
+    if _is_wsl():
+        wsl_win_home = Path("/mnt/c/Users")
+        try:
+            if wsl_win_home.exists():
+                candidates = [
+                    d for d in wsl_win_home.iterdir()
+                    if d.is_dir() and not d.name.startswith(("Default", "Public", "All"))
+                ]
+                if len(candidates) == 1:
+                    start = candidates[0]
+                else:
+                    start = wsl_win_home
+        except OSError as e:
+            _logger.warning("WSL home probe failed, using %s: %s", start, e)
     return str(start)
 
 

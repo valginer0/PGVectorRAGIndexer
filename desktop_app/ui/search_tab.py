@@ -140,6 +140,8 @@ class SearchTab(QWidget):
         self.current_query = ""  # Store for snippet extraction
         self._display_result_limit = 10
         self._active_engine = "lancedb"
+        self._scope_includes: List[str] = []
+        self._scope_excludes: List[str] = []
         self.setup_ui()
 
     def clear_results(self) -> None:
@@ -149,7 +151,86 @@ class SearchTab(QWidget):
             self.results_table.setRowCount(0)
         except Exception:
             pass
-    
+
+    # ------------------------------------------------------------------
+    # Folder scope (include/exclude prefixes fed from the Documents tree)
+    # ------------------------------------------------------------------
+
+    def add_scope_include(self, folder_path: str) -> None:
+        """Restrict the next searches to this folder (additive with other includes)."""
+        path = folder_path.rstrip("/")
+        if not path:
+            return
+        if path in self._scope_excludes:
+            self._scope_excludes.remove(path)
+        if path not in self._scope_includes:
+            self._scope_includes.append(path)
+        self._refresh_scope_chips()
+
+    def add_scope_exclude(self, folder_path: str) -> None:
+        """Exclude this folder from the next searches."""
+        path = folder_path.rstrip("/")
+        if not path:
+            return
+        if path in self._scope_includes:
+            self._scope_includes.remove(path)
+        if path not in self._scope_excludes:
+            self._scope_excludes.append(path)
+        self._refresh_scope_chips()
+
+    def clear_scope(self) -> None:
+        """Remove all folder include/exclude restrictions."""
+        self._scope_includes = []
+        self._scope_excludes = []
+        self._refresh_scope_chips()
+
+    def scope_filters(self) -> Optional[Dict[str, Any]]:
+        """Active scope as search-API filter keys, or None when unscoped."""
+        filters: Dict[str, Any] = {}
+        if self._scope_includes:
+            filters["path_prefixes"] = list(self._scope_includes)
+        if self._scope_excludes:
+            filters["excluded_path_prefixes"] = list(self._scope_excludes)
+        return filters or None
+
+    def _remove_scope_entry(self, path: str, exclude: bool) -> None:
+        target = self._scope_excludes if exclude else self._scope_includes
+        if path in target:
+            target.remove(path)
+        self._refresh_scope_chips()
+
+    def _refresh_scope_chips(self) -> None:
+        """Rebuild the chip row to mirror the current scope lists."""
+        while self._scope_chip_layout.count():
+            item = self._scope_chip_layout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater()
+
+        for path, exclude in (
+            [(p, False) for p in self._scope_includes]
+            + [(p, True) for p in self._scope_excludes]
+        ):
+            name = path.rstrip("/").rsplit("/", 1)[-1] or path
+            chip = QPushButton(f"✕ {'not ' if exclude else ''}{name}")
+            role = "Excluding" if exclude else "Only searching"
+            chip.setToolTip(f"{role}: {path}\nClick to remove this restriction")
+            chip.setStyleSheet(
+                "QPushButton { border-radius: 10px; padding: 3px 10px; "
+                + ("background-color: #7f1d1d; color: #fecaca; }"
+                   if exclude else
+                   "background-color: #1e3a5f; color: #bfdbfe; }")
+            )
+            chip.clicked.connect(
+                lambda checked=False, p=path, e=exclude: self._remove_scope_entry(p, e)
+            )
+            self._scope_chip_layout.addWidget(chip)
+
+        self.scope_group.setVisible(
+            bool(self._scope_includes or self._scope_excludes)
+        )
+
+
     def setup_ui(self):
         """Setup the user interface."""
         layout = QVBoxLayout(self)
@@ -181,7 +262,22 @@ class SearchTab(QWidget):
         
         search_layout.addLayout(query_layout)
         layout.addWidget(search_group)
-        
+
+        # Folder scope chips — populated via the Documents tree context menu.
+        # Hidden while no scope is active so the default layout is unchanged.
+        self.scope_group = QGroupBox("Search Scope (Folders)")
+        scope_outer = QHBoxLayout(self.scope_group)
+        self._scope_chip_layout = QHBoxLayout()
+        self._scope_chip_layout.setSpacing(6)
+        scope_outer.addLayout(self._scope_chip_layout)
+        scope_outer.addStretch()
+        self.clear_scope_btn = QPushButton("Clear Scope")
+        self.clear_scope_btn.setToolTip("Remove all folder include/exclude restrictions")
+        self.clear_scope_btn.clicked.connect(self.clear_scope)
+        scope_outer.addWidget(self.clear_scope_btn)
+        self.scope_group.setVisible(False)
+        layout.addWidget(self.scope_group)
+
         # Search options
         options_group = QGroupBox("Search Options")
         options_layout = QHBoxLayout(options_group)
@@ -364,6 +460,7 @@ class SearchTab(QWidget):
             group_by_document=True,
             literal_tail_suppression="identifier-token",
             source=source,
+            filters=self.scope_filters(),
         )
         self.search_worker.finished.connect(self.search_finished)
         self.search_worker.start()

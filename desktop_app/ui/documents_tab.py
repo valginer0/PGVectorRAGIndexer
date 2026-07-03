@@ -28,7 +28,11 @@ from .document_tree_model import DocumentTreeModel
 
 class DocumentsTab(QWidget):
     """Tab for managing documents."""
-    
+
+    # Emitted from the tree context menu: (folder_path, "include" | "exclude").
+    # MainWindow routes it to the Search tab's folder scope.
+    search_scope_requested = Signal(str, str)
+
     def __init__(self, api_client, parent=None):
         super().__init__(parent)
         self.api_client = api_client
@@ -895,8 +899,12 @@ class DocumentsTab(QWidget):
         menu = QMenu(self)
         copy_path_action = menu.addAction("Copy Path")
         delete_folder_action = None
+        scope_include_action = scope_exclude_action = None
 
         if node.node_type == "folder":
+            scope_include_action = menu.addAction("Search in This Folder")
+            scope_exclude_action = menu.addAction("Exclude Folder from Search")
+            menu.addSeparator()
             delete_folder_action = menu.addAction("Delete Folder Documents...")
 
         open_action = open_with_action = show_in_folder_action = None
@@ -937,6 +945,10 @@ class DocumentsTab(QWidget):
             else:
                 from PySide6.QtWidgets import QApplication
                 QApplication.clipboard().setText(source_uri)
+        elif scope_include_action is not None and action == scope_include_action:
+            self.search_scope_requested.emit(source_uri, "include")
+        elif scope_exclude_action is not None and action == scope_exclude_action:
+            self.search_scope_requested.emit(source_uri, "exclude")
         elif action == delete_folder_action:
             self.delete_folder_documents(source_uri, node.name)
         elif action == open_action:

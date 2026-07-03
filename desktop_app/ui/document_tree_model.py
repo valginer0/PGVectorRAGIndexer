@@ -262,11 +262,26 @@ class DocumentTreeModel(QAbstractItemModel):
         self.loading.emit(node.path)
 
         worker = TreeWorker(self._api, parent_path=node.path, source=self.source)
-        worker.finished.connect(
-            lambda ok, data, pp: self._on_children_loaded(ok, data, node)
-        )
+        worker._target_node = node
+        # Bound-method receiver (not a lambda) so Qt auto-disconnects when this
+        # model is destroyed — a short-lived owner (e.g. the scope dialog) can
+        # be closed before the fetch completes without a dead-object callback.
+        worker.finished.connect(self._on_worker_finished)
         self._workers.append(worker)
         worker.start()
+
+    def _on_worker_finished(self, success: bool, data, parent_path: str) -> None:
+        worker = self.sender()
+        node = getattr(worker, "_target_node", None)
+        if worker in self._workers:
+            self._workers.remove(worker)
+        if node is not None:
+            self._on_children_loaded(success, data, node)
+
+    def shutdown_workers(self, timeout_ms: int = 2000) -> None:
+        """Wait for in-flight fetches — call before destroying a short-lived model."""
+        for worker in list(self._workers):
+            worker.wait(timeout_ms)
 
 
     def _on_children_loaded(self, success: bool, data, node: TreeNode) -> None:

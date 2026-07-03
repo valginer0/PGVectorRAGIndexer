@@ -184,6 +184,26 @@ class SearchTab(QWidget):
         self._scope_excludes = []
         self._refresh_scope_chips()
 
+    def open_scope_dialog(self) -> None:
+        """Open the folder checkbox tree and apply the resulting scope."""
+        from PySide6.QtWidgets import QDialog
+        from .search_scope_dialog import SearchScopeDialog
+
+        engine = self.engine_combo.currentData() if hasattr(self, "engine_combo") else None
+        source = "postgres" if engine == "postgres" else "lancedb"
+        dialog = SearchScopeDialog(
+            self.api_client,
+            source=source,
+            includes=self._scope_includes,
+            excludes=self._scope_excludes,
+            parent=self,
+        )
+        if dialog.exec() == QDialog.Accepted:
+            includes, excludes = dialog.selected_scope()
+            self._scope_includes = list(includes)
+            self._scope_excludes = list(excludes)
+            self._refresh_scope_chips()
+
     def scope_filters(self) -> Optional[Dict[str, Any]]:
         """Active scope as search-API filter keys, or None when unscoped."""
         filters: Dict[str, Any] = {}
@@ -259,6 +279,15 @@ class SearchTab(QWidget):
         self.search_btn.setMinimumHeight(40)
         self.search_btn.setProperty("class", "primary")
         query_layout.addWidget(self.search_btn)
+
+        self.scope_btn = QPushButton("Scope…")
+        self.scope_btn.setIcon(qta.icon('fa5s.folder-open', color='#9ca3af'))
+        self.scope_btn.setToolTip(
+            "Limit the search to specific folders, or exclude folders"
+        )
+        self.scope_btn.clicked.connect(self.open_scope_dialog)
+        self.scope_btn.setMinimumHeight(40)
+        query_layout.addWidget(self.scope_btn)
         
         search_layout.addLayout(query_layout)
         layout.addWidget(search_group)

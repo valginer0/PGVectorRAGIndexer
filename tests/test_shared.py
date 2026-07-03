@@ -88,3 +88,38 @@ def test_open_in_wsl_success():
         mock_popen.assert_called_with(
             ["cmd.exe", "/c", "start", "", windows_path]
         )
+
+
+# ---------------------------------------------------------------------------
+# default_start_dir — the /mnt/c probe must never run on Windows.
+# Regression: app launched from a \\wsl.localhost\... checkout resolved the
+# rootless '/mnt/c/Users' back into the WSL share, where stat() raises
+# PermissionError (pathlib exists() propagates it), killing every file
+# dialog before it opened.
+# ---------------------------------------------------------------------------
+
+
+def test_default_start_dir_windows_never_probes_mnt():
+    """On non-WSL platforms the /mnt/c/Users probe must not even be stat'd."""
+    from desktop_app.ui import shared
+
+    def exploding_exists(self):
+        raise PermissionError(5, "Access is denied", str(self))
+
+    with patch("desktop_app.ui.shared._is_wsl", return_value=False), \
+         patch.object(Path, "exists", exploding_exists):
+        result = shared.default_start_dir()
+    assert result == str(Path.home())
+
+
+def test_default_start_dir_survives_probe_permission_error():
+    """Even on WSL, a probe failure must fall back to home, not raise."""
+    from desktop_app.ui import shared
+
+    def exploding_exists(self):
+        raise PermissionError(5, "Access is denied", str(self))
+
+    with patch("desktop_app.ui.shared._is_wsl", return_value=True), \
+         patch.object(Path, "exists", exploding_exists):
+        result = shared.default_start_dir()
+    assert result == str(Path.home())

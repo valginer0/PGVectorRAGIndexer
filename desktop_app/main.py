@@ -14,11 +14,11 @@ from PySide6.QtCore import Qt
 
 from .ui.main_window import MainWindow
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Configure logging: console + rotating file under the app data directory,
+# with unhandled-exception hooks so windowed builds don't swallow tracebacks.
+from .utils.logging_setup import setup_desktop_logging
+
+_log_file = setup_desktop_logging()
 logger = logging.getLogger(__name__)
 
 # Import version from central module
@@ -83,8 +83,11 @@ def main():
         logger.error(f"Failed to load stylesheet: {e}")
 
     window.show()
-    
-    logger.info("Desktop application started")
+
+    logger.info(
+        "Desktop application started (v%s, log file: %s)",
+        __version__, _log_file or "console only",
+    )
     
     sys.exit(app.exec())
 

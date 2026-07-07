@@ -47,7 +47,7 @@ All roadmap features are **implemented and shipping** as of v2.16.0 The codebase
 ### ✅ #13a Self-Serve Licensing — MVP Pricing Page (Historical Phase)
 - **Effort**: ~2-4h | **Edition**: N/A (website) | **Dependencies**: None
 - **Repo**: `PGVectorRAGIndexerWebsite` | **Branch**: `feature/pricing-page`
-- [x] Pricing section with 4 tiers: Community (Free), Team ($199/yr), Organization ($599/yr), Enterprise (Custom)
+- [x] Pricing section with 4 tiers: Community (Free), Team ($299/yr), Organization ($799/yr), Enterprise (Custom)
 - [x] "Reserve your license" CTA (mailto) on Team tier, "Contact Us" on Org/Enterprise (Initially manual, later automated in 13b)
 - [x] Pricing FAQ: 6 questions (personal use, commercial trigger, try-before-buy, data privacy, PO/invoice, renewal)
 - [x] Responsive CSS: 4-col → 2-col → 1-col grid, glassmorphism cards, featured card highlight
@@ -56,7 +56,7 @@ All roadmap features are **implemented and shipping** as of v2.16.0 The codebase
 ### ✅ #13b Self-Serve Licensing — Stripe Automation (Current Live Behavior)
 - **Effort**: ~6-8h | **Edition**: N/A (website + backend) | **Dependencies**: #13a, #17
 - **Repo**: `PGVectorRAGIndexerWebsite` (Vercel serverless functions)
-- [x] Stripe Checkout integration (Team $199/yr + Organization $599/yr)
+- [x] Stripe Checkout integration (Team $299/yr + Organization $799/yr)
   - `api/checkout.js`: creates Stripe Checkout sessions per tier
   - Pricing page buttons wired to checkout API with loading state
   - Success modal on return from Stripe (`#purchase-success` hash)

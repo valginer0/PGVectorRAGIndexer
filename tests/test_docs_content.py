@@ -7,9 +7,14 @@ No database, no network — pure filesystem reads.  Runs in < 1s.
 Checks:
   - COMMERCIAL.md : pricing tiers, contact email, license stacking
   - QUICK_START.md : correct installer filename, What's New section
+  - Pricing consistency: dollar figures in price-bearing docs must not
+    contradict COMMERCIAL.md
 """
 
+import re
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 
@@ -60,6 +65,49 @@ class TestCommercialMd:
     def test_no_old_org_price(self):
         content = _read("COMMERCIAL.md")
         assert "$599/yr" not in content, "Old Org price $599/yr must not appear"
+
+
+# ── Pricing consistency across docs ──────────────────────────────────────────
+
+class TestPricingConsistencyAcrossDocs:
+    """Dollar figures in price-bearing docs must not contradict COMMERCIAL.md.
+
+    COMMERCIAL.md is canonical: Team $299/yr / $499 one-time, Organization
+    $799/yr / $1,299 one-time; $1,598 and $3,196 are documented
+    license-stacking multiples (2x / 4x Organization annual).
+
+    CHANGELOG.md is deliberately excluded — historical entries legitimately
+    reference superseded prices.
+
+    If pricing changes, update ALLOWED_FIGURES together with COMMERCIAL.md.
+    """
+
+    PRICE_BEARING_DOCS = [
+        "COMMERCIAL.md",
+        "docs/IMPLEMENTATION_TRACKER.md",
+        "docs/LARGE_ORG_LICENSING.md",
+    ]
+
+    ALLOWED_FIGURES = {"$299", "$499", "$799", "$1,299", "$1,598", "$3,196"}
+
+    SUPERSEDED_PRICES = ["$199/yr", "$599/yr", "$349"]
+
+    @pytest.mark.parametrize("doc", PRICE_BEARING_DOCS)
+    def test_no_superseded_prices(self, doc):
+        content = _read(doc)
+        found = [stale for stale in self.SUPERSEDED_PRICES if stale in content]
+        assert not found, f"{doc} contains superseded price(s): {found}"
+
+    @pytest.mark.parametrize("doc", PRICE_BEARING_DOCS)
+    def test_dollar_figures_match_commercial_md(self, doc):
+        figures = set(re.findall(r"\$[\d,]+", _read(doc)))
+        unexpected = figures - self.ALLOWED_FIGURES
+        assert not unexpected, (
+            f"{doc} contains dollar figure(s) {sorted(unexpected)} not in the "
+            f"canonical set {sorted(self.ALLOWED_FIGURES)} from COMMERCIAL.md — "
+            "either a stale price or a new price that requires updating "
+            "ALLOWED_FIGURES and COMMERCIAL.md together"
+        )
 
 
 # ── QUICK_START.md ────────────────────────────────────────────────────────────

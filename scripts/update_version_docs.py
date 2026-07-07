@@ -53,6 +53,7 @@ WEBSITE_PATTERNS = [
     ]),
     ("index.html", [
         (r'<span>Production Ready · v[\d.]+</span>', '<span>Production Ready · v{full}</span>'),
+        (r'<p>Version [\d.]+ - Production Ready', '<p>Version {full} - Production Ready'),
         (r'releases/download/v[\d.]+/PGVectorRAGIndexer\.msi', 'releases/download/v{full}/PGVectorRAGIndexer.msi'),
         (r'releases/download/v[\d.]+/install\.command', 'releases/download/v{full}/install.command'),
         (r'releases/download/v[\d.]+/install-linux\.sh', 'releases/download/v{full}/install-linux.sh'),

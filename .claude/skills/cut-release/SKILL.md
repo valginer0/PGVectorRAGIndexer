@@ -28,14 +28,19 @@ Parse `$ARGUMENTS`: bump type `major|minor|patch` or explicit `x.y.z`
 `scripts/update_version_docs.py` (invoked by release.sh) already handles:
 README.md, QUICK_START, DEPLOYMENT, USAGE_GUIDE, CHANGELOG.md (promotes
 `[Unreleased]`), and in the website repo package.json + index.html (hero
-version and the three `releases/download/v<ver>/...` URLs). Check what it
-does NOT:
+version, footer version line, and the three `releases/download/v<ver>/...`
+URLs). Check what it does NOT:
 
 1. `OLD=$(cat VERSION)` then grep the repo for the old version string outside
    the auto-updated files:
    `grep -rn "v\?$OLD" docs/ *.md --exclude=CHANGELOG.md | grep -v -E "README|QUICK_START|DEPLOYMENT|USAGE_GUIDE"`
    and the website repo beyond index.html/package.json (e.g. `demo.html`).
    Report hits to the user; update only clear version references.
+   Then sweep the website repo for ANY semver-like string, not just the old
+   version — a string missed in one release never matches "the old version"
+   again and stays stale forever (the footer sat at 2.13.0 this way):
+   `grep -rnE '[Vv]ersion [0-9]+\.[0-9]+\.[0-9]+|v[0-9]+\.[0-9]+\.[0-9]+' index.html demo.html`
+   Flag any match that is not the NEW version.
 2. CHANGELOG.md must have a meaningful `[Unreleased]` section describing this
    release. If it is empty/missing, draft entries from
    `git log --oneline <last-tag>..HEAD` and show the user before committing.

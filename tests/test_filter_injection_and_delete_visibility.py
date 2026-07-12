@@ -81,6 +81,38 @@ def test_bulk_delete_rejects_unknown_filter_key():
     assert cursor.calls == []
 
 
+def test_export_documents_rejects_unknown_filter_key():
+    repo, cursor = _repo_with_capture()
+    with pytest.raises(ValueError, match="Unsupported filter key"):
+        repo.export_documents({INJECTION_KEY: "x"})
+    assert cursor.calls == []
+
+
+# ---------------------------------------------------------------------------
+# Folder-prefix deletes must be case-sensitive (parity with search + LanceDB)
+# ---------------------------------------------------------------------------
+
+
+def test_folder_prefix_delete_is_case_sensitive():
+    """source_uri_prefix must use LIKE, not ILIKE: search folder scoping and
+    LanceDB starts_with are case-sensitive, so an ILIKE delete of /Cases/Acme
+    would also delete /Cases/acme and leave the two stores inconsistent."""
+    repo, cursor = _repo_with_capture()
+    repo.bulk_delete({"source_uri_prefix": "/Cases/Acme"})
+    sql, params = cursor.calls[0]
+    assert "ILIKE" not in sql
+    assert "LIKE" in sql
+    assert params[0] == "/Cases/Acme/%"
+
+
+def test_source_uri_like_stays_case_insensitive():
+    """Free-text source_uri_like patterns keep ILIKE semantics."""
+    repo, cursor = _repo_with_capture()
+    repo.bulk_delete({"source_uri_like": "acme"})
+    sql, _ = cursor.calls[0]
+    assert "ILIKE" in sql
+
+
 @pytest.mark.parametrize("key", sorted(__import__("database").DocumentRepository.ALLOWED_FILTER_COLUMNS))
 def test_allowed_direct_columns_pass(key):
     repo, cursor = _repo_with_capture()

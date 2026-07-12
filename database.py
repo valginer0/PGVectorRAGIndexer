@@ -342,13 +342,17 @@ class DocumentRepository:
         """(clause, params) matching documents under a literal folder prefix.
 
         Unlike source_uri_like, LIKE metacharacters in the folder name are
-        escaped, so 'report_2024' never matches 'reportX2024'. Returns None
-        for empty/root prefixes (no restriction).
+        escaped, so 'report_2024' never matches 'reportX2024'. Matching is
+        case-sensitive (LIKE, not ILIKE) to agree with folder_prefix_like_pattern
+        semantics, the search-path folder scoping, and LanceDB's starts_with —
+        otherwise deleting /Cases/Acme on a case-sensitive filesystem would also
+        delete /Cases/acme, and only in one of the two stores' terms. Returns
+        None for empty/root prefixes (no restriction).
         """
         pattern = folder_prefix_like_pattern(value)
         if pattern is None:
             return None
-        return self._source_uri_like_clause(), [pattern, pattern, pattern]
+        return self._source_uri_like_clause(operator="LIKE"), [pattern, pattern, pattern]
 
     def _normalize_source_uri_like(self, pattern: str) -> str:
         normalized = pattern.replace('\\', '/').replace('\t', '/').replace('\n', '/').replace('\r', '/')
@@ -359,8 +363,12 @@ class DocumentRepository:
             normalized = f"%{normalized}%"
         return normalized
 
-    def _source_uri_like_clause(self) -> str:
-        """Return SQL matching source URI filters across canonical URI fields."""
+    def _source_uri_like_clause(self, operator: str = "ILIKE") -> str:
+        """Return SQL matching source URI filters across canonical URI fields.
+
+        operator: "ILIKE" (default) for user free-text patterns, "LIKE" for
+        folder-prefix matching where case sensitivity must be preserved.
+        """
         normalized_metadata_source_uri_sql = (
             "REPLACE(REPLACE(REPLACE(REPLACE("
             "COALESCE(metadata->>'source_uri', ''), E'\\\\', '/'), "
@@ -373,9 +381,9 @@ class DocumentRepository:
         )
         return (
             "("
-            f"{NORMALIZED_URI_SQL} ILIKE %s OR "
-            f"{normalized_metadata_source_uri_sql} ILIKE %s OR "
-            f"{normalized_custom_source_uri_sql} ILIKE %s"
+            f"{NORMALIZED_URI_SQL} {operator} %s OR "
+            f"{normalized_metadata_source_uri_sql} {operator} %s OR "
+            f"{normalized_custom_source_uri_sql} {operator} %s"
             ")"
         )
     
@@ -1143,11 +1151,13 @@ class DocumentRepository:
                 where_clauses.append(prefix_filter[0])
                 params.extend(prefix_filter[1])
             else:
+                if key not in self.ALLOWED_FILTER_COLUMNS:
+                    raise ValueError(f"Unsupported filter key: {key}")
                 where_clauses.append(f"{key} = %s")
                 params.append(value)
-        
+
         where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
-        
+
         # Export all chunk data
         query = f"""
         SELECT 

@@ -110,6 +110,37 @@ class TestPricingConsistencyAcrossDocs:
         )
 
 
+class TestInternalSalesDocsPricing:
+    """Active sales docs in docs/internal must not quote superseded prices —
+    a stale quote email underquotes real customers.
+
+    docs/internal is a separate private repo, gitignored here and absent in CI
+    checkouts, so these tests skip there; they run on dev machines, which is
+    where quote emails get sent from. Historical strategy docs (V2/V3/V4,
+    COMMERCIAL_PROCESS) legitimately keep old prices and are excluded.
+    """
+
+    ACTIVE_INTERNAL_DOCS = [
+        "docs/internal/MONETIZATION_STRATEGY_V5.md",
+        "docs/internal/default_email_reply_deployment.md",
+        "docs/internal/default_email_reply_smallteam.md",
+    ]
+
+    SUPERSEDED_FIGURES = ["$199", "$349", "$599", "$999"]
+
+    @pytest.mark.parametrize("doc", ACTIVE_INTERNAL_DOCS)
+    def test_no_superseded_prices(self, doc):
+        path = ROOT / doc
+        if not path.exists():
+            pytest.skip("docs/internal not checked out (separate private repo)")
+        content = path.read_text(encoding="utf-8")
+        found = [stale for stale in self.SUPERSEDED_FIGURES if stale in content]
+        assert not found, (
+            f"{doc} contains superseded price(s) {found} — current pricing is "
+            "Team $299/yr / $499, Organization $799/yr / $1,299 (COMMERCIAL.md)"
+        )
+
+
 # ── QUICK_START.md ────────────────────────────────────────────────────────────
 
 class TestQuickStartMd:

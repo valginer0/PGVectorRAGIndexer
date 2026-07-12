@@ -44,6 +44,18 @@ else
     check FAIL "website repo not found at $WEB"
 fi
 
+# --- docs/internal repo (separate private repo) -------------------------------
+# SKILL.md later runs `git add -A` here for the version-bump side-effect commit;
+# a dirty tree now would sweep unrelated internal changes into that commit.
+DOCSINT="$MAIN/docs/internal"
+if [ -d "$DOCSINT/.git" ]; then
+    IDIRTY=$(git -C "$DOCSINT" status --porcelain)
+    [ -z "$IDIRTY" ] && check ok "docs/internal repo clean" \
+                     || { check FAIL "docs/internal repo not clean — 'git add -A' in the release side-effect commit would sweep these in:"; echo "$IDIRTY" | sed 's/^/        /'; }
+else
+    check FAIL "docs/internal repo not found at $DOCSINT"
+fi
+
 # --- tooling -----------------------------------------------------------------
 gh auth status >/dev/null 2>&1 && check ok "gh authenticated" \
                                || check FAIL "gh auth status failed"

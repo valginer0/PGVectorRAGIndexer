@@ -135,6 +135,10 @@ celerybeat.pid
 *.sage.py
 
 # Environments
+# Broadened from a bare `.env` after `.env.neon-demo` was committed by
+# accident (2026-02-21, removed 2026-08-26). The file held only
+# placeholder secrets — see docs/SECURITY_AUDIT_LOG.md before treating
+# that commit as a real leak.
 .env*
 !.env.example
 .envrc

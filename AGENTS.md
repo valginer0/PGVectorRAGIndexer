@@ -43,3 +43,8 @@ named rejected alternatives — don't re-propose something already tried:
 - Test suite: exclude `tests/test_upload_endpoint.py`, `tests/test_web_ui.py`,
   `tests/test_web_ui_integration.py` (they hang). DB-dependent tests need
   `pytest.mark.database` or the `db_manager`/`setup_test_database` fixtures.
+- Closed security findings live in `docs/SECURITY_AUDIT_LOG.md`. Read it
+  before reporting a credential leak — commit `95fc792`'s message claims a
+  Neon password and Stripe webhook secret need rotating, but the committed
+  values were literal `REDACTED` placeholders. That message has already
+  triggered one false alarm; the log has the re-verification commands.

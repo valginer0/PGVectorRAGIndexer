@@ -8,18 +8,12 @@ Get up and running in 5 minutes!
 
 ## 🆕 What's New in v2.16.0
 
-- **PowerPoint Indexing Robustness**: `.pptx` files no longer fail when unstructured's optional PPTX extras are missing; supported decks use native extraction with a built-in OpenXML fallback.
-- **Image OCR Format Normalization**: Phone/camera images that open as special Pillow formats are normalized before OCR so valid `.jpg` files are not rejected by Tesseract's helper.
+- **Folder-Scoped Search**: Scope a search to just one folder, or exclude a folder, on either search backend. In the Desktop App: right-click a folder in the Documents tree → **Search in This Folder** / **Exclude Folder from Search**, or use the scope chips in the Search tab. See [Folder-Scoped Search](#folder-scoped-search) below for the API form.
+- **`/health` reports the active search backend** (`"lancedb"` or `"postgres"`) so clients can tell which engine a default search uses.
 
-### Recent Fixes (v2.14.4)
+### Recent Features (v2.15.x)
 
-- **Database Pool Backpressure**: Burst indexing now waits for available PostgreSQL pool capacity and uses configured overflow slots instead of failing immediately with connection pool exhaustion.
-
-### Recent Features (v2.14.3)
-
-- **Large-Organization License Stacking**: Stack multiple Organization licenses on one server to combine seat limits for 50, 75, or 100+ users — no configuration changes needed.
-- **Admin Console — Licenses Panel**: Admins can now add, view, and remove license keys directly in the Organization Console with client-side validation and per-key status.
-- **Role-Based Overage Banner**: When seat count exceeds licensed capacity, admins see an "Add Licenses" shortcut; non-admins see a contact-your-admin message.
+- **Team Mode — Per-User Document Visibility & Collections**: Documents can be marked private (visible only to their owner) or shared, and roles can be restricted to specific document collections. This is opt-in — see [Setting Up for a Team](#setting-up-for-a-team-optional) below.
 
 See the full [`CHANGELOG.md`](CHANGELOG.md) or [Releases page](https://github.com/valginer0/PGVectorRAGIndexer/releases) for all changes.
 
@@ -192,6 +186,27 @@ curl -X POST "http://localhost:8000/search" \
   }'
 ```
 
+### Folder-Scoped Search
+
+Scope a search to one or more folders, or exclude folders — matched at
+folder boundaries, case-sensitive. If a folder appears in both lists,
+the exclusion wins.
+
+```bash
+curl -X POST "http://localhost:8000/search" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "deployment guide",
+    "filters": {
+      "path_prefixes": ["/app/documents/engineering"],
+      "excluded_path_prefixes": ["/app/documents/engineering/archive"]
+    }
+  }'
+```
+
+In the Desktop App, right-click any folder in the **Documents** tree for
+the same thing without writing JSON.
+
 ### Supported File Types
 
 The system supports these file formats:
@@ -253,6 +268,25 @@ chmod +x inspect_db.sh
 7. Show table schema
 8. Interactive psql session
 9. Custom SQL query
+
+## 👥 Setting Up for a Team (Optional)
+
+Everything above is single-user by default (`require_auth: false` — no
+API keys, no visibility restrictions). Deploying on a shared server for
+multiple people? Enabling auth unlocks:
+
+- **RBAC** — admin/user roles and permission-checked endpoints
+- **Per-user document visibility** — documents can be private (owner
+  only) or shared
+- **Collections** — restrict a role to specific document sets
+- **SSO/SAML and SCIM provisioning** — for enterprise identity workflows
+- **API key management** — create, revoke, and rotate keys per user
+
+This isn't a quick-start-sized setup — see the full
+[**Access Control Guide**](docs/ACCESS_CONTROL_GUIDE.md) for the staging
+checklist and enforcement details, and the
+[Enterprise Capabilities](README.md#enterprise-capabilities) section of
+the README for the full feature list.
 
 ## 📚 Next Steps
 

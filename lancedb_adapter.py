@@ -47,7 +47,7 @@ def auto_semantic_pool(
 
 def generate_chunk_id(document_id: str, chunk_index: int) -> int:
     """Generate a deterministic, unique positive int64 ID for a chunk."""
-    h = xxhash.xxh64(f"{document_id}:{chunk_index}")
+    h = xxhash.xxh64(f"{document_id}:{chunk_index}".encode())
     return h.intdigest() & 0x7fffffffffffffff
 
 

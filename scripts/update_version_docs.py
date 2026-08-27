@@ -40,10 +40,10 @@ MAIN_DOC_PATTERNS = [
         (r'^Last updated: \d{4}-\d{2}-\d{2} \(v[\d.]+\)', 'Last updated: {date} (v{full})'),
         (r'shipping\*\* as of v[\d.]+', 'shipping** as of v{full}'),
     ]),
-    ("docs/internal/MONETIZATION_STRATEGY_V4.md", [
-        (r'^# Monetization Strategy V4 — Current State \(\d{4}-\d{2}-\d{2}\)', '# Monetization Strategy V4 — Current State ({date})'),
-        (r'implemented state as of v[\d.]+', 'implemented state as of v{full}'),
-    ]),
+    # docs/internal/MONETIZATION_STRATEGY_V4.md is deliberately absent: V4 is a
+    # frozen historical snapshot (V5 is the active strategy), so restamping its
+    # date and version on every release made it look freshly reviewed and would
+    # eventually have it claiming to describe a release it predates by years.
 ]
 
 # Patterns for the website repository

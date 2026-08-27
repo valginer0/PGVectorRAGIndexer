@@ -238,7 +238,10 @@ class TestSourceUriPrefixFilter:
         repo = DocumentRepository(db_manager)
         clause, params = repo._source_uri_prefix_filter("report_2024")
         assert params == [r"report\_2024/%"] * 3
-        assert "ILIKE" in clause
+        # Case-sensitive on purpose (65b3b2f): ILIKE would let a delete of
+        # /Cases/Acme also match /Cases/acme on a case-sensitive filesystem.
+        assert "ILIKE" not in clause
+        assert "LIKE %s" in clause
 
     def test_root_prefix_means_no_restriction(self, db_manager):
         from database import DocumentRepository

@@ -183,12 +183,12 @@ function displaySearchResults(results) {
 
     container.innerHTML = `
         <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:0.9em;color:#a5b4fc">
-            💡 In the desktop app, click any result to open the document with the matched section highlighted.
+            In the desktop app, click any result to open the document with the matched section highlighted.
         </div>
     ` + results.map(result => `
         <div class="result-card">
             <div class="result-header">
-                <div class="result-source">📄 ${escapeHtml(result.source_uri)}</div>
+                <div class="result-source"><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-1px"><path d="M4 1.5h5.5L12.5 4.5V14.5H4V1.5Z" stroke-linejoin="round"/><path d="M9.5 1.5V4.5H12.5" stroke-linejoin="round"/></svg> ${escapeHtml(result.source_uri)}</div>
                 <div class="result-score">${(result.relevance_score * 100).toFixed(1)}%</div>
             </div>
             <div class="result-content">
@@ -249,7 +249,7 @@ async function uploadFile(file, forceReindex, container, customSourceUri = null)
     const progressHtml = `
         <div class="progress-item" id="${progressId}">
             <div class="progress-header">
-                <span>📄 ${escapeHtml(displayName)}</span>
+                <span><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-1px"><path d="M4 1.5h5.5L12.5 4.5V14.5H4V1.5Z" stroke-linejoin="round"/><path d="M9.5 1.5V4.5H12.5" stroke-linejoin="round"/></svg> ${escapeHtml(displayName)}</span>
                 <span class="progress-percent">0%</span>
             </div>
             <div class="progress-bar">
@@ -334,14 +334,14 @@ function displayDocuments(documents) {
 
     const desktopHint = isDemoMode ? `
         <div style="background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:8px;padding:10px 16px;margin-bottom:16px;font-size:0.9em;color:#a5b4fc">
-            💡 In the desktop app, click any document to open it in the editor and browse its indexed chunks.
+            In the desktop app, click any document to open it in the editor and browse its indexed chunks.
         </div>
     ` : '';
 
     container.innerHTML = desktopHint + documents.map(doc => `
         <div class="document-card">
             <div class="document-info">
-                <h3>📄 ${escapeHtml(doc.source_uri)}</h3>
+                <h3><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-1px"><path d="M4 1.5h5.5L12.5 4.5V14.5H4V1.5Z" stroke-linejoin="round"/><path d="M9.5 1.5V4.5H12.5" stroke-linejoin="round"/></svg> ${escapeHtml(doc.source_uri)}</h3>
                 <div class="document-meta">
                     <span>🆔 ${doc.document_id}</span>
                     <span>📊 ${doc.chunk_count} chunks</span>

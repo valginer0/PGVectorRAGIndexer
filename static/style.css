@@ -32,6 +32,10 @@ header h1 {
     margin-bottom: 10px;
 }
 
+header h1 .h1-icon {
+    vertical-align: -0.15em;
+}
+
 .subtitle {
     font-size: 1.2em;
     opacity: 0.9;
@@ -398,8 +402,10 @@ header h1 {
 }
 
 .empty-state-icon {
+    width: 1.2em;
+    height: 1.2em;
     font-size: 4em;
-    margin-bottom: 16px;
+    margin: 0 auto 16px;
     opacity: 0.5;
 }
 

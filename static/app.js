@@ -125,7 +125,7 @@ function initSearch() {
     ];
     resultsContainer.innerHTML = `
         <div class="empty-state">
-            <div class="empty-state-icon">🔍</div>
+            <svg class="empty-state-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1"><circle cx="7" cy="7" r="5" /><path d="M11 11l3.5 3.5" stroke-linecap="round" /></svg>
             <p>Try one of these sample queries:</p>
             <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px">
                 ${sampleQueries.map(q => `<button class="btn" style="font-size:0.85em" onclick="document.getElementById('searchQuery').value='${q}';performSearch()">${q}</button>`).join('')}
@@ -174,7 +174,7 @@ function displaySearchResults(results) {
     if (results.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">🔍</div>
+                <svg class="empty-state-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1"><circle cx="7" cy="7" r="5" /><path d="M11 11l3.5 3.5" stroke-linecap="round" /></svg>
                 <p>No results found. Try adjusting your search query or threshold.</p>
             </div>
         `;
@@ -325,7 +325,7 @@ function displayDocuments(documents) {
     if (documents.length === 0) {
         container.innerHTML = `
             <div class="empty-state">
-                <div class="empty-state-icon">📚</div>
+                <svg class="empty-state-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.2"><path d="M2 3.5C2 2.7 2.7 2 3.5 2H7v11H3.5A1.5 1.5 0 0 1 2 11.5v-8Z" stroke-linejoin="round" /><path d="M14 3.5c0-.8-.7-1.5-1.5-1.5H9v11h3.5a1.5 1.5 0 0 0 1.5-1.5v-8Z" stroke-linejoin="round" /></svg>
                 <p>No documents indexed yet. Upload some documents to get started!</p>
             </div>
         `;

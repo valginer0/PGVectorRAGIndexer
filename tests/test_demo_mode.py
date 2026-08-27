@@ -5,8 +5,6 @@ Tests cover:
 - DEMO_MODE env var parsing
 - Demo mode flag in /api and /api/version responses
 - Allowed POST paths constant
-- Dockerfile.demo exists
-- docker-compose.demo.yml exists and sets DEMO_MODE
 """
 
 import os
@@ -78,32 +76,3 @@ class TestDemoModeApiResponses:
         assert resp.status_code == 200
         data = resp.json()
         assert "demo" not in data
-
-
-# ===========================================================================
-# Test: Demo Docker files exist
-# ===========================================================================
-
-
-class TestDemoDockerFiles:
-    def test_dockerfile_demo_exists(self):
-        assert (PROJECT_ROOT / "Dockerfile.demo").exists()
-
-    def test_dockerfile_demo_sets_demo_mode(self):
-        content = (PROJECT_ROOT / "Dockerfile.demo").read_text()
-        assert "DEMO_MODE=1" in content
-
-    def test_docker_compose_demo_exists(self):
-        assert (PROJECT_ROOT / "docker-compose.demo.yml").exists()
-
-    def test_docker_compose_demo_sets_demo_mode(self):
-        content = (PROJECT_ROOT / "docker-compose.demo.yml").read_text()
-        assert "DEMO_MODE" in content
-
-    def test_docker_compose_demo_has_healthcheck(self):
-        content = (PROJECT_ROOT / "docker-compose.demo.yml").read_text()
-        assert "healthcheck" in content
-
-    def test_dockerfile_demo_has_healthcheck(self):
-        content = (PROJECT_ROOT / "Dockerfile.demo").read_text()
-        assert "HEALTHCHECK" in content

@@ -177,23 +177,20 @@ All roadmap features are **implemented and shipping** as of v2.16.1 The codebase
   - Allows GET/HEAD/OPTIONS + POST to /search and /virtual-roots/resolve
   - Returns 403 with helpful message for blocked writes
   - `/api` and `/api/version` include `"demo": true` flag
-- [x] `Dockerfile.demo`: demo image with DEMO_MODE=1, healthcheck
-- [x] `docker-compose.demo.yml`: full demo stack (db + app), auto-reset instructions
-- [x] Tests: 11 tests (constants, API responses, Docker files)
-- [x] `render.yaml`: Render Blueprint for free tier deployment
-- [x] SSL/sslmode support: `DB_SSLMODE` config field for cloud PostgreSQL (Neon)
-- [x] Warm-up interstitial page (`demo.html` in Website repo)
-  - Polls demo server `/health` endpoint every 3s during cold start
-  - Shows feature cards and sample queries while waiting
-  - Auto-redirects when server responds; graceful fallback on timeout
-- [x] "Try Live Demo" button on website (bold gradient CTA in hero section)
-- [x] Deployed to Render free tier (auto-sleep) + Neon free tier (pgvector DB)
-  - URL: https://demo-pgvectorrag.onrender.com
-  - CPU-only PyTorch for 512MB RAM limit; deferred init for fast port binding
-  - HEAD support on root endpoint for Render port detection
-- [x] Sample corpus: `scripts/seed_demo.py` — 8 documents, 40 chunks seeded into Neon
-  - Topics: getting started, vector embeddings, document processing, API reference,
-    RAG concepts, deployment guide, security, performance tuning
+- [x] Tests: constants, API responses
+- [x] SSL/sslmode support: `DB_SSLMODE` config field, for customers who choose
+      a cloud PostgreSQL — never a default, and not used by the product itself
+- [x] `demo.html` on the website — now a recorded walkthrough
+
+**Hosted demo RETIRED 2026-08-27.** The Render + Neon instance is gone and is
+not coming back; `demo.html` is a recorded walkthrough against a local
+instance. `Dockerfile.demo`, `docker-compose.demo.yml`, `render.yaml`,
+`scripts/demo-entrypoint.sh` and `scripts/seed_demo.py` were deleted with it —
+a public repo selling local-only search should not ship a cloud deployment
+blueprint. `DEMO_MODE` itself remains in `api.py` as a supported read-only
+mode. If a demo is ever rebuilt, do not reuse the old seed corpus: one of its
+documents recommended running production on managed cloud Postgres, which
+contradicts the product's core claim.
 - [x] Demo UX: capabilities banner listing full app features + "Learn more →" link to ragvault.net
 - [x] Demo UX: hide Upload tab and Delete buttons in demo mode (detected via `/api` demo flag)
 - [x] Demo UX: clickable sample query buttons so users know what to search

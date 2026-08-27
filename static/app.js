@@ -41,14 +41,14 @@ function initTabs() {
         const banner = document.createElement('div');
         banner.style.cssText = 'background:rgba(99,102,241,0.08);border:1px solid rgba(99,102,241,0.25);border-radius:10px;padding:16px 20px;margin-bottom:20px;font-size:0.88em;line-height:1.6;color:#c4b5fd';
         banner.innerHTML = `
-            <strong style="color:#a5b4fc;font-size:1.05em">🎯 This demo showcases core search &amp; retrieval.</strong>
+            <strong style="color:#a5b4fc;font-size:1.05em">This demo showcases core search &amp; retrieval.</strong>
             The full application also includes:
             <span style="display:inline-block;margin-top:4px">
-                📤 Document upload &amp; indexing · 🔄 Smart re-indexing (only changed files) ·
-                📁 Watched folders with scheduled auto-indexing ·
-                🖥️ Desktop app with click-to-open results ·
-                🔐 API key auth, SSO/SAML &amp; per-user document visibility ·
-                🌳 Document tree navigation · 📦 Export &amp; restore
+                Document upload &amp; indexing · Smart re-indexing (only changed files) ·
+                Watched folders with scheduled auto-indexing ·
+                Desktop app with click-to-open results ·
+                API key auth, SSO/SAML &amp; per-user document visibility ·
+                Document tree navigation · Export &amp; restore
             </span>
             <div style="margin-top:8px">
                 <a href="https://www.ragvault.net/" target="_blank" style="color:#818cf8;text-decoration:underline">Learn more →</a>
@@ -142,7 +142,7 @@ async function performSearch() {
     const resultsContainer = document.getElementById('searchResults');
 
     if (!query) {
-        showMessage(resultsContainer, '⚠️ Please enter a search query', 'warning');
+        showMessage(resultsContainer, 'Please enter a search query', 'warning');
         return;
     }
 
@@ -164,7 +164,7 @@ async function performSearch() {
         currentQuery = query;
         displaySearchResults(data.results || []);
     } catch (error) {
-        showMessage(resultsContainer, `❌ Search failed: ${error.message}`, 'error');
+        showMessage(resultsContainer, `Search failed: ${error.message}`, 'error');
     }
 }
 
@@ -197,8 +197,8 @@ function displaySearchResults(results) {
                 ${result.text_content.length > 150 ? `<details style="margin-top:6px"><summary style="cursor:pointer;font-size:0.85em;color:#a5b4fc">Show full text</summary><div style="margin-top:6px;padding:8px;background:rgba(0,0,0,0.2);border-radius:6px;font-size:0.9em">${escapeHtml(result.text_content)}</div></details>` : ''}
             </div>
             <div class="result-meta">
-                <span>📍 Chunk ${result.chunk_index}</span>
-                <span>🆔 ${result.document_id}</span>
+                <span>Chunk ${result.chunk_index}</span>
+                <span>ID: ${result.document_id}</span>
             </div>
         </div>
     `).join('');
@@ -284,16 +284,16 @@ async function uploadFile(file, forceReindex, container, customSourceUri = null)
         progressPercent.textContent = '100%';
 
         if (response.ok) {
-            progressStatus.textContent = `✅ Indexed ${data.chunks_indexed} chunks`;
+            progressStatus.textContent = `Indexed ${data.chunks_indexed} chunks`;
             progressStatus.classList.add('success');
         } else {
-            progressStatus.textContent = `❌ ${data.detail || 'Upload failed'}`;
+            progressStatus.textContent = `${data.detail || 'Upload failed'}`;
             progressStatus.classList.add('error');
         }
     } catch (error) {
         progressFill.style.width = '100%';
         progressPercent.textContent = '100%';
-        progressStatus.textContent = `❌ Error: ${error.message}`;
+        progressStatus.textContent = `Error: ${error.message}`;
         progressStatus.classList.add('error');
     }
 }
@@ -315,7 +315,7 @@ async function loadDocuments() {
         currentDocuments = documents;
         displayDocuments(documents);
     } catch (error) {
-        showMessage(container, `❌ Failed to load documents: ${error.message}`, 'error');
+        showMessage(container, `Failed to load documents: ${error.message}`, 'error');
     }
 }
 
@@ -343,14 +343,14 @@ function displayDocuments(documents) {
             <div class="document-info">
                 <h3><svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" style="vertical-align:-1px"><path d="M4 1.5h5.5L12.5 4.5V14.5H4V1.5Z" stroke-linejoin="round"/><path d="M9.5 1.5V4.5H12.5" stroke-linejoin="round"/></svg> ${escapeHtml(doc.source_uri)}</h3>
                 <div class="document-meta">
-                    <span>🆔 ${doc.document_id}</span>
-                    <span>📊 ${doc.chunk_count} chunks</span>
-                    <span>📅 ${new Date(doc.indexed_at).toLocaleString()}</span>
+                    <span>ID: ${doc.document_id}</span>
+                    <span>${doc.chunk_count} chunks</span>
+                    <span>${new Date(doc.indexed_at).toLocaleString()}</span>
                 </div>
             </div>
             ${isDemoMode ? '' : `<div class="document-actions">
                 <button class="btn btn-danger" onclick="deleteDocument('${doc.document_id}')">
-                    🗑️ Delete
+                    Delete
                 </button>
             </div>`}
         </div>
@@ -388,7 +388,7 @@ async function loadStatistics() {
         const stats = await response.json();
         displayStatistics(stats);
     } catch (error) {
-        showMessage(container, `❌ Failed to load statistics: ${error.message}`, 'error');
+        showMessage(container, `Failed to load statistics: ${error.message}`, 'error');
     }
 }
 

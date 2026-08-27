@@ -260,8 +260,10 @@ header h1 .h1-icon {
 }
 
 .upload-icon {
+    width: 1.2em;
+    height: 1.2em;
     font-size: 4em;
-    margin-bottom: 16px;
+    margin: 0 auto 16px;
 }
 
 .upload-hint {

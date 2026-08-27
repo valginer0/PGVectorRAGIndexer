@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.16.1] - 2026-08-27
+
 ### Added
 - Desktop: rotating log file at `<app-data>/PGVectorRAGIndexer/logs/desktop.log`
   (2 MB x 3 backups) plus unhandled-exception hooks, so Qt slot tracebacks and

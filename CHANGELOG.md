@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Desktop: rotating log file at `<app-data>/PGVectorRAGIndexer/logs/desktop.log`
+  (2 MB x 3 backups) plus unhandled-exception hooks, so Qt slot tracebacks and
+  startup failures are recorded instead of vanishing in the windowed build
+
+### Fixed
+- Indexing failed when `xxhash` 4.x was installed: LanceDB chunk-ID generation
+  passed a `str` to `xxh64()`, which 4.0 no longer accepts. Chunk IDs are
+  byte-for-byte unchanged, so existing indexes are unaffected
+- Export and delete filters: closed a filter-key injection path, and
+  folder-prefix delete is now case-sensitive - deleting `/Cases/Acme` can no
+  longer also remove a sibling `/Cases/acme` on case-sensitive filesystems
+- Built-in web UI: replaced bare emoji markers with inline SVG icons so the
+  interface renders consistently across platforms and fonts
+
+### Security
+- Removed a demo environment file that had been committed to the repository,
+  and hardened `.gitignore` against env-file patterns
+
+### Documentation
+- QUICK_START: corrected the "What's New" section, documented folder-scoped
+  search with an API example, and added a Team-mode setup pointer covering
+  RBAC, per-user visibility, collections, Admin Console and License Stacking
+
 ## [2.16.0] - 2026-07-03
 
 ### Added

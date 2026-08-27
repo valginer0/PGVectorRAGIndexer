@@ -160,15 +160,15 @@ class TestQuickStartMd:
         assert f"v{__version__}" in _read("QUICK_START.md"), \
             f"What's New section must reference v{__version__}"
 
-    def test_license_stacking_in_whats_new(self):
+    def test_license_stacking_documented(self):
         assert "License Stacking" in _read("QUICK_START.md"), \
-            "License Stacking must appear in What's New"
+            "License Stacking must be documented somewhere in QUICK_START.md"
 
     def test_setup_wizard_mentioned(self):
         content = _read("QUICK_START.md")
         assert "Wizard" in content or "wizard" in content, \
             "First-run Setup Wizard must be mentioned"
 
-    def test_admin_console_in_whats_new(self):
+    def test_admin_console_documented(self):
         assert "Admin Console" in _read("QUICK_START.md"), \
-            "Admin Console Licenses Panel must appear in What's New"
+            "Admin Console must be documented somewhere in QUICK_START.md"

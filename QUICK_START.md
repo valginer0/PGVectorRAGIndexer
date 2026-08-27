@@ -281,6 +281,10 @@ multiple people? Enabling auth unlocks:
 - **Collections** — restrict a role to specific document sets
 - **SSO/SAML and SCIM provisioning** — for enterprise identity workflows
 - **API key management** — create, revoke, and rotate keys per user
+- **Admin Console — Licenses Panel** — add, view, and remove license keys
+  in the Organization Console, with per-key status
+- **License Stacking** — stack multiple Organization licenses on one
+  server to combine seat limits for 50, 75, or 100+ users
 
 This isn't a quick-start-sized setup — see the full
 [**Access Control Guide**](docs/ACCESS_CONTROL_GUIDE.md) for the staging

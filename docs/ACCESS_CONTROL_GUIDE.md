@@ -151,6 +151,24 @@ Notes:
 - The server must be migrated (`alembic upgrade head`) to at least
   migration `020` for collection grants.
 
+### For developers: adding a new read endpoint
+
+Reuse the existing visibility pattern instead of hand-rolling filters —
+this is how every endpoint listed above enforces "shared docs + own docs"
+correctly:
+
+- `document_visibility.visibility_clause_for_key_record(key_record)`
+  resolves the caller behind an API key into a `(sql_fragment, params)`
+  pair — AND it into any `document_chunks`/documents query. Returns no
+  filter for admins or when auth is disabled; shared+own for a regular
+  user; shared-only if the key isn't linked to a user.
+- `document_visibility.document_visible_for_key_record(document_id,
+  key_record)` answers the single-document version of the same check.
+- **Hidden-ID pattern:** a document the caller can't see returns a plain
+  `404`, never a `403` — its existence is not revealed. Follow this for
+  any new single-document read endpoint (see the `/documents/{id}`
+  behavior above for the reference case).
+
 ## Validating Team mode (staging checklist)
 
 Before rolling Team mode out on your internal server, you can validate the

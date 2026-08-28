@@ -172,3 +172,28 @@ class TestQuickStartMd:
     def test_admin_console_documented(self):
         assert "Admin Console" in _read("QUICK_START.md"), \
             "Admin Console must be documented somewhere in QUICK_START.md"
+
+
+# ── Version stamping ──────────────────────────────────────────────────────────
+
+class TestVersionStamps:
+    """Guard every declared version string against the VERSION file.
+
+    The README footer silently claimed 2.13.0 for three releases because
+    ``scripts/update_version_docs.py`` had no pattern for it and nothing
+    checked.  An external reviewer found it before we did.
+    """
+
+    def test_readme_footer_version(self):
+        from version import __version__
+        m = re.search(r"^\*\*Version\*\*: ([\d.]+)", _read("README.md"), re.M)
+        assert m, "README.md must carry a '**Version**: x.y.z' footer"
+        assert m.group(1) == __version__, (
+            f"README footer says {m.group(1)}, VERSION says {__version__} — "
+            "run scripts/update_version_docs.py"
+        )
+
+    def test_readme_title_version(self):
+        from version import __version__
+        assert f"# PGVectorRAGIndexer v{__version__}" in _read("README.md"), \
+            f"README title must reference v{__version__}"

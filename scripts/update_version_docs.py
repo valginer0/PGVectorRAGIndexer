@@ -19,6 +19,11 @@ MAIN_DOC_PATTERNS = [
         (r'^# PGVectorRAGIndexer v[\d.]+', '# PGVectorRAGIndexer v{full}'),
         (r"^## 🋹 What's New in v[\d.]+", "## 🋹 What's New in v{full}"),
         (r'^### 🆕 Latest (Features|Fixes) \(v[\d.]+\)', r'### 🆕 Latest \1 (v{full})'),
+        # Footer block. Missed until 2026-08-28, by which point it had been
+        # claiming 2.13.0 for three releases; tests/test_docs_content.py now
+        # guards it so a stale footer fails the suite rather than shipping.
+        (r'^\*\*Version\*\*: [\d.]+', '**Version**: {full}'),
+        (r'^\*\*Last Updated\*\*: .+$', '**Last Updated**: {date}  '),
     ]),
     ("QUICK_START.md", [
         (r'^# Quick Start Guide - PGVectorRAGIndexer v[\d.]+', 

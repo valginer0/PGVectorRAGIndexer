@@ -1000,8 +1000,8 @@ All development is maintained exclusively by PIVARO LLC to ensure code quality a
 
 
 
-**Version**: 2.13.0  
-**Last Updated**: 2026  
+**Version**: 2.16.1  
+**Last Updated**: 2026-08-28  
 **Status**: Production Ready ✅
 
 

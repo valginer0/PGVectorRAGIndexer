@@ -2,7 +2,7 @@
 
 Derived from [FEATURE_IDEAS_V5.md](./FEATURE_IDEAS_V5.md). Each task maps to a feature number in V5.
 
-Last updated: 2026-08-27 (v2.16.1)
+Last updated: 2026-08-28 (v2.16.1)
 
 ---
 

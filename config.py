@@ -274,8 +274,12 @@ class APIConfig(BaseSettings):
         description='Rate limit per minute per IP'
     )
     require_auth: bool = Field(
-        default=False,
-        description='Require API key authentication for all endpoints'
+        default=True,
+        description=(
+            'Require API key authentication for non-loopback requests. '
+            'Loopback (127.0.0.1/::1) is exempt so a single-machine install '
+            'needs no key; set API_REQUIRE_AUTH=false to opt out entirely.'
+        )
     )
     allowed_hosts: list[str] = Field(
         default=['*'],

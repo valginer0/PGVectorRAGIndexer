@@ -62,11 +62,18 @@ class TestDockerCompose:
         # Check if any port mapping includes 8000
         assert any('8000' in str(port) for port in ports)
     
-    def test_db_exposes_port_5432(self, docker_compose_config):
-        """Test that db service exposes port 5432."""
+    def test_db_port_is_loopback_only(self, docker_compose_config):
+        """The DB port must be bound to loopback, never to all interfaces.
+
+        A bare '5432:5432' publishes Postgres on every interface, which
+        combined with the default credentials exposed the whole index to the
+        local network. The app itself reaches the DB over the internal docker
+        network (DB_HOST: db), so this mapping is only ever for local psql.
+        """
         db_service = docker_compose_config['services']['db']
         assert 'ports' in db_service
-        assert '5432:5432' in db_service['ports']
+        assert '127.0.0.1:5432:5432' in db_service['ports']
+        assert '5432:5432' not in db_service['ports']
     
     def test_has_named_volumes(self, docker_compose_config):
         """Test that docker-compose.yml defines named volumes."""

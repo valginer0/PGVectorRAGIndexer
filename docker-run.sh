@@ -60,10 +60,18 @@ echo ""
 # Create .env file if it doesn't exist
 if [ ! -f ".env" ]; then
     echo -e "${GREEN}Creating .env file...${NC}"
-    cat > .env << 'EOF'
+    # Generate a password unique to this install. The previous default was the
+    # literal string 'rag_password', published in this repo, which meant every
+    # install shared a credential anyone could look up.
+    if command -v openssl >/dev/null 2>&1; then
+        GENERATED_DB_PASSWORD="$(openssl rand -hex 24)"
+    else
+        GENERATED_DB_PASSWORD="$(head -c 24 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    fi
+    cat > .env << EOF
 # Database Configuration
 POSTGRES_USER=rag_user
-POSTGRES_PASSWORD=rag_password
+POSTGRES_PASSWORD=${GENERATED_DB_PASSWORD}
 POSTGRES_DB=rag_vector_db
 DB_HOST=db
 DB_PORT=5432
@@ -77,7 +85,7 @@ API_HOST=0.0.0.0
 API_PORT=8000
 
 # Project Directory (for volume mounts)
-PROJECT_DIR=${PWD}
+PROJECT_DIR=\${PWD}
 EOF
     echo -e "${GREEN}✓ Created .env file${NC}"
 else
@@ -97,7 +105,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

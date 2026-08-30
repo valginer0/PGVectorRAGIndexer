@@ -22,7 +22,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_password}
       POSTGRES_DB: ${POSTGRES_DB:-rag_vector_db}
     ports:
-      - "5432:5432"
+      # Loopback only: the app reaches the DB over the internal
+      # docker network (DB_HOST: db), so this mapping exists purely for
+      # local psql/tests. Publishing it on 0.0.0.0 exposed the database,
+      # and its default credentials, to the whole network.
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

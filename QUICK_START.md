@@ -226,9 +226,12 @@ Open http://localhost:8000/docs and try the API interactively!
 Edit `~/pgvector-rag/.env` to customize:
 
 ```bash
-# Database
+# Database — the install script generates POSTGRES_PASSWORD for you.
+# Don't replace it with a value copied from the docs; if you change it after
+# the database has been created, the existing volume keeps the old password
+# and the app will fail to connect.
 POSTGRES_USER=rag_user
-POSTGRES_PASSWORD=rag_password
+POSTGRES_PASSWORD=<generated at install>
 POSTGRES_DB=rag_vector_db
 
 # Embedding Model

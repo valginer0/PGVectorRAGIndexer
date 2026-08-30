@@ -85,10 +85,15 @@ Write-Host ""
 $envFile = Join-Path $DeployDir ".env"
 if (-not (Test-Path $envFile)) {
     Write-Host "Creating .env file..." -ForegroundColor Green
+    # Generate a password unique to this install. The previous default was the
+    # literal string 'rag_password', published in this repo.
+    $pwBytes = New-Object byte[] 24
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($pwBytes)
+    $GeneratedDbPassword = -join ($pwBytes | ForEach-Object { $_.ToString('x2') })
     @"
 # Database Configuration
 POSTGRES_USER=rag_user
-POSTGRES_PASSWORD=rag_password
+POSTGRES_PASSWORD=$GeneratedDbPassword
 POSTGRES_DB=rag_vector_db
 DB_HOST=db
 DB_PORT=5432
@@ -120,7 +125,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - __POSTGRES_VOLUME__:/var/lib/postgresql/data
     healthcheck:

@@ -13,7 +13,7 @@ services:
       POSTGRES_PASSWORD: rag_password
       POSTGRES_DB: rag_vector_db
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro

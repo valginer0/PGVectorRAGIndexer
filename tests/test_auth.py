@@ -217,6 +217,17 @@ class TestAuthRequired:
         request = self._make_request(host="127.0.0.1")
         assert is_auth_required(request) is True
 
+    def test_require_auth_defaults_to_true(self, monkeypatch):
+        """The shipped default must be auth-on.
+
+        A fresh install serving on 0.0.0.0 used to accept every request from
+        the network; the loopback exemption above is what keeps a
+        single-machine install key-free, not this default.
+        """
+        from config import APIConfig
+        monkeypatch.delenv("API_REQUIRE_AUTH", raising=False)
+        assert APIConfig(_env_file=None).require_auth is True
+
 
 # ---------------------------------------------------------------------------
 # FastAPI dependency

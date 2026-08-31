@@ -2,8 +2,9 @@
 API key authentication for PGVectorRAGIndexer.
 
 Provides API key generation, hashing, verification, and a FastAPI
-dependency for protecting endpoints. Auth is only enforced when
-API_REQUIRE_AUTH=true — local mode stays unauthenticated.
+dependency for protecting endpoints. Auth is enforced by default
+(API_REQUIRE_AUTH defaults to true); loopback requests stay exempt, so a
+single-machine install needs no key.
 
 This module is separate from license.py:
 - API keys authenticate clients to the server (who can connect)
@@ -124,14 +125,16 @@ def is_auth_required(request: Request) -> bool:
     the local desktop app to work seamlessly while remote connections
     are still protected.
 
-    When API_REQUIRE_AUTH is not set, auth is NOT required (local mode default).
+    API_REQUIRE_AUTH defaults to true, so a fresh install is protected
+    against non-loopback callers without any configuration. Set it to false
+    to opt out entirely.
 
     Set API_AUTH_FORCE_ALL=true (CI/testing only) to disable the loopback
     exemption and require auth for ALL requests including localhost.
     """
     from config import get_config
     config = get_config()
-    if not getattr(config.api, 'require_auth', False):
+    if not getattr(config.api, 'require_auth', True):
         return False
     # CI/testing: force auth on all requests including loopback
     if os.environ.get("API_AUTH_FORCE_ALL", "").lower() in ("1", "true", "yes"):

@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Default install no longer ships an open database. `docker compose up`
+  published Postgres on `0.0.0.0:5432` with the credentials printed in this
+  repository, so any host on the same network could read every indexed
+  document straight from the database, bypassing the application. All compose
+  files now bind the database to `127.0.0.1`, and `docker-run.sh`,
+  `docker-run.ps1` and `server-setup.sh` generate a random
+  `POSTGRES_PASSWORD` per install instead of writing the published one
+- API key authentication is now on by default (`API_REQUIRE_AUTH` defaults to
+  true). Loopback (127.0.0.1 / ::1) stays exempt, so a single-machine install
+  and the desktop app still need no key - requests from any other host now do
+- SCIM provisioning requires the Team edition, matching every other user
+  management endpoint. It was already unreachable without `SCIM_ENABLED=true`
+  and a non-empty `SCIM_BEARER_TOKEN`, so this closes an under-collection gap
+  rather than an anonymous bypass
+
+### Changed
+- `.env.example` ships `POSTGRES_PASSWORD=CHANGE_ME` instead of a working
+  password. Existing `.env` files are left untouched by the install scripts
+
+### Upgrading
+- Existing installs keep their current `.env`, so nothing changes on disk. Two
+  behaviours do change: a client calling the API from another machine now
+  needs an API key (set `API_REQUIRE_AUTH=false` to restore the old
+  behaviour), and `psql` against the container's published port must connect
+  over `127.0.0.1` rather than the host's LAN address
+
 ## [2.16.1] - 2026-08-27
 
 ### Added

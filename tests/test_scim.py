@@ -491,3 +491,36 @@ class TestScimEndpoints:
     def test_delete_group_endpoint(self):
         # DELETE /scim/v2/Groups/{group_id} — same path as GET
         assert "/scim/v2/Groups/{group_id}" in self.routes
+
+
+class TestScimEditionGate:
+    """SCIM provisions users, so it must require the same edition as user management.
+
+    ``identity_api`` guards every user endpoint with ``require_team_edition``.
+    SCIM reached the same capability with no edition check, which both
+    under-collected and contradicted the website's "Single user" line on the
+    Community tier.
+    """
+
+    def _auth_status(self, is_team):
+        from fastapi import HTTPException
+        from routers.scim_api import _scim_auth
+
+        request = MagicMock()
+        request.headers = {"Authorization": "Bearer test_token"}
+
+        with patch("scim.is_scim_available", return_value=True), \
+             patch("scim.validate_bearer_token", return_value=True), \
+             patch("license.get_current_license") as mock_lic:
+            mock_lic.return_value.is_team = is_team
+            try:
+                _scim_auth(request)
+                return None
+            except HTTPException as e:
+                return e.status_code
+
+    def test_community_edition_is_refused(self):
+        assert self._auth_status(is_team=False) == 403
+
+    def test_team_edition_is_allowed(self):
+        assert self._auth_status(is_team=True) is None

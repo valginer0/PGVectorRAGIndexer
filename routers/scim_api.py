@@ -13,10 +13,24 @@ scim_router = APIRouter(tags=["SCIM"])
 
 
 def _scim_auth(request: Request):
-    """Validate SCIM bearer token from Authorization header."""
+    """Validate SCIM bearer token from Authorization header.
+
+    Also enforces the licence edition. SCIM provisions users, and user
+    management is a Team-edition feature (``require_team_edition`` guards every
+    endpoint in ``identity_api``), so an ungated SCIM endpoint was a way to
+    reach the same capability without one. The website sells SCIM on the Team
+    card and marks Community as single-user; this makes both true.
+    """
     from scim import is_scim_available, validate_bearer_token, scim_error
     if not is_scim_available():
         raise HTTPException(status_code=404, detail="SCIM provisioning is not enabled")
+
+    from license import get_current_license
+    if not get_current_license().is_team:
+        raise HTTPException(
+            status_code=403,
+            detail=scim_error(403, "SCIM provisioning requires a Team or Organization license"),
+        )
     auth = request.headers.get("Authorization", "")
     if not validate_bearer_token(auth):
         raise HTTPException(status_code=401, detail=scim_error(401, "Invalid or missing bearer token"))

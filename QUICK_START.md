@@ -1,4 +1,4 @@
-# Quick Start Guide - PGVectorRAGIndexer v2.16.1
+# Quick Start Guide - PGVectorRAGIndexer v2.17.0
 
 Get up and running in 5 minutes!
 > 🔒 **Network safety tip**
@@ -6,7 +6,7 @@ Get up and running in 5 minutes!
 > This helps prevent other users on the same network from accessing local services.
 > For home or private networks, this is not a concern.
 
-## 🆕 What's New in v2.16.1
+## 🆕 What's New in v2.17.0
 
 - **Folder-Scoped Search**: Scope a search to just one folder, or exclude a folder, on either search backend. In the Desktop App: right-click a folder in the Documents tree → **Search in This Folder** / **Exclude Folder from Search**, or use the scope chips in the Search tab. See [Folder-Scoped Search](#folder-scoped-search) below for the API form.
 - **`/health` reports the active search backend** (`"lancedb"` or `"postgres"`) so clients can tell which engine a default search uses.

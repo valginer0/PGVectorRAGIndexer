@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.0] - 2026-09-01
+
 ### Security
 - Default install no longer ships an open database. `docker compose up`
   published Postgres on `0.0.0.0:5432` with the credentials printed in this

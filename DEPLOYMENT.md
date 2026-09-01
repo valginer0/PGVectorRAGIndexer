@@ -71,10 +71,12 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-rag_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-rag_vector_db}
     ports:
-      - "${DB_PORT:-5432}:5432"
+      # Loopback only. The API reaches the database over the compose network,
+      # so publishing 5432 on every interface only exposes it to the LAN.
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
@@ -95,7 +97,7 @@ services:
       DB_HOST: db
       DB_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-rag_user}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_password}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-rag_vector_db}
       API_HOST: 0.0.0.0
       API_PORT: 8000

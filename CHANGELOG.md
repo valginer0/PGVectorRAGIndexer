@@ -27,6 +27,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.env.example` ships `POSTGRES_PASSWORD=CHANGE_ME` instead of a working
   password. Existing `.env` files are left untouched by the install scripts
 
+### Documentation
+- USAGE_GUIDE, DEPLOYMENT and the `docker-compose.yml` header no longer print
+  the published database password as the value to use, and the DEPLOYMENT
+  example stack binds the database to `127.0.0.1` like the shipped compose
+  files do
+
 ### Upgrading
 - Existing installs keep their current `.env`, so nothing changes on disk. Two
   behaviours do change: a client calling the API from another machine now

@@ -6,7 +6,7 @@
 #
 # For development, create a .env file with:
 #   POSTGRES_USER=rag_user
-#   POSTGRES_PASSWORD=rag_password
+#   POSTGRES_PASSWORD=<pick your own; don't copy one out of this repo>
 #   POSTGRES_DB=rag_vector_db
 #   API_HOST=0.0.0.0
 #   API_PORT=8000

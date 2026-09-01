@@ -239,9 +239,11 @@ docker compose restart
 Available configuration options in `.env`:
 
 ```bash
-# Database
+# Database - the install script generates POSTGRES_PASSWORD for you.
+# Never copy a password out of the documentation; the one that used to be
+# printed here was identical on every install.
 POSTGRES_USER=rag_user
-POSTGRES_PASSWORD=rag_password
+POSTGRES_PASSWORD=<generated at install>
 POSTGRES_DB=rag_vector_db
 DB_HOST=db
 DB_PORT=5432

@@ -13,7 +13,7 @@ class TestDockerCompose:
     @pytest.fixture
     def docker_compose_config(self):
         """Load docker-compose.yml configuration."""
-        with open("docker-compose.yml", 'r') as f:
+        with open("docker-compose.yml", 'r', encoding="utf-8") as f:
             return yaml.safe_load(f)
     
     def test_docker_compose_exists(self):
@@ -147,12 +147,14 @@ class TestInstallScriptIntents:
 
     @pytest.fixture
     def docker_run(self):
-        with open("docker-run.sh") as f:
+        # encoding is explicit: both scripts contain UTF-8 (checkmarks, dashes)
+        # and Windows CI defaults to cp1252, which raises UnicodeDecodeError.
+        with open("docker-run.sh", encoding="utf-8") as f:
             return f.read()
 
     @pytest.fixture
     def server_setup(self):
-        with open("server-setup.sh") as f:
+        with open("server-setup.sh", encoding="utf-8") as f:
             return f.read()
 
     def test_docker_run_is_loopback_and_keyless(self, docker_run):

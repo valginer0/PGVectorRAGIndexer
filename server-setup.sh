@@ -143,6 +143,10 @@ POSTGRES_PASSWORD=${GENERATED_DB_PASSWORD}
 POSTGRES_DB=rag_vector_db
 API_HOST=0.0.0.0
 API_PORT=${API_PORT}
+# This is the networked-server install: the API port is published on every
+# interface, so API-key auth must stay on. Clients present X-API-Key.
+API_BIND_ADDRESS=0.0.0.0
+API_REQUIRE_AUTH=true
 PROJECT_DIR=${PROJECT_DIR}
 EOF
     fi
@@ -156,6 +160,22 @@ fi
 # Update API_PORT in .env
 sed -i.bak "s|^API_PORT=.*|API_PORT=${API_PORT}|" .env 2>/dev/null || true
 rm -f .env.bak
+
+# This script sets up the SERVER, which publishes the API on every interface.
+# That combination is only safe with auth on, so enforce both settings on every
+# run - including an .env copied from .env.example or left over from a
+# single-machine install, where they default the other way.
+set_env_var() {
+    local key="$1" value="$2"
+    if grep -q "^${key}=" .env 2>/dev/null; then
+        sed -i.bak "s|^${key}=.*|${key}=${value}|" .env && rm -f .env.bak
+    else
+        printf '%s=%s\n' "$key" "$value" >> .env
+    fi
+}
+set_env_var API_BIND_ADDRESS 0.0.0.0
+set_env_var API_REQUIRE_AUTH true
+echo -e "  ✓ Server mode: API published on all interfaces with API-key auth required"
 
 # Set up data directory for persistent volumes
 if [ -n "$DATA_DIR" ]; then
@@ -205,19 +225,19 @@ echo -e "${GREEN}[5/5] Post-setup...${NC}"
 
 if [ "$GENERATE_KEY" = true ]; then
     echo -e "  Generating API key..."
-    # The API key generation endpoint requires the API to be running
-    if curl -sf "http://localhost:${API_PORT}/api" > /dev/null 2>&1; then
-        KEY_RESPONSE=$(curl -sf -X POST "http://localhost:${API_PORT}/api/v1/api-keys" \
-            -H "Content-Type: application/json" \
-            -d '{"name": "server-setup-key"}' 2>/dev/null || echo "")
-        if [ -n "$KEY_RESPONSE" ]; then
-            echo -e "  ${GREEN}✓ API key generated. Save this — it won't be shown again:${NC}"
-            echo -e "  ${CYAN}$KEY_RESPONSE${NC}"
-        else
-            echo -e "  ${YELLOW}⚠ Could not generate key. Create one manually via the API.${NC}"
-        fi
+    # Mint the first key INSIDE the container, not over HTTP. The key endpoint
+    # is itself authenticated, and a request to the published port arrives from
+    # the docker gateway rather than 127.0.0.1, so the loopback exemption never
+    # applies - bootstrapping over curl would just return 401.
+    KEY_RESPONSE=$(docker exec vector_rag_app python -c \
+        "from auth import create_api_key_record; print(create_api_key_record('server-setup-key')['key'])" \
+        2>/dev/null | tail -1)
+    if [ -n "$KEY_RESPONSE" ]; then
+        echo -e "  ${GREEN}✓ API key generated. Save this — it won't be shown again:${NC}"
+        echo -e "  ${CYAN}$KEY_RESPONSE${NC}"
     else
-        echo -e "  ${YELLOW}⚠ API not running — start containers first, then generate a key.${NC}"
+        echo -e "  ${YELLOW}⚠ Could not generate key (is vector_rag_app running?). Create one with:${NC}"
+        echo -e "  ${YELLOW}  docker exec vector_rag_app python -c \"from auth import create_api_key_record; print(create_api_key_record('my-key')['key'])\"${NC}"
     fi
 fi
 
@@ -242,6 +262,10 @@ echo -e "  1. Open the desktop app → Settings tab"
 echo -e "  2. Switch to ${YELLOW}Remote Server${NC} mode"
 echo -e "  3. Enter the server URL above"
 echo -e "  4. Enter your API key"
+echo ""
+echo -e "${CYAN}This server requires an API key:${NC}"
+echo -e "  Clients send it as an ${YELLOW}X-API-Key${NC} header. Create one with:"
+echo -e "  ${YELLOW}docker exec vector_rag_app python -c \"from auth import create_api_key_record; print(create_api_key_record('my-key')['key'])\"${NC}"
 echo ""
 echo -e "${CYAN}Useful commands:${NC}"
 echo -e "  View logs:       ${YELLOW}docker logs -f vector_rag_app${NC}"

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **The default Docker install returned 401 against its own machine.** v2.17.0
+  turned API-key auth on with a loopback exemption, but a request from the host
+  to a published container port arrives from the docker gateway address, never
+  `127.0.0.1`, so the exemption could not fire behind Docker - `docker-run.sh`
+  installs and the desktop app's Local (Docker) mode were rejected by their own
+  backend. The single-machine stack now publishes the API on `127.0.0.1` only
+  (`API_BIND_ADDRESS`) and ships with `API_REQUIRE_AUTH=false`: nothing off the
+  machine can reach it, so it needs no key. Server installs are unchanged in
+  intent - `server-setup.sh` publishes on every interface and enforces auth
+- `server-setup.sh --generate-key` could not mint the first key: it called the
+  key endpoint over HTTP, which is itself authenticated. It now creates the key
+  inside the container
+
+### Added
+- `API_BIND_ADDRESS` (host address the API port is published on, default
+  `127.0.0.1`) documented in `.env.example` alongside `API_REQUIRE_AUTH`, with
+  the warning that the two must move together
+- CI job covering a default install with no API key - an authenticated endpoint
+  answering 200 over loopback, the same port refusing on the LAN address, and a
+  server-configured stack returning 401 to a non-loopback client. Every prior
+  smoke check sent a key, which is why the regression shipped green
+
+
 ## [2.17.0] - 2026-09-01
 
 ### Security

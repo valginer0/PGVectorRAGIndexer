@@ -274,9 +274,11 @@ chmod +x inspect_db.sh
 
 ## 👥 Setting Up for a Team (Optional)
 
-Everything above is single-user by default (`require_auth: false` — no
-API keys, no visibility restrictions). Deploying on a shared server for
-multiple people? Enabling auth unlocks:
+Everything above is single-user by default: the Docker install publishes the
+API on `127.0.0.1` and ships with `API_REQUIRE_AUTH=false`, so nothing off
+this machine can reach it and no key is needed. Deploying on a shared server
+for multiple people? `server-setup.sh` publishes on every interface and turns
+auth on, which unlocks:
 
 - **RBAC** — admin/user roles and permission-checked endpoints
 - **Per-user document visibility** — documents can be private (owner

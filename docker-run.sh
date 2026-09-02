@@ -81,8 +81,16 @@ EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
 EMBEDDING_DIMENSION=384
 
 # API Configuration
+# API_HOST is the address INSIDE the container - leave it at 0.0.0.0.
+# API_BIND_ADDRESS is the host address the port is published on. 127.0.0.1
+# means this machine only, which is why no API key is needed below.
+# To serve other machines, set API_BIND_ADDRESS=0.0.0.0 AND
+# API_REQUIRE_AUTH=true, then create an API key. Changing one without the
+# other either locks you out or puts an unauthenticated API on the network.
 API_HOST=0.0.0.0
 API_PORT=8000
+API_BIND_ADDRESS=127.0.0.1
+API_REQUIRE_AUTH=false
 
 # Project Directory (for volume mounts)
 PROJECT_DIR=\${PWD}
@@ -128,8 +136,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       API_HOST: ${API_HOST}
       API_PORT: ${API_PORT}
+      API_REQUIRE_AUTH: ${API_REQUIRE_AUTH:-false}
     ports:
-      - "${API_PORT}:8000"
+      # Loopback only by default - see the API section of .env before changing.
+      - "${API_BIND_ADDRESS:-127.0.0.1}:${API_PORT}:8000"
     volumes:
       - ./documents:/app/documents
       - ./backups:/app/backups

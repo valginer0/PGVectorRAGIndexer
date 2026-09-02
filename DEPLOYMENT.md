@@ -101,6 +101,11 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-rag_vector_db}
       API_HOST: 0.0.0.0
       API_PORT: 8000
+      # This example publishes the API to the network, so auth stays on and
+      # clients send X-API-Key. Create the first key inside the container:
+      #   docker exec <app> python -c "from auth import create_api_key_record; \
+      #     print(create_api_key_record('my-key')['key'])"
+      API_REQUIRE_AUTH: "true"
     ports:
       - "${API_PORT:-8000}:8000"
     depends_on:

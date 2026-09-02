@@ -119,3 +119,66 @@ jobs:
     - name: Dump logs on failure
       if: failure()
       run: $COMPOSE logs --tail 200
+
+  # The path that shipped broken in v2.17.0. Every check above sends an API key,
+  # so nothing exercised a default single-machine install, and a release that
+  # 401'd against its own machine went out green. This job runs the compose file
+  # exactly as a user gets it: no override, no key.
+  install-defaults:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build app image from this commit
+      run: docker build -t "$APP_IMAGE" .
+
+    - name: Start the stack the way a single-machine install does
+      run: |
+        docker compose up -d db
+        for i in $(seq 1 30); do
+          if docker compose ps db | grep -q healthy; then echo "db healthy"; break; fi
+          [ "$i" = 30 ] && { echo "db never became healthy"; exit 1; }
+          sleep 2
+        done
+        docker compose run --rm app alembic upgrade head
+        docker compose up -d app
+        for i in $(seq 1 60); do
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health || true)
+          if [ "$code" = "200" ]; then echo "app healthy"; break; fi
+          [ "$i" = 60 ] && { echo "app never became healthy (last: $code)"; exit 1; }
+          sleep 3
+        done
+
+    - name: An authenticated endpoint answers WITHOUT a key on the local install
+      run: |
+        for ep in /documents /stats; do
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8000$ep")
+          [ "$code" = "200" ] || { echo "expected 200 on $ep without a key, got $code"; exit 1; }
+        done
+
+    - name: ...and that is only safe because the port is not published to the network
+      run: |
+        LAN_IP=$(hostname -I | awk '{print $1}')
+        echo "probing $LAN_IP:8000 - it must refuse"
+        code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 5 "http://$LAN_IP:8000/health" || true)
+        [ "$code" = "000" ] || { echo "API answered on the LAN address with $code; loopback publish is broken"; exit 1; }
+
+    - name: Server config requires a key from a non-loopback client
+      run: |
+        docker compose down
+        LAN_IP=$(hostname -I | awk '{print $1}')
+        API_BIND_ADDRESS=0.0.0.0 API_REQUIRE_AUTH=true docker compose up -d
+        for i in $(seq 1 60); do
+          code=$(curl -s -o /dev/null -w '%{http_code}' "http://$LAN_IP:8000/health" || true)
+          if [ "$code" = "200" ]; then echo "app healthy on $LAN_IP"; break; fi
+          [ "$i" = 60 ] && { echo "app never became reachable (last: $code)"; exit 1; }
+          sleep 3
+        done
+        code=$(curl -s -o /dev/null -w '%{http_code}' "http://$LAN_IP:8000/documents")
+        [ "$code" = "401" ] || { echo "expected 401 from a LAN client without a key, got $code"; exit 1; }
+
+    - name: Dump logs on failure
+      if: failure()
+      run: docker compose logs --tail 200

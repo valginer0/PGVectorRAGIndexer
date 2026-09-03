@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.1] - 2026-09-03
+
 ### Fixed
 - **The default Docker install returned 401 against its own machine.** v2.17.0
   turned API-key auth on with a loopback exemption, but a request from the host
@@ -29,7 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   answering 200 over loopback, the same port refusing on the LAN address, and a
   server-configured stack returning 401 to a non-loopback client. Every prior
   smoke check sent a key, which is why the regression shipped green
-
 
 ## [2.17.0] - 2026-09-01
 

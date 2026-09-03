@@ -1,4 +1,4 @@
-# PGVectorRAGIndexer v2.17.0
+# PGVectorRAGIndexer v2.17.1
 ![MCP Compatible](https://img.shields.io/badge/MCP-compatible-blue)
 
 > **Start here:**
@@ -88,9 +88,9 @@ Both modes run **entirely on your hardware** — no cloud, no external services,
 
 ---
 
-## 🋹 What's New in v2.17.0
+## 🋹 What's New in v2.17.1
 
-### 🆕 Latest Fixes (v2.17.0)
+### 🆕 Latest Fixes (v2.17.1)
 
 - **✅ Accurate `.doc` Error Reporting**: Legacy `.doc` upload failures now show the real error from the loader chain instead of a generic "not supported" message that masked actual issues.
 - **✅ Stale Docker Backend Detection**: The desktop app now detects when its Docker backend is running an older version and offers a one-click update at startup.
@@ -1000,8 +1000,8 @@ All development is maintained exclusively by PIVARO LLC to ensure code quality a
 
 
 
-**Version**: 2.17.0  
-**Last Updated**: 2026-09-01  
+**Version**: 2.17.1  
+**Last Updated**: 2026-09-03  
 **Status**: Production Ready ✅
 
 

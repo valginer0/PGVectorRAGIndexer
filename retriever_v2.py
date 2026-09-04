@@ -313,8 +313,17 @@ class DocumentRetriever:
             pg_docs = pg_stats.get("total_documents", 0)
             pg_chunks = pg_stats.get("total_chunks", 0)
 
-            # Check for empty-with-pg-data or count drift
-            if pg_docs > 0 and (lancedb_docs == 0 or pg_docs != lancedb_docs or pg_chunks != lancedb_chunks):
+            # Any count mismatch is drift, in either direction.
+            #
+            # This was previously guarded by `pg_docs > 0`, which made an empty
+            # Postgres with a populated LanceDB fall through to the READY branch
+            # below: counts had diverged as far as they can, and the stale index
+            # kept serving results. A self-hoster reaches that by restoring or
+            # resetting the database, or pointing the app at a fresh one.
+            # sync_postgres_to_lancedb(force=True) drops and recreates the
+            # tables before syncing, so the existing repair path converges on an
+            # empty index for this case without further changes.
+            if pg_docs != lancedb_docs or pg_chunks != lancedb_chunks:
                 drift_signature = (pg_docs, pg_chunks, lancedb_docs, lancedb_chunks)
                 _lancedb_current_drift_signature = drift_signature
                 logger.warning(

@@ -367,6 +367,66 @@ def test_failed_lancedb_sync_guard_does_not_relaunch_same_drift(monkeypatch):
     assert sync_calls == [(1, 2, 0, 0)]
 
 
+def test_empty_postgres_with_populated_index_is_drift(monkeypatch):
+    """An emptied Postgres must not leave a populated LanceDB serving results.
+
+    The drift branch used to be guarded by `pg_docs > 0`, so this case - counts
+    diverged as far as they can - fell through to the READY branch and the
+    stale index kept answering. A self-hoster reaches it by restoring or
+    resetting the database, or pointing the app at a fresh one.
+    """
+    import retriever_v2
+    from retriever_v2 import DocumentRetriever
+
+    _reset_lancedb_readiness_state()
+
+    class EmptyRepository:
+        def get_statistics(self):
+            return {"total_documents": 0, "total_chunks": 0}
+
+    class PopulatedAdapter:
+        def get_statistics(self):
+            return {"total_documents": 12, "total_chunks": 340}
+
+    monkeypatch.setattr("services.get_lancedb_adapter", lambda: PopulatedAdapter())
+    monkeypatch.setattr(DocumentRetriever, "_trigger_self_healing_sync", lambda self: None)
+
+    retriever = DocumentRetriever.__new__(DocumentRetriever)
+    retriever.config = SimpleNamespace(retrieval=SimpleNamespace(lancedb_enabled=True))
+    retriever.repository = EmptyRepository()
+
+    try:
+        assert retriever.check_readiness() == "NOT_READY"
+        assert retriever_v2._lancedb_cached_ready is False
+        assert retriever_v2._lancedb_current_drift_signature == (0, 0, 12, 340)
+    finally:
+        # check_readiness caches globally; leaving it set changes later tests.
+        _reset_lancedb_readiness_state()
+
+
+def test_both_empty_is_ready(monkeypatch):
+    """The widened guard must not turn a fresh, genuinely empty install into drift."""
+    import retriever_v2
+    from retriever_v2 import DocumentRetriever
+
+    _reset_lancedb_readiness_state()
+
+    class EmptyStats:
+        def get_statistics(self):
+            return {"total_documents": 0, "total_chunks": 0}
+
+    monkeypatch.setattr("services.get_lancedb_adapter", lambda: EmptyStats())
+
+    retriever = DocumentRetriever.__new__(DocumentRetriever)
+    retriever.config = SimpleNamespace(retrieval=SimpleNamespace(lancedb_enabled=True))
+    retriever.repository = EmptyStats()
+
+    try:
+        assert retriever.check_readiness() == "READY"
+    finally:
+        _reset_lancedb_readiness_state()
+
+
 def test_failed_readiness_persists_across_cached_calls(monkeypatch):
     """A drift-FAILED status must keep returning FAILED on later cached calls,
     not decay to a generic NOT_READY (which hides 'manual repair required')."""

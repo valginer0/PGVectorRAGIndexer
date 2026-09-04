@@ -67,6 +67,19 @@ When in doubt, use full release.sh. It: bumps VERSION, updates docs, runs
 tests, builds+pushes the image, commits, commits+pushes the website repo,
 tags `vX.Y.Z`, pushes main + the tag.
 
+**The script now gates the tag on CI.** It pushes the release commit, waits
+for every workflow on that commit to finish, and pushes the tag ONLY if they
+all pass (40-minute ceiling). So expect release.sh to sit for ~10 minutes
+after the Docker push - that is the gate, not a hang. If CI is red it exits
+without pushing the tag and prints the two recovery options; the local tag
+still exists, so fix the failure and either `git tag -d v<ver>` and re-run, or
+push the tag deliberately. `--skip-ci-gate` bypasses it for an emergency
+release when CI itself is broken.
+
+This exists because v2.17.0 shipped a default install that 401'd against its
+own machine: the tag went out seconds after the commit, so the suite that
+would have caught it finished after the release was already public.
+
 **Do not trust the exit code alone.** After the script finishes, verify the
 tag actually exists and is pushed: `git tag --points-at HEAD` must show the
 new tag, and the release commit must be on origin/main. Record it as `$TAG`.
@@ -100,7 +113,10 @@ split-backend E2E, fresh-image smoke, installer verify, ...).
 
 1. Find the tag's installer run: `gh run list --limit 8` (match the tag).
 2. Wait with `gh run watch <run-id> --exit-status` — NEVER a sleep loop.
-3. **Check ALL runs on the release commit**, not just the installer:
+3. **Check ALL runs on the release commit**, not just the installer. The gate
+   in release.sh already required these to be green before it pushed the tag,
+   so this is a confirmation rather than a discovery - but the tag-triggered
+   installer build runs AFTER the gate and is not covered by it:
    `gh run list --commit "$(git rev-parse HEAD)"` — every workflow must end
    `success`. A red non-installer workflow (e.g. the macOS no-database run)
    means the release commit shipped a regression CI would have caught; fix

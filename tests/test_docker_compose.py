@@ -72,8 +72,11 @@ class TestDockerCompose:
         """
         db_service = docker_compose_config['services']['db']
         assert 'ports' in db_service
-        assert '127.0.0.1:5432:5432' in db_service['ports']
-        assert '5432:5432' not in db_service['ports']
+        ports = [str(p) for p in db_service['ports']]
+        assert any(p.startswith('${DB_BIND_ADDRESS:-127.0.0.1}:') for p in ports), \
+            f"DB must publish on 127.0.0.1 by default, got {ports}"
+        assert '5432:5432' not in ports, \
+            "bare mapping publishes the database on every interface"
     
     def test_api_port_is_loopback_by_default(self, docker_compose_config):
         """The API port must default to loopback, like the DB port.

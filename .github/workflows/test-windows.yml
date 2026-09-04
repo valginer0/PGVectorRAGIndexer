@@ -42,7 +42,12 @@ jobs:
           -k "not test_sets_permissions_on_linux and not test_secures_parent_directory and not test_system_open_linux_fallback and not test_resolve_path_mismatch_wsl and not test_resolves_simple_path and not test_remove_entry and not test_find_entry"
 
   msi-verify:
-    name: MSI Install Verification
+    # NOT a released-MSI test. This builds the installer from the repo with
+    # PyInstaller, so it runs the unpatched DEFAULT_REPO_REF = "main" - a
+    # release build has that rewritten to its tag, which is a different code
+    # path from the one customers run. Renamed because the old name implied a
+    # guarantee it never made.
+    name: Installer Builds (source build, not a released MSI)
     runs-on: windows-latest
     needs: [ unit-tests ]
 

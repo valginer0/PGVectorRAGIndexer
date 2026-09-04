@@ -54,10 +54,17 @@ IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
 
 # Parse arguments
 CONFIRM=true
-if [ "$1" == "-y" ]; then
-    CONFIRM=false
-    shift
-fi
+SKIP_CI_GATE=false
+while true; do
+    case "$1" in
+        -y) CONFIRM=false; shift ;;
+        # Escape hatch for an emergency release when CI itself is broken.
+        # Using it means the tag is published without the default-install
+        # check that v2.17.0 shipped past.
+        --skip-ci-gate) SKIP_CI_GATE=true; shift ;;
+        *) break ;;
+    esac
+done
 
 # Determine new version based on argument
 BUMP_TYPE="${1:-patch}"  # Default to patch if no argument
@@ -243,8 +250,67 @@ git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION
 See CHANGELOG.md for details."
 echo -e "${GREEN}✓ Created tag v$NEW_VERSION${NC}"
 
-# Push changes and tag
+# Push the release commit first, WITHOUT the tag. The tag is what publishes a
+# release (it triggers the installer build and becomes the version users get),
+# so it must not go out until CI has judged this exact commit.
 git push origin main
+
+# ── CI gate ─────────────────────────────────────────────────────────────────
+# v2.17.0 shipped a default install that returned 401 against its own machine.
+# Nothing stopped it: the tag was pushed seconds after the commit, long before
+# any workflow finished. The install-defaults job now covers that path, but a
+# passing job only helps if the release waits for it.
+if [ "$SKIP_CI_GATE" = true ]; then
+    echo -e "${YELLOW}⚠ Skipping the CI gate (--skip-ci-gate).${NC}"
+    echo -e "${YELLOW}  The tag will publish without CI having judged this commit.${NC}"
+elif ! command -v gh &> /dev/null; then
+    echo -e "${RED}✗ gh CLI not found - cannot verify CI before tagging.${NC}"
+    echo -e "${YELLOW}  Install gh, or re-run with --skip-ci-gate to publish anyway.${NC}"
+    echo -e "${YELLOW}  The local tag v$NEW_VERSION exists but was NOT pushed.${NC}"
+    exit 1
+else
+    RELEASE_SHA=$(git rev-parse HEAD)
+    echo ""
+    echo -e "${GREEN}Waiting for CI on the release commit before publishing the tag...${NC}"
+    echo -e "${BLUE}  commit: $RELEASE_SHA${NC}"
+
+    # Give the workflows time to be registered before concluding anything.
+    for _ in $(seq 1 24); do
+        [ -n "$(gh run list --commit "$RELEASE_SHA" --limit 25 --json databaseId -q '.[].databaseId' 2>/dev/null)" ] && break
+        sleep 5
+    done
+    if [ -z "$(gh run list --commit "$RELEASE_SHA" --limit 25 --json databaseId -q '.[].databaseId' 2>/dev/null)" ]; then
+        echo -e "${RED}✗ No workflow runs appeared for this commit after 2 minutes.${NC}"
+        echo -e "${YELLOW}  The local tag v$NEW_VERSION exists but was NOT pushed.${NC}"
+        exit 1
+    fi
+
+    # Poll until every run on this commit has finished (40 min ceiling).
+    GATE_DEADLINE=$(( $(date +%s) + 2400 ))
+    while [ -n "$(gh run list --commit "$RELEASE_SHA" --limit 25 --json status -q '.[]|select(.status!="completed")' 2>/dev/null)" ]; do
+        if [ "$(date +%s)" -gt "$GATE_DEADLINE" ]; then
+            echo -e "${RED}✗ CI did not finish within 40 minutes.${NC}"
+            echo -e "${YELLOW}  The local tag v$NEW_VERSION exists but was NOT pushed.${NC}"
+            exit 1
+        fi
+        sleep 20
+    done
+
+    FAILED=$(gh run list --commit "$RELEASE_SHA" --limit 25 \
+        --json conclusion,name -q '.[]|select(.conclusion!="success")|.name' 2>/dev/null | sort -u)
+    if [ -n "$FAILED" ]; then
+        echo -e "${RED}✗ CI is not green on the release commit. Tag NOT pushed.${NC}"
+        echo -e "${RED}  Failing: $(echo "$FAILED" | tr '\n' ' ')${NC}"
+        echo ""
+        echo -e "${YELLOW}  The version bump is already on main, and the local tag exists.${NC}"
+        echo -e "${YELLOW}  Fix the failure, then either:${NC}"
+        echo -e "${YELLOW}    git tag -d v$NEW_VERSION && ./release.sh -y $NEW_VERSION   (re-tag the fixed commit)${NC}"
+        echo -e "${YELLOW}    git push origin v$NEW_VERSION                              (publish anyway)${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ CI green on the release commit${NC}"
+fi
+
 git push origin "v$NEW_VERSION"
 echo -e "${GREEN}✓ Pushed to GitHub${NC}"
 

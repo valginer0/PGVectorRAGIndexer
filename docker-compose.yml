@@ -22,11 +22,17 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag_password}
       POSTGRES_DB: ${POSTGRES_DB:-rag_vector_db}
     ports:
-      # Loopback only: the app reaches the DB over the internal
-      # docker network (DB_HOST: db), so this mapping exists purely for
-      # local psql/tests. Publishing it on 0.0.0.0 exposed the database,
-      # and its default credentials, to the whole network.
-      - "127.0.0.1:5432:5432"
+      # Loopback only: the app reaches the DB over the internal docker network
+      # (DB_HOST: db), so this mapping exists purely for local psql and tests.
+      # Publishing it on 0.0.0.0 exposed the database, and its default
+      # credentials, to the whole network.
+      #
+      # DB_BIND_ADDRESS exists for one case: on Windows + Rancher/Docker
+      # Desktop, a test suite running inside WSL cannot reach a Windows-side
+      # loopback publish (not via 127.0.0.1, not via the host IP, not via the
+      # container IP). A developer in that setup sets DB_BIND_ADDRESS=0.0.0.0
+      # in their local .env. Never set it on a machine others can reach.
+      - "${DB_BIND_ADDRESS:-127.0.0.1}:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

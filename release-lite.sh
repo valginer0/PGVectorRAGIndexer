@@ -50,10 +50,14 @@ IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT_VERSION"
 
 # Parse arguments
 CONFIRM=true
-if [ "$1" == "-y" ]; then
-    CONFIRM=false
-    shift
-fi
+SKIP_CI_GATE=false
+while true; do
+    case "$1" in
+        -y) CONFIRM=false; shift ;;
+        --skip-ci-gate) SKIP_CI_GATE=true; shift ;;
+        *) break ;;
+    esac
+done
 
 # Determine new version based on argument
 BUMP_TYPE="${1:-patch}"  # Default to patch if no argument
@@ -133,8 +137,42 @@ git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION
 See CHANGELOG.md for details."
 echo -e "${GREEN}✓ Created tag v$NEW_VERSION${NC}"
 
-# Push changes and tag
+# Push the release commit first. The tag publishes the release, so it waits
+# for CI to judge this commit - see the same gate in release.sh.
 git push origin main
+
+if [ "$SKIP_CI_GATE" = true ]; then
+    echo -e "${YELLOW}⚠ Skipping the CI gate (--skip-ci-gate).${NC}"
+elif ! command -v gh &> /dev/null; then
+    echo -e "${RED}✗ gh CLI not found - cannot verify CI before tagging.${NC}"
+    echo -e "${YELLOW}  The local tag v$NEW_VERSION exists but was NOT pushed.${NC}"
+    exit 1
+else
+    RELEASE_SHA=$(git rev-parse HEAD)
+    echo -e "${GREEN}Waiting for CI on the release commit before publishing the tag...${NC}"
+    for _ in $(seq 1 24); do
+        [ -n "$(gh run list --commit "$RELEASE_SHA" --limit 25 --json databaseId -q '.[].databaseId' 2>/dev/null)" ] && break
+        sleep 5
+    done
+    GATE_DEADLINE=$(( $(date +%s) + 2400 ))
+    while [ -n "$(gh run list --commit "$RELEASE_SHA" --limit 25 --json status -q '.[]|select(.status!="completed")' 2>/dev/null)" ]; do
+        if [ "$(date +%s)" -gt "$GATE_DEADLINE" ]; then
+            echo -e "${RED}✗ CI did not finish within 40 minutes. Tag NOT pushed.${NC}"
+            exit 1
+        fi
+        sleep 20
+    done
+    FAILED=$(gh run list --commit "$RELEASE_SHA" --limit 25 \
+        --json conclusion,name -q '.[]|select(.conclusion!="success")|.name' 2>/dev/null | sort -u)
+    if [ -n "$FAILED" ]; then
+        echo -e "${RED}✗ CI is not green on the release commit. Tag NOT pushed.${NC}"
+        echo -e "${RED}  Failing: $(echo "$FAILED" | tr '\n' ' ')${NC}"
+        echo -e "${YELLOW}  Fix, then: git tag -d v$NEW_VERSION && ./release-lite.sh -y $NEW_VERSION${NC}"
+        exit 1
+    fi
+    echo -e "${GREEN}✓ CI green on the release commit${NC}"
+fi
+
 git push origin "v$NEW_VERSION"
 echo -e "${GREEN}✓ Pushed to GitHub${NC}"
 

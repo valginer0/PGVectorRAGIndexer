@@ -21,9 +21,17 @@ from config import (
 class TestDatabaseConfig:
     """Tests for DatabaseConfig."""
     
-    def test_default_values(self):
-        """Test default configuration values."""
-        config = DatabaseConfig()
+    def test_default_values(self, monkeypatch):
+        """Test default configuration values.
+
+        The declared defaults, not whatever this machine happens to export.
+        DB_HOST/DB_PORT are overridable (see tests/conftest.py), so a developer
+        pointing the suite at another database would otherwise fail this test
+        for no reason.
+        """
+        monkeypatch.delenv('DB_HOST', raising=False)
+        monkeypatch.delenv('DB_PORT', raising=False)
+        config = DatabaseConfig(_env_file=None)
         assert config.host == 'localhost'
         assert config.port == 5432
         assert config.pool_size == 10

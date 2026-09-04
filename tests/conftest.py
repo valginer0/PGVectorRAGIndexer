@@ -11,8 +11,15 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 # Set test environment variables before importing config
 # Use a SEPARATE test database to avoid polluting development data
 os.environ['ENVIRONMENT'] = 'development'  # Use development mode but with test database
-os.environ['DB_HOST'] = 'localhost'
-os.environ['DB_PORT'] = '5432'
+# WHERE the database lives is the developer's business - setdefault, so an
+# explicit DB_HOST/DB_PORT wins. Hardcoding these meant the suite could only
+# run against localhost:5432, and on a machine where something else already
+# owns 5432 (a native PostgreSQL service, say) there was no way to point it
+# elsewhere. CI sets the same values it always did, so nothing changes there.
+os.environ.setdefault('DB_HOST', 'localhost')
+os.environ.setdefault('DB_PORT', '5432')
+# WHICH database, and as whom, stays forced: tests must not run against
+# development data.
 os.environ['POSTGRES_DB'] = 'rag_vector_db_test'  # Separate test database
 os.environ['POSTGRES_USER'] = 'rag_user'
 os.environ['POSTGRES_PASSWORD'] = 'rag_password'

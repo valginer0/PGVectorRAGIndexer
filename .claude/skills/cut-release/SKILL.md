@@ -172,6 +172,18 @@ exercises a different code path.
    v2.17.0 shipped.
 4. Only after this passes: announce the release.
 
+**What counts as having run it.** The user installing the downloaded MSI and
+reporting the app works IS this phase - don't ask for a ceremonial re-run. The
+three checks can be evidenced from machine state after the fact:
+
+- `docker ps` shows the app on `127.0.0.1:8000->8000/tcp` and the release's
+  image tag,
+- `curl http://127.0.0.1:8000/documents` returns 200,
+- `netstat.exe -ano | grep 127.0.0.1:8000` shows an ESTABLISHED connection
+  from a `python.exe` in the Console session - that is the desktop app.
+
+Record the evidence in the final report rather than re-running the install.
+
 If it fails, the tag is already public. Annotate the release page with a
 known-issue callout pointing at the fix (see what v2.17.0 carries), and cut
 the patch release rather than leaving the latest release broken.

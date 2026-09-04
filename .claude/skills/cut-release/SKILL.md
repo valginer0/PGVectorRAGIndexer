@@ -149,6 +149,33 @@ signed. Do not poll, do not proceed on silence.
 3. Verify: `gh release view "$TAG" --json assets` — one PGVectorRAGIndexer.msi,
    size matching the signed file.
 
+## Phase 6b — Fresh-install validation (REQUIRED; the CI gate cannot cover it)
+
+The gate in release.sh waits for workflows on the release *commit*. The MSI is
+built by the tag-triggered workflow, from a tree whose `DEFAULT_REPO_REF` that
+workflow rewrites to the tag — so the artifact customers install is produced
+*after* the gate has already passed and is never exercised by it. Nothing
+automated tests what a customer receives. This step is that test.
+
+Do it with the **downloaded release MSI**, never a local build: a locally
+built installer carries the unpatched `DEFAULT_REPO_REF = "main"` and
+exercises a different code path.
+
+1. Install the signed MSI from the release page on a Windows machine.
+2. Let it complete its Docker setup, then confirm the backend came up on
+   loopback and answers WITHOUT a key (single-machine default):
+   - `docker ps` shows `127.0.0.1:8000->8000/tcp`, not `0.0.0.0:8000`
+   - `curl http://127.0.0.1:8000/documents` returns 200, not 401
+3. Open the desktop app in **Local (Docker)** mode and confirm it loads
+   documents. The API-key field is disabled in that mode, so a backend that
+   demands a key leaves the app with no way to connect — this is exactly how
+   v2.17.0 shipped.
+4. Only after this passes: announce the release.
+
+If it fails, the tag is already public. Annotate the release page with a
+known-issue callout pointing at the fix (see what v2.17.0 carries), and cut
+the patch release rather than leaving the latest release broken.
+
 ## Phase 7 — Verify the website points at the signed MSI and is live
 
 Run `<skill-base-dir>/scripts/verify_release.sh "$TAG"`. It checks:
@@ -174,4 +201,6 @@ MSI uploaded (size), website live checks (all three: repo, live page, asset).
 Remind about anything deferred from Phase 2.
 
 **STOP #2** — the release is done; take no further action (no announcements,
-no version bumps elsewhere) unless asked.
+no version bumps elsewhere) unless asked. If Phase 6b has not been run, say so
+explicitly in the report: the release is published but unvalidated against the
+artifact customers actually receive.

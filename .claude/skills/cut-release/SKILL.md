@@ -182,7 +182,10 @@ three checks can be evidenced from machine state after the fact:
 - `netstat.exe -ano | grep 127.0.0.1:8000` shows an ESTABLISHED connection
   from a `python.exe` in the Console session - that is the desktop app.
 
-Record the evidence in the final report rather than re-running the install.
+Record the evidence in the final report rather than re-running the install,
+AND append a dated result row to `docs/RELEASE_VALIDATION.md` - that file is
+the durable record, and it is the form diligence asks for: not "we test our
+releases" but "here is the check, and here is the result for this one".
 
 If it fails, the tag is already public. Annotate the release page with a
 known-issue callout pointing at the fix (see what v2.17.0 carries), and cut

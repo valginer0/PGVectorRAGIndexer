@@ -662,3 +662,38 @@ EMBEDDING_BATCH_SIZE=16
 ---
 
 **Troubleshooting:** If something goes wrong, check logs and documentation first. Review `docker compose logs -f` for detailed error messages.
+
+## GPU acceleration (untested)
+
+The shipped image already contains the CUDA build of PyTorch
+(`torch 2.10.0+cu128`), so no different image is needed. What a container does
+*not* get by default is access to the host GPU — that requires an explicit
+device reservation, which `docker-compose.gpu.yml` supplies:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+**Host prerequisite:** the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/)
+must be installed, or the container cannot see the GPU whatever the compose
+file says.
+
+**Verify it actually engaged** — this is the step worth not skipping:
+
+```bash
+docker exec vector_rag_app python -c "import torch; print(torch.cuda.is_available())"
+```
+
+It must print `True`.
+
+> **Status: not verified on hardware.** Neither the author's machine nor CI has
+> a GPU, so this configuration has never been executed. It is documented
+> because the image ships CUDA libraries regardless, and shipping them with no
+> documented route at all is worse. If you run it — successfully or not —
+> please open an issue; that report is what turns "should work" into "does
+> work".
+
+All published performance figures (~900 MB idle, ~3.3 GB serving, sub-second
+warm search over 130k chunks) are **CPU-only measurements**. No GPU figures
+exist.
+

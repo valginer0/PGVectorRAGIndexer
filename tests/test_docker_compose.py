@@ -175,3 +175,47 @@ class TestInstallScriptIntents:
         assert "create_api_key_record" in server_setup
         assert "api/v1/api-keys" not in server_setup, \
             "bootstrapping the first key over HTTP cannot work with auth on"
+
+
+class TestGPUOverride:
+    """The GPU override must stay self-consistent and honestly labelled.
+
+    It is published UNVERIFIED - no GPU exists on the author's machine or in
+    CI - so the label is the feature. A future edit that quietly drops the
+    warning would turn an honest offer into a false claim.
+    """
+
+    @pytest.fixture
+    def gpu_compose_text(self):
+        with open("docker-compose.gpu.yml", encoding="utf-8") as f:
+            return f.read()
+
+    @pytest.fixture
+    def gpu_compose(self):
+        with open("docker-compose.gpu.yml", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    def test_reserves_a_gpu_device(self, gpu_compose):
+        """Without this block the container cannot see the host GPU at all."""
+        devices = gpu_compose['services']['app']['deploy']['resources']['reservations']['devices']
+        assert any(d.get('driver') == 'nvidia' and 'gpu' in d.get('capabilities', [])
+                   for d in devices), f"no nvidia GPU reservation: {devices}"
+
+    def test_sets_the_embedding_device(self, gpu_compose):
+        """EMBEDDING_ is the env_prefix on EmbeddingConfig (config.py:58)."""
+        env = gpu_compose['services']['app']['environment']
+        assert 'EMBEDDING_DEVICE' in env
+
+    def test_is_labelled_untested(self, gpu_compose_text):
+        """The honesty label is load-bearing - do not remove it silently."""
+        assert 'NOT VERIFIED' in gpu_compose_text.upper()
+
+    def test_names_the_host_prerequisite(self, gpu_compose_text):
+        """Without the toolkit on the host, the reservation does nothing."""
+        assert 'NVIDIA Container Toolkit' in gpu_compose_text
+
+    def test_base_compose_grants_no_gpu(self):
+        """The default stack stays CPU-only; GPU is opt-in via the override."""
+        with open("docker-compose.yml", encoding="utf-8") as f:
+            base = yaml.safe_load(f)
+        assert 'deploy' not in base['services']['app']

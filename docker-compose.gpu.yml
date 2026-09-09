@@ -1,0 +1,42 @@
+# GPU override — UNTESTED ON HARDWARE. See the warning below.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# STATUS: NOT VERIFIED ON A GPU MACHINE.
+#
+# The shipped image already contains the CUDA build of PyTorch
+# (torch 2.10.0+cu128), and the embedding device is auto-detected — so in
+# principle this override is the only missing piece. But neither the author nor
+# CI has a GPU, so this configuration has never actually been executed. It is
+# published because the alternative was shipping CUDA libraries with no
+# documented way to use them at all.
+#
+# If you run this successfully, or it fails, please open an issue — that report
+# is what turns this from "should work" into "does work".
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# HOST PREREQUISITE: the NVIDIA Container Toolkit must be installed on the host,
+# or the container cannot see the GPU no matter what this file says:
+#   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/
+#
+# Verify the GPU is visible inside the container after starting:
+#   docker exec vector_rag_app python -c "import torch; print(torch.cuda.is_available())"
+# It must print True. If it prints False, the toolkit is missing or the device
+# reservation did not apply, and embeddings are silently running on CPU.
+services:
+  app:
+    environment:
+      # Forces CUDA, deliberately. If you opted into this file you want to know
+      # the GPU was NOT used, rather than silently getting CPU inference at a
+      # tenth of the speed you expected — so this fails loudly instead.
+      # Set EMBEDDING_DEVICE=cpu to fall back on purpose.
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-cuda}
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]

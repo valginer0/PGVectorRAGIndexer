@@ -17,7 +17,13 @@
 # is what turns this from "should work" into "does work".
 # ─────────────────────────────────────────────────────────────────────────────
 #
-# HOST PREREQUISITE: the NVIDIA Container Toolkit must be installed on the host,
+# WINDOWS USERS: if you installed with the MSI you will not have this file -
+# the installer pins the repo to its own release tag. Download it into your
+# install directory; see the "Windows" subsection in DEPLOYMENT.md. Docker
+# Desktop passes NVIDIA GPUs through the WSL2 backend, so Windows GPU users are
+# a real audience, not an edge case.
+#
+# HOST PREREQUISITE (Linux): the NVIDIA Container Toolkit must be installed,
 # or the container cannot see the GPU no matter what this file says:
 #   https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/
 #

@@ -693,6 +693,30 @@ It must print `True`.
 > please open an issue; that report is what turns "should work" into "does
 > work".
 
+### Windows: adding this to an existing install
+
+**If you installed with the MSI, you do not have this file yet.** The installer
+checks out the repository at its own release tag, so anything added afterwards
+is absent until you install a newer release. Windows GPU users are a real
+audience — Docker Desktop passes NVIDIA GPUs through the WSL2 backend — so this
+is worth doing by hand rather than waiting.
+
+From your install directory (`%USERPROFILE%\PGVectorRAGIndexer` by default):
+
+```powershell
+cd $env:USERPROFILE\PGVectorRAGIndexer
+curl.exe -fsSL -o docker-compose.gpu.yml `
+  https://raw.githubusercontent.com/valginer0/PGVectorRAGIndexer/main/docker-compose.gpu.yml
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+```
+
+Then run the `torch.cuda.is_available()` check above. On Windows the host
+prerequisite is the NVIDIA driver plus Docker Desktop's WSL2 backend, not the
+Linux container toolkit.
+
+The same applies to any install pinned to an older tag — `git pull` in that
+directory also works, though it moves you off the pinned release.
+
 All published performance figures (~900 MB idle, ~3.3 GB serving, sub-second
 warm search over 130k chunks) are **CPU-only measurements**. No GPU figures
 exist.

@@ -214,6 +214,23 @@ class TestGPUOverride:
         """Without the toolkit on the host, the reservation does nothing."""
         assert 'NVIDIA Container Toolkit' in gpu_compose_text
 
+    def test_healthcheck_retains_the_api_check(self, gpu_compose):
+        """The GPU healthcheck must SUBSUME the image's, not replace it.
+
+        The image defines its own healthcheck (Dockerfile:47) that probes
+        /health. A compose-level healthcheck silently overrides it, so narrowing
+        this to a GPU-only probe would change what "healthy" means for the
+        service - a container with a working GPU and a dead API would report
+        healthy. Guards meaning, not wording.
+        """
+        test = gpu_compose['services']['app']['healthcheck']['test']
+        joined = " ".join(test) if isinstance(test, list) else str(test)
+        assert '/health' in joined, f"API check dropped from healthcheck: {joined}"
+        assert '/dev/nvidiactl' in joined and '/dev/dxg' in joined, (
+            "both device paths required: nvidiactl is native Linux, dxg is "
+            f"Docker Desktop's WSL2 backend. Got: {joined}"
+        )
+
     def test_base_compose_grants_no_gpu(self):
         """The default stack stays CPU-only; GPU is opt-in via the override."""
         with open("docker-compose.yml", encoding="utf-8") as f:

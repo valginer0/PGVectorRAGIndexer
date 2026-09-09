@@ -674,17 +674,27 @@ device reservation, which `docker-compose.gpu.yml` supplies:
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 ```
 
-**Host prerequisite:** the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/)
-must be installed, or the container cannot see the GPU whatever the compose
-file says.
-
-**Verify it actually engaged** — this is the step worth not skipping:
+**Run this immediately afterwards.** It is the whole difference between "should
+work" and "does work", and it takes five seconds:
 
 ```bash
 docker exec vector_rag_app python -c "import torch; print(torch.cuda.is_available())"
 ```
 
-It must print `True`.
+It must print `True`. If it prints `False`, the GPU is not being used and
+embeddings will fail on the first search rather than silently running on CPU.
+
+**Host prerequisite:** on Linux, the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/);
+on Windows, the NVIDIA driver plus Docker Desktop's WSL2 backend. Without it the
+container cannot see the GPU whatever the compose file says.
+
+**The container will also report `unhealthy`** in `docker ps` if the GPU device
+was not passed through — about two minutes after `up -d`, not immediately, since
+failures during the 40-second start period don't count toward the retry budget.
+It keeps serving on :8000 while unhealthy; nothing depends on its health, so
+there is no restart loop. If it goes unhealthy despite a correctly installed
+driver, see the `gpus: all` fallback documented in `docker-compose.gpu.yml` —
+older Compose ignores the `deploy:` block entirely.
 
 > **Status: not verified on hardware.** Neither the author's machine nor CI has
 > a GPU, so this configuration has never been executed. It is documented
@@ -710,12 +720,19 @@ curl.exe -fsSL -o docker-compose.gpu.yml `
 docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 ```
 
-Then run the `torch.cuda.is_available()` check above. On Windows the host
-prerequisite is the NVIDIA driver plus Docker Desktop's WSL2 backend, not the
-Linux container toolkit.
+Then run the `torch.cuda.is_available()` check above.
 
-The same applies to any install pinned to an older tag — `git pull` in that
-directory also works, though it moves you off the pinned release.
+**Note that this overlay tracks `main` while your `docker-compose.yml` is pinned
+to a release tag.** That is fine today — the overlay only adds an environment
+variable, a device reservation and a healthcheck. If a future release renames
+the `app` service or restructures the base compose file, fetch the overlay from
+your matching release tag instead of `main`.
+
+The same one-file download rescues any install pinned to an older tag. **Running
+`git pull` in that directory is not recommended**: the installer deliberately
+pins the checkout to its release, and pulling `main` breaks that guarantee — a
+later repair or reinstall re-checks out the pinned ref and may conflict with what
+you pulled. Download the single file instead.
 
 All published performance figures (~900 MB idle, ~3.3 GB serving, sub-second
 warm search over 130k chunks) are **CPU-only measurements**. No GPU figures

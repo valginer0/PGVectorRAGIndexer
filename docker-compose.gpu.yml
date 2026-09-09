@@ -39,6 +39,44 @@ services:
       # tenth of the speed you expected — so this fails loudly instead.
       # Set EMBEDDING_DEVICE=cpu to fall back on purpose.
       EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-cuda}
+    # Fails fast instead of at first search. Without this, a host with no usable
+    # GPU starts cleanly, reports healthy, and only errors when someone runs
+    # their first query - because the embedding model loads lazily.
+    #
+    # TIMING: expect "unhealthy" about TWO MINUTES after `up -d`, not seconds.
+    # Failures inside start_period do not count, so the checks that count land
+    # at roughly 60s, 90s and 120s, and the third one flips it. Checking
+    # `docker ps` at 20 seconds shows "starting" - that is normal, not a fault.
+    #
+    # An unhealthy container KEEPS SERVING. Nothing depends on this service
+    # (only app depends on db), and `restart: always` acts on exit rather than
+    # on health - so there is no restart loop and no dependency stall. You will
+    # see "unhealthy" in `docker ps` while the API still answers on :8000.
+    #
+    # This subsumes the image's own healthcheck (Dockerfile:47) rather than
+    # replacing it - the API check is kept and the device check added, with the
+    # same intervals, so nothing else about health behaviour changes.
+    #
+    # It verifies DEVICE PASSTHROUGH, not that CUDA is fully working. The
+    # authoritative check is the one-time torch.cuda.is_available() command
+    # above. A torch probe here would import torch every 30 seconds forever to
+    # detect a condition that cannot change after startup.
+    #
+    # Two device paths, deliberately: /dev/nvidiactl is native Linux with the
+    # NVIDIA Container Toolkit; /dev/dxg is Docker Desktop's WSL2 backend,
+    # which never creates nvidiactl. Testing only the first would mark a
+    # WORKING Windows GPU host unhealthy.
+    #
+    # UNVERIFIED, both the GPU and the runtime: it was confirmed that neither
+    # device node exists in a plain container without a reservation (so the
+    # probe cannot pass spuriously), but that was under Rancher Desktop, and no
+    # GPU exists here to confirm the nodes DO appear under passthrough.
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import requests; requests.get('http://localhost:8000/health')\" && { test -e /dev/nvidiactl || test -e /dev/dxg; }"]
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
     deploy:
       resources:
         reservations:
@@ -46,3 +84,16 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+
+# If the container reports unhealthy, or torch.cuda.is_available() prints False,
+# despite the NVIDIA toolkit/driver being installed correctly:
+#
+# Older Compose silently ignores everything under `deploy:` outside Swarm mode -
+# it starts cleanly and grants no device, with nothing pointing at the Compose
+# version as the cause. Replace the deploy: block above with:
+#
+#   services:
+#     app:
+#       gpus: all
+#
+# and start again.

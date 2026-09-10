@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- **A brand-new install could destroy its own schema on first start.** Starting
+  a fresh database, the app wrote a pre-migration `pg_dump` — of an empty
+  database — then ran the migrations, then saw "a backup exists" plus
+  "`document_chunks` has 0 rows", diagnosed data loss, dropped the database and
+  restored the empty dump over the schema it had just created. The result was a
+  database with no tables at all. Reproduced against the published v2.17.1
+  image and verified fixed. Auto-recovery now requires a backup to actually
+  **contain rows** before it means anything, and refuses to restore a rowless
+  dump at all — the restore path drops the database first, so a dump with
+  nothing in it can only ever destroy. If you hit this, no data was lost that
+  you had put in: it only ever fired on an empty database. Upgrade, and if your
+  install is already in this state, `docker compose down && docker compose up -d`
+  on this version recreates the schema
+- **`/health` reported "healthy" for a database with no tables.** The top-level
+  status was hardcoded rather than derived; `health_check()` reports a failure
+  by returning `{"status": "unhealthy"}` instead of raising, so nothing
+  overrode it. It now reports `degraded` when the database is not healthy, and
+  still returns HTTP 200 so clients can read the body for the reason
+- The container health probe could not fail: it called
+  `requests.get('/health')`, which neither checks the status code nor targets an
+  endpoint that reports readiness. `docker ps` therefore said `healthy` for a
+  broken install
+
+### Added
+- **`GET /ready`** — readiness as distinct from liveness. Returns 200 when the
+  service can actually serve requests, and **503 with the reason** while the
+  embedding model is still loading or when the database is unhealthy. The
+  container health probe now uses it, so a broken install shows as `unhealthy`
+  in `docker ps` instead of reporting success
+- CI job `first-run-schema-survives`, which starts the stack the way a user
+  does — with no out-of-band `alembic upgrade head` — and asserts the schema is
+  still there. Migrating separately is exactly why the existing jobs could not
+  catch the bug above
+
 ## [2.17.1] - 2026-09-03
 
 ### Fixed

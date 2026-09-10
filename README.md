@@ -17,6 +17,9 @@
 
 ### What it looks like
 
+**[▶ Watch the 42-second walkthrough](https://www.ragvault.net/demo.html)** — the
+desktop app searching a document set, recorded against v2.17.1.
+
 Ask a question in plain language; get the passage that answers it. This query
 shares no keywords with the document that answers it — the retention policy
 never says "how long" or "destroying":

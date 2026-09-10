@@ -340,9 +340,19 @@ async def health_check():
         
         embedding_service = get_embedding_service()
         model_info = embedding_service.get_model_info()
-        
+
+        # Derive the top-level status from the database rather than asserting
+        # it. db_manager.health_check() REPORTS failure by returning
+        # {"status": "unhealthy", ...}; it does not raise, so the except below
+        # never fires for a broken database. Hardcoding "healthy" here meant a
+        # database with no tables at all was announced as healthy — the exact
+        # situation the first-run recovery bug produced, and the reason nobody
+        # hitting it had any signal that something was wrong.
+        db_status = (db_health or {}).get("status", "unknown")
+        overall = "healthy" if db_status == "healthy" else "degraded"
+
         response = HealthResponse(
-            status="healthy",
+            status=overall,
             timestamp=datetime.now(timezone.utc).isoformat(),
             database=db_health,
             embedding_model=model_info,
@@ -358,6 +368,58 @@ async def health_check():
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Service unhealthy: {str(e)}"
         )
+
+
+@system_app_router.get(
+    "/ready",
+    responses={
+        200: {"description": "The service can serve requests"},
+        503: {"description": "The service is alive but cannot serve requests yet"},
+    },
+)
+async def readiness_check():
+    """Readiness, as distinct from liveness.
+
+    ``/health`` answers "is this process up?" and returns 200 whenever it can
+    reply at all — which is what the desktop client wants, because it reads the
+    body to tell the user *why* something is wrong.
+
+    This endpoint answers "can it do its job?", and says so in the HTTP status
+    so that Docker, Compose and any orchestrator can act on it. That signal did
+    not exist before: a container whose database had been wiped, or whose model
+    was still loading, reported healthy to everything that asked, and the
+    person running it had no indication anything was wrong until a search
+    failed.
+    """
+    from services import init_complete, init_error
+
+    if not init_complete:
+        reason = f"initialization failed: {init_error}" if init_error else "still initializing"
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Not ready — {reason}",
+        )
+
+    try:
+        db_manager = get_db_manager()
+        db_health = await asyncio.to_thread(db_manager.health_check)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Not ready — database check failed: {e}",
+        )
+
+    db_status = (db_health or {}).get("status", "unknown")
+    if db_status != "healthy":
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Not ready — database is {db_status}: {(db_health or {}).get('error', 'no detail')}",
+        )
+
+    return {
+        "status": "ready",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 def _format_bytes(num_bytes: int) -> str:

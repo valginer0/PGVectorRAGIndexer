@@ -182,3 +182,91 @@ jobs:
     - name: Dump logs on failure
       if: failure()
       run: docker compose logs --tail 200
+
+  first-run-schema-survives:
+    # The bug this job exists for: on 2026-09-10 a genuinely fresh install
+    # destroyed its own schema on first start. migrate.py wrote a pre-migration
+    # pg_dump of an EMPTY database, then auto_recovery saw "a backup exists"
+    # plus "document_chunks is empty", called it data loss, dropped the
+    # database and restored the empty dump over the schema migrations had just
+    # created. The container then reported healthy, and /health said "healthy"
+    # with no tables in the database at all.
+    #
+    # The other jobs here cannot catch it, and that is the point: they run
+    # `alembic upgrade head` out of band first, so the app's own startup finds
+    # nothing pending and never writes the backup that triggers it. This job
+    # deliberately does NOT migrate out of band — it starts the stack exactly
+    # the way `docker-run.sh` and the MSI do, with an empty backups directory,
+    # and lets the application migrate itself.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Build app image from this commit
+      run: docker build -t "$APP_IMAGE" .
+
+    - name: Confirm the backups directory starts empty
+      run: |
+        mkdir -p backups
+        # A fresh clone has no backups/ (it is gitignored) and docker-run.sh
+        # never creates one, so Docker makes it empty. That empty directory is
+        # the condition every other job here is missing.
+        found=$(ls -A backups 2>/dev/null | wc -l)
+        [ "$found" = "0" ] || { echo "backups/ is not empty ($found entries); this job needs a fresh state"; exit 1; }
+
+    - name: Start the stack with no out-of-band migration
+      run: |
+        docker compose up -d db
+        for i in $(seq 1 30); do
+          if docker compose ps db | grep -q healthy; then echo "db healthy"; break; fi
+          [ "$i" = 30 ] && { echo "db never became healthy"; exit 1; }
+          sleep 2
+        done
+        docker compose up -d app
+        for i in $(seq 1 60); do
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/health || true)
+          if [ "$code" = "200" ]; then echo "app responding"; break; fi
+          [ "$i" = 60 ] && { echo "app never responded (last: $code)"; exit 1; }
+          sleep 3
+        done
+
+    - name: The schema must still exist
+      run: |
+        # The direct assertion. Before the fix this printed 0.
+        tables=$(docker compose exec -T db psql -U rag_user -d rag_vector_db -tAc \
+          "select count(*) from information_schema.tables where table_schema='public';" | tr -d '[:space:]')
+        echo "public tables: $tables"
+        [ "$tables" -gt 5 ] || { echo "SCHEMA WAS DESTROYED ON FIRST RUN (found $tables tables)"; docker compose logs app | tail -40; exit 1; }
+        docker compose exec -T db psql -U rag_user -d rag_vector_db -tAc \
+          "select 1 from information_schema.tables where table_name='document_chunks';" | grep -q 1 \
+          || { echo "document_chunks is missing"; exit 1; }
+
+    - name: No false data-loss diagnosis was made
+      run: |
+        if docker compose logs app | grep -q "DATA LOSS DETECTED"; then
+          echo "auto_recovery claimed data loss on a fresh install"
+          docker compose logs app | grep -A3 "DATA LOSS DETECTED"
+          exit 1
+        fi
+        echo "no false positive"
+
+    - name: /health and /ready tell the truth
+      run: |
+        # Working install: both say so.
+        curl -sf http://localhost:8000/ready >/dev/null || { echo "/ready failed on a working install"; exit 1; }
+        status=$(curl -s http://localhost:8000/health | python3 -c "import sys,json;print(json.load(sys.stdin)['status'])")
+        [ "$status" = "healthy" ] || { echo "expected healthy, got $status"; exit 1; }
+
+        # Now break it, and require the signals to change. /health stays 200
+        # because the desktop client reads the body for the reason; /ready is
+        # the machine-readable signal and must fail.
+        docker compose exec -T db psql -U rag_user -d rag_vector_db -c "DROP TABLE document_chunks CASCADE;"
+
+        code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/ready)
+        [ "$code" = "503" ] || { echo "/ready returned $code for a broken database; it must be 503"; exit 1; }
+
+        status=$(curl -s http://localhost:8000/health | python3 -c "import sys,json;print(json.load(sys.stdin)['status'])")
+        [ "$status" = "degraded" ] || { echo "/health said '$status' with no document_chunks table; it must not say healthy"; exit 1; }
+        echo "both endpoints report the truth"

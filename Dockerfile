@@ -44,8 +44,12 @@ RUN if ! command -v soffice >/dev/null 2>&1 && ! command -v libreoffice >/dev/nu
 EXPOSE 8000
 
 # Health check
+# Probe /ready, not /health, and raise on the status. Two separate reasons the
+# old line could not fail: /health returns 200 whenever the process can reply,
+# and requests.get() does not raise on 4xx/5xx — so this reported healthy for a
+# container whose database had no tables in it.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')"
+    CMD python -c "import requests; requests.get('http://localhost:8000/ready', timeout=5).raise_for_status()"
 
 # Default command (can be overridden)
 CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

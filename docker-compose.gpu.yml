@@ -53,6 +53,9 @@ services:
     # on health - so there is no restart loop and no dependency stall. You will
     # see "unhealthy" in `docker ps` while the API still answers on :8000.
     #
+    # Probes /ready (not /health) and raises on the status, matching the image.
+    # /health returns 200 whenever the process can reply, and requests.get()
+    # does not raise on 5xx, so the old form could not fail on a broken DB.
     # This subsumes the image's own healthcheck (Dockerfile:47) rather than
     # replacing it - the API check is kept and the device check added, with the
     # same intervals, so nothing else about health behaviour changes.
@@ -72,7 +75,7 @@ services:
     # probe cannot pass spuriously), but that was under Rancher Desktop, and no
     # GPU exists here to confirm the nodes DO appear under passthrough.
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import requests; requests.get('http://localhost:8000/health')\" && { test -e /dev/nvidiactl || test -e /dev/dxg; }"]
+      test: ["CMD-SHELL", "python -c \"import requests; requests.get('http://localhost:8000/ready', timeout=5).raise_for_status()\" && { test -e /dev/nvidiactl || test -e /dev/dxg; }"]
       interval: 30s
       timeout: 10s
       start_period: 40s

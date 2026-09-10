@@ -4,6 +4,7 @@ Tests for docker-compose.yml configuration.
 
 import pytest
 import os
+import re
 import yaml
 
 
@@ -217,15 +218,30 @@ class TestGPUOverride:
     def test_healthcheck_retains_the_api_check(self, gpu_compose):
         """The GPU healthcheck must SUBSUME the image's, not replace it.
 
-        The image defines its own healthcheck (Dockerfile:47) that probes
-        /health. A compose-level healthcheck silently overrides it, so narrowing
-        this to a GPU-only probe would change what "healthy" means for the
-        service - a container with a working GPU and a dead API would report
-        healthy. Guards meaning, not wording.
+        A compose-level healthcheck silently overrides the image's, so
+        narrowing this to a GPU-only probe would change what "healthy" means
+        for the service - a container with a working GPU and a dead API would
+        report healthy. Guards meaning, not wording.
+
+        The endpoint is read out of the Dockerfile rather than hardcoded here.
+        It moved once already: /health returns 200 whenever the process can
+        reply, so the probe was changed to /ready, and a literal string in this
+        test failed for a change that was correct. Reading the Dockerfile makes
+        the assertion track the actual invariant - the override probes whatever
+        the image probes - and catches drift in either file.
         """
+        with open("Dockerfile", encoding="utf-8") as f:
+            dockerfile = f.read()
+        image_endpoints = re.findall(r"http://localhost:8000(/\w+)", dockerfile)
+        assert image_endpoints, "no healthcheck endpoint found in the Dockerfile"
+        endpoint = image_endpoints[0]
+
         test = gpu_compose['services']['app']['healthcheck']['test']
         joined = " ".join(test) if isinstance(test, list) else str(test)
-        assert '/health' in joined, f"API check dropped from healthcheck: {joined}"
+        assert endpoint in joined, (
+            f"API check dropped from the GPU healthcheck: the image probes "
+            f"{endpoint} and the override does not. Got: {joined}"
+        )
         assert '/dev/nvidiactl' in joined and '/dev/dxg' in joined, (
             "both device paths required: nvidiactl is native Linux, dxg is "
             f"Docker Desktop's WSL2 backend. Got: {joined}"

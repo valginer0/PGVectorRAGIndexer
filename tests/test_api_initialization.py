@@ -30,7 +30,12 @@ async def test_health_after_initialization():
     mock_embedding.get_model_info.return_value = {"status": "mocked"}
 
     async def fake_to_thread(func, *args, **kwargs):
-        return {"status": "mocked"}
+        # The database has to actually report healthy for /health to say so.
+        # This stub used to return {"status": "mocked"} and the assertion below
+        # still passed, because the endpoint hardcoded "healthy" regardless of
+        # what the database said — the defect that let a schema-less database
+        # be announced as healthy.
+        return {"status": "healthy"}
 
     with patch("services.init_complete", True), \
          patch("services.init_error", None), \

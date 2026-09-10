@@ -18,15 +18,81 @@ logger = logging.getLogger(__name__)
 
 RESTORE_TIMEOUT = 600  # 10 minutes for large restores
 
+# How much of a dump to read when deciding whether it holds any rows. pg_dump
+# writes the schema first, so the COPY blocks are near the end of the file for a
+# small database and far into it for a large one — but we only need to find the
+# FIRST row of any table, and an empty dump has none anywhere. Reading is
+# streamed line by line, so this is a guard against a pathological file, not a
+# size limit on real backups.
+_SCAN_LINE_LIMIT = 5_000_000
+
+
+def backup_contains_rows(backup_path: Path) -> bool:
+    r"""Return True if *backup_path* holds at least one row of data.
+
+    A plain-format pg_dump of an empty database still contains a complete
+    schema and a ``COPY ... FROM stdin;`` header for every table, immediately
+    followed by the ``\.`` terminator. Nothing distinguishes it from a real
+    backup by name, timestamp or existence — only by whether any row is
+    actually in it.
+
+    This matters because restoring drops the database first. A dump with no
+    rows cannot return data to anyone; restoring one can only ever destroy what
+    is already there. See ``restore_from_pg_dump``.
+    """
+    try:
+        in_copy = False
+        with open(backup_path, "r", errors="replace") as f:
+            for i, line in enumerate(f):
+                if i > _SCAN_LINE_LIMIT:
+                    logger.warning(
+                        "[recovery] %s is too large to scan; assuming it holds data",
+                        backup_path.name,
+                    )
+                    return True
+                if in_copy:
+                    if line.startswith("\\."):
+                        in_copy = False
+                    elif line.strip():
+                        return True
+                    continue
+                stripped = line.lstrip()
+                if stripped.startswith("COPY ") and "FROM stdin" in stripped:
+                    in_copy = True
+                elif stripped.upper().startswith("INSERT INTO "):
+                    return True
+    except OSError as e:
+        # Unreadable is not the same as empty. Say so rather than guessing, and
+        # let the caller refuse to act on a backup it cannot inspect.
+        logger.warning("[recovery] Could not read %s: %s", backup_path.name, e)
+        return False
+    return False
+
 
 def detect_data_loss(db_url: str, backup_dir: Optional[Path] = None) -> bool:
     """Check if data loss is suspected.
 
-    Returns True when BOTH conditions are met:
-      1. At least one .sql backup exists in backup_dir (meaning data existed before)
-      2. The document_chunks table has 0 rows
+    Returns True when ALL of these hold:
+      1. At least one .sql backup exists in backup_dir
+      2. That backup actually contains rows
+      3. The document_chunks table has 0 rows
 
-    Fresh installs (no backups) return False — no false positives.
+    Condition 2 is what makes conditions 1 and 3 mean anything.
+
+    The original version had only 1 and 3, with the reasoning that a fresh
+    install has no backups and so cannot produce a false positive. That is true
+    of a user's backups and false of ours: ``migrate.py`` writes a
+    ``pre_migrate_<ts>.sql`` before running migrations, and on a brand-new
+    database that dump is a few hundred bytes of empty schema. Startup then
+    went: take an empty backup, create the tables, observe "a backup exists and
+    document_chunks is empty", and restore the empty backup over the schema it
+    had just built — leaving a database with no tables at all, on the one path
+    where there was nothing to protect in the first place.
+
+    So the question "has this system ever had data?" is asked of the backup's
+    contents, which is the only place the answer actually lives. Existence,
+    name and timestamp are all satisfied by a dump we wrote ourselves moments
+    earlier.
     """
     if backup_dir is None:
         backup_dir = DEFAULT_BACKUP_DIR
@@ -35,6 +101,16 @@ def detect_data_loss(db_url: str, backup_dir: Optional[Path] = None) -> bool:
     latest = find_latest_backup(backup_dir)
     if latest is None:
         logger.debug("No backups found in %s — not a data-loss scenario", backup_dir)
+        return False
+
+    # Condition 2: the backup holds something worth restoring. Checked BEFORE
+    # touching the database, because the restore path drops it.
+    if not backup_contains_rows(latest):
+        logger.info(
+            "[recovery] Newest backup %s contains no rows — treating this as a "
+            "fresh or intentionally empty database, not data loss.",
+            latest.name,
+        )
         return False
 
     # Condition 2: database is empty
@@ -90,6 +166,19 @@ def restore_from_pg_dump(db_url: str, backup_path: Path) -> bool:
     port = str(parsed.port or 5432)
     user = parsed.username or "rag_user"
     dbname = parsed.path.lstrip("/") or "rag_vector_db"
+
+    # Refuse before the destructive step, not after it. Everything below drops
+    # the target database; a dump with no rows cannot put anything back, so
+    # proceeding could only ever lose data. detect_data_loss already checks
+    # this — the check is repeated here because this function is also reachable
+    # directly, and the cost of being wrong is the whole database.
+    if not backup_contains_rows(backup_path):
+        logger.error(
+            "[recovery] Refusing to restore %s: it contains no rows, and "
+            "restoring drops the database first. Nothing was changed.",
+            backup_path.name,
+        )
+        return False
 
     env = os.environ.copy()
     env["PGPASSWORD"] = parsed.password or ""

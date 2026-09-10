@@ -37,6 +37,48 @@ without condition 1 is an unauthenticated API on the network.
 
 ## Results
 
+### v2.17.2 — PARTIAL, 2026-09-10
+
+**Docker path: PASSED on real data. MSI path: NOT YET RUN.**
+
+This release fixes a bug in which a **fresh** install destroyed its own schema
+on first start, so validation has two halves and neither substitutes for the
+other: does a new install now survive, and does an existing one still work.
+
+**Half 1 — the fresh-install path, verified before release.** Run against the
+*published* v2.17.1 image and repeated on the fix, on a throwaway stack with an
+empty backups directory:
+
+| | v2.17.1 (published) | v2.17.2 |
+|---|---|---|
+| Tables in `public` after first start | **0** | **17** |
+| `DATA LOSS DETECTED` in the log | yes, falsely | no |
+
+Now covered on every commit by the `first-run-schema-survives` CI job, which
+starts the stack with no out-of-band `alembic upgrade head` — the step that made
+every other job blind to this.
+
+**Half 2 — an existing install with real data, on the author's own stack.**
+The most important check for a fix that touches recovery: it must not act on a
+database that is fine.
+
+| # | Observed |
+|---|---|
+| 1 | `vector_rag_app \| ghcr.io/valginer0/pgvectorragindexer:2.17.2 \| 127.0.0.1:8000->8000/tcp` |
+| — | **2,367 documents / 129,918 chunks — unchanged.** No recovery attempted, no backup restored |
+| — | `/health` → `healthy`, database `healthy` |
+| — | `/ready` → **503** while the embedding model loaded, **200** once ready |
+| — | `docker ps` health → `healthy`, via the new probe `requests.get('/ready').raise_for_status()` |
+
+**Not yet done: conditions 2 and 3 from the standard list**, which need the
+signed MSI installed on Windows — a key-free `GET /documents`, and the desktop
+app connecting in Local (Docker) mode. **This release is published but not
+validated against the artifact a customer receives.**
+
+Note for whoever runs it: a machine with an existing populated database
+**cannot** reproduce the first-run condition. It validates that the MSI path
+still works normally, which is a different claim from the one in half 1.
+
 ### v2.17.1 — PASSED, 2026-09-03
 
 Installed from the signed MSI downloaded from the v2.17.1 release page.

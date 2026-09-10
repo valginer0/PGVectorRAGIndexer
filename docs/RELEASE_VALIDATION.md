@@ -37,19 +37,74 @@ without condition 1 is an unauthenticated API on the network.
 
 ## Results
 
-### v2.17.2 — PARTIAL, 2026-09-10
+### v2.17.2 — PASSED, 2026-09-10
 
-**Docker path: PASSED on real data. MSI path: NOT YET RUN.**
+**Tested on an UPGRADED install, not a fresh one.** Read that caveat with the
+result: it is stronger evidence in one direction and no evidence in another.
+This release fixes a bug that only fires on a *new* database, so a machine that
+already has data cannot reproduce the condition being fixed. What this row
+proves is that the migration path preserved a real 2,367-document database and
+that the normal install still works. The fresh-install half is evidenced
+separately, below.
 
-This release fixes a bug in which a **fresh** install destroyed its own schema
-on first start, so validation has two halves and neither substitutes for the
-other: does a new install now survive, and does an existing one still work.
+#### The three standard conditions — observed, not inferred
 
-**Half 1 — the fresh-install path, verified before release.** Run against the
-*published* v2.17.1 image and repeated on the fix, on a throwaway stack with an
-empty backups directory:
+Installed from the **signed MSI downloaded from the v2.17.2 release page**.
 
-| | v2.17.1 (published) | v2.17.2 |
+| # | Observed |
+|---|---|
+| 1 | Both services bound loopback-only; app on `ghcr.io/valginer0/pgvectorragindexer:2.17.2` |
+| 2 | `GET /documents` → **200** with no `X-API-Key` header, returning **2,376 documents** |
+| 3 | Desktop app connected in Local (Docker) mode; a reindex ran to completion against the upgraded stack |
+
+#### The upgrade preserved real data
+
+Measured on the author's own stack before and after the upgrade to 2.17.2:
+
+| | Before | After upgrade | After reindex |
+|---|---|---|---|
+| Documents | 2,367 | **2,367** | 2,376 |
+| Chunks | 129,918 | **129,918** | 130,182 |
+
+No recovery was attempted and no backup was restored — the correct behaviour for
+a database that is fine, and the single most important check for a release that
+changes the recovery path.
+
+`/ready`, new in this release, returned **503** while the embedding model loaded
+and **200** once ready; `docker ps` reported `healthy` via the new probe
+`requests.get('/ready').raise_for_status()`.
+
+#### Indexing run, 2026-09-10 21:11:04–21:13:51 UTC
+
+| | |
+|---|---|
+| Wall clock | **167 s** |
+| Files scanned | **287** |
+| Indexed | 9 added, 5 updated (**264 chunks**) |
+| Not indexed | 273 |
+| Per indexed document | **7.0 s average** (range 1.4–41.0 s, n=14) |
+
+The 273 are content-extraction outcomes, not code failures, and all three
+classes are expected for this corpus:
+
+| Class | Files |
+|---|---|
+| `encrypted_pdf` (password-protected) | 261 |
+| `no_content_loaded` (empty file) | 8 |
+| `no_text_in_word_doc` (scanned/imageonly) | 4 |
+
+**This is not a throughput benchmark.** 95% of the scanned files failed fast on
+extraction, so the file-per-second figure for this run (1.7/s) measures how
+quickly encrypted PDFs are rejected, not how quickly documents are indexed. The
+usable number is the **7.0 s per document actually indexed**, and even that is
+n=14. A full folder pass over indexable content is still the missing
+measurement — see the peak-RAM gap, which is also unmeasured.
+
+#### The fresh-install half, evidenced separately
+
+Run before release against a throwaway stack with an empty backups directory:
+
+| | v2.17.1 (published image) | v2.17.2 |
 |---|---|---|
 | Tables in `public` after first start | **0** | **17** |
 | `DATA LOSS DETECTED` in the log | yes, falsely | no |
@@ -57,27 +112,6 @@ empty backups directory:
 Now covered on every commit by the `first-run-schema-survives` CI job, which
 starts the stack with no out-of-band `alembic upgrade head` — the step that made
 every other job blind to this.
-
-**Half 2 — an existing install with real data, on the author's own stack.**
-The most important check for a fix that touches recovery: it must not act on a
-database that is fine.
-
-| # | Observed |
-|---|---|
-| 1 | `vector_rag_app \| ghcr.io/valginer0/pgvectorragindexer:2.17.2 \| 127.0.0.1:8000->8000/tcp` |
-| — | **2,367 documents / 129,918 chunks — unchanged.** No recovery attempted, no backup restored |
-| — | `/health` → `healthy`, database `healthy` |
-| — | `/ready` → **503** while the embedding model loaded, **200** once ready |
-| — | `docker ps` health → `healthy`, via the new probe `requests.get('/ready').raise_for_status()` |
-
-**Not yet done: conditions 2 and 3 from the standard list**, which need the
-signed MSI installed on Windows — a key-free `GET /documents`, and the desktop
-app connecting in Local (Docker) mode. **This release is published but not
-validated against the artifact a customer receives.**
-
-Note for whoever runs it: a machine with an existing populated database
-**cannot** reproduce the first-run condition. It validates that the MSI path
-still works normally, which is a different claim from the one in half 1.
 
 ### v2.17.1 — PASSED, 2026-09-03
 

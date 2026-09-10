@@ -15,6 +15,22 @@
 
 ---
 
+### What it looks like
+
+Ask a question in plain language; get the passage that answers it. This query
+shares no keywords with the document that answers it — the retention policy
+never says "how long" or "destroying":
+
+![Semantic search over a document set](docs/images/search-example.png)
+
+Everything indexed stays on your machine, listed and deletable:
+
+![Document library](docs/images/document-library.png)
+
+*Screenshots use a synthetic corpus for a fictional firm ([`demo_corpus/`](demo_corpus/)) — no real documents.*
+
+---
+
 ### 🤔 In Plain English (What does this actually do?)
 
 > **Imagine a magic bookshelf** that reads and understands every book, document, and note you put on it. When you have a question, you don't have to search for keywords yourself—you just ask the bookshelf in plain English (like "How do I fix the printer?" or "What was our revenue last year?"), and it instantly hands you the exact page with the answer.

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.17.2] - 2026-09-10
+
 ### Fixed
 - **A brand-new install could destroy its own schema on first start.** Starting
   a fresh database, the app wrote a pre-migration `pg_dump` — of an empty

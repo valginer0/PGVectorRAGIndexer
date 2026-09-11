@@ -130,6 +130,18 @@ Now covered on every commit by the `first-run-schema-survives` CI job, which
 starts the stack with no out-of-band `alembic upgrade head` — the step that made
 every other job blind to this.
 
+**Fresh-install schema creation has now been observed three independent ways**,
+which is worth stating because the whole release turns on it:
+
+| # | Where | Result |
+|---|---|---|
+| 1 | Local throwaway stack, empty backups dir | 17 tables, no false data-loss |
+| 2 | `first-run-schema-survives` CI job, clean runner | 17 tables, all four assertions green |
+| 3 | Separate throwaway stack built later for throughput measurement | 17 tables, zero `DATA LOSS DETECTED` |
+
+Three different machines-or-runners, three fresh databases, same result. The
+published v2.17.1 image produces 0 tables on the same test.
+
 ### v2.17.1 — PASSED, 2026-09-03
 
 Installed from the signed MSI downloaded from the v2.17.1 release page.

@@ -74,31 +74,48 @@ changes the recovery path.
 and **200** once ready; `docker ps` reported `healthy` via the new probe
 `requests.get('/ready').raise_for_status()`.
 
-#### Indexing run, 2026-09-10 21:11:04–21:13:51 UTC
+#### Folder pass, 2026-09-10 — an INCREMENTAL reindex of 2,399 files
+
+**Corrected 2026-09-10 after reading the desktop log.** An earlier version of
+this row said "287 files scanned". That was wrong, and wrong in the direction
+that undersells the product: 287 is what reached the *server*. The pass covered
+**2,399 files**, and 2,112 of them never left the machine.
 
 | | |
 |---|---|
-| Wall clock | **167 s** |
-| Files scanned | **287** |
-| Indexed | 9 added, 5 updated (**264 chunks**) |
-| Not indexed | 273 |
-| Per indexed document | **7.0 s average** (range 1.4–41.0 s, n=14) |
+| Files in the folder pass | **2,399** |
+| Skipped, unchanged (client-side hash) | **2,112** |
+| Uploaded and indexed | 14 (9 added, 5 updated, 264 chunks) |
+| Uploaded, no content extracted | 273 |
 
-The 273 are content-extraction outcomes, not code failures, and all three
-classes are expected for this corpus:
+The client compares a local file hash against the stored one **before
+uploading** (`desktop_app/ui/workers.py:186-200`) and skips on a match, so an
+unchanged file costs one metadata call plus one local hash and is never sent.
+
+| Measured | |
+|---|---|
+| Verify one unchanged file | **15.5 ms** (8.9 ms metadata + 5.4 ms hash) |
+| Verify all 2,112 unchanged files | **32.7 s** |
+| Index one document | **7.08 s** (client, n=14) / **7.04 s** (server, n=14) |
+
+The two indexing figures are independent — one from the desktop worker's upload
+timer, one from `indexing_runs` durations — and they agree to 0.5%.
+
+**What this establishes: incremental reindex cost scales with what changed, not
+with corpus size.** Re-checking 2,112 unchanged documents took half a minute.
+
+The 273 that produced no content are extraction outcomes, not code failures,
+and all three classes are expected for this corpus:
 
 | Class | Files |
 |---|---|
 | `encrypted_pdf` (password-protected) | 261 |
 | `no_content_loaded` (empty file) | 8 |
-| `no_text_in_word_doc` (scanned/imageonly) | 4 |
+| `no_text_in_word_doc` (scanned/image-only) | 4 |
 
-**This is not a throughput benchmark.** 95% of the scanned files failed fast on
-extraction, so the file-per-second figure for this run (1.7/s) measures how
-quickly encrypted PDFs are rejected, not how quickly documents are indexed. The
-usable number is the **7.0 s per document actually indexed**, and even that is
-n=14. A full folder pass over indexable content is still the missing
-measurement — see the peak-RAM gap, which is also unmeasured.
+**Still missing: cold-start throughput.** Every figure above is from a corpus
+already indexed. Nothing here measures indexing *N* new documents at scale, and
+n=14 is small with a 1.4-41.0 s spread. Peak RAM is also still unmeasured.
 
 #### The fresh-install half, evidenced separately
 
